@@ -3,20 +3,15 @@
 
 #define OUTPUT_FD STDOUT_FILENO
 
-/* this is not configurable as the code will not count the change in the calculations */
-#define TABLENGTH 1
-/* there is a significant price to pay in almost any calculation and conditional jumps
- * are expensive, and for something that has no practice other in Makefiles (in any case, the
- * code highlight tabs). But by default, it is not possible to add a new one (which indents),
- * however it is possible to change that per filetype basis, by setting the relative option;
-   in that case a tab is treated like the rest in its range, that is one cell width.
- */
-
 #define MAX_FRAMES 3
 #define RLINE_HISTORY_NUM_ENTRIES 20
 #define UNDO_NUM_ENTRIES 20
 #define DEFAULT_SHIFTWIDTH 2
 #define DEFAULT_PROMPT_CHAR ':'
+
+/* this is not configurable as the code will not count the change in the calculations */
+#define TABLENGTH 1
+#define TAB_ON_INSERT_MODE_INDENTS 0
 #define CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #define SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #define SMALL_E_ON_NORMAL_GOES_INSERT_MODE 1

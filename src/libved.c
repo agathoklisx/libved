@@ -1997,6 +1997,7 @@ string_t *(*indent_fun) (buf_t *, row_t *)) {
   strcpy ($my(ftype)->name, $my(syn)->file_type);
   $my(ftype)->autochdir = 1;
   $my(ftype)->shiftwidth = 0;
+  $my(ftype)->tab_indents = TAB_ON_INSERT_MODE_INDENTS;
   $my(ftype)->autoindent = indent_fun;
   strcpy ($my(ftype)->on_emptyline, "~");
   return $my(ftype);
@@ -2005,6 +2006,7 @@ string_t *(*indent_fun) (buf_t *, row_t *)) {
 private ftype_t *buf_ftype_init_c (buf_t *this) {
   ftype_t *ft = buf_ftype_init_default (this, FTYPE_C, buf_autoindent_c);
   ft->shiftwidth = 2;
+  ft->tab_indents = 1;
   return ft;
 }
 
@@ -6848,6 +6850,7 @@ private void ved_init_commands (void) {
     [VED_COM_READ_ALIAS] = "r",
     [VED_COM_SPLIT] = "split",
     [VED_COM_SUBSTITUTE] = "substitute",
+    [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
@@ -7482,6 +7485,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       }
 
     case VED_COM_SUBSTITUTE:
+    case VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE:
     case VED_COM_SUBSTITUTE_ALIAS:
       {
         arg_t *pat = rline_get_arg (rl, RL_VED_ARG_PATTERN);
@@ -7491,7 +7495,11 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         arg_t *range = rline_get_arg (rl, RL_VED_ARG_RANGE);
         if (pat is NULL or sub is NULL) goto theend;
 
-        if (NOTOK is ved_rline_parse_range (this, rl, range)) goto theend;
+        if (NULL is range and rl->com is VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE) {
+          rl->range[0] = 0; rl->range[1] = this->num_items - 1;
+        } else
+          if (NOTOK is ved_rline_parse_range (this, rl, range))
+            goto theend;
 
         retval = ved_substitute (this, pat->val->bytes, sub->val->bytes,
            global isnot NULL, interactive isnot NULL, rl->range[0], rl->range[1]);
@@ -7753,7 +7761,7 @@ new_char:
       }
 */
     else if (c is '\t') {
-      if ($my(ftype)->new_tab_is_tab or ($my(state) & ACCEPT_TAB_WHEN_INSERT)) {
+      if ($my(ftype)->tab_indents is 0 or ($my(state) & ACCEPT_TAB_WHEN_INSERT)) {
         $my(state) &= ~ACCEPT_TAB_WHEN_INSERT;
         buf[0] = c;
         buf[1] = '\0';

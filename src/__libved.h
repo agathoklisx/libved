@@ -104,6 +104,7 @@ enum {
   VED_COM_READ_ALIAS,
   VED_COM_SPLIT,
   VED_COM_SUBSTITUTE,
+  VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE,
   VED_COM_SUBSTITUTE_ALIAS,
   VED_COM_WIN_CHANGE_NEXT,
   VED_COM_WIN_CHANGE_NEXT_ALIAS,
@@ -680,7 +681,7 @@ NewType (ftype,
   char name[8];
   char on_emptyline[2];
 
-  int new_tab_is_tab;
+  int tab_indents;
   int shiftwidth;
   int autochdir;
   string_t *(*autoindent) (buf_t *, row_t *);

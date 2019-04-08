@@ -14,13 +14,12 @@
 
  * - it doesn't do any validation of the incoming data (the data it produces
  *   is rather controllable, but it cannot handle (for instance) data which
- *   it might be malformed (UTF-8) byte sequences, or escape sequences (both
- *   functions are expensive though)).
+ *   it might be malformed (UTF-8) byte sequences, or escape sequences.
 
  * - some motions don't behave properly when a character it occupies more than
- *   one cell width, or behave properly if this character is a tab but for now
- *   a tab it takes one single cell, much like a space. Again to assure that,
- *   an expensive wcwidth() should be included.
+ *   one cell width, or behave properly if this character is a tab but (for now)
+ *   a tab it takes one single cell, much like a space. To implement that required
+ *   functionality an expensive wcwidth() should be included.
 
  * - the code is young and is tested (and develops) based on the usage and the
  *   needs, so time is needed for stabilization, and some crude algorithms that
@@ -31,11 +30,13 @@
  *   regular expresion. As the prerequisity is to be independed (at some point)
  *   from libc, this has to be a minimal external perl like regexp machine.
 
- * It is published mainly for recording reasons and a couple of egoistic ones.
+ * It is published mainly for recording reasons and a personal one.
  * But mainly because at some point the integration might become very tighted to
  * the environment, and there is no certainity for a satisfactory abstraction.
  * Also because it was written mainly for the C programming language it will
- * (quite probably the next step) integrate the tcc compiler.
+ * integrate the tcc compiler at some point, both in time and space (mean unit).
+ * In short is not suited for nothing more than experinment and maybe and if
+ * there is something that worths at the end, for inspiration.
 
  * The original purpose was to record the development process so it could be
  * usefull as a (document) reference for an editor implementation, but the
@@ -52,13 +53,15 @@
    *  $logon: jtywu$
    *  Simple Editor written in C using Linked List with undo
 
- * Code snippets from outer sources should mention this source; if not, this
- * is an omission and should be fixed (sorry if there are such cases).
+ * Code snippets from outer sources should mention this source on top of
+ * those blocks; if not, this is an omission and should be fixed (sorry
+ * if there are such cases).
 
  * The code constantly runs under valgrind, so it is supposed to have no
  * memory leaks, which it is simple not true, because the conditions in a
- * editor are too many to ever be sure. Also many segmentation faults were
- * fixed thanks to gdb.
+ * editor are too many to ever be sure and true.
+
+ * Also uncountable segmentation faults were diagnosed and fixed thanks to gdb.
 
  * The library code can be compiled as a shared or as a static library, both
  * with gcc and tcc.
@@ -308,17 +311,22 @@ Search:
  * - terminal type
 
  * Many of the algorithms are based on a (usually) double linked list with
- * a head and a tail and probably a current pointer, but there is no specific
- * list type (just abstracted macros that act on structures, that based on
- * the context contain some or all of these (all C favorite) pointers, that
- * can be complicated and hard to get them right, but if you got them right,
- * then there is this direct and free of charge access to the machine and
- * the bits located to this machine adress; in my humble opinion is the main
- * property of C, or the property that deserves all the pain: opening and
- * working with a quite big lexicon file, the operations are instant (to move
- * around is just a matter of simple arithmetic, [in|de]crement just the
- * current pointer) and the memory consumption is ridicously low, less than
- * a shell, and that was quite a big of satisfaction).
+ * a head and a tail and in many cases a current pointer, that can act (at
+ * the minimum) as an iterator;  but there is no specific list type (just
+ * abstracted macros that act on structures. Those structs, and based on
+ * the context (specific type), can contain (some or all) of those (everybody
+ * C favorites) pointers;  that can be complicated and hard to get them right,
+ * but if you got them right, then there is this direct and free of charge,
+ * access to the underlying machine and finally, to the bits located to this
+ * machine adress;  in my humble opinion is the (o quite the one) property of C,
+ * or the property that could deserve the pain;  opening and working with a
+ * quite big lexicon file, the operations are instant (to move around is just
+ * a matter of simple arithmetic, a[n] [in|de]crementation of the current buffer
+ * pointer), and the memory consumption is ridicously low; and of course that was
+ * a satisfaction.
+
+ * The library in reality consists of two levels, the actual editing part and the
+ * interface.
 
  * A couple of notes regarding the inner code.
  * The inner code it uses a couple of macros to ease the development, like:
