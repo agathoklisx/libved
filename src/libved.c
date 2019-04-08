@@ -2221,9 +2221,10 @@ private row_t *__buf_current_delete (buf_t *this, row_t **row) {
   }
 
   if (this->cur_idx + 1 is this->num_items) {
-    this->current->prev->next = NULL;
-    this->current = this->current->prev;
     this->cur_idx--;
+    this->current = this->current->prev;
+    this->current->next = NULL;
+    this->tail = this->current;
     goto theend;
   }
 
@@ -2256,8 +2257,11 @@ private row_t *buf_current_pop_next (buf_t *this) {
   this->current = this->current->next;
   this->cur_idx++;
   row_t *row; __buf_current_delete (this, &row);
-  this->current = this->current->prev;
-  this->cur_idx--;
+  ifnot (this->cur_idx + 1 is this->num_items) {
+    this->current = this->current->prev;
+    this->cur_idx--;
+  }
+
   return row;
 }
 
@@ -4277,7 +4281,6 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
 
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw_cur_row);
-  msg_fmt ("deleted into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
@@ -4709,6 +4712,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
+  msg_fmt ("deleted into register [%c]", REGISTERS[regidx]);
   self(draw);
   vundo_push (this, action);
   return DONE;
@@ -7409,8 +7413,12 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
           if (NULL isnot range or NULL isnot append) goto theend;
           retval = ved_write_buffer (this, VED_COM_WRITE_FORCE is rl->com);
         } else {
-          if (NOTOK is ved_rline_parse_range (this, rl, range)) goto theend;
-
+          if (NULL is range) {
+            rl->range[0] = 0;
+            rl->range[1] = this->num_items - 1;
+          } else
+            if (NOTOK is ved_rline_parse_range (this, rl, range))
+              goto theend;
           retval = ved_write_to_fname (this, fname->option->bytes, NULL isnot append,
             rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com);
         }
@@ -7663,7 +7671,8 @@ handle_char:
             $mycur(data)->bytes[$mycur(cur_col_idx)] is 0 or
             $mycur(data)->bytes[$mycur(cur_col_idx)] is '\n') {
           if (HAS_THIS_LINE_A_TRAILING_NEW_LINE) {
-            ved_normal_left (this, 1);
+            if ($mycur(cur_col_idx) + 1 is (int) $mycur(data)->num_bytes)
+              ved_normal_left (this, 1);
             RM_TRAILING_NEW_LINE;
           }
 
@@ -8304,10 +8313,9 @@ private ed_t *__ed_new__ (ed_T *E) {
 
   $my(term) = My(Term).new ();
   $my(term)->prop->Me = &E->Term;
-  $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
   My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);
+  $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
   My(Term).raw ($my(term));
-  // is NOTOK) return NULL;
 
   $my(topline) = My(String).new ();
   $my(msgline) = My(String).new ();
@@ -8393,7 +8401,6 @@ private int __init__ (ed_T *this) {
       &$my(term)->prop->orig_curs_col_pos);
   My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);
   My(Screen).save ($my(term));
-  //$my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
   My(Term).sane ($my(term));
   return OK;
 }

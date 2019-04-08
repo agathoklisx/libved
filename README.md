@@ -97,7 +97,7 @@
    * is defined it is not being used in current code.
    */
 
- /* also purely for lingustic and expressional reasons the followings:
+ /* also purely for linguistic and expressional reasons the followings:
   * (again they being used by others too, see at github/orangeduck/Cello
   */
 
@@ -353,6 +353,13 @@ Search:
  * or the oposite, neither a single bit of penalty. It allows mainly expressionism
  * and focus to the intentions and not to __how__ to get right writting.
 
+ * In that spirit, also available also are macros, that their sole role is to
+ * abstract the details over type creation/declaration/allocation, that assists to
+ * quick development.
+ * The significant ones: AllocType, NewType, DeclareType. Those are getting an
+ * argument with the type name but without the _t extension, which is the actual
+ * type.
+
  * Finally, a couple of macros that access the root editor type or the parent's
  * (win structure) type. Either of these three main structures have acces (with one
  * way or the other) to all the fields of the root structure, so My(Class) macro
@@ -367,6 +374,16 @@ Search:
 
  * this code has acces to the root structure, and should use the get/set
  * specific to types methods to access the underlying properties.
+
+ * Memory Interface
+ * The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
+ * integer overflows, and exposes a public mutable handler function that is invoked
+ * on such overflows or when there is not enough memory available errors.
+ * This function is meant to be set by the user of the library, on the application
+ * side and scope. The provided one exits the program with a detailed message.
+
+ * It implements two those wrappers. Alloc (size) and Realloc (object, size).
+ * Both they return void *.
 
  /* LICENSE:
   * I wish we could do without LICENSES. In my world it is natural to give credits
