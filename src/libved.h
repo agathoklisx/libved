@@ -177,6 +177,7 @@ DeclareType (term);
 DeclareType (string);
 DeclareType (vstritem);
 DeclareType (vstr);
+DeclareType (regexp);
 DeclareType (vrow);
 DeclareType (video);
 DeclareType (dirlist);
@@ -314,6 +315,21 @@ NewSelf (string,
 
 NewClass (string,
   Self (string) self;
+);
+
+NewSelf (re,
+  regexp_t *(*new) (char *, int, int);
+      void  (*free) (regexp_t *);
+      void  (*free_captures) (regexp_t *);
+      void  (*free_capture_elements) (regexp_t *);
+      void  (*free_pat) (regexp_t *);
+
+       int  (*exec) (regexp_t *, char *, size_t);
+  string_t *(*parse_substitute) (char *, char *);
+);
+
+NewClass (re,
+  Self (re) self;
 );
 
 NewSubSelf (buf, get,
@@ -487,6 +503,7 @@ NewClass (ed,
   Class (term) Term;
   Class (video) Video;
   Class (string) String;
+  Class (re) Re;
   Class (input) Input;
   Class (screen) Screen;
   Class (cursor) Cursor;

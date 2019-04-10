@@ -2,6 +2,16 @@
 #define _XOPEN_SOURCE 700
 #define _DEFAULT_SOURCE
 
+/* 
+  Πάρτε σβάρνα τα βουνά τις οξιές
+  και τις λαγκαδιές
+  και ξεχάστε το χθές
+  
+  Πάρτε σβάρνα τα βουνά τις κορφές
+  και τις αμουδιές
+  να θυμάστε το χθές
+*/
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -512,6 +522,111 @@ private char *string_reverse_from_to (char *dest, char *src, int fidx, int lidx)
   return dest;
 }
 
+private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
+  (void) buf_len;
+  char *sp = strstr (bytes, re->pat->bytes);
+
+  if (NULL is sp) {
+    re->retval = RE_NO_MATCH;
+    goto theend;
+  }
+
+  re->retval = (sp - bytes) + re->pat->num_bytes;
+  re->cap[0] = AllocType (capture);
+  re->cap[0]->ptr = sp;
+  re->cap[0]->len = re->pat->num_bytes;
+
+theend:
+  return re->retval;
+}
+
+private void re_free_capture_elements (regexp_t *re) {
+  for (int i = 0; i < re->num_caps; i++) {
+    if (NULL is re->cap[i]) continue;
+    free (re->cap[i]);
+    re->cap[i] = NULL;
+  }
+}
+
+private void re_free_captures (regexp_t *re) {
+  if (re->cap is  NULL) return;
+  re_free_capture_elements (re);
+  free (re->cap);
+  re->cap = NULL;
+}
+
+private void re_free_pat (regexp_t *re) {
+  if (NULL is re->pat) return;
+  string_free (re->pat);
+  re->pat = NULL;
+}
+
+private void re_free (regexp_t *re) {
+  re_free_pat (re);
+  re_free_captures (re);
+  free (re);
+}
+
+private regexp_t *re_new (char *pat, int case_sens, int num_caps) {
+  regexp_t *re = AllocType (regexp);
+  re->pat = string_new_with (pat);
+  re->num_caps = (0 > num_caps ? 0 : num_caps);
+  re->cap = Alloc (sizeof (capture_t) * re->num_caps);
+  re->flags |= case_sens;
+  return re;
+}
+
+private string_t *re_parse_substitute (char *sub, char *replace_buf) {
+  string_t *substr = string_new ();
+  char *sub_p = sub;
+  while (*sub_p) {
+    switch (*sub_p) {
+      case '\\':
+        switch (*++sub_p) {
+          case '&':
+            string_append_byte (substr, '&');
+            sub_p++;
+            continue;
+
+          case '\\':
+            string_append_byte (substr, '\\');
+            sub_p++;
+            continue;
+
+          default:
+            goto theerror;
+        }
+
+      case '&':
+        string_append (substr, replace_buf);
+        break;
+
+      default:
+        string_append_byte (substr, *sub_p);
+     }
+    sub_p++;
+  }
+
+  return substr;
+
+theerror:
+  string_free (substr);
+  return NULL;
+}
+
+public re_T __init_re__ (void) {
+  return ClassInit (re,
+    .self = SelfInit (re,
+      .exec = re_exec,
+      .new = re_new,
+      .free = re_free,
+      .free_captures = re_free_captures,
+      .free_capture_elements = re_free_capture_elements,
+      .free_pat = re_free_pat,
+      .parse_substitute = re_parse_substitute
+    )
+  );
+}
 private int file_is_reg (const char *fname) {
   struct stat st;
   if (NOTOK is stat (fname, &st)) return 0;
@@ -739,9 +854,8 @@ private void term_set_ptr_pos (term_t *this, int row, int col) {
 }
 
 private void term_free (term_t *this) {
-debug_append ("f %d\n", this is NULL);
   if (NULL is this) return;
-debug_append ("p %d\n", $myprop is NULL);
+
   ifnot (NULL is $myprop) {
     free ($myprop);
     $myprop = NULL;
@@ -1384,8 +1498,6 @@ init_list:;
 
 //    string_append (render, TERM_CURSOR_SHOW);
 
-debug_append ("|%s|\n", render->bytes);
-debug_append ("|%s|\n", fmt);
     fd_write (menu->fd, render->bytes, render->num_bytes);
 
     string_free (render);
@@ -2502,6 +2614,7 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(Me) = $myparents(Buf);
   $my(Win)= $myparents(Me);
   $my(String) = $myparents(String);
+  $my(Re) = $myparents(Re);
   $my(Video) = $myparents(Video);
   $my(Term) = $myparents(Term);
   $my(Input) = $myparents(Input);
@@ -2716,6 +2829,7 @@ private win_t *ed_win_new (ed_t *ed, int num_frames) {
   $my(Me) = &$myparents(Me)->Win;
   $my(Buf) = &$myparents(Me)->Buf;
   $my(String) =$myparents(String);
+  $my(Re) = $myparents(Re);
   $my(Video) = $myparents(Video);
   $my(Term) = $myparents(Term);
   $my(Input) = $myparents(Input);
@@ -3094,44 +3208,55 @@ private char *get_current_word (buf_t *this, char *word, char *Nwtype, int len) 
   idx__;                                   \
 })
 
-#define SEARCH_FREE              \
-({                               \
-  My(String).free (sch->pat);    \
-  stack_free (sch, sch_t);       \
-  free (sch);                    \
+#define SEARCH_FREE                               \
+({                                                \
+  My(String).free (sch->pat);                     \
+  stack_free (sch, sch_t);                        \
+  ifnot (NULL is sch->prefix) free (sch->prefix); \
+  ifnot (NULL is sch->match) free (sch->match);   \
+  free (sch);                                     \
 })
 
-#define SEARCH_PUSH(idx_, row_)  \
-  sch_t *s_ = AllocType (sch);   \
-  s_->idx = (idx_);              \
-  s_->row  = (row_);             \
+#define SEARCH_PUSH(idx_, row_)                   \
+  sch_t *s_ = AllocType (sch);                    \
+  s_->idx = (idx_);                               \
+  s_->row  = (row_);                              \
   stack_push (sch, s_)
 
 private int __ved_search__ (buf_t *this, search_t *sch) {
-  sch->found = 0;
+  int retval = NOTOK;
   int idx = sch->cur_idx;
+  regexp_t *re = My(Re).new (sch->pat->bytes, 0, 1);
+
+  sch->found = 0;
   SEARCH_PUSH (sch->cur_idx, sch->row);
 
   do {
-    sch->match = strstr (sch->row->data->bytes, sch->pat->bytes);
-    if (NULL isnot sch->match) {
-      size_t len = bytelen (sch->pat->bytes);
+    My(Re).free_capture_elements (re);
+    if (0 <= My(Re).exec (re, sch->row->data->bytes,
+        sch->row->data->num_bytes)) {
       sch->idx = idx;
       sch->found = 1;
-      sch->col = sch->match - sch->row->data->bytes;
+      sch->col = re->retval - re->cap[0]->len;
       strcpy (sch->line, sch->row->data->bytes);
-      sch->prefix = sch->line;
+      sch->match =  Alloc ((sizeof (char) * re->cap[0]->len) + 1);
+      memcpy (sch->match, re->cap[0]->ptr, re->cap[0]->len);
+      sch->match[re->cap[0]->len] = '\0';
+      sch->prefix = Alloc ((sizeof (char) * sch->col) + 1);
+      memcpy (sch->prefix, sch->row->data->bytes, sch->col);
       sch->prefix[sch->col] = '\0';
-      sch->end = sch->line + sch->col + len;
-      return OK;
+      sch->end = sch->line + re->retval;
+      retval = OK;
+      goto theend;
     }
 
     idx = SEARCH_UPDATE_ROW (idx);
 
-  }
-  while (idx isnot sch->cur_idx);
+  } while (idx isnot sch->cur_idx);
 
-  return NOTOK;
+theend:
+  My(Re).free (re);
+  return retval;
 }
 
 private int rline_search_at_beg (rline_t **rl) {
@@ -3155,8 +3280,11 @@ private int rline_search_at_beg (rline_t **rl) {
 private int ved_search (buf_t *this, char com) {
   if (this->num_items is 0) return NOTHING_TODO;
 
+  int toggle = 0;
+
   search_t *sch = AllocType (search);
   sch->found = 0;
+  sch->prefix = sch->match = NULL;
   sch->row = this->current;
 
   if (com is '/' or com is '*' or com is 'n') sch->dir = 1;
@@ -3202,9 +3330,7 @@ private int ved_search (buf_t *this, char com) {
       sch->pat = My(String).new ();
   }
 
-  int toggle = 0;
   for (;;) {
-
     utf8 c = rline_edit (rl)->c;
     string_t *p = vstr_join (rl->line, "");
     if (rl->line->tail->data->bytes[0] is ' ')
@@ -3213,11 +3339,12 @@ private int ved_search (buf_t *this, char com) {
     if (str_eq (sch->pat->bytes, p->bytes)) {
       string_free (p);
     } else {
-      string_clear (sch->pat);
-      string_append (sch->pat, p->bytes);
+      string_replace_with (sch->pat, p->bytes);
       string_free (p);
 
 search:
+      ifnot (NULL is sch->prefix) { free (sch->prefix); sch->prefix = NULL; }
+      ifnot (NULL is sch->match) { free (sch->match); sch->match = NULL; }
       __ved_search__ (this, sch);
       if (toggle) {
         sch->dir = (sch->dir is 1) ? -1 : 1;
@@ -3226,7 +3353,7 @@ search:
 
       if (sch->found) {
         msg_fmt ("|%d %d|%s%s%s%s%s", sch->idx + 1, sch->col, sch->prefix,
-          TERM_MAKE_COLOR(COLOR_RED), sch->pat->bytes, TERM_COLOR_RESET,
+          TERM_MAKE_COLOR(COLOR_RED), sch->match, TERM_COLOR_RESET,
           sch->end);
         sch->cur_idx = sch->idx;
       } else {
@@ -3487,9 +3614,9 @@ int interactive, int fidx, int lidx) {
   row_t *it = this->head;
 
   int slen = bytelen (sub);
-  int plen = bytelen (pat);
 
-  string_t *substr = My(String).new ();
+  string_t *substr = NULL;
+  regexp_t *re = My(Re).new (pat, 0, 1);
 
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
@@ -3505,40 +3632,33 @@ int interactive, int fidx, int lidx) {
 
 searchandsub:;
     int done_substitution = 0;
-    char *sp = strstr (it->data->bytes + bidx, pat);
-    if (NULL is sp) goto thecontinue;
-    int diff = sp - it->data->bytes;
-    My(String).clear (substr);
-    char *sub_p = sub;
-    while (*sub_p) {
-      switch (*sub_p) {
-        case '\\':
-          switch (*++sub_p) {
-            case '&': My(String).append_byte (substr, '&'); sub_p++; continue;
-            case '\\': My(String).append_byte (substr, '\\');sub_p++; continue;
-            default: goto theend;
-          }
+    My(Re).free_capture_elements (re);
+    if (0 > My(Re).exec (re, it->data->bytes + bidx,
+        it->data->num_bytes - bidx)) goto thecontinue;
 
-        case '&': My(String).append (substr, pat); break;
-        default:  My(String).append_byte (substr, *sub_p);
-       }
-      sub_p++;
-    }
+    int diff = re->retval - re->cap[0]->len;
+
+    ifnot (NULL is substr) string_free (substr);
+    if (NULL is (substr = My(Re).parse_substitute (sub, pat)))
+      goto theend;
 
     if (interactive) {
       char prefix[diff + 1];
-      sp += plen;
-
       memcpy (prefix, it->data->bytes, diff); prefix[diff] = '\0';
+      char match[re->cap[0]->len + 1];
+      memcpy (match, re->cap[0]->ptr, re->cap[0]->len);
+      match[re->cap[0]->len] = '\0';
+
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A'};
       utf8 c = quest (this, str_fmt (
           "|match at line %d byte idx %d|\n"
           "%s%s%s%s%s\n"
           "Replace with %s%s%s or quit [yY|nN|qQ|[aA]ll]\n",
-           idx, diff, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), pat,
-           TERM_MAKE_COLOR(COLOR_MENU_BG),
-           sp, TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG)),
+           idx, diff, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), match,
+           TERM_MAKE_COLOR(COLOR_MENU_BG), re->cap[0]->ptr + re->cap[0]->len,
+           TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG)),
            chars, ARRLEN (chars));
+
       switch (c) {
         case 'n': case 'N': goto if_global;
         case 'q': case 'Q': goto theend;
@@ -3552,7 +3672,7 @@ searchandsub:;
     act->bytes = str_dup (it->data->bytes);
     stack_push (action, act);
 
-    string_replace_numbytes_at_with (it->data, plen, diff, substr->bytes);
+    string_replace_numbytes_at_with (it->data, re->cap[0]->len, diff, substr->bytes);
     done_substitution = 1;
 
     retval = DONE;
@@ -3576,7 +3696,8 @@ theend:
   } else
     buf_free_action (this, action);
 
-  My(String).free (substr);
+  My(Re).free (re);
+  ifnot (NULL is substr) string_free (substr);
 
   return retval;
 }
@@ -8311,6 +8432,7 @@ private ed_t *__ed_new__ (ed_T *E) {
 
   $my(Me) = E;
   $my(String) = &E->String;
+  $my(Re) = &E->Re;
   $my(Term) = &E->Term;
   $my(Input) = &E->Input;
   $my(Screen) = &E->Screen;
@@ -8375,6 +8497,7 @@ private ed_t *ed_new (ed_T *E, int num_wins) {
 private ed_T *__allocate_prop__ (ed_T *this) {
   $myprop = AllocProp (ed);
   $my(String) = &this->String;
+  $my(Re) = &this->Re;
   $my(Term) = &this->Term;
   $my(Input) = &this->Input;
   $my(Screen) = &this->Screen;
@@ -8598,7 +8721,8 @@ private ed_T *editor_new (char *name) {
     ),
     .Video = __init_video__ (),
     .Term = __init_term__ (),
-    .String = __init_string__ ()
+    .String = __init_string__ (),
+    .Re = __init_re__ ()
   );
 
   this->Cursor.self = this->Term.self.Cursor;

@@ -318,15 +318,16 @@ Search:
  * C favorites) pointers;  that can be complicated and hard to get them right,
  * but if you got them right, then there is this direct and free of charge,
  * access to the underlying machine and finally, to the bits located to this
- * machine adress;  in my humble opinion is the (o quite the one) property of C,
+ * machine adress;  in my humble opinion is the (quite the one) property of C,
  * or the property that could deserve the pain;  opening and working with a
  * quite big lexicon file, the operations are instant (to move around is just
  * a matter of simple arithmetic, a[n] [in|de]crementation of the current buffer
- * pointer), and the memory consumption is ridicously low; and of course that was
- * a satisfaction.
+ * pointer), and the memory consumption is ridicously low, as it is borrowing, and
+ * this stuff is not an implementation, it is a property; and of course that was
+ * a satisfaction and rather not a boring one).
 
- * The library in reality consists of two levels, the actual editing part and the
- * interface.
+ * Currently the library consists of two levels actually, the actual editing part
+ * and the interface. Those is wise to split, to understand and simplify the code.
 
  * A couple of notes regarding the inner code.
  * The inner code it uses a couple of macros to ease the development, like:
@@ -407,8 +408,8 @@ Search:
   * The trueth is that my heart is with GNU, but my mind refuces to accept the existance
   * of the word LICENSE.
   * I wish there was a road to an unlicense, together with a certain certainity, that
-  * we (humans) realized for sure this emphasis to freedom, which besides ideology, this
-  * is the road to paradise.
+  * we (humans) full of the gained consciense, can guard it and keep it safe, as it
+  * is also (besides ideology) the road to paradise.
   */
 
 /* NOTE:
