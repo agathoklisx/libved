@@ -531,10 +531,10 @@ private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
     goto theend;
   }
 
-  re->retval = (sp - bytes) + re->pat->num_bytes;
-  re->cap[0] = AllocType (capture);
-  re->cap[0]->ptr = sp;
-  re->cap[0]->len = re->pat->num_bytes;
+  re->match_idx = sp - bytes;
+  re->match_len = re->pat->num_bytes;
+  re->match_ptr = bytes + re->match_idx;
+  re->retval = re->match_idx + re->match_len;
 
 theend:
   return re->retval;
@@ -549,7 +549,7 @@ private void re_free_capture_elements (regexp_t *re) {
 }
 
 private void re_free_captures (regexp_t *re) {
-  if (re->cap is  NULL) return;
+  if (re->cap is NULL) return;
   re_free_capture_elements (re);
   free (re->cap);
   re->cap = NULL;
@@ -567,16 +567,23 @@ private void re_free (regexp_t *re) {
   free (re);
 }
 
-private regexp_t *re_new (char *pat, int case_sens, int num_caps) {
+private int re_compile (regexp_t *re) {
+  (void) re;
+  return OK;
+}
+
+private regexp_t *re_new (char *pat, int flags, int num_caps, int (*compile) (regexp_t *)) {
   regexp_t *re = AllocType (regexp);
+  re->flags |= flags;
   re->pat = string_new_with (pat);
+  compile (re);
   re->num_caps = (0 > num_caps ? 0 : num_caps);
   re->cap = Alloc (sizeof (capture_t) * re->num_caps);
-  re->flags |= case_sens;
   return re;
 }
 
-private string_t *re_parse_substitute (char *sub, char *replace_buf) {
+private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
+  (void) re;
   string_t *substr = string_new ();
   char *sub_p = sub;
   while (*sub_p) {
@@ -623,10 +630,12 @@ public re_T __init_re__ (void) {
       .free_captures = re_free_captures,
       .free_capture_elements = re_free_capture_elements,
       .free_pat = re_free_pat,
-      .parse_substitute = re_parse_substitute
+      .parse_substitute = re_parse_substitute,
+      .compile = re_compile,
     )
   );
 }
+
 private int file_is_reg (const char *fname) {
   struct stat st;
   if (NOTOK is stat (fname, &st)) return 0;
@@ -2613,6 +2622,7 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(Ed) = $myparents(Ed);
   $my(Me) = $myparents(Buf);
   $my(Win)= $myparents(Me);
+  $my(Cstring) = $myparents(Cstring);
   $my(String) = $myparents(String);
   $my(Re) = $myparents(Re);
   $my(Video) = $myparents(Video);
@@ -2828,6 +2838,7 @@ private win_t *ed_win_new (ed_t *ed, int num_frames) {
   $my(Ed) = $myparents(Me);
   $my(Me) = &$myparents(Me)->Win;
   $my(Buf) = &$myparents(Me)->Buf;
+  $my(Cstring) = $myparents(Cstring);
   $my(String) =$myparents(String);
   $my(Re) = $myparents(Re);
   $my(Video) = $myparents(Video);
@@ -3184,28 +3195,28 @@ private char *get_current_word (buf_t *this, char *word, char *Nwtype, int len) 
   return word;
 }
 
-#define SEARCH_UPDATE_ROW(idx)             \
-({                                         \
-  int idx__ = (idx);                       \
-  if (sch->dir is -1) {                    \
-    if (idx__ is 0) {                      \
-      idx__ = this->num_items - 1;         \
-      sch->row = this->tail;               \
-    } else {                               \
-      idx__--;                             \
-      sch->row = sch->row->prev;           \
-    }                                      \
-  } else {                                 \
-    if (idx__ is this->num_items - 1) {    \
-      idx__ = 0;                           \
-      sch->row = this->head;               \
-    } else {                               \
-      idx__++;                             \
-      sch->row = sch->row->next;           \
-    }                                      \
-  }                                        \
-                                           \
-  idx__;                                   \
+#define SEARCH_UPDATE_ROW(idx)                    \
+({                                                \
+  int idx__ = (idx);                              \
+  if (sch->dir is -1) {                           \
+    if (idx__ is 0) {                             \
+      idx__ = this->num_items - 1;                \
+      sch->row = this->tail;                      \
+    } else {                                      \
+      idx__--;                                    \
+      sch->row = sch->row->prev;                  \
+    }                                             \
+  } else {                                        \
+    if (idx__ is this->num_items - 1) {           \
+      idx__ = 0;                                  \
+      sch->row = this->head;                      \
+    } else {                                      \
+      idx__++;                                    \
+      sch->row = sch->row->next;                  \
+    }                                             \
+  }                                               \
+                                                  \
+  idx__;                                          \
 })
 
 #define SEARCH_FREE                               \
@@ -3226,26 +3237,26 @@ private char *get_current_word (buf_t *this, char *word, char *Nwtype, int len) 
 private int __ved_search__ (buf_t *this, search_t *sch) {
   int retval = NOTOK;
   int idx = sch->cur_idx;
-  regexp_t *re = My(Re).new (sch->pat->bytes, 0, 1);
+  int flags = 0;
+  regexp_t *re = My(Re).new (sch->pat->bytes, flags, 0, My(Re).compile);
 
   sch->found = 0;
   SEARCH_PUSH (sch->cur_idx, sch->row);
 
   do {
-    My(Re).free_capture_elements (re);
     if (0 <= My(Re).exec (re, sch->row->data->bytes,
         sch->row->data->num_bytes)) {
       sch->idx = idx;
       sch->found = 1;
-      sch->col = re->retval - re->cap[0]->len;
-      strcpy (sch->line, sch->row->data->bytes);
-      sch->match =  Alloc ((sizeof (char) * re->cap[0]->len) + 1);
-      memcpy (sch->match, re->cap[0]->ptr, re->cap[0]->len);
-      sch->match[re->cap[0]->len] = '\0';
+      sch->col = re->match_idx;
+      sch->match = Alloc ((sizeof (char) * re->match_len) + 1);
+      memcpy (sch->match, re->match_ptr, re->match_len);
+      sch->match[re->match_len] = '\0';
+
       sch->prefix = Alloc ((sizeof (char) * sch->col) + 1);
       memcpy (sch->prefix, sch->row->data->bytes, sch->col);
       sch->prefix[sch->col] = '\0';
-      sch->end = sch->line + re->retval;
+      sch->end = sch->row->data->bytes + re->retval;
       retval = OK;
       goto theend;
     }
@@ -3616,7 +3627,8 @@ int interactive, int fidx, int lidx) {
   int slen = bytelen (sub);
 
   string_t *substr = NULL;
-  regexp_t *re = My(Re).new (pat, 0, 1);
+  int flags = 0;
+  regexp_t *re = My(Re).new (pat, flags, RE_MAX_NUM_CAPTURES, My(Re).compile);
 
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
@@ -3633,29 +3645,29 @@ int interactive, int fidx, int lidx) {
 searchandsub:;
     int done_substitution = 0;
     My(Re).free_capture_elements (re);
+
     if (0 > My(Re).exec (re, it->data->bytes + bidx,
         it->data->num_bytes - bidx)) goto thecontinue;
 
-    int diff = re->retval - re->cap[0]->len;
-
     ifnot (NULL is substr) string_free (substr);
-    if (NULL is (substr = My(Re).parse_substitute (sub, pat)))
+    if (NULL is (substr = My(Re).parse_substitute (re, sub, pat)))
       goto theend;
 
     if (interactive) {
-      char prefix[diff + 1];
-      memcpy (prefix, it->data->bytes, diff); prefix[diff] = '\0';
-      char match[re->cap[0]->len + 1];
-      memcpy (match, re->cap[0]->ptr, re->cap[0]->len);
-      match[re->cap[0]->len] = '\0';
+      char prefix[re->match_idx + 1];
+      memcpy (prefix, it->data->bytes, re->match_idx);
+      prefix[re->match_idx] = '\0';
+      char match[re->match_len + 1];
+      memcpy (match, re->match_ptr, re->match_len);
+      match[re->match_len] = '\0';
 
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A'};
       utf8 c = quest (this, str_fmt (
           "|match at line %d byte idx %d|\n"
           "%s%s%s%s%s\n"
           "Replace with %s%s%s or quit [yY|nN|qQ|[aA]ll]\n",
-           idx, diff, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), match,
-           TERM_MAKE_COLOR(COLOR_MENU_BG), re->cap[0]->ptr + re->cap[0]->len,
+           idx, re->match_idx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), match,
+           TERM_MAKE_COLOR(COLOR_MENU_BG), re->match_ptr + re->match_len,
            TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG)),
            chars, ARRLEN (chars));
 
@@ -3672,14 +3684,14 @@ searchandsub:;
     act->bytes = str_dup (it->data->bytes);
     stack_push (action, act);
 
-    string_replace_numbytes_at_with (it->data, re->cap[0]->len, diff, substr->bytes);
+    string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx, substr->bytes); 
     done_substitution = 1;
 
     retval = DONE;
 
 if_global:
     if (global) {
-      bidx = diff + (done_substitution ? slen : 0) + 1;
+      bidx = re->match_idx + (done_substitution ? slen : 0) + 1;
       if (bidx >= (int) it->data->num_bytes) goto thecontinue;
       goto searchandsub;
     }
@@ -3845,8 +3857,6 @@ private int ved_quit (buf_t *this, int force) {
 }
 
 private int ved_normal_right (buf_t *this, int count, int draw) {
- // int curcol = $mycur(first_col_idx);
-
   int is_ins_mode = str_eq ($my(mode), INSERT_MODE);
 
   if ($mycur(cur_col_idx) is ((int) $mycur(data)->num_bytes - 1 +
@@ -8431,6 +8441,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
 
   $my(Me) = E;
+  $my(Cstring) = &E->Cstring;
   $my(String) = &E->String;
   $my(Re) = &E->Re;
   $my(Term) = &E->Term;
@@ -8496,6 +8507,7 @@ private ed_t *ed_new (ed_T *E, int num_wins) {
 
 private ed_T *__allocate_prop__ (ed_T *this) {
   $myprop = AllocProp (ed);
+  $my(Cstring) = &this->Cstring;
   $my(String) = &this->String;
   $my(Re) = &this->Re;
   $my(Term) = &this->Term;
@@ -8542,6 +8554,14 @@ private void __deinit__ (ed_T *this) {
                       $my(term)->prop->orig_curs_col_pos);
   My(Screen).restore ($my(term));
   __deallocate_prop__ (this);
+}
+
+public cstring_T __init_cstring__ (void) {
+  return ClassInit (cstring,
+    .self = SelfInit (cstring,
+      .cmp_n = str_cmp_n
+    )
+  );
 }
 
 public string_T __init_string__ (void) {
@@ -8722,6 +8742,7 @@ private ed_T *editor_new (char *name) {
     .Video = __init_video__ (),
     .Term = __init_term__ (),
     .String = __init_string__ (),
+    .Cstring = __init_cstring__ (),
     .Re = __init_re__ ()
   );
 
