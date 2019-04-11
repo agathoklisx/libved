@@ -70,8 +70,6 @@
 
 #define VUNDO_RESET (1 << 0)
 
-#define RE_NO_MATCH -1
-
 enum {
   NOTHING_TODO = 0,
   DONE,
@@ -353,12 +351,6 @@ NewType (video,
       int rows[MAXROWS];
 );
 
-NewType (string,
-  size_t  num_bytes;
-  size_t  mem_size;
-    char *bytes;
-);
-
 NewType (vstritem,
   string_t *data;
 
@@ -373,7 +365,7 @@ NewType (vstr,
         int   cur_idx;
         int   num_items;
 );
-
+/*
 NewType (capture,
   const char *ptr;
   int len;
@@ -388,7 +380,8 @@ NewType (regexp,
   capture_t **cap;
   int num_caps;
 );
-
+*/
+  
 NewType (dirlist,
   vstr_t *list;
   char dir[PATH_MAX];
@@ -560,7 +553,6 @@ NewType (search,
   int  col;
   int  found;
   int  dir;
-  char line[MAXLINE];
   char *prefix;
   char *match;
   char *end;
@@ -608,6 +600,7 @@ NewType (hist,
   Class (__me__) *Me;            \
   Class (video) *Video;          \
   Class (term) *Term;            \
+  Class (cstring) *Cstring;      \
   Class (string) *String;        \
   Class (re) *Re;                \
   Class (input)  *Input;         \

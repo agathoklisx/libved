@@ -212,6 +212,38 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
+NewType (string,
+  size_t  num_bytes;
+  size_t  mem_size;
+    char *bytes;
+);
+
+#define RE_IGNORE_CASE (1 << 0)
+#define RE_ENCLOSE_PAT_IN_PAREN (1 << 1)
+#define RE_PATTERN_IS_STRING_LITERAL (1 << 2)
+
+#define RE_NO_MATCH -1
+
+#define RE_MAX_NUM_CAPTURES 9
+
+NewType (capture,
+  const char *ptr;
+  int len;
+);
+
+NewType (regexp,
+  string_t *pat;
+  capture_t **cap;
+  char *buf;
+  size_t buflen;
+  int retval;
+  int flags;
+  int num_caps;
+  int match_idx;
+  int match_len;
+  char *match_ptr;
+);
+
 NewSubSelf (video, draw,
   void
      (*row_at) (video_t *, int),
@@ -289,6 +321,14 @@ NewClass (term,
   Self (term) self;
 );
 
+NewSelf (cstring,
+  int (*cmp_n) (const char *, const char *, size_t);
+);
+
+NewClass (cstring,
+  Self (cstring) self;
+);
+
 NewSelf (string,
   void
      (*free) (string_t *),
@@ -318,14 +358,16 @@ NewClass (string,
 );
 
 NewSelf (re,
-  regexp_t *(*new) (char *, int, int);
+  regexp_t *(*new) (char *, int, int, int (*) (regexp_t *));
       void  (*free) (regexp_t *);
       void  (*free_captures) (regexp_t *);
       void  (*free_capture_elements) (regexp_t *);
       void  (*free_pat) (regexp_t *);
 
        int  (*exec) (regexp_t *, char *, size_t);
-  string_t *(*parse_substitute) (char *, char *);
+       int  (*compile) (regexp_t *);
+  string_t *(*parse_substitute) (regexp_t *, char *, char *);
+  string_t *(*get_match) (regexp_t *, int);
 );
 
 NewClass (re,
@@ -502,6 +544,7 @@ NewClass (ed,
   Class (win) Win;
   Class (term) Term;
   Class (video) Video;
+  Class (cstring) Cstring;
   Class (string) String;
   Class (re) Re;
   Class (input) Input;
@@ -517,5 +560,7 @@ NewClass (ed,
 
 public ed_T *__init_ved__ (void);
 public void __deinit_ved__ (ed_T *);
+
+public int str_cmp_n (const char *, const char *, size_t);
 
 #endif /* LIBVED_H */
