@@ -69,13 +69,17 @@
  * Also included a very minimal executable that can be used to test the code.
  * This executable can be compiled also as static with gcc, but not with tcc.
 
- * To test the editor issue:
+ * To test the editor issue (using gcc as the default compiler):
 
    cd src && make veda-shared && make run
 
- * or with tcc
+   * to enable regular expression support issue:
 
-   cd src && make CC=tcc veda-shared && make run
+   cd src && make HAS_REGEXP=1 veda-shared && make run
+
+ * or with the tcc compiler
+
+   cd src && make CC=tcc HAS_REGEXP=1 veda-shared && make run
 
  * (this will open the source files of itself)
 
@@ -236,9 +240,10 @@ Search:
  * until user accepts the match. The results and the dialog, are shown at the
  * bottom lines (the message line as the last line on screen).
  * Also at this state, pattern is just string literal and the code is using
- * strstr() to perform the searching.
+ * strstr() to perform the searching. (UPDATE) The sample application can use
+ * now regular expressions.
  * It searches once in the line, and it should highlight the captured string
- * with a proper message with the matched line, line number and byte index
+ * with a proper message with the matched line, line number and byte index.
  */
 
 /* Command line mode:
@@ -267,7 +272,8 @@ Search:
 
  * :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] --global
  * At this state `pat' is a string literal, `sub' can contain '&' to denote the
- * captured pattern (an '&' can be inserted by escaping).
+ * captured pattern (an '&' can be inserted by escaping). (UPDATE: It is possible
+ * to use regular expressions, see below at the Sample Application section).
 
  * :w[rite][!] [filename [--range] [--append]]
  * :e[!] filename        (reloading has not been implemented properly)
@@ -383,6 +389,17 @@ Search:
 
  * this code has acces to the root structure, and should use the get/set
  * specific to types methods to access the underlying properties.
+
+ * Sample Application
+ * This application adds regular expression support, by using a slightly modified
+ * version of the slre machine, which is an ISO C library that implements a subset
+ * of Perl regular expression syntax, see:
+
+     https://github.com/cesanta/slre.git
+
+ * Many thanks.
+ * It is implemented outside of the library by overiding methods from the Re structure.
+ * To enable it use "HAS_REGEXP=1" during compilation.
 
  * Memory Interface
  * The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches

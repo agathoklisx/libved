@@ -43,6 +43,12 @@ STATIC_CFLAGS  := -static
 FLAGS          := $(BASE_FLAGS)
 
 #----------------------------------------------------------#
+HAS_REGEXP := 0
+
+ifneq ($(HAS_REGEXP), 0)
+  FLAGS += -DHAS_REGEXP
+endif
+
 DEBUG := 1
 
 ifneq ($(DEBUG), 0)

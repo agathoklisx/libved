@@ -2,16 +2,6 @@
 #define _XOPEN_SOURCE 700
 #define _DEFAULT_SOURCE
 
-/* 
-  Πάρτε σβάρνα τα βουνά τις οξιές
-  και τις λαγκαδιές
-  και ξεχάστε το χθές
-  
-  Πάρτε σβάρνα τα βουνά τις κορφές
-  και τις αμουδιές
-  να θυμάστε το χθές
-*/
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -535,12 +525,23 @@ private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
   re->match_len = re->pat->num_bytes;
   re->match_ptr = bytes + re->match_idx;
   re->retval = re->match_idx + re->match_len;
+  re->match = re->pat;
 
 theend:
   return re->retval;
 }
 
-private void re_free_capture_elements (regexp_t *re) {
+private void re_reset_captures (regexp_t *re) {
+  re->match_len = re->match_idx = 0;
+  re->match_ptr = NULL;
+
+  ifnot (re->flags & RE_PATTERN_IS_STRING_LITERAL) {
+    if (re->match isnot NULL) {
+      string_free (re->match);
+      re->match = NULL;
+    }
+  }
+
   for (int i = 0; i < re->num_caps; i++) {
     if (NULL is re->cap[i]) continue;
     free (re->cap[i]);
@@ -550,7 +551,7 @@ private void re_free_capture_elements (regexp_t *re) {
 
 private void re_free_captures (regexp_t *re) {
   if (re->cap is NULL) return;
-  re_free_capture_elements (re);
+  re_reset_captures (re);
   free (re->cap);
   re->cap = NULL;
 }
@@ -568,7 +569,7 @@ private void re_free (regexp_t *re) {
 }
 
 private int re_compile (regexp_t *re) {
-  (void) re;
+  re->flags |= RE_PATTERN_IS_STRING_LITERAL;
   return OK;
 }
 
@@ -579,6 +580,7 @@ private regexp_t *re_new (char *pat, int flags, int num_caps, int (*compile) (re
   compile (re);
   re->num_caps = (0 > num_caps ? 0 : num_caps);
   re->cap = Alloc (sizeof (capture_t) * re->num_caps);
+  re->match = NULL;
   return re;
 }
 
@@ -628,7 +630,7 @@ public re_T __init_re__ (void) {
       .new = re_new,
       .free = re_free,
       .free_captures = re_free_captures,
-      .free_capture_elements = re_free_capture_elements,
+      .reset_captures = re_reset_captures,
       .free_pat = re_free_pat,
       .parse_substitute = re_parse_substitute,
       .compile = re_compile,
@@ -3624,7 +3626,7 @@ int interactive, int fidx, int lidx) {
   int retval = NOTHING_TODO;
   row_t *it = this->head;
 
-  int slen = bytelen (sub);
+//  int slen = bytelen (sub);
 
   string_t *substr = NULL;
   int flags = 0;
@@ -3644,29 +3646,25 @@ int interactive, int fidx, int lidx) {
 
 searchandsub:;
     int done_substitution = 0;
-    My(Re).free_capture_elements (re);
+    My(Re).reset_captures (re);
 
     if (0 > My(Re).exec (re, it->data->bytes + bidx,
         it->data->num_bytes - bidx)) goto thecontinue;
 
     ifnot (NULL is substr) string_free (substr);
-    if (NULL is (substr = My(Re).parse_substitute (re, sub, pat)))
+    if (NULL is (substr = My(Re).parse_substitute (re, sub, re->match->bytes)))
       goto theend;
 
     if (interactive) {
-      char prefix[re->match_idx + 1];
-      memcpy (prefix, it->data->bytes, re->match_idx);
-      prefix[re->match_idx] = '\0';
-      char match[re->match_len + 1];
-      memcpy (match, re->match_ptr, re->match_len);
-      match[re->match_len] = '\0';
-
+      char prefix[bidx + re->match_idx + 1];
+      memcpy (prefix, it->data->bytes, bidx + re->match_idx);
+      prefix[bidx + re->match_idx] = '\0';
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A'};
       utf8 c = quest (this, str_fmt (
           "|match at line %d byte idx %d|\n"
           "%s%s%s%s%s\n"
           "Replace with %s%s%s or quit [yY|nN|qQ|[aA]ll]\n",
-           idx, re->match_idx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), match,
+           idx, re->match_idx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), re->match->bytes,
            TERM_MAKE_COLOR(COLOR_MENU_BG), re->match_ptr + re->match_len,
            TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG)),
            chars, ARRLEN (chars));
@@ -3684,14 +3682,15 @@ searchandsub:;
     act->bytes = str_dup (it->data->bytes);
     stack_push (action, act);
 
-    string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx, substr->bytes); 
+    string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx + bidx,
+      substr->bytes);
     done_substitution = 1;
 
     retval = DONE;
 
 if_global:
     if (global) {
-      bidx = re->match_idx + (done_substitution ? slen : 0) + 1;
+      bidx += re->match_idx + (done_substitution ? re->match_len : 0) + 1;
       if (bidx >= (int) it->data->num_bytes) goto thecontinue;
       goto searchandsub;
     }

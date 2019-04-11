@@ -242,6 +242,7 @@ NewType (regexp,
   int match_idx;
   int match_len;
   char *match_ptr;
+  string_t *match;
 );
 
 NewSubSelf (video, draw,
@@ -361,7 +362,7 @@ NewSelf (re,
   regexp_t *(*new) (char *, int, int, int (*) (regexp_t *));
       void  (*free) (regexp_t *);
       void  (*free_captures) (regexp_t *);
-      void  (*free_capture_elements) (regexp_t *);
+      void  (*reset_captures) (regexp_t *);
       void  (*free_pat) (regexp_t *);
 
        int  (*exec) (regexp_t *, char *, size_t);
@@ -560,7 +561,5 @@ NewClass (ed,
 
 public ed_T *__init_ved__ (void);
 public void __deinit_ved__ (ed_T *);
-
-public int str_cmp_n (const char *, const char *, size_t);
 
 #endif /* LIBVED_H */
