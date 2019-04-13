@@ -171,9 +171,11 @@ Normal mode:
  | [yY]              | yank [char|line]wise           | yes
  | [pP]              | put register                   |
  | d[d]              | delete line[s]                 | yes
- | x|DELETE          | delete charecter               | yes
+ | x|DELETE          | delete character               | yes
  | D                 | delete to end of line          |
- | X|BACKSPACE       | delete charecter front         | yes
+ | X|BACKSPACE       | delete character to the left   | yes
+ |   BACKSPACE and if set and when current idx is 0, deletes trailing spaces|
+ |   BACKSPACE and if set is like insert mode         |
  | r                 | replace character              |
  | C                 | delete to end of line (insert) |
  | J                 | join lines                     |
@@ -214,7 +216,7 @@ Insert Mode:
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
- | motion normal commands with some differences explained bellow
+ | motion normal mode commands with some differences explained bellow|
  | HOME              | goes to the begining of line   |
  | END               | goes to the end of line        |
  | escape            | aborts                         |
@@ -404,16 +406,23 @@ Search:
  * Many thanks.
  * It is implemented outside of the library by overiding methods from the Re structure.
  * To enable it use "HAS_REGEXP=1" during compilation.
+ *
+ * The substitution string in the ":substitute command", can use '&' to denote the full
+ * captured matched string, but also captures of which denoted with \nth.
+ * It is also possible to force caseless searching, by using (like pcre) (?i) in front
+ * of the pattern. This option won't work with multibyte characters. Searching for
+ * multibyte characters it should work properly though.
 
  * Memory Interface
  * The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
- * integer overflows, and exposes a public mutable handler function that is invoked
+ * integer overflows), and it exposes a public mutable handler function that is invoked
  * on such overflows or when there is not enough memory available errors.
  * This function is meant to be set by the user of the library, on the application
  * side and scope. The provided one exits the program with a detailed message.
 
- * It implements two those wrappers. Alloc (size) and Realloc (object, size).
- * Both they return void *.
+ * The code defines two those memory wrappers.
+ * Alloc (size) and Realloc (object, size). Both like their counterparts, they return
+ * void *.
 
  /* LICENSE:
   * I wish we could do without LICENSES. In my world it is natural to give credits

@@ -11,10 +11,13 @@
 
 /* this is not configurable as the code will not count the change in the calculations */
 #define TABLENGTH 1
+
 #define TAB_ON_INSERT_MODE_INDENTS 0
 #define CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #define SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #define SMALL_E_ON_NORMAL_GOES_INSERT_MODE 1
+#define BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES 1
+#define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 
 #define ED_INIT_ERROR   (1 << 0)
 

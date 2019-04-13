@@ -7246,8 +7246,8 @@ process_char:
             rl->line->num_items is 0))
           goto post_process;
         {
-          vstritem_t *t = current_list_pop (rl->line, vstritem_t);
-          if (NULL isnot t) {string_free (t->data); free (t);}
+          vstritem_t *tmp = current_list_pop (rl->line, vstritem_t);
+          if (NULL isnot tmp) {string_free (tmp->data); free (tmp);}
         }
         goto post_process;
 
@@ -7828,8 +7828,7 @@ handle_char:
         goto get_char;
 
       case BACKSPACE_KEY:
-        if (0 is $mycur(cur_col_idx))
-          goto get_char;
+        ifnot ($mycur(cur_col_idx)) goto get_char;
 
         ved_normal_left (this, 1);
         ved_normal_delete (this, 1, -1);
@@ -8085,7 +8084,24 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       return ved_normal_delete (this, count, reg);
 
     case BACKSPACE_KEY:
-      ifnot ($mycur(cur_col_idx)) return NOTHING_TODO;
+      ifnot ($mycur(cur_col_idx)) {
+        if (BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES) {
+          size_t len = $mycur(data)->num_bytes;
+          for (int i = $mycur(data)->num_bytes - 1; i > 0; i--)
+            if ($mycur(data)->bytes[i] is ' ')
+              My(String).clear_at ($mycur(data), i);
+            else
+              break;
+
+          if (len isnot $mycur(data)->num_bytes) self(draw_cur_row);
+          return DONE;
+        }
+
+        return NOTHING_TODO;
+      }
+      
+      ifnot (BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE)
+        return NOTHING_TODO;
 
       __fallthrough__;
 
