@@ -77,9 +77,13 @@
 
    cd src && make HAS_REGEXP=1 veda-shared && make run
 
+   * by default writing is disabled, unless in DEBUG mode, like:
+
+   cd src && make HAS_REGEXP=1 DEBUG=1 veda-shared && make run
+
  * or with the tcc compiler
 
-   cd src && make CC=tcc HAS_REGEXP=1 veda-shared && make run
+   cd src && make CC=tcc HAS_REGEXP=1 DEBUG=1 veda-shared && make run
 
  * (this will open the source files of itself)
 

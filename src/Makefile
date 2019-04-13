@@ -49,10 +49,10 @@ ifneq ($(HAS_REGEXP), 0)
   FLAGS += -DHAS_REGEXP
 endif
 
-DEBUG := 1
+DEBUG := 0
 
 ifneq ($(DEBUG), 0)
-  FLAGS += $(DEBUG_FLAGS)
+  FLAGS += $(DEBUG_FLAGS) -DENABLE_WRITING
 endif
 
 CHECK_PTR_BOUNDS := 0

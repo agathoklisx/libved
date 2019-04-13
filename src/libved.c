@@ -3855,6 +3855,23 @@ private int ved_quit (buf_t *this, int force) {
   return EXIT;
 }
 
+private void ved_on_blankline (buf_t *this) {
+  int lineisblank = 1;
+  for (int i = 0; i < (int) $mycur(data)->num_bytes; i++) {
+    if ($mycur(data)->bytes[i] isnot ' ') {
+      lineisblank = 0;
+      break;
+    }
+  }
+
+  if (lineisblank) {
+    My(String).replace_with ($mycur(data), "");
+    $my(video)->col_pos = $my(cur_video_col) = 0;
+    $mycur(cur_col_idx) = $my(video)->col_pos = $my(cur_video_col) =
+      $mycur(first_col_idx) = 0;
+  }
+}
+
 private int ved_normal_right (buf_t *this, int count, int draw) {
   int is_ins_mode = str_eq ($my(mode), INSERT_MODE);
 
@@ -4007,6 +4024,8 @@ private int ved_normal_up (buf_t *this, int count, int adjust_col, int draw) {
   int clen = char_byte_len ($mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
+  ved_on_blankline (this);
+
   currow_idx -= count;
   self(cur.set, currow_idx);
 
@@ -4051,6 +4070,8 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
   int curcol_idx = $mycur(cur_col_idx);
   int clen = char_byte_len ($mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
+
+  ved_on_blankline (this);
 
   currow_idx += count;
   self(cur.set, currow_idx);
@@ -4105,6 +4126,7 @@ private int ved_normal_page_down (buf_t *this, int count) {
       }
   }
 
+  ved_on_blankline (this);
 
   self(cur.set, currow_idx);
   self(set.video_first_row, frow);
@@ -4140,6 +4162,8 @@ private int ved_normal_page_up (buf_t *this, int count) {
     curlnr -= ONE_PAGE;
   }
 
+  ved_on_blankline (this);
+
   self(cur.set, curlnr);
   self(set.video_first_row, frow);
   $my(video)->row_pos = $my(cur_video_row) = row;
@@ -4157,6 +4181,8 @@ private int ved_normal_bof (buf_t *this) {
   int curcol_idx = $mycur(cur_col_idx);
   int clen = char_byte_len ($mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
+
+  ved_on_blankline (this);
 
   self(set.video_first_row, 0);
   self(cur.set, 0);
@@ -4177,6 +4203,8 @@ private int ved_normal_eof (buf_t *this) {
   int curcol_idx = $mycur(cur_col_idx);
   int clen = char_byte_len ($mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
+
+  ved_on_blankline (this);
 
   self(cur.set, this->num_items - 1);
 
@@ -7538,6 +7566,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_WRITE_FORCE:
     case VED_COM_WRITE:
     case VED_COM_WRITE_ALIAS:
+#ifdef ENABLE_WRITING
       {
         arg_t *fname = rline_get_arg (rl, RL_VED_ARG_FILENAME);
         arg_t *range = rline_get_arg (rl, RL_VED_ARG_RANGE);
@@ -7556,6 +7585,9 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
             rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com);
         }
       }
+#else
+  msg_error ("writing is disabled, to enable use DEBUG=1 during compilation");
+#endif
       goto theend;
 
     case VED_COM_EDIT_FORCE_ALIAS:

@@ -8,32 +8,38 @@
 
 #include <libved.h>
 
-ed_T *E;
+ed_T *E = NULL;
 
-#undef My
 #define Ed E->self
+#undef My
 #define My(__C__) E->__C__.self
 
-#define MAXLINE 4096
-#define str_fmt(fmt, ...)                                 \
-({                                                        \
-  char buf_[MAXLINE];                                     \
-  snprintf (buf_, MAXLINE, fmt, __VA_ARGS__);             \
-  buf_;                                                   \
-})
-
-#define debug_append(fmt, ...)                            \
-({                                                        \
-  char *file_ = str_fmt ("/tmp/%s.debug", __func__);      \
-  FILE *fp_ = fopen (file_, "a+");                        \
-  if (fp_ isnot NULL) {                                   \
-    fprintf (fp_, (fmt), ## __VA_ARGS__);                 \
-    fclose (fp_);                                         \
-  }                                                       \
-})
 #ifdef HAS_REGEXP
 #include "modules/slre/slre.h"
 #include "modules/slre/slre.c"
+
+/* this is like slre_match(), with an aditional argument and two extra fields
+ * in the slre regex_info structure */
+int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
+struct slre_cap *caps, int num_caps, int flags) {
+  struct regex_info info;
+
+  info.flags = flags;
+  info.num_brackets = info.num_branches = 0;
+  info.num_caps = num_caps;
+  info.caps = caps;
+
+  info.match_idx = info.match_len = -1;
+
+  int retval = foo (regexp, (int) strlen(regexp), s, s_len, &info);
+  if (0 <= retval) {
+    re->match_idx = info.match_idx;
+    re->match_len = info.match_len;
+    re->match_ptr = (char *) s + info.match_idx;
+  }
+
+  return retval;
+}
 
 private int my_re_compile (regexp_t *re) {
   ifnot (My(Cstring).cmp_n (re->pat->bytes, "(?i)", 4)) {
@@ -74,13 +80,12 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
 }
 
 private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
-  (void) re;
   string_t *substr = My(String).new ();
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
       case '\\':
-        if (*(sub_p + 1)  is 0) goto theerror;
+        if (*(sub_p + 1) is 0) goto theerror;
 
         switch (*++sub_p) {
           case '&':
@@ -157,6 +162,7 @@ int err, size_t size,  char *file, const char *func, int line) {
   else
     fprintf (stderr, "Error: Not Enouch Memory\n");
 
+  ifnot (NULL is E) __deinit_ved__ (E);
   exit (1);
 }
 
