@@ -84,7 +84,7 @@ typedef unsigned char uchar;
 #define private __attribute__((visibility ("hidden")))
 #define mutable __attribute__((__weak__))
 #define __fallthrough__  __attribute__ ((fallthrough))
-#define __unused__  __attribute__ ((unused))
+//#define __unused__  __attribute__ ((unused))
 
 #define bytelen strlen
 #define is    ==
@@ -326,7 +326,8 @@ NewClass (term,
 );
 
 NewSelf (cstring,
-  int (*cmp_n) (const char *, const char *, size_t);
+   int  (*cmp_n) (const char *, const char *, size_t);
+  char *(*dup) (const char *);
 );
 
 NewClass (cstring,
@@ -428,10 +429,12 @@ NewSelf (buf,
   SubSelf (buf, row) row;
   SubSelf (buf, read) read;
 
- void
-   (*draw) (buf_t *),
-   (*flush) (buf_t *),
-   (*draw_cur_row) (buf_t *);
+  void
+    (*draw) (buf_t *),
+    (*flush) (buf_t *),
+    (*draw_cur_row) (buf_t *);
+
+  row_t *(*append_with) (buf_t *, char *);
 );
 
 NewClass (buf,
@@ -464,11 +467,12 @@ NewSelf (win,
   void (*draw) (win_t *);
 
   buf_t *(*buf_new) (win_t *, char *, int);
+  buf_t *(*buf_new_special) (win_t *, char *);
 
   int
-     (*append_buf)    (win_t *, buf_t *),
-     (*prepend_buf)   (win_t *, buf_t *),
-     (*insert_buf_at) (win_t *, buf_t *, int);
+    (*append_buf)    (win_t *, buf_t *),
+    (*prepend_buf)   (win_t *, buf_t *),
+    (*insert_buf_at) (win_t *, buf_t *, int);
 );
 
 NewClass (win,
@@ -487,7 +491,8 @@ NewSubSelf (ed, get,
   win_t
     *(*current_win) (ed_t *),
     *(*win_head) (ed_t *),
-    *(*win_next) (ed_t *, win_t *);
+    *(*win_next) (ed_t *, win_t *),
+    *(*win_by_idx) (ed_t *, int);
 
   ed_t *(*next) (ed_t *);
   ed_t *(*prev) (ed_t *);
@@ -501,7 +506,8 @@ NewSubSelf (ed, set,
 );
 
 NewSubSelf (ed, append,
-  int (*win) (ed_t *, win_t *);
+   int (*win) (ed_t *, win_t *);
+  void (*message) (ed_t *, char *);
 );
 
 NewSubSelf (ed, readjust,
@@ -513,7 +519,7 @@ NewSubSelf (ed, exec,
 );
 
 NewSubSelf (ed, win,
-  win_t *(*new) (ed_t *, int);
+  win_t *(*new) (ed_t *, char *, int);
 );
 
 NewSelf (ed,

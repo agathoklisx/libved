@@ -203,6 +203,7 @@ Normal mode:
  |   `               | previus focused window         |
  | :                 | command line mode              |
  | CTRL-j            | detach editor [extension]      |
+ | q                 | quit (not delete) and when buffer type is pager|
 
 Insert Mode:
  |
@@ -290,6 +291,7 @@ Search:
  * :w[*] (functions that implement the above buf functions, with regards to windows)
  * :enew filename        (new buffer on a new window)
  * :r[ead] filename      (read filename into current buffer)
+ * :messages             (message buffer)
  * :wq!                  (write quite)
  * :q!                   (quit)
  */

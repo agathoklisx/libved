@@ -5,12 +5,14 @@
 #define MAXROWS 256
 #define MAX_COUNT_DIGITS 8
 
-#define UNAMED "[No Name]"
-#define NORMAL_MODE "normal"
-#define INSERT_MODE "insert"
-#define VISUAL_MODE_LW "visual"
-#define VISUAL_MODE_CW "visual line"
-#define VISUAL_MODE_BW "visual block"
+#define VED_SPECIAL_WIN "__"
+#define VED_MSG_BUF     "[messages]"
+#define UNAMED          "[No Name]"
+#define NORMAL_MODE     "normal"
+#define INSERT_MODE     "insert"
+#define VISUAL_MODE_LW  "visual"
+#define VISUAL_MODE_CW  "visual line"
+#define VISUAL_MODE_BW  "visual block"
 
 #define CASE_A ",[]()+-:;}{<>_"
 #define CASE_B ".][)(-+;:{}><-"
@@ -44,6 +46,7 @@
 #define RL_VED_ARG_INTERACTIVE (1 << 5)
 #define RL_VED_ARG_APPEND (1 << 6)
 #define RL_VED_ARG_BUFNAME (1 << 7)
+#define RL_VED_ARG_ANYTYPE (1 << 8)
 
 #define RL_OK (1 << 0)
 #define RL_CONTINUE (1 << 1)
@@ -67,6 +70,7 @@
 #define BUF_IS_MODIFIED  (1 << 5)
 #define BUF_IS_VISIBLE   (1 << 6)
 #define BUF_IS_RDONLY    (1 << 7)
+#define BUF_IS_PAGER     (1 << 8)
 
 #define VUNDO_RESET (1 << 0)
 
@@ -76,6 +80,8 @@ enum {
   NEWCHAR,
   EXIT,
   WIN_EXIT,
+  BUF_EXIT,
+  BUF_QUIT,
 };
 
 enum {
@@ -96,6 +102,7 @@ enum {
   VED_COM_EDIT,
   VED_COM_EDIT_ALIAS,
   VED_COM_ENEW,
+  VED_COM_MESSAGES,
   VED_COM_QUIT_FORCE,
   VED_COM_QUIT_FORCE_ALIAS,
   VED_COM_QUIT,
@@ -288,20 +295,20 @@ enum {
 5:buffer is read only.\
 6:buffer has not been modified, use w! to force."
 
-#define error_string(mid, ...)                                         \
-({                                                                     \
-  char mfmt[MAXERRLEN]; mfmt[0] = '\0';                                \
-  char mpat[16]; snprintf (mpat, 16, "%d:", mid);                      \
-  char *sp = strstr (ED_MSGS_FMT, mpat);                               \
+#define error_string(eid, ...)                                         \
+(char *)({                                                                     \
+  char efmt[MAXERRLEN]; efmt[0] = '\0';                                \
+  char epat[16]; snprintf (epat, 16, "%d:", eid);                      \
+  char *sp = strstr (ED_MSGS_FMT, epat);                               \
   if (sp isnot NULL) {                                                 \
     int i_;                                                            \
-    for (i_ = 0; i_ < (int) bytelen (mpat); i_++) sp++;                \
-    for (i_ = 0; *sp and *sp isnot '.'; sp++) mfmt[i_++] = *sp;        \
-    mfmt[i_] = '\0';                                                   \
+    for (i_ = 0; i_ < (int) bytelen (epat); i_++) sp++;                \
+    for (i_ = 0; *sp and *sp isnot '.'; sp++) efmt[i_++] = *sp;        \
+    efmt[i_] = '\0';                                                   \
   }                                                                    \
-  char mbuf[MAXERRLEN];                                                \
-  snprintf (mbuf, MAXERRLEN, mfmt, ## __VA_ARGS__);                    \
-  mbuf;                                                                \
+  char ebuf[MAXERRLEN];                                                \
+  snprintf (ebuf, MAXERRLEN, efmt, ## __VA_ARGS__);                    \
+  ebuf;                                                                \
 })
 
 NewProp (term,
@@ -351,37 +358,20 @@ NewType (video,
       int rows[MAXROWS];
 );
 
-NewType (vstritem,
-  string_t *data;
-
-  vstritem_t *next;
-  vstritem_t *prev;
+NewType (vstring,
+   string_t *data;
+  vstring_t *next;
+  vstring_t *prev;
 );
 
 NewType (vstr,
-  vstritem_t *head;
-  vstritem_t *tail;
-  vstritem_t *current;
-        int   cur_idx;
-        int   num_items;
-);
-/*
-NewType (capture,
-  const char *ptr;
-  int len;
+  vstring_t *head;
+  vstring_t *tail;
+  vstring_t *current;
+        int  cur_idx;
+        int  num_items;
 );
 
-NewType (regexp,
-  string_t *pat;
-  char *buf;
-  size_t buflen;
-  int retval;
-  int flags;
-  capture_t **cap;
-  int num_caps;
-);
-*/
-  
 NewType (dirlist,
   vstr_t *list;
   char dir[PATH_MAX];
@@ -828,7 +818,7 @@ private int ved_normal_goto_linenr (buf_t *, int);
 private int ved_insert (buf_t *, utf8);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
-private int ved_win_change (buf_t **, int);
+private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
 private int ved_quit (buf_t *, int);
 private int ved_rline (buf_t **, rline_t *);
@@ -861,13 +851,13 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsNotDirSep(c) (c != '/')
 #define IsSeparator(c)                          \
   ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
-   strchr(",.()+-/*=~%<>[]:;", (c)) isnot NULL)
+   strchr(",.()+-/=*~%<>[]:;", (c)) isnot NULL)
 
 #define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
-#define Notword ".,?/*+-=~%<>[](){}\\'\";"
+#define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
- 
+
 /*
 #define NotWord " \t\n"
 #define NotWord_len 3

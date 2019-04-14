@@ -133,8 +133,7 @@ theerror:
   My(String).free (substr);
   return NULL;
 }
-
-#endif
+#endif /* HAS_REGEXP */
 
 private void sigwinch_handler (int sig) {
   (void) sig;

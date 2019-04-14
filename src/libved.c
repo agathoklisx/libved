@@ -268,9 +268,9 @@ private int string_replace_with_fmt (string_t *this, const char *fmt, ...) {
 private void vstr_free (vstr_t *this) {
   if (this is NULL) return;
 
-  vstritem_t *vs = this->head;
+  vstring_t *vs = this->head;
   while (vs) {
-    vstritem_t *tmp = vs->next;
+    vstring_t *tmp = vs->next;
     string_free (vs->data);
     free (vs);
     vs = tmp;
@@ -281,7 +281,7 @@ private void vstr_free (vstr_t *this) {
 
 private string_t *vstr_join (vstr_t *this, char *sep) {
   string_t *bytes = string_new ();
-  vstritem_t *it = this->head;
+  vstring_t *it = this->head;
   while (it) {
     string_append_fmt (bytes, "%s%s", it->data->bytes, sep);
     it = it->next;
@@ -294,14 +294,14 @@ private string_t *vstr_join (vstr_t *this, char *sep) {
 }
 
 private void vstr_append_current_with (vstr_t *this, char *bytes) {
-  vstritem_t *vstr = AllocType (vstritem);
+  vstring_t *vstr = AllocType (vstring);
   vstr->data = string_new_with (bytes);
   current_list_append (this, vstr);
 }
 
 private vstr_t *vstr_dup (vstr_t *this) {
   vstr_t *vs = AllocType (vstr);
-  vstritem_t *it = this->head;
+  vstring_t *it = this->head;
   while (it) {
     vstr_append_current_with (vs, it->data->bytes);
     it = it->next;
@@ -312,7 +312,7 @@ private vstr_t *vstr_dup (vstr_t *this) {
 }
 
 private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
-  vstritem_t *vs = AllocType (vstritem);
+  vstring_t *vs = AllocType (vstring);
   vs->data = string_new_with (bytes);
 
   int res = 1;
@@ -356,7 +356,7 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
     goto theend;
   }
 
-  vstritem_t *it = this->head->next;
+  vstring_t *it = this->head->next;
 
   while (it) {
     res = strcmp (bytes, it->data->bytes);
@@ -701,7 +701,7 @@ private dirlist_t *dirlist (char *dir) {
       if (len == 1 || dp->d_name[1] == '.')
         continue;
 
-    vstritem_t *vstr = AllocType (vstritem);
+    vstring_t *vstr = AllocType (vstring);
     vstr->data = string_new_with (dp->d_name);
 
     if (dp->d_type is DT_DIR) string_append_byte (vstr->data, PATH_SEP);
@@ -1279,7 +1279,7 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
   vstr_t *vsa = AllocType (vstr);
 
   while (l_p isnot NULL) {
-    vstritem_t *vs = AllocType (vstritem);
+    vstring_t *vs = AllocType (vstring);
     vs->data = string_new ();
 
     l_p = strstr (l_p, "\n");
@@ -1304,7 +1304,7 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
   int num_chars = last_col - first_col + 1;
 
   string_t *render = string_new_with_fmt ("%s" TERM_SET_COLOR_FMT, TERM_CURSOR_HIDE, COLOR_BOX);
-  vstritem_t *it = vsa->head;
+  vstring_t *it = vsa->head;
   i = 0;
   while (i < num_rows) {
     this->rows[i] = (i + first_row);
@@ -1418,7 +1418,7 @@ init_list:;
 
   ifnot (menu->list->num_items) goto theend;
 
-  vstritem_t *it = menu->list->head;
+  vstring_t *it = menu->list->head;
 
   int maxlen = 0;
   while (it) {
@@ -1540,7 +1540,7 @@ init_list:;
           vcol_pos += (num - vcol_pos);
         }
 
-        __fallthrough__;
+        //__fallthrough__;
 
       case ARROW_UP_KEY:
         if (vrow_pos is first_row) {
@@ -1570,7 +1570,7 @@ init_list:;
         cur_idx -= (vcol_pos - 1);
         vcol_pos = 1;
 
-        __fallthrough__;
+        //__fallthrough__;
 
       case ARROW_DOWN_KEY:
         if (vrow_pos is menu->last_row or (vrow_pos - first_row + 1 is num_rows)) {
@@ -1706,7 +1706,7 @@ char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot",
     "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|",
     "$mycur|", "$from|", "theend|", "OK|", "NOTOK|", "mutable|",
-    "forever", "__fallthrough__", "__unused__",
+    "forever", "__fallthrough__",
     "switch", "if", "while", "for", "break", "continue", "else", "do",
     "default", "goto",
     "case|", "return|", "free|",
@@ -1766,7 +1766,8 @@ syn_t HL_DB[] = {
 #define SYN_HAS_SINGLELINE_COMMENT (1 << 1)
 #define SYN_HAS_MULTILINE_COMMENT (1 << 2)
 
-private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index __unused__, row_t *row __unused__) {
+private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index, row_t *row) {
+  (void) index; (void) row;
   ifnot (len) return line;
 
   string_t *s = My(String).new ();
@@ -1882,7 +1883,8 @@ theend:
   return line;
 }
 
-private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index __unused__, row_t *row) {
+private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index, row_t *row) {
+ (void) index;
   ifnot (len) return line;
 
   string_t *s = My(String).new ();
@@ -2315,6 +2317,15 @@ private row_t *buf_current_append (buf_t *this, row_t *row) {
   return current_list_append (this, row);
 }
 
+private row_t *buf_append_with (buf_t *this, char *bytes) {
+  row_t *row = self(row.new_with, bytes);
+  int cur_idx = this->cur_idx;
+  self(cur.set, this->num_items - 1);
+  current_list_append (this, row);
+  self(cur.set, cur_idx);
+  return row;
+}
+
 private row_t *buf_current_prepend_with(buf_t *this, char *bytes) {
   row_t *row = self(row.new_with, bytes);
   return current_list_prepend (this, row);
@@ -2687,6 +2698,13 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   return this;
 }
 
+private buf_t *win_buf_new_special (win_t *w, char *name) {
+  buf_t *this = win_buf_new (w, name, 0);
+  $my(flags) |= (BUF_IS_RDONLY|BUF_IS_PAGER);
+  My(Win).append_buf (w, this);
+  return this;
+}
+
 private buf_t *win_set_current_buf (win_t *w, int idx) {
   buf_t *this = w->current;
 
@@ -2827,13 +2845,16 @@ private void win_free (win_t *this) {
  free (this);
 }
 
-private win_t *ed_win_new (ed_t *ed, int num_frames) {
+private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   win_t *this = AllocType (win);
   $myprop = AllocProp (win);
-  int num = ed->name_gen / 26;
-  $my(name) = Alloc (num * sizeof (char *) + 1);
-  for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ ^ 26);
-  $my(name)[num] = '\0';
+  if (NULL is name) {
+    int num = ed->name_gen / 26;
+    $my(name) = Alloc (num * sizeof (char *) + 1);
+    for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ ^ 26);
+    $my(name)[num] = '\0';
+  } else
+    $my(name) = str_dup (name);
 
   $my(parent) = ed;
 
@@ -2868,7 +2889,7 @@ private win_t *ed_win_new (ed_t *ed, int num_frames) {
   $my(max_frames) = MAX_FRAMES;
 
   $my(frames_dim) = dim_calc (this, $my(dim)->num_rows, $my(num_frames),
-    $my(min_rows), $my(has_dividers));
+      $my(min_rows), $my(has_dividers));
 
   return this;
 }
@@ -2903,7 +2924,7 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
   }
 }
 
-private void check_msg_status (buf_t *this) {
+private void ed_check_msg_status (buf_t *this) {
   if ($myroots(msg_send) is 1)
       $myroots(msg_send)++;
   else if (2 is $myroots(msg_send)) {
@@ -2913,7 +2934,16 @@ private void check_msg_status (buf_t *this) {
   }
 }
 
+private int ed_msg_buf (buf_t **thisp) {
+  return ved_win_change (thisp, 0, VED_SPECIAL_WIN, 1);
+}
+
+private void ed_append_message (ed_t *this, char *msg) {
+  My(Buf).append_with (this->head->head, msg);
+}
+
 private void send_msg (buf_t *this, int color, char *msg) {
+  My(Ed).append.message ($my(root), msg);
   $myroots(msg_send) = 1;
   My(String).replace_with_fmt ($myroots(msgline), TERM_SET_COLOR_FMT, color);
   int numchars = 0; int clen;
@@ -4761,14 +4791,14 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 
     case 'l':
     case ARROW_RIGHT_KEY:
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_NEXT);
+      return ved_win_change (thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
 
     case 'h':
     case ARROW_LEFT_KEY:
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV);
+      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV, NULL, 0);
 
     case '`':
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED);
+      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
 
     default:
       break;
@@ -5956,30 +5986,62 @@ private int ved_split (buf_t **thisp, char *fname) {
 
 private int ved_enew_fname (buf_t **thisp, char *fname) {
   buf_t *this = *thisp;
-  win_t *w = My(Ed).win.new ($my(root), 1);
+  win_t *w = My(Ed).win.new ($my(root), NULL, 1);
   My(Ed).append.win ($my(root), w);
   $my(parent) = $my(root)->current;
   ved_edit_fname (thisp, fname, 0, 1, 1);
   return DONE;
 }
 
-private int ved_win_change (buf_t **thisp, int com) {
+private int ved_win_change (buf_t **thisp, int com, char *name, int accept_rdonly) {
   buf_t *this = *thisp;
 
+  if ($my(root)->num_items is 1) return NOTHING_TODO;
+
   int idx = $my(root)->cur_idx;
-  switch (com) {
-    case VED_COM_WIN_CHANGE_PREV:
-      if (--idx is -1) { idx = $my(root)->num_items - 1; } break;
-    case VED_COM_WIN_CHANGE_NEXT:
-      if (++idx is $my(root)->num_items) { idx = 0; } break;
-    case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-      idx = $my(root)->prev_idx;
+  int cidx = idx;
+
+  ifnot (NULL is name) {
+    int found = 0;
+    win_t *it = $my(root)->head;
+    idx = 0;
+    while (it) {
+      if (str_eq (it->prop->name, name)) {
+        found = 1;
+        break;
+      }
+      idx++;
+      it = it->next;
+    }
+    ifnot (found) return NOTHING_TODO;
+  } else {
+change_idx:
+    switch (com) {
+      case VED_COM_WIN_CHANGE_PREV:
+        if (--idx is -1) { idx = $my(root)->num_items - 1; } break;
+      case VED_COM_WIN_CHANGE_NEXT:
+        if (++idx is $my(root)->num_items) { idx = 0; } break;
+      case VED_COM_WIN_CHANGE_PREV_FOCUSED:
+        idx = $my(root)->prev_idx;
+    }
+    if (idx is cidx) return NOTHING_TODO;
+
+    ifnot (accept_rdonly) {
+      win_t *w = My(Ed).get.win_by_idx ($my(root), idx);
+      if (NULL is w) return NOTHING_TODO;
+      if (str_eq (w->prop->name, VED_SPECIAL_WIN)) {
+        if (com is VED_COM_WIN_CHANGE_PREV_FOCUSED)
+          com = VED_COM_WIN_CHANGE_PREV;
+
+        goto change_idx;
+      }
+    }
   }
 
   My(Ed).set.current_win ($my(root), idx);
   this = $my(root)->current->current;
   $my(parent) = $my(root)->current;
-  *thisp = My(Win).set.current_buf ($my(parent), $my(parent)->cur_idx); 
+  *thisp = My(Win).set.current_buf ($my(parent), $my(parent)->cur_idx);
   My(Win).set.video_dividers ($my(parent));
   My(Win).draw ($my(parent));
   return DONE;
@@ -6591,7 +6653,7 @@ getlist:;
   }
 
   vstr_t *vs = AllocType (vstr);
-  vstritem_t *it = dlist->list->head;
+  vstring_t *it = dlist->list->head;
 
   $my(shared_int) = joinpath;
   My(String).clear ($my(shared_str));
@@ -6809,7 +6871,7 @@ private void rline_clear (rline_t *rl) {
     rl->num_items = 0;
     rl->cur_idx = 0;
     rl->line = AllocType (vstr);
-    vstritem_t *vstr = AllocType (vstritem);
+    vstring_t *vstr = AllocType (vstring);
     vstr->data = string_new_with (" ");
     current_list_append (rl->line, vstr);
   }
@@ -6817,8 +6879,8 @@ private void rline_clear (rline_t *rl) {
   rl->state &= ~RL_CLEAR_FREE_LINE;
 }
 
-private vstritem_t *ved_rline_get_command (rline_t *rl) {
-  vstritem_t *it = rl->line->head;
+private vstring_t *ved_rline_get_command (rline_t *rl) {
+  vstring_t *it = rl->line->head;
   char com[MAXCOMLEN]; com[0] = '\0';
   int com_idx = 0;
   while (it isnot NULL and it->data->bytes[0] is ' ') it = it->next;
@@ -6886,7 +6948,7 @@ private int ved_rline_tab_completion (rline_t *rl) {
 
   ifnot (type) return retval;
 
-  int (*process_list) (menu_t *);
+  int (*process_list) (menu_t *) = NULL;
   if (type & RL_TOK_ARG_FILENAME)
     process_list = ved_complete_filename;
   else if (type & RL_TOK_COMMAND)
@@ -6928,7 +6990,7 @@ private int ved_rline_tab_completion (rline_t *rl) {
     current_list_set (rl->line, fidx);
     int lidx = fidx + orig_len;
     while (fidx++ < lidx) {
-      vstritem_t *tmp = current_list_pop (rl->line, vstritem_t);
+      vstring_t *tmp = current_list_pop (rl->line, vstring_t);
       string_free (tmp->data);
       free (tmp);
     }
@@ -6956,7 +7018,8 @@ private int rline_break (rline_t **rl) {
   return RL_BREAK;
 }
 
-private int rline_tab_completion (rline_t *rl __unused__) {
+private int rline_tab_completion (rline_t *rl) {
+  (void) rl;
   return NOTHING_TODO;
 }
 
@@ -7000,6 +7063,7 @@ private void ved_init_commands (void) {
     [VED_COM_EDIT] = "edit",
     [VED_COM_EDIT_ALIAS] = "e",
     [VED_COM_ENEW] = "enew",
+    [VED_COM_MESSAGES] = "messages",
     [VED_COM_QUIT_FORCE] = "quit!",
     [VED_COM_QUIT_FORCE_ALIAS] = "q!",
     [VED_COM_QUIT] = "quit",
@@ -7088,7 +7152,7 @@ int num_cols, video_t *video) {
   rl->row_pos = rl->prompt_row;
   rl->fd = $my(out_fd);
   rl->line = AllocType (vstr);
-  vstritem_t *s = AllocType (vstritem);
+  vstring_t *s = AllocType (vstring);
   s->data = string_new_with (" ");
   current_list_append (rl->line, s);
 
@@ -7136,7 +7200,7 @@ private void rline_write (rline_t *rl) {
 
   rl->row_pos = rl->prompt_row - rl->num_rows + 1;
 
-  vstritem_t *chars = rl->line->head;
+  vstring_t *chars = rl->line->head;
 
   int cidx = 0;
   for (int i = 0; i < rl->num_rows; i++) {
@@ -7164,7 +7228,7 @@ private void rline_write (rline_t *rl) {
 
 private rline_t *rline_edit (rline_t *rl) {
   ed_t *this = rl->ed;
-  vstritem_t *ch;
+  vstring_t *ch;
   int retval;
 
   if (rl->state & RL_CLEAR) {
@@ -7246,7 +7310,7 @@ process_char:
             rl->line->num_items is 0))
           goto post_process;
         {
-          vstritem_t *tmp = current_list_pop (rl->line, vstritem_t);
+          vstring_t *tmp = current_list_pop (rl->line, vstring_t);
           if (NULL isnot tmp) {string_free (tmp->data); free (tmp);}
         }
         goto post_process;
@@ -7255,7 +7319,7 @@ process_char:
           if (rl->line->cur_idx is 0) continue;
           rl->line->current = rl->line->current->prev;
           rl->line->cur_idx--;
-          vstritem_t *tmp = current_list_pop (rl->line, vstritem_t);
+          vstring_t *tmp = current_list_pop (rl->line, vstring_t);
           if (NULL isnot tmp) {string_free (tmp->data); free (tmp);}
         }
 
@@ -7281,10 +7345,10 @@ insert_char:
           goto post_process;
 
         if (rl->c < 0x80) {
-          ch = AllocType (vstritem);
+          ch = AllocType (vstring);
           ch->data = string_new_with (str_fmt ("%c", rl->c));
         } else {
-          ch = AllocType (vstritem);
+          ch = AllocType (vstring);
           char buf[5];
           ch->data = string_new_with (char_from_code (rl->c, buf));
         }
@@ -7319,7 +7383,7 @@ theend:;
 }
 
 private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
-  vstritem_t *it = ved_rline_get_command (rl);
+  vstring_t *it = ved_rline_get_command (rl);
 
   while (it) {
     int failed = 0;
@@ -7345,9 +7409,9 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
           goto arg_type;
 
         if (it->data->bytes[0] is '=') {
-          it = it->next;
+          if (it->next is NULL) {failed = 1; goto itnext;}
 
-          if (it is NULL) {failed = 1; goto itnext;}
+          it = it->next;
 
           arg->val = My(String).new ();
           int is_quoted = '"' is it->data->bytes[0];
@@ -7401,9 +7465,10 @@ arg_type:
           arg->type |= RL_VED_ARG_GLOBAL;
         else if (str_eq (opt->bytes, "append"))
           arg->type |= RL_VED_ARG_APPEND;
-        else
-          goto argtype_failed;
-
+        else {
+          arg->type |= RL_VED_ARG_ANYTYPE;
+          arg->option = My(String).new_with (opt->bytes);
+          }
         goto argtype_succeed;
       }
 
@@ -7451,6 +7516,22 @@ private arg_t *rline_get_arg (rline_t *rl, int type) {
   }
 
   return NULL;
+}
+
+private arg_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
+  arg_t *arg = rl->tail;
+  while (arg) {
+      debug_append ("|%d|\n", arg->type);
+    if (arg->type & RL_VED_ARG_ANYTYPE) {
+      debug_append ("|%s|\n", arg->option->bytes);
+      if (str_eq (arg->option->bytes, argname)) return arg;
+    }
+    arg = arg->prev;
+  }
+
+  return NULL;
+
+
 }
 
 private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
@@ -7551,6 +7632,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
   int retval = NOTHING_TODO;
 
   buf_t *this = *thisp;
+  int is_special_win = str_eq ($myparents(name), VED_SPECIAL_WIN);
 
   rl = rline_edit (rl);
 
@@ -7562,7 +7644,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
 
   switch (rl->com) {
     case VED_COM_WRITE_FORCE_ALIAS:
-      rl->com = VED_COM_WRITE_FORCE; __fallthrough__;
+      rl->com = VED_COM_WRITE_FORCE; //__fallthrough__;
     case VED_COM_WRITE_FORCE:
     case VED_COM_WRITE:
     case VED_COM_WRITE_ALIAS:
@@ -7572,6 +7654,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         arg_t *range = rline_get_arg (rl, RL_VED_ARG_RANGE);
         arg_t *append = rline_get_arg (rl, RL_VED_ARG_APPEND);
         if (NULL is fname) {
+          if (is_special_win) goto theend;
           if (NULL isnot range or NULL isnot append) goto theend;
           retval = ved_write_buffer (this, VED_COM_WRITE_FORCE is rl->com);
         } else {
@@ -7591,10 +7674,11 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       goto theend;
 
     case VED_COM_EDIT_FORCE_ALIAS:
-      rl->com = VED_COM_EDIT_FORCE; __fallthrough__;
+      rl->com = VED_COM_EDIT_FORCE; //__fallthrough__;
     case VED_COM_EDIT_FORCE:
     case VED_COM_EDIT:
     case VED_COM_EDIT_ALIAS:
+      if (is_special_win) goto theend;
       {
         arg_t *arg = rline_get_arg (rl, RL_VED_ARG_FILENAME);
         retval = ved_edit_fname (thisp, (NULL is arg ? NULL : arg->option->bytes),
@@ -7603,15 +7687,17 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       goto theend;
 
     case VED_COM_QUIT_FORCE_ALIAS:
-      rl->com = VED_COM_QUIT_FORCE; __fallthrough__;
+      rl->com = VED_COM_QUIT_FORCE; //__fallthrough__;
     case VED_COM_QUIT_FORCE:
     case VED_COM_QUIT:
     case VED_COM_QUIT_ALIAS:
+      if (is_special_win) goto theend;
       retval = ved_quit (this, VED_COM_QUIT_FORCE is rl->com);
       goto theend;
 
     case VED_COM_WRITE_QUIT:
     case VED_COM_WRITE_QUIT_FORCE:
+      if (is_special_win) goto theend;
       ved_write_buffer (this, 0);
       retval = ved_quit (this, VED_COM_WRITE_QUIT_FORCE is rl->com);
       goto theend;
@@ -7626,8 +7712,13 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         }
         goto theend;
 
+    case VED_COM_MESSAGES:
+      retval = ed_msg_buf (thisp);
+      goto theend;
+
     case VED_COM_SPLIT:
       {
+        if (is_special_win) goto theend;
         arg_t *arg = rline_get_arg (rl, RL_VED_ARG_FILENAME);
         if (NULL is arg)
           retval = ved_split (thisp, UNAMED);
@@ -7670,26 +7761,30 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        goto theend;
 
     case VED_COM_BUF_CHANGE_PREV_ALIAS:
-      rl->com = VED_COM_BUF_CHANGE_PREV; __fallthrough__;
+      rl->com = VED_COM_BUF_CHANGE_PREV; //__fallthrough__;
     case VED_COM_BUF_CHANGE_PREV:
+      if (is_special_win) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
     case VED_COM_BUF_CHANGE_NEXT_ALIAS:
-      rl->com = VED_COM_BUF_CHANGE_NEXT; __fallthrough__;
+      rl->com = VED_COM_BUF_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_BUF_CHANGE_NEXT:
+      if (is_special_win) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
     case VED_COM_BUF_CHANGE_PREV_FOCUSED_ALIAS:
-      rl->com = VED_COM_BUF_CHANGE_PREV_FOCUSED; __fallthrough__;
+      rl->com = VED_COM_BUF_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_BUF_CHANGE_PREV_FOCUSED:
+      if (is_special_win) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
     case VED_COM_BUF_CHANGE_ALIAS:
-      rl->com = VED_COM_BUF_CHANGE; __fallthrough__;
+      rl->com = VED_COM_BUF_CHANGE; //__fallthrough__;
     case VED_COM_BUF_CHANGE:
+      if (is_special_win) goto theend;
       {
         arg_t *bufname = rline_get_arg (rl, RL_VED_ARG_BUFNAME);
         if (NULL is bufname) goto theend;
@@ -7698,28 +7793,29 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
-      rl->com = VED_COM_WIN_CHANGE_PREV; __fallthrough__;
+      rl->com = VED_COM_WIN_CHANGE_PREV; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV:
-      retval = ved_win_change (thisp, rl->com);
+      retval = ved_win_change (thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_WIN_CHANGE_NEXT_ALIAS:
-      rl->com = VED_COM_WIN_CHANGE_NEXT; __fallthrough__;
+      rl->com = VED_COM_WIN_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_WIN_CHANGE_NEXT:
-      retval = ved_win_change (thisp, rl->com);
+      retval = ved_win_change (thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_FOCUSED_ALIAS:
-      rl->com = VED_COM_WIN_CHANGE_PREV_FOCUSED; __fallthrough__;
+      rl->com = VED_COM_WIN_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-      retval = ved_win_change (thisp, rl->com);
+      retval = ved_win_change (thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_BUF_DELETE_FORCE_ALIAS:
-      rl->com = VED_COM_BUF_DELETE_FORCE; __fallthrough__;
+      rl->com = VED_COM_BUF_DELETE_FORCE; //__fallthrough__;
     case VED_COM_BUF_DELETE_FORCE:
     case VED_COM_BUF_DELETE_ALIAS:
     case VED_COM_BUF_DELETE:
+      if (is_special_win) goto theend;
       retval = ved_buf_delete (thisp, $my(parent)->cur_idx,
         rl->com is VED_COM_BUF_DELETE_FORCE);
       goto theend;
@@ -7781,7 +7877,7 @@ theloop:
   for (;;) {
 
 get_char:
-    check_msg_status (this);
+    ed_check_msg_status (this);
     c = My(Input).get ($my(term_ptr));
 
 handle_char:
@@ -7998,7 +8094,8 @@ theend:
   return DONE;
 }
 
-private int ved_normal_test3 (buf_t **cur __unused__) {
+private int ved_normal_test3 (buf_t **cur) {
+  (void) cur;
   return DONE;
 }
 
@@ -8018,6 +8115,10 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
   }
 
   switch (com) {
+    case 'q':
+      if ($my(flags) & BUF_IS_PAGER) return BUF_QUIT;
+      return NOTHING_TODO;
+
     case ':':
       {
       rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
@@ -8093,17 +8194,20 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
             else
               break;
 
-          if (len isnot $mycur(data)->num_bytes) self(draw_cur_row);
+          if (len isnot $mycur(data)->num_bytes) {
+            $my(flags) |= BUF_IS_MODIFIED;
+            self(draw_cur_row);
+          }
           return DONE;
         }
 
         return NOTHING_TODO;
       }
-      
+
       ifnot (BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE)
         return NOTHING_TODO;
 
-      __fallthrough__;
+      //__fallthrough__;
 
     case 'X':
        if (DONE is ved_normal_left (this, 1))
@@ -8190,8 +8294,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       ifnot (CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE)
         return NOTHING_TODO;
       com = '\n';
-      __fallthrough__;
-
+//      __fallthrough__;
     case 'i':
     case 'a':
     case 'A':
@@ -8245,7 +8348,7 @@ new_state:
     range[0] = range[1] = -1;
 
 get_char:
-    check_msg_status (this);
+    ed_check_msg_status (this);
     c = My(Input).get ($my(term_ptr));
 
 handle_char:
@@ -8274,7 +8377,7 @@ handle_char:
 
      case '0':
         if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        __fallthrough__;
+        //__fallthrough__;
 
       case '1'...'9':
         if (ARE_BOTH_RANGES_OK) goto exec_block;
@@ -8312,7 +8415,20 @@ exec_block:
         if (cmd_retv is DONE || cmd_retv is NOTHING_TODO)
           goto new_state;
 
+        if (cmd_retv is BUF_QUIT) {
+          retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
+          if (retval is NOTHING_TODO) {
+            retval = ved_win_change (&this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+            if (retval is NOTHING_TODO)
+              cmd_retv = EXIT;
+            else
+              goto new_state;
+          } else
+            goto new_state;
+        }
+
         if (cmd_retv is EXIT) {retval = OK; goto theend;}
+
         if (cmd_retv is WIN_EXIT) {
           retval = ved_win_delete (ed, &this);
           if (retval is DONE) goto new_state;
@@ -8351,6 +8467,18 @@ private win_t *ed_get_current_win (ed_t *this) {
 
 private int ed_get_current_win_idx (ed_t *this) {
   return this->cur_idx;
+}
+
+private win_t *ed_get_win_by_idx (ed_t *this, int idx) {
+  if (idx >= this->num_items) return NULL;
+  int i = 0;
+  win_t *it = this->head;
+  while (it) {
+    if (i++ is idx) return it;
+    it = it->next;
+  }
+
+  return NULL;
 }
 
 private int ed_get_state (ed_t *this) {
@@ -8539,12 +8667,17 @@ private ed_t *__ed_new__ (ed_T *E) {
 
 private ed_t *ed_new (ed_T *E, int num_wins) {
   ed_t *this = __ed_new__ (E);
-  if (num_wins <= 0 ) num_wins = 1;
+  if (num_wins <= 0) num_wins = 1;
 
   int num_frames = 1;
 
+  win_t *w = self(win.new, VED_SPECIAL_WIN, 1);
+
+  self(append.win, w);
+  My(Win).buf_new_special (w, VED_MSG_BUF);
+
   loop (num_wins) {
-    win_t *w = self(win.new, num_frames);
+    w = self(win.new, NULL, num_frames);
     self(append.win, w);
   }
 
@@ -8606,7 +8739,8 @@ private void __deinit__ (ed_T *this) {
 public cstring_T __init_cstring__ (void) {
   return ClassInit (cstring,
     .self = SelfInit (cstring,
-      .cmp_n = str_cmp_n
+      .cmp_n = str_cmp_n,
+      .dup = str_dup
     )
   );
 }
@@ -8714,11 +8848,13 @@ private ed_T *editor_new (char *name) {
         .state = ed_get_state,
         .win_head = ed_get_win_head,
         .win_next = ed_get_win_next,
+        .win_by_idx = ed_get_win_by_idx,
         .next = ed_get_next,
         .prev = ed_get_prev,
       ),
       .append = SubSelfInit (ed, append,
-        .win = ed_append_win
+        .win = ed_append_win,
+        .message = ed_append_message
       ),
       .readjust = SubSelfInit (ed, readjust,
         .win_size =ed_win_readjust_size
@@ -8747,6 +8883,7 @@ private ed_T *editor_new (char *name) {
         ),
         .draw = win_draw,
         .buf_new = win_buf_new,
+        .buf_new_special = win_buf_new_special,
         .append_buf = win_append_buf
       ),
     ),
@@ -8783,7 +8920,8 @@ private ed_T *editor_new (char *name) {
         ),
         .draw = buf_draw,
         .flush = buf_flush,
-        .draw_cur_row = buf_draw_cur_row
+        .draw_cur_row = buf_draw_cur_row,
+        .append_with = buf_append_with
       ),
     ),
     .Video = __init_video__ (),

@@ -52,7 +52,7 @@ endif
 DEBUG := 0
 
 ifneq ($(DEBUG), 0)
-  FLAGS += $(DEBUG_FLAGS) -DENABLE_WRITING
+  FLAGS += -DENABLE_WRITING FLAGS += $(DEBUG_FLAGS)
 endif
 
 CHECK_PTR_BOUNDS := 0
@@ -62,7 +62,7 @@ ifneq ($(CHECK_PTR_BOUNDS), 0)
 endif
 
 #----------------------------------------------------------#
-LIBFLAGS := -I. $(FLAGS)
+LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
 
 all: shared static veda-all
 
