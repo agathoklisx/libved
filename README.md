@@ -26,18 +26,7 @@
  *   had been used during this bootstapped period, need a revision as the code
  *   learns by itself.
 
- * - currently searching and substitution is done using literal text and not a
- *   regular expresion. As the prerequisity is to be independed (at some point)
- *   from libc, this has to be a minimal external perl like regexp machine.
-
  * It is published mainly for recording reasons and a personal one.
- * But mainly because at some point the integration might become very tighted to
- * the environment, and there is no certainity for a satisfactory abstraction.
- * Also because it was written mainly for the C programming language it will
- * integrate the tcc compiler at some point, both in time and space (mean unit).
- * In short is not suited for nothing more than experinment and maybe and if
- * there is something that worths at the end, for inspiration.
-
  * The original purpose was to record the development process so it could be
  * usefull as a (document) reference for an editor implementation, but the
  * git commits ended as huge incrementals commits and there were unusable to
@@ -81,11 +70,11 @@
 
    cd src && make HAS_REGEXP=1 DEBUG=1 veda-shared && make run
 
- * or with the tcc compiler
-
-   cd src && make CC=tcc HAS_REGEXP=1 DEBUG=1 veda-shared && make run
-
  * (this will open the source files of itself)
+
+ * similarly with tcc compiler, but the CC Makefile variable should be set to tcc,
+ * and one way to do is from the command line:
+   make CC=tcc ...
 
 
  * C
@@ -171,6 +160,8 @@ Normal mode:
  | [yY]              | yank [char|line]wise           | yes
  | [pP]              | put register                   |
  | d[d]              | delete line[s]                 | yes
+ | d[g|HOME]         | delete lines to the beg of file|
+ | d[G|END]          | delete lines to the end of file|
  | x|DELETE          | delete character               | yes
  | D                 | delete to end of line          |
  | X|BACKSPACE       | delete character to the left   | yes
@@ -305,13 +296,38 @@ Search:
 
  /* Application Interface.
   * The library exposes a root struct, two de|init public functions that
-  * initialize the structure and quite a lot of opaque pointers.
+  * de|initialize the structure and quite a lot of opaque pointers.
 
   * The code uses an object oriented style, though it is just for practical
-  * reasons. It is my belief that this is the right way for C, as permits
+  * reasons. It is my belief that this is can be a wise way for C, as permits
   * code organization, simplicity, abstraction, compacteness, relationship,
-  * easy to integrate and understand and also quite a lot of freedom to develop
-  * new functions or to override a method with a custom one.
+  * easy integration and also quite a lot of freedom to develop or overide new
+  * functionality.
+  * But the main advantage of this approach is that there is no global state,
+  * the functions acts on a an instance of a type, or if not, simple their scope
+  * is narrow to a specific job that can not change state to the environment.
+  * In this whole library, there is neither one global variable and just one static
+  * that utilizes editor commands (even this can be avoided, by adding a property,
+  * however this (besides the needless overhead) abstracts abstraction, while the
+  * the route in code like this, should be the other way around)).
+
+  * In short, compact environments that can unified under a root structure, with
+  * functions that act on a known type or to expected arguments with narrow scope.
+
+  * The heavy duty is to the entry points or|and to the communication ports, that
+  * could check and sanitize external data, or|and to interfere with a known and
+  * controlled protocol with the outer environment, respectively.
+  * It's just then up to the internal implementation to get the facts right, by
+  * checking conditions, but in known and limited and with strong borders now space.
+
+  * This could also speed up execution time (by avoiding un-needed checks of a data
+  * that is known for certain that is valid, because, either it is produced (usually)
+  * by the self/own, or has already been checked, by previous users in the toolchain
+  * stack.
+  * But the main benefit, is that it brings clarity to the code and concentration
+  * to the actual details. However that it could also be considered as a functional
+  * envrironment (with the no-side-effect meaning) or as an algorithm environment.
+  * The 'wise future for C' reference to the later mostly.
 
  * The main structure is the editor structure type, and contains other nested
  * relative structures (that contain others too):
@@ -417,10 +433,14 @@ Search:
 
  * Memory Interface
  * The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
- * integer overflows), and it exposes a public mutable handler function that is invoked
- * on such overflows or when there is not enough memory available errors.
+ * integer overflows), and it exposes a public mutable handler function that is
+ * invoked on such overflows or when there is not enough memory available errors.
+
  * This function is meant to be set by the user of the library, on the application
  * side and scope. The provided one exits the program with a detailed message.
+ * I do not know the results however, if this function could wait for an answer
+ * before exits, as (theoretically) the user could free resources, and return for
+ * a retry. The function signature should change to account for that.
 
  * The code defines two those memory wrappers.
  * Alloc (size) and Realloc (object, size). Both like their counterparts, they return
@@ -450,10 +470,113 @@ Search:
  * C at his fifty two and it is focused on the code intentionality (if such a word).
  * C was choosen because it is a high level language, but it is tighted up with the
  * machine so that can be considered primitive, and there shouldn't be any interpeter
- * in between, and finaly because C is about algorithms and when implemented properly
+ * in between, and finally because C is about algorithms and when implemented properly
  * the code hapilly lives for ever without a single change. Of course the properties
  * are machine properties and such endevour it never ends and needs responsibility,
  * extensive study and so time. I do not know however if (time) is generous.
+ */
+
+/* TO DO
+ * Really. The real interest is to use this code as an underline machine.
+ * It would be great if could catch and fix false conditions, as I fix things as i
+ * catch them by using this editor since 20 something of february, (the bad thing
+ * however is that i can survive of a current row miscalculation:
+ *                             Seriously! ATTENTION BUFGS AROUND!
+ * When it happens (probably by the mark|save|restore|state quick implementation)
+ * is critical, because you see different than it actually is, and this is the
+ * worst that can happen to a visual editor (an ed doesn't suffer from this)).
+ * so what i do? either gg|G first, to go to __a known reset point__ and then
+ * goback again, but !!not by using the a ` mark, but with an another way, either
+ * with a search or a `goto to linenum' kind of thing.
+
+ * That would be nice to catch those bugs. Would also be nice if i could reserve
+ * sometime to fix the tabwidth stuff, which is something i do not have the slightest
+ * will to do, because i hate tabs with a passion!!! in the code (nothing is perfect
+ * in this life).
+
+ * I'd rather give my time (as a side project though) to split those two different
+ * consepts. The first level or better the zero level, the actual editor code:
+
+   - inserting/deleting lines (this should meet or extend ed specifications)
+
+   - line operations where line as:
+     An array of characters that provide information or methods about the
+     actual num bytes used to consist each character and the utf8 representation.
+
+     Line operations: inserting/deleting/replacing..., based on that type.
+
+   - /undo/redo
+
+   - basically the ed interface.
+
+  And the second level the obvious one.
+
+/* My opinion on this editor.
+
+ * It is assumed of course, that this product is not meant for production use; it
+ * is far far faaaar away to the completion, but is an editor which implements the
+ * basic operation set that can be considered enough to be productive, which runs
+ * really low in memory resources. Theoretically (assuming the code is good enough)
+ * it could be used in many situations, since is indepented and that is the one
+ * and only interesting point of this.
+
+ * And this (probably) is the reason the persistence to self sufficiency.
+ * The other (probably again and by digging around the mind) is about some beliefs
+ * about the language.
+ *
+ * But first, there isn't such a thing as self sufficiency!
+ * So our dependency, our libc environment, is more like a collection of individual
+ * stable functions, which their body are usually only algorithms (and so and machine
+ * code, because this is a property of C), and with as less is possible conditional
+ * branches (personally, i do not like the situation when i have to code an else,
+ * though i feel there is nothing wrong with a linear branching (an if after an if)).
+ *
+ * However those functions and for good reason, are unware for anything out of their
+ * domain, which is execution.
+ * They have no relationship between their (lets group), as they do not even have a
+ * sense that belong to a group, such: "I am a string type function! (and what is a
+ * string anyway?). But when i see code like *s++ = *sa++, I can point/direct to the
+ * memory and without can't even care what points to but who to where".
+ * Great! Primitive machine code with such an abstraction and freedom (C unbeatable
+ * true power).
+
+ * With regards to libc'es, (i strongly believe) that it would be great, if you could
+ * just cherry pick (specific functionality) from a pool but without to carry all the
+ * weight of the pool, to build an own independend pool, extracting as a code and as
+ * (lets say) jit'ed library. As an example: i request your malloc, but an independend
+ * malloc. Then i want to offer me an end|entry point to de|initialize this memory
+ * interface and a method/point to communicate with you with a standardized protocol.
+
+ * Of course the exact same goes with the protocol whatever the protocol: function
+ * calls, or good old sockets or modern ones like json, which is already implemented
+ * using the standard and full optimized and known to do the expected thing everytime
+ * and for ever, libc functions.
+ *
+ * But how about a little more complex task, an input functionality. It goes like
+ * this: save terminal state - raw mode - get key - return the key - reset term.
+
+ * All well except the get key () function. What it will return? An ascii code in
+ * UTF-8 era is usually useless. You want a signed int (if i'm not wrong).
+ * So there is no other way, when the first byte indicates a byte sequence, than
+ * to deal with it, into the getkey() scope. So you probably need an utf-8 library.
+ * This is (excuse me) a bit of stupid. It just needs 10/20 lines of code, see:
+ * term_get_input (term_t *this), which i plan to publish it as a separate project.
+
+ * It will also has to deal with the terminal escape sequenses and returns reliably
+ * the code for all the keyboard keys. Again this is easy because is one time job
+ * and boring testing or simply usage from different users on different terminals.
+ * The above mentioned function, it looks that it deals well with xterm/linux/urxvt
+ * and st from suckless terminals, in 110 lines of code reserved for this.
+
+ * This specific example is an excellent candidate for this imaginery standard
+ * C library. It's like forkpty() which wraps perfect the details. I guess what i'm
+ * really talking about is a bit more broader scope/functionality than forkpty().
+
+ * And it would be even greater if you could easily request a collection, that use
+ * each other properties, to build a task, like an editor. As standard algrorithm!
+ * I could [fore]see used a lot. This particular is a prototype and not yet ready,
+ * but this is the idea and is a general one and it seems that it could be usefull
+ * for all; they just have to connect to C and use these algorithms.
  */
 
 αγαθοκλής

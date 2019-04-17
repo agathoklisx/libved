@@ -296,7 +296,7 @@ enum {
 6:buffer has not been modified, use w! to force."
 
 #define error_string(eid, ...)                                         \
-(char *)({                                                                     \
+({                                                                     \
   char efmt[MAXERRLEN]; efmt[0] = '\0';                                \
   char epat[16]; snprintf (epat, 16, "%d:", eid);                      \
   char *sp = strstr (ED_MSGS_FMT, epat);                               \
@@ -945,17 +945,17 @@ static const utf8 offsetsFromUTF8[6] = {
   nr;                                                                     \
 })
 
-#define BYTES_TO_RLINE(rl_, bytes, len)                 \
-do {                                                    \
-  char *sp_ = (bytes);                                  \
-  for (int i__ = 0; i__ < (len); i__++) {               \
-    int clen = char_byte_len ((bytes)[i__]);            \
-    (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);          \
-    (rl_)->c = utf8_code (sp_);                         \
-    rline_edit ((rl_));                                 \
-    i__ += clen - 1;                                    \
-    sp_ += clen;                                        \
-    }                                                   \
+#define BYTES_TO_RLINE(rl_, bytes, len)                             \
+do {                                                                \
+  char *sp_ = (bytes);                                              \
+  for (int i__ = 0; i__ < (len); i__++) {                           \
+    int clen = char_byte_len ((bytes)[i__]);                        \
+    (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);                      \
+    (rl_)->c = utf8_code (sp_);                                     \
+    rline_edit ((rl_));                                             \
+    i__ += clen - 1;                                                \
+    sp_ += clen;                                                    \
+    }                                                               \
 } while (0)
 
 #define IS_MODE(mode__) str_eq ($my(mode), (mode__))
@@ -963,67 +963,67 @@ do {                                                    \
 #define HAS_THIS_LINE_A_TRAILING_NEW_LINE \
 ({$mycur(data)->bytes[$mycur(data)->num_bytes - 1] is '\n';})
 
-#define RM_TRAILING_NEW_LINE \
+#define RM_TRAILING_NEW_LINE                                        \
   if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] is '\n' or   \
       $mycur(data)->bytes[$mycur(data)->num_bytes - 1] is 0)        \
      My(String).clear_at ($mycur(data), $mycur(data)->num_bytes - 1)
 
-#define ADD_TRAILING_NEW_LINE \
-  if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] isnot '\n') \
+#define ADD_TRAILING_NEW_LINE                                        \
+  if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] isnot '\n')   \
     My(String).append ($mycur(data), "\n")
 
-#define msg_normal(msg) send_msg(this, COLOR_NORMAL, (msg))
-#define msg_success(msg) send_msg(this, COLOR_SUCCESS, (msg))
-#define msg_error(msg) send_msg(this, COLOR_FAILURE, (msg))
+#define msg_normal(msg) send_msg (this, COLOR_NORMAL, (msg))
+#define msg_success(msg) send_msg (this, COLOR_SUCCESS, (msg))
+#define msg_error(msg) send_msg (this, COLOR_FAILURE, (msg))
 #define msg_error_fmt(fmt, ...) msg_error(str_fmt(fmt, __VA_ARGS__))
 #define msg_fmt(fmt, ...) msg_normal(str_fmt(fmt, __VA_ARGS__))
 
-#define stack_free(list, type)                            \
-do {                                                      \
-  type *item = (list)->head;                              \
-  while (item != NULL) {                                  \
-    type *tmp = item->next;                               \
-    free (item);                                          \
-    item = tmp;                                           \
-  }                                                       \
+#define stack_free(list, type)                                      \
+do {                                                                \
+  type *item = (list)->head;                                        \
+  while (item != NULL) {                                            \
+    type *tmp = item->next;                                         \
+    free (item);                                                    \
+    item = tmp;                                                     \
+  }                                                                 \
 } while (0)
 
-#define stack_push(list, node)                           \
-({                                                       \
-  if ((list)->head == NULL) {                            \
-    (list)->head = (node);                               \
-    (list)->head->next = NULL;                           \
-  } else {                                               \
-    (node)->next = (list)->head;                         \
-    (list)->head = (node);                               \
-  }                                                      \
-                                                         \
- list;                                                   \
+#define stack_push(list, node)                                      \
+({                                                                  \
+  if ((list)->head == NULL) {                                       \
+    (list)->head = (node);                                          \
+    (list)->head->next = NULL;                                      \
+  } else {                                                          \
+    (node)->next = (list)->head;                                    \
+    (list)->head = (node);                                          \
+  }                                                                 \
+                                                                    \
+ list;                                                              \
 })
 
-#define stack_pop(list, type)                           \
-({                                                      \
-  type *node = (list)->head;                            \
-  if (node != NULL)                                     \
-    (list)->head = (list)->head->next;                  \
-                                                        \
-  node;                                                 \
+#define stack_pop(list, type)                                       \
+({                                                                  \
+  type *node = (list)->head;                                        \
+  if (node != NULL)                                                 \
+    (list)->head = (list)->head->next;                              \
+                                                                    \
+  node;                                                             \
 })
 
-#define list_push(list, node)                                      \
-({                                                                 \
-  if ((list)->head == NULL) {                                      \
-    (list)->head = (node);                                         \
-    (list)->head->next = NULL;                                     \
-    (list)->head->prev = NULL;                                     \
-  } else {                                                         \
-    (list)->head->prev = (node);                                   \
-    (node)->next = (list)->head;                                   \
-    (list)->head = (node);                                         \
-  }                                                                \
-                                                                   \
- (list)->num_items++;                                              \
- list;                                                             \
+#define list_push(list, node)                                       \
+({                                                                  \
+  if ((list)->head == NULL) {                                       \
+    (list)->head = (node);                                          \
+    (list)->head->next = NULL;                                      \
+    (list)->head->prev = NULL;                                      \
+  } else {                                                          \
+    (list)->head->prev = (node);                                    \
+    (node)->next = (list)->head;                                    \
+    (list)->head = (node);                                          \
+  }                                                                 \
+                                                                    \
+ (list)->num_items++;                                               \
+ list;                                                              \
 })
 
 #define current_list_prepend(list, node)                            \

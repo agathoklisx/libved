@@ -591,6 +591,8 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
   while (*sub_p) {
     switch (*sub_p) {
       case '\\':
+        if (*(sub_p + 1) is 0) goto theerror;
+
         switch (*++sub_p) {
           case '&':
             string_append_byte (substr, '&');
@@ -3656,8 +3658,6 @@ int interactive, int fidx, int lidx) {
   int retval = NOTHING_TODO;
   row_t *it = this->head;
 
-//  int slen = bytelen (sub);
-
   string_t *substr = NULL;
   int flags = 0;
   regexp_t *re = My(Re).new (pat, flags, RE_MAX_NUM_CAPTURES, My(Re).compile);
@@ -5302,6 +5302,21 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
 private int ved_cmd_delete (buf_t *this, int count, int reg) {
   utf8 c = My(Input).get ($my(term_ptr));
   switch (c) {
+    case 'G':
+    case END_KEY:
+      count = (this->num_items - 1) - this->cur_idx;
+      break;
+    case 'g':
+    case HOME_KEY:
+      count = this->cur_idx + 1;
+      ved_normal_bof (this);
+  }
+
+  switch (c) {
+    case 'G':
+    case END_KEY:
+    case 'g':
+    case HOME_KEY:
     case 'd':
       return ved_delete_line (this, count, reg);
 
@@ -7419,7 +7434,10 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
 
           while (it) {
             if (' ' is it->data->bytes[0])
-              ifnot (is_quoted) goto arg_type;
+              ifnot (is_quoted) {
+                type |= RL_TOK_ARG_OPTION;
+                goto arg_type;
+              }
 
             if ('"' is it->data->bytes[0])
               if (is_quoted) {
@@ -7428,12 +7446,13 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
                   it = it->next;
                   continue;
                 }
-                else
+                else { /* accept empty string --opt="" */
+                  type |= RL_TOK_ARG_OPTION;
                   goto arg_type;
+                }
               }
 
             string_append (arg->val, it->data->bytes);
-            if (arg->val->num_bytes) type |= RL_TOK_ARG_OPTION;
             it = it->next;
           }
 
@@ -7521,17 +7540,13 @@ private arg_t *rline_get_arg (rline_t *rl, int type) {
 private arg_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
   arg_t *arg = rl->tail;
   while (arg) {
-      debug_append ("|%d|\n", arg->type);
     if (arg->type & RL_VED_ARG_ANYTYPE) {
-      debug_append ("|%s|\n", arg->option->bytes);
       if (str_eq (arg->option->bytes, argname)) return arg;
     }
     arg = arg->prev;
   }
 
   return NULL;
-
-
 }
 
 private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
@@ -7746,6 +7761,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         arg_t *global = rline_get_arg (rl, RL_VED_ARG_GLOBAL);
         arg_t *interactive = rline_get_arg (rl, RL_VED_ARG_INTERACTIVE);
         arg_t *range = rline_get_arg (rl, RL_VED_ARG_RANGE);
+
         if (pat is NULL or sub is NULL) goto theend;
 
         if (NULL is range and rl->com is VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE) {
