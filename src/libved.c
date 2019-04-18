@@ -2424,7 +2424,7 @@ private int buf_set_fname (buf_t *this, char *fname) {
 
   if (fname_exists) {
     if (is_directory (fname)) {
-      msg_error (error_string (FILE_EXISTS_AND_IS_A_DIRECTORY, fname));
+      VED_MSG_ERROR (MSG_FILE_EXISTS_AND_IS_A_DIRECTORY, fname);
       strcpy ($my(fname), UNAMED);
       $my(basename) = $my(fname);
       $my(flags) &= ~FILE_EXISTS;
@@ -2457,7 +2457,7 @@ private int buf_set_fname (buf_t *this, char *fname) {
 
   buf_t *buf = My(Ed).get.bufname ($my(root), $my(fname));
   if (buf isnot NULL) {
-    msg_error (error_string (FILE_IS_LOADED_IN_ANOTHER_BUFFER, fname));
+    VED_MSG_ERROR (MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER, fname);
     $my(flags) |= BUF_IS_RDONLY;
   }
 
@@ -2476,13 +2476,13 @@ private ssize_t buf_read_fname (buf_t *this) {
       if (file_exists ($my(fname))) {
         $my(flags) |= FILE_EXISTS;
         $my(flags) &= ~(FILE_IS_READABLE|FILE_IS_WRITABLE);
-        msg_error_fmt ("%s: is not readable", $my(fname));
+        VED_MSG_ERROR(MSG_FILE_IS_NOT_READABLE, $my(fname));
         return NOTOK;
       } else
        return OK;
 
     } else {
-      msg_error_fmt ("%s: %s", $my(fname), errno_string (errno));
+      SYS_MSG_ERROR(errno);
       return NOTOK;
     }
   }
@@ -2640,6 +2640,8 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(Cstring) = $myparents(Cstring);
   $my(String) = $myparents(String);
   $my(Re) = $myparents(Re);
+  $my(Msg) = $myparents(Msg);
+  $my(Error) = $myparents(Error);
   $my(Video) = $myparents(Video);
   $my(Term) = $myparents(Term);
   $my(Input) = $myparents(Input);
@@ -2738,17 +2740,15 @@ change:
 
   if ($my(ftype)->autochdir)
     if (-1 is chdir ($my(cwd)))
-      msg_error_fmt ("chdir(): %s", errno_string (errno));
+      SYS_MSG_ERROR(errno);
 
   if ($my(flags) & FILE_EXISTS) {
     struct stat st;
     if (-1 is stat ($my(fname), &st)) {
-      msg_error_fmt ("[Warning]\n%s: removed from filesystem since last operation",
-         $my(fname));
+      VED_MSG_ERROR(MSG_FILE_REMOVED_FROM_FILESYSTEM);
     } else {
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec)
-        msg_error_fmt ("[Warning]%s: has been modified since last operation",
-            $my(fname));
+        VED_MSG_ERROR(MSG_FILE_HAS_BEEN_MODIFIED);
     }
   }
 
@@ -2866,6 +2866,8 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   $my(Cstring) = $myparents(Cstring);
   $my(String) =$myparents(String);
   $my(Re) = $myparents(Re);
+  $my(Msg) = $myparents(Msg);
+  $my(Error) = $myparents(Error);
   $my(Video) = $myparents(Video);
   $my(Term) = $myparents(Term);
   $my(Input) = $myparents(Input);
@@ -2944,21 +2946,85 @@ private void ed_append_message (ed_t *this, char *msg) {
   My(Buf).append_with (this->head->head, msg);
 }
 
-private void send_msg (buf_t *this, int color, char *msg) {
-  My(Ed).append.message ($my(root), msg);
-  $myroots(msg_send) = 1;
-  My(String).replace_with_fmt ($myroots(msgline), TERM_SET_COLOR_FMT, color);
+private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
+  char fmt[MAXERRLEN]; fmt[0] = '\0';
+  char pat[16]; snprintf (pat, 16, "%d:", msgid);
+  char *sp = strstr (ED_MSGS_FMT, pat);
+  if (sp isnot NULL) {
+    int i;
+    for (i = 0; i < (int) bytelen (pat); i++) sp++;
+    for (i = 0; *sp and *sp isnot '.'; sp++) fmt[i++] = *sp;
+    fmt[i] = '\0';
+  }
+  char bytes[MAXLINE];
+  va_list ap;
+  va_start(ap, msgid);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  My(String).replace_with ($my(shared_str), bytes);
+  return $my(shared_str)->bytes;
+}
+
+private void ed_msg_send (ed_t *this, int color, char *msg) {
+  self(append.message, msg);
+  $my(msg_send) = 1;
+  My(String).replace_with_fmt ($my(msgline), TERM_SET_COLOR_FMT, color);
   int numchars = 0; int clen;
-  for (int idx = 0; numchars < $myroots(dim)->num_cols and msg[idx]; idx++) {
+  for (int idx = 0; numchars < $my(dim)->num_cols and msg[idx]; idx++) {
     clen = char_byte_len (msg[idx]);
-    for (int i = 0; i < clen; i++) My(String).append_byte ($myroots(msgline), msg[idx + i]);
+    for (int i = 0; i < clen; i++) My(String).append_byte ($my(msgline), msg[idx + i]);
     numchars++;  idx += clen - 1;
   }
 
-  My(String).append($myroots(msgline), TERM_COLOR_RESET);
+  My(String).append($my(msgline), TERM_COLOR_RESET);
+  My(Video).set_with ($my(video), $my(msg_row) - 1, $my(msgline)->bytes);
+  My(Video).Draw.row_at ($my(video), $my(msg_row));
+}
 
-  My(Video).set_with ($my(video), *$my(msg_row_ptr) - 1, $myroots(msgline)->bytes);
-  My(Video).Draw.row_at ($my(video), *$my(msg_row_ptr));
+private void ed_msg_error (ed_t *this, char *msg) {
+  My(Msg).send (this, COLOR_FAILURE, msg);
+}
+
+private void ed_msg_error_fmt (ed_t *this, char *fmt, ...) {
+  char bytes[(VA_ARGS_FMT_SIZE) + 1];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  My(Msg).send (this, COLOR_FAILURE, bytes);
+}
+
+private void ed_msg_send_fmt (ed_t *this, int color, char *fmt, ...) {
+  char bytes[(VA_ARGS_FMT_SIZE) + 1];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  My(Msg).send (this, color, bytes);
+}
+
+private char *ed_error_string (ed_t *this, int err) {
+  char ebuf[MAXERRLEN];
+  ebuf[0] = '\0';
+  char epat[16];
+  snprintf (epat, 16, "%d:", err);
+  char *sp = strstr (SYS_ERRORS, epat);
+  if (sp is NULL) {
+    snprintf (epat, 16, "%d:",  err);
+    sp = strstr (ED_ERRORS, epat);
+  }
+
+  if (sp is NULL) return NULL;
+  int i;
+  for (i = 0; *sp is ' ' or i <= (int) bytelen (epat); i++) sp++;
+  for (i = 0; *sp and *sp isnot ' '; sp++) ebuf[i++] = *sp;
+  for (; *sp and *sp is ' '; sp++);
+  ebuf[i++] = ':'; ebuf[i++] = ' ';
+  for (; *sp and *sp isnot ','; sp++) ebuf[i++] = *sp;
+  ebuf[i] = '\0';
+
+  My(String).replace_with ($my(shared_str), ebuf);
+  return $my(shared_str)->bytes;
 }
 
 private void buf_set_topline (buf_t *this) {
@@ -3339,7 +3405,7 @@ private int ved_search (buf_t *this, char com) {
 
   histitem_t *his = $my(history)->search->head;
 
-  msg_normal (" ");
+  VED_MSG(" ");
 
   rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
     $my(dim)->num_cols, $my(video));
@@ -3397,9 +3463,8 @@ search:
       }
 
       if (sch->found) {
-        msg_fmt ("|%d %d|%s%s%s%s%s", sch->idx + 1, sch->col, sch->prefix,
-          TERM_MAKE_COLOR(COLOR_RED), sch->match, TERM_COLOR_RESET,
-          sch->end);
+        VED_MSG("|%d %d|%s%s%s%s%s", sch->idx + 1, sch->col, sch->prefix,
+            TERM_MAKE_COLOR(COLOR_RED), sch->match, TERM_COLOR_RESET, sch->end);
         sch->cur_idx = sch->idx;
       } else {
         sch_t *s = stack_pop (sch, sch_t);
@@ -3409,7 +3474,7 @@ search:
           free (s);
         }
 
-      msg_normal (" ");
+      VED_MSG(" ");
       }
 
       continue;
@@ -3472,7 +3537,7 @@ theend:
     ved_normal_goto_linenr (this, sch->idx + 1);
   }
 
-  msg_normal (" ");
+  VED_MSG(" ");
 
   rline_clear (rl);
   rline_free (rl);
@@ -3755,7 +3820,7 @@ private int mark_set (buf_t *this, int mark) {
   $my(marks)[mark].cur_idx = this->cur_idx;
 
   if (mark isnot MARK_UNAMED)
-    msg_fmt ("set [%c] mark", MARKS[mark]);
+    VED_MSG("set [%c] mark", MARKS[mark]);
 
   return DONE;
 }
@@ -4902,7 +4967,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
-  msg_fmt ("deleted into register [%c]", REGISTERS[regidx]);
+  VED_MSG("deleted into register [%c]", REGISTERS[regidx]);
   self(draw);
   vundo_push (this, action);
   return DONE;
@@ -5190,7 +5255,7 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
     stack_push (rg, reg);
   }
 
-  msg_fmt ("yanked [linewise] into register [%c]", REGISTERS[regidx]);
+  VED_MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
@@ -5220,7 +5285,7 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
   reg->data = My(String).new_with (buf);
   stack_push (rg, reg);
 
-  msg_fmt ("yanked [charwise] into register [%c]", REGISTERS[regidx]);
+  VED_MSG("yanked [charwise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
@@ -6002,6 +6067,7 @@ private int ved_split (buf_t **thisp, char *fname) {
 private int ved_enew_fname (buf_t **thisp, char *fname) {
   buf_t *this = *thisp;
   win_t *w = My(Ed).win.new ($my(root), NULL, 1);
+  $my(root)->prev_idx = $my(root)->cur_idx;
   My(Ed).append.win ($my(root), w);
   $my(parent) = $my(root)->current;
   ved_edit_fname (thisp, fname, 0, 1, 1);
@@ -6089,7 +6155,7 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
 
   int fexists = file_exists (fnstr->bytes);
   if (fexists and 0 is append and 0 is force) {
-    msg_error (error_string(FILE_EXISTS_AND_NO_FORCE, fnstr->bytes));
+    VED_MSG_ERROR(MSG_FILE_EXISTS_AND_NO_FORCE, fnstr->bytes);
     goto theend;
   }
 
@@ -6097,7 +6163,7 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
 
   FILE *fp = fopen (fnstr->bytes, (append ? "a+" : "w"));
   if (NULL is fp) {
-    msg_error (errno_string (errno));
+    SYS_MSG_ERROR (errno);
     goto theend;
   }
 
@@ -6113,7 +6179,7 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
   }
 
   fclose (fp);
-  msg_fmt ("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
+  VED_MSG("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
 
   retval = DONE;
 
@@ -6124,18 +6190,18 @@ theend:
 
 private int ved_write_buffer (buf_t *this, int force) {
   if (str_eq ($my(fname), UNAMED)) {
-    msg_error (error_string (CAN_NOT_WRITE_AN_UNAMED_BUFFER));
+    VED_MSG_ERROR (MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER);
     return NOTHING_TODO;
   }
 
   if ($my(flags) & BUF_IS_RDONLY) {
-    msg_error (error_string (BUF_IS_READ_ONLY));
+    VED_MSG_ERROR(MSG_BUF_IS_READ_ONLY);
     return NOTHING_TODO;
   }
 
   ifnot ($my(flags) & BUF_IS_MODIFIED) {
     ifnot (force) {
-      msg_error (error_string (ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE));
+      VED_MSG_ERROR (MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE);
       return NOTHING_TODO;
     }
   }
@@ -6162,7 +6228,7 @@ private int ved_write_buffer (buf_t *this, int force) {
 
   FILE *fp = fopen ($my(fname), "w");
   if (NULL is fp) {
-    msg_error_fmt ("%s: %s", $my(fname), errno_string (errno));
+    SYS_MSG_ERROR(errno);
     return NOTHING_TODO;
   }
 
@@ -6179,8 +6245,7 @@ private int ved_write_buffer (buf_t *this, int force) {
 
   fstat (fileno (fp), &$my(st));
   fclose (fp);
-  msg_fmt ("%s: %zd bytes written", $my(fname), bts);
-
+  VED_MSG("%s: %zd bytes written", $my(fname), bts);
   return DONE;
 }
 
@@ -6192,7 +6257,7 @@ private int ved_buf_read (buf_t *this, char *fname) {
   row_t *row = this->current;
   FILE *fp = fopen (fname, "r");
   if (NULL is fp) {
-    msg_error (errno_string (errno));
+    SYS_MSG_ERROR(errno);
     return NOTHING_TODO;
   }
 
@@ -6364,8 +6429,8 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
   buf_t *tmp;
   if (cur_idx is idx) {
     if ($my(flags) & BUF_IS_MODIFIED) {
-      if (0 is force) {
-        msg_error ("buffer has been modified, use bd! to delete it without writing");
+      ifnot (force) {
+        VED_MSG_ERROR(MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE);
         return NOTHING_TODO;
       }
     }
@@ -6377,8 +6442,8 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
     current_list_set (parent, idx);
     this = parent->current;
     if ($my(flags) & BUF_IS_MODIFIED) {
-      if (0 is force) {
-        msg_error ("buffer has been modified, use bd! to delete it without writing");
+      ifnot (force) {
+        VED_MSG_ERROR(MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE);
         return NOTHING_TODO;
       }
     }
@@ -7684,7 +7749,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         }
       }
 #else
-  msg_error ("writing is disabled, to enable use DEBUG=1 during compilation");
+  My(Msg).error ($my(root), "writing is disabled, to enable use DEBUG=1 during compilation");
 #endif
       goto theend;
 
@@ -8464,10 +8529,10 @@ private int ved_main (ed_t *this, buf_t *buf) {
   } else
     My(Win).draw (this->current);
 
-  send_msg (buf, COLOR_NORMAL, " ");
+  My(Msg).send(this, COLOR_NORMAL, " ");
 /*
-  send_msg (buf, COLOR_CYAN,
-    "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
+  My(Msg).send (this, COLOR_CYAN,
+      "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
  */
 
   return ved_loop (this, buf);
@@ -8608,6 +8673,7 @@ private void ed_free (ed_t *this) {
     My(String).free ($my(topline));
     My(String).free ($my(msgline));
     My(String).free ($my(last_insert));
+    My(String).free ($my(shared_str));
     My(Video).free ($my(video));
 
     history_free (&$my(history));
@@ -8642,6 +8708,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(Video) = &E->Video;
   $my(Win) = &E->Win;
   $my(Buf) = &E->Buf;
+  $my(Msg) = &E->Msg;
+  $my(Error) = &E->Error;
 
   $my(term) = My(Term).new ();
   $my(term)->prop->Me = &E->Term;
@@ -8673,6 +8741,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
 
   $my(last_insert) = My(String).new ();
+  $my(shared_str) = My(String).new ();
 
   $my(saved_cwd) = dir_get_current ();
 
@@ -8713,6 +8782,8 @@ private ed_T *__allocate_prop__ (ed_T *this) {
   $my(Video) = &this->Video;
   $my(Win) = &this->Win;
   $my(Buf) = &this->Buf;
+  $my(Msg) = &this->Msg;
+  $my(Error) = &this->Error;
   $my(Me) = this;
   return this;
 }
@@ -8938,6 +9009,20 @@ private ed_T *editor_new (char *name) {
         .flush = buf_flush,
         .draw_cur_row = buf_draw_cur_row,
         .append_with = buf_append_with
+      ),
+    ),
+    .Msg = ClassInit (msg,
+      .self = SelfInit (msg,
+        .send = ed_msg_send,
+        .send_fmt = ed_msg_send_fmt,
+        .error = ed_msg_error,
+        .error_fmt = ed_msg_error_fmt,
+        .fmt = ed_msg_fmt
+      ),
+    ),
+    .Error = ClassInit (error,
+      .self = SelfInit (error,
+        .string = ed_error_string
       ),
     ),
     .Video = __init_video__ (),

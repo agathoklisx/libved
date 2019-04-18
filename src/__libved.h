@@ -211,7 +211,7 @@ enum {
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
 
-#define BASE_ERRORS "\
+#define SYS_ERRORS "\
 1:  EPERM     Operation not permitted,\
 2:  ENOENT    No such file or directory,\
 3:  ESRCH     No such process,\
@@ -254,62 +254,41 @@ enum {
 40: ELOOP     Too many symbolic links encountered"
 
 #define ED_ERRORS "\
--2: INDEX_ERROR Index is out of range,\
--3: NULL_PTR_ERROR NULL Pointer,\
--4: INTEGEROVERFLOW_ERROR Integer overflow"
+-11: INDEX_ERROR Index is out of range,\
+-12: NULL_PTR_ERROR NULL Pointer,\
+-13: INTEGEROVERFLOW_ERROR Integer overflow"
 
-#define errno_string(_errno_)                                          \
-({                                                                     \
-  char ebuf[MAXERRLEN]; ebuf[0] = '\0';                                \
-  char epat[16]; snprintf (epat, 16, "%d:", _errno_);                  \
-  char *sp = strstr (BASE_ERRORS, epat);                               \
-  if (sp is NULL) {                                                    \
-    snprintf (epat, 16, "%d:",  _errno_);                              \
-    sp = strstr (ED_ERRORS, epat);                                     \
-  }                                                                    \
-  if (sp isnot NULL) {                                                 \
-    int i_;                                                            \
-    for (i_ = 0; *sp is ' ' or i_ <= (int) bytelen (epat); i_++) sp++; \
-    for (i_ = 0; *sp and *sp isnot ' '; sp++) ebuf[i_++] = *sp;        \
-    for (i_ = i_; *sp and *sp is ' '; sp++);                           \
-    ebuf[i_++] = ':'; ebuf[i_++] = ' ';                                \
-    for (i_ = i_; *sp and *sp isnot ','; sp++) ebuf[i_++] = *sp;       \
-    ebuf[i_] = '\0';                                                   \
-  }                                                                    \
-                                                                       \
-  ebuf;                                                                \
-})
-
-#define FILE_EXISTS_AND_NO_FORCE 1
-#define FILE_EXISTS_AND_IS_A_DIRECTORY 2
-#define CAN_NOT_WRITE_AN_UNAMED_BUFFER 3
-#define FILE_IS_LOADED_IN_ANOTHER_BUFFER 4
-#define BUF_IS_READ_ONLY 5
-#define ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE 6
+#define MSG_FILE_EXISTS_AND_NO_FORCE 1
+#define MSG_FILE_EXISTS_AND_IS_A_DIRECTORY 2
+#define MSG_FILE_IS_NOT_READABLE 3
+#define MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER 4
+#define MSG_FILE_REMOVED_FROM_FILESYSTEM 5
+#define MSG_FILE_HAS_BEEN_MODIFIED 6
+#define MSG_BUF_IS_READ_ONLY 7
+#define MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE 8
+#define MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE 9
+#define MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER 10
 
 #define ED_MSGS_FMT "\
 1:file %s: exists, use w! to overwrite.\
 2:file %s: exists and is a directory.\
-3:can not write an unamed buffer.\
+3:file %s: is not readable.\
 4:file %s: is loaded in another buffer.\
-5:buffer is read only.\
-6:buffer has not been modified, use w! to force."
+5:[Warning]%s: removed from filesystem since last operation.\
+6:[Warning]%s: has been modified since last operation.\
+7:buffer is read only.\
+8:buffer has not been modified, use w! to force.\
+9:buffer has been modified, use bd! to delete it without writing.\
+10:can not write an unamed buffer."
 
-#define error_string(eid, ...)                                         \
-({                                                                     \
-  char efmt[MAXERRLEN]; efmt[0] = '\0';                                \
-  char epat[16]; snprintf (epat, 16, "%d:", eid);                      \
-  char *sp = strstr (ED_MSGS_FMT, epat);                               \
-  if (sp isnot NULL) {                                                 \
-    int i_;                                                            \
-    for (i_ = 0; i_ < (int) bytelen (epat); i_++) sp++;                \
-    for (i_ = 0; *sp and *sp isnot '.'; sp++) efmt[i_++] = *sp;        \
-    efmt[i_] = '\0';                                                   \
-  }                                                                    \
-  char ebuf[MAXERRLEN];                                                \
-  snprintf (ebuf, MAXERRLEN, efmt, ## __VA_ARGS__);                    \
-  ebuf;                                                                \
-})
+#define VED_MSG_ERROR(err__, ...) \
+  My(Msg).error ($my(root), My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
+
+#define SYS_MSG_ERROR(errno__) \
+  My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
+
+#define VED_MSG(fmt, ...) \
+  My(Msg).send_fmt ($my(root), COLOR_NORMAL, fmt, ##__VA_ARGS__)
 
 NewProp (term,
   term_T *Me;
@@ -593,9 +572,11 @@ NewType (hist,
   Class (cstring) *Cstring;      \
   Class (string) *String;        \
   Class (re) *Re;                \
-  Class (input)  *Input;         \
+  Class (input) *Input;          \
   Class (screen) *Screen;        \
-  Class (cursor) *Cursor
+  Class (cursor) *Cursor;        \
+  Class (msg) *Msg;              \
+  Class (error) *Error
 
 NewType (dim,
   int
@@ -807,6 +788,7 @@ NewProp (ed,
   string_t *last_insert;
   string_t *msgline;
   string_t *topline;
+  string_t *shared_str;
   hist_t *history;
   rg_t regs[NUM_REGISTERS];
 );
@@ -972,11 +954,11 @@ do {                                                                \
   if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] isnot '\n')   \
     My(String).append ($mycur(data), "\n")
 
-#define msg_normal(msg) send_msg (this, COLOR_NORMAL, (msg))
-#define msg_success(msg) send_msg (this, COLOR_SUCCESS, (msg))
-#define msg_error(msg) send_msg (this, COLOR_FAILURE, (msg))
-#define msg_error_fmt(fmt, ...) msg_error(str_fmt(fmt, __VA_ARGS__))
-#define msg_fmt(fmt, ...) msg_normal(str_fmt(fmt, __VA_ARGS__))
+//#define msg_normal(msg) send_msg (this, COLOR_NORMAL, (msg))
+//#define msg_success(msg) send_msg (this, COLOR_SUCCESS, (msg))
+//#define msg_error(msg) send_msg (this, COLOR_FAILURE, (msg))
+//#define msg_error_fmt(fmt, ...) msg_error(str_fmt(fmt, __VA_ARGS__))
+//#define msg_fmt(fmt, ...) msg_normal(str_fmt(fmt, __VA_ARGS__))
 
 #define stack_free(list, type)                                      \
 do {                                                                \

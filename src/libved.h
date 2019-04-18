@@ -72,9 +72,10 @@
 #define HL_TAB          COLOR_CYAN
 #define HL_ERROR        COLOR_RED
 
-#define INDEX_ERROR     -2
-#define NULL_PTR_ERROR  -3
-#define INTEGEROVERFLOW_ERROR -4
+#define ED_BASE_ERROR   -10
+#define INDEX_ERROR     ED_BASE_ERROR - 1
+#define NULL_PTR_ERROR  ED_BASE_ERROR - 2
+#define INTEGEROVERFLOW_ERROR ED_BASE_ERROR - 3
 
 typedef signed int utf8;
 typedef unsigned int uint;
@@ -522,6 +523,27 @@ NewSubSelf (ed, win,
   win_t *(*new) (ed_t *, char *, int);
 );
 
+NewSelf (msg,
+  void
+    (*send) (ed_t *, int, char *),
+    (*send_fmt) (ed_t *, int, char *, ...),
+    (*error) (ed_t *, char *),
+    (*error_fmt) (ed_t *, char *, ...);
+  char *(*fmt) (ed_t *, int, ...);
+);
+
+NewClass (msg,
+  Self (msg) self;
+);
+
+NewSelf (error,
+  char *(*string) (ed_t *, int);
+);
+
+NewClass (error,
+  Self (error) self;
+);
+
 NewSelf (ed,
   ed_t *(*new) (Class (ed) *, int);
 
@@ -560,7 +582,8 @@ NewClass (ed,
   Class (input) Input;
   Class (screen) Screen;
   Class (cursor) Cursor;
-
+  Class (msg) Msg;
+  Class (error) Error;
   ed_t *head;
   ed_t *tail;
   ed_t *current;
