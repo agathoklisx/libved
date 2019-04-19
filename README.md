@@ -1,16 +1,18 @@
 ```C
-/* This is a product that was born during C's educational period, and it
- * is nothing else but just another text visual editor, with the initial
- * intentions to be used as a C library and as it is. That means that it
- * can be used without external dependencies, by either "include" it as a
- * single file unit or by linking to it. Because it was meant to be used
- * in primitive environment, it should minimize (with time) even the libc
- * dependency and should provide the required functions. As such it doesn't
- * require a curses library and doesn't use the mb* family of functions.
+/* This is a product that was born during C's educational period, and it is
+ * nothing else but just another text visual editor, but that can be used as
+ * a library and as it is.
 
- * The current state is at the bootstrap level. That means that the editor
- * can develop itself, as the basic interface is considered quite close to
- * completion, however:
+ * That means an independed functional (ala vim) editor, that either can be
+ * "include" it as a single file unit or by linking to it.
+
+ * Because it [wa|s]s meant to be used in primitive environment[s], it should
+ * replace (with time) even the libc functions.  As such it doesn't require a
+ * curses library or|and it doesn't use the mb* family of functions.
+
+ * The current state is at the bootstrap|prototype level. That means that the
+ * editor can develop itself, and the basic interface is considered quite close
+ * to completion, however:
 
  * - it doesn't do any validation of the incoming data (the data it produces
  *   is rather controllable, but it cannot handle (for instance) data which
@@ -18,8 +20,9 @@
 
  * - some motions don't behave properly when a character it occupies more than
  *   one cell width, or behave properly if this character is a tab but (for now)
- *   a tab it takes one single cell, much like a space. To implement that required
- *   functionality an expensive wcwidth() should be included.
+ *   a tab it takes one single cell, much like a space. To implement some of this
+ *   functionality an expensive wcwidth() should be included and algorithms should
+ *   adjust.
 
  * - the code is young and is tested (and develops) based on the usage and the
  *   needs, so time is needed for stabilization, and some crude algorithms that
@@ -43,8 +46,8 @@
    *  Simple Editor written in C using Linked List with undo
 
  * Code snippets from outer sources should mention this source on top of
- * those blocks; if not, this is an omission and should be fixed (sorry
- * if there are such cases).
+ * those blocks; if not, I'm sorry but this is probably an omission and should
+ * be fixed.
 
  * The code constantly runs under valgrind, so it is supposed to have no
  * memory leaks, which it is simple not true, because the conditions in a
@@ -52,30 +55,34 @@
 
  * Also uncountable segmentation faults were diagnosed and fixed thanks to gdb.
 
- * The library code can be compiled as a shared or as a static library, both
- * with gcc and tcc.
+ * The library code can be compiled as a shared or as a static library, with
+ * gcc, clang and tcc.
+
+ * The development environment is void-linux and probably the code it won't compile
+ * on other unixes without some ifdef's.
  *
- * Also included a very minimal executable that can be used to test the code.
- * This executable can be compiled also as static with gcc, but not with tcc.
+ * Also included a very minimal executable that can be used to test the library code.
+ * This can be compiled also as static with gcc and clang, but not with tcc.
 
  * To test the editor issue (using gcc as the default compiler):
 
-   cd src && make veda-shared && make run
+   cd src && make veda-shared
 
-   * to enable regular expression support issue:
+   * or to enable regular expression support issue:
 
-   cd src && make HAS_REGEXP=1 veda-shared && make run
+   cd src && make HAS_REGEXP=1 veda-shared
 
-   * by default writing is disabled, unless in DEBUG mode, like:
+   * by default writing is disabled, unless in DEBUG mode:
 
-   cd src && make HAS_REGEXP=1 DEBUG=1 veda-shared && make run
+   cd src && make HAS_REGEXP=1 DEBUG=1 veda-shared
 
- * (this will open the source files of itself)
+   * and finally to run the executable and open the source files from itself, issue:
 
- * similarly with tcc compiler, but the CC Makefile variable should be set to tcc,
- * and one way to do is from the command line:
+   make run
+
+ * similarly with clang and tcc compilers, but the CC Makefile variable should be
+ * set and one way to do this, is from the command line:
    make CC=tcc ...
-
 
  * C
  * This compiles to C11 for two reasons:
@@ -112,27 +119,28 @@
    * I guess the most precise is bytelen() and charlen() in the utf8 era */
 
   /* defined but not being used, though i could happily use it (same with the loop
-   * macro) if it was enforced */
+   * macro) if it was enforced by a standard */
   #define forever for (;;)
 
-/* Interface
+/* Interface and Semantics.
+
  * It is a vi[m] like interface with the adition of a topline that can be disabled,
  * and it is based on modes.
 
  * Every buffer belongs to a window.
  * A window can have unlimited buffers.
  * A window can also be splited in frames.
- * An Editor instance can have unlimited windows.
- * There can be unlimited editor instances.
+ * An Editor instance can have unlimited independed windows.
 
- * The highlight system currently works only for C sources; editing C sources is one
- * of the main reasons for this editor, so it is and will be tight up with C more.
+ * There can be unlimited independed editor instances (can be (de|rea)ttached)¹.
 
- * Modes and Semantics
+ * Modes.
 
  * These are mostly like vim and which of course lack much of the rich feature set
  * of vim. That would require quite the double code i believe.
  */
+
+                // FIRST DRAFT //
 
 Normal mode:
  |
@@ -193,7 +201,7 @@ Normal mode:
  |   l, ARROW_RIGHT  | window to the right            |
  |   `               | previus focused window         |
  | :                 | command line mode              |
- | CTRL-j            | detach editor [extension]      |
+¹| CTRL-j            | detach editor [extension]      |
  | q                 | quit (not delete) and when buffer type is pager|
 
 Insert Mode:

@@ -254,6 +254,7 @@ enum {
 40: ELOOP     Too many symbolic links encountered"
 
 #define ED_ERRORS "\
+-3: RE_UNBALANCHED_BRACKETS_ERROR Unbalanced brackets in the pattern,\
 -11: INDEX_ERROR Index is out of range,\
 -12: NULL_PTR_ERROR NULL Pointer,\
 -13: INTEGEROVERFLOW_ERROR Integer overflow"
@@ -1132,13 +1133,21 @@ do {                                                                \
 })
 
 /* from man printf(3) Linux Programmer's Manual */
+/*
 #define VA_ARGS_FMT_SIZE                                            \
 ({                                                                  \
   int size = 0;                                                     \
-  va_list ap;                                                       \
-                                                                    \
-  va_start(ap, fmt);                                                \
+  va_list ap; va_start(ap, fmt);                                    \
   size = vsnprintf(NULL, size, fmt, ap);                            \
   va_end(ap);                                                       \
   size;                                                             \
 })
+ *
+ * gcc complains on -Werror=alloc-size-larger-than= or -fsanitize=undefined,
+ *  with:
+ *  argument 1 range [18446744071562067968, 18446744073709551615]
+ *  exceeds maximum object size 9223372036854775807
+ *  in a call to built-in allocation function '__builtin_alloca_with_align'
+ */
+
+#define VA_ARGS_FMT_SIZE (MAXLINE * 2)

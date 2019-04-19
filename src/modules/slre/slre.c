@@ -72,13 +72,17 @@ struct regex_info {
   /* E.g. SLRE_IGNORE_CASE. See enum below */
   int flags;
 
-  /* EXTENSION (aga.chatzimanikas at gmail): 
+  /* EXTENSION: 
    * the start byte index that occured the match */
   int match_idx;
 
-  /* EXTENSION (aga.chatzimanikas at gmail): 
+  /* EXTENSION: 
    * byte length of the full match */
   int match_len;
+
+  /* EXTENSION: 
+   * total final captured substrings */
+  int total_caps;
 };
 
 static int is_metacharacter(const unsigned char *s) {
@@ -290,6 +294,7 @@ static int bar(const char *re, int re_len, const char *s, int s_len,
       if (info->caps != NULL && n > 0) {
         info->caps[bi - 1].ptr = s + j;
         info->caps[bi - 1].len = n;
+        info->total_caps++;
       }
       j += n;
     } else if (re[i] == '^') {
@@ -333,7 +338,7 @@ static int baz(const char *s, int s_len, struct regex_info *info) {
     result = doh(s + i, s_len - i, info, 0);
 
     if (result >= 0) {
-      /* EXTENSION (aga.chatzimanikas at gmail) */
+      /* EXTENSION */
       info->match_idx = i;
       info->match_len = result;
       /**/

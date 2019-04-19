@@ -21,7 +21,7 @@ ed_T *E = NULL;
 /* this is like slre_match(), with an aditional argument and two extra fields
  * in the slre regex_info structure */
 int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
-struct slre_cap *caps, int num_caps, int flags) {
+                            struct slre_cap *caps, int num_caps, int flags) {
   struct regex_info info;
 
   info.flags = flags;
@@ -30,11 +30,13 @@ struct slre_cap *caps, int num_caps, int flags) {
   info.caps = caps;
 
   info.match_idx = info.match_len = -1;
+  info.total_caps = 0;
 
   int retval = foo (regexp, (int) strlen(regexp), s, s_len, &info);
   if (0 <= retval) {
     re->match_idx = info.match_idx;
     re->match_len = info.match_len;
+    re->total_caps = info.total_caps;
     re->match_ptr = (char *) s + info.match_idx;
   }
 
@@ -58,23 +60,30 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
       re->pat->bytes[0] is '|'))
     return re->retval;
 
-  struct slre_cap cap[re->num_caps];
-  for (int i = 0; i < re->num_caps; i++) cap[i].len = 0;
+  do {
+    struct slre_cap cap[re->num_caps];
+    for (int i = 0; i < re->num_caps; i++) cap[i].len = 0;
 
-  re->retval = re_match (re, re->pat->bytes, buf, buf_len,
-      cap, re->num_caps, re->flags);
+    re->retval = re_match (re, re->pat->bytes, buf, buf_len,
+        cap, re->num_caps, re->flags);
 
-  if (0 <= re->retval) {
+    if (re->retval is RE_CAPS_ARRAY_TOO_SMALL_ERROR) {
+      My(Re).free_captures (re);
+      My(Re).allocate_captures (re, re->num_caps + (re->num_caps / 2));
+      continue;
+    }
+
+    if (0 > re->retval) return re->retval;
+
     re->match = My(String).new_with (re->match_ptr);
     My(String).clear_at (re->match, re->match_len);
 
-    for (int i = 0; i < re->num_caps; i++) {
-      ifnot (cap[i].len) break;
+    for (int i = 0; i < re->total_caps; i++) {
       re->cap[i] = AllocType (capture);
       re->cap[i]->ptr = cap[i].ptr;
       re->cap[i]->len = cap[i].len;
     }
-  }
+  } while (0);
 
   return re->retval;
 }
@@ -100,16 +109,20 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
 
           case '1'...'9':
             {
-              int idx = *sub_p - '0' - 1;
-              if (0 > idx or idx + 1 > re->num_caps)
-                goto theerror;
+              int idx = 0;
+              while (*sub_p and ('0' <= *sub_p and *sub_p <= '9')) {
+                idx = (10 * idx) + (*sub_p - '0');
+                sub_p++;
+              }
+              idx--;
+              if (0 > idx or idx + 1 > re->total_caps) goto theerror;
 
               char buf[re->cap[idx]->len + 1];
               memcpy (buf, re->cap[idx]->ptr, re->cap[idx]->len);
               buf[re->cap[idx]->len] = '\0';
               My(String).append (substr, buf);
             }
-            sub_p++;
+
             continue;
 
           default:
@@ -184,8 +197,8 @@ int main (int argc, char **argv) {
   win_t *w = Ed.get.current_win (this);
 
   ifnot (argc) {
-     buf_t *buf = My(Win).buf_new (w, NULL, 0);
-     My(Win).append_buf (w, buf);
+    buf_t *buf = My(Win).buf_new (w, NULL, 0);
+    My(Win).append_buf (w, buf);
   } else
     for (int i = 0; i < argc; i++) {
       buf_t *buf = My(Win).buf_new (w, argv[i], 0);
@@ -214,10 +227,10 @@ int main (int argc, char **argv) {
         if (NULL is ed) ed = Ed.get.prev (this);
         this = ed;
       }
-    } else
-      break;
+    } else goto theend;
   }
 
+theend:
   __deinit_ved__ (E);
 
   return retval;

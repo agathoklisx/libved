@@ -72,10 +72,26 @@
 #define HL_TAB          COLOR_CYAN
 #define HL_ERROR        COLOR_RED
 
-#define ED_BASE_ERROR   -10
-#define INDEX_ERROR     ED_BASE_ERROR - 1
-#define NULL_PTR_ERROR  ED_BASE_ERROR - 2
-#define INTEGEROVERFLOW_ERROR ED_BASE_ERROR - 3
+#define RE_IGNORE_CASE (1 << 0)
+#define RE_ENCLOSE_PAT_IN_PAREN (1 << 1)
+#define RE_PATTERN_IS_STRING_LITERAL (1 << 2)
+
+#define RE_MAX_NUM_CAPTURES 9
+
+/* These corespond to SLRE failure codes */
+#define RE_NO_MATCH                     -1
+#define RE_UNEXPECTED_QUANTIFIER_ERROR  -2
+#define RE_UNBALANCED_BRACKETS_ERROR    -3
+#define RE_INTERNAL_ERROR               -4
+#define RE_INVALID_CHARACTER_SET_ERROR  -5
+#define RE_INVALID_METACHARACTER_ERROR  -6
+#define RE_CAPS_ARRAY_TOO_SMALL_ERROR   -7
+#define RE_TOO_MANY_BRANCHES_ERROR      -8
+#define RE_TOO_MANY_BRACKETS_ERROR      -9
+
+#define INDEX_ERROR                    -10
+#define NULL_PTR_ERROR                 -11
+#define INTEGEROVERFLOW_ERROR          -12
 
 typedef signed int utf8;
 typedef unsigned int uint;
@@ -222,14 +238,6 @@ NewType (string,
     char *bytes;
 );
 
-#define RE_IGNORE_CASE (1 << 0)
-#define RE_ENCLOSE_PAT_IN_PAREN (1 << 1)
-#define RE_PATTERN_IS_STRING_LITERAL (1 << 2)
-
-#define RE_NO_MATCH -1
-
-#define RE_MAX_NUM_CAPTURES 9
-
 NewType (capture,
   const char *ptr;
   int len;
@@ -243,6 +251,7 @@ NewType (regexp,
   int retval;
   int flags;
   int num_caps;
+  int total_caps;
   int match_idx;
   int match_len;
   char *match_ptr;
@@ -368,6 +377,7 @@ NewSelf (re,
       void  (*free) (regexp_t *);
       void  (*free_captures) (regexp_t *);
       void  (*reset_captures) (regexp_t *);
+      void  (*allocate_captures) (regexp_t *, int);
       void  (*free_pat) (regexp_t *);
 
        int  (*exec) (regexp_t *, char *, size_t);

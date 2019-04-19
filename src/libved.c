@@ -556,6 +556,11 @@ private void re_free_captures (regexp_t *re) {
   re->cap = NULL;
 }
 
+private void re_allocate_captures (regexp_t *re, int num) {
+  re->num_caps = (0 > num ? 0 : num);
+  re->cap = Alloc (sizeof (capture_t) * re->num_caps);
+}
+
 private void re_free_pat (regexp_t *re) {
   if (NULL is re->pat) return;
   string_free (re->pat);
@@ -578,8 +583,7 @@ private regexp_t *re_new (char *pat, int flags, int num_caps, int (*compile) (re
   re->flags |= flags;
   re->pat = string_new_with (pat);
   compile (re);
-  re->num_caps = (0 > num_caps ? 0 : num_caps);
-  re->cap = Alloc (sizeof (capture_t) * re->num_caps);
+  re_allocate_captures (re, num_caps);
   re->match = NULL;
   return re;
 }
@@ -632,6 +636,7 @@ public re_T __init_re__ (void) {
       .new = re_new,
       .free = re_free,
       .free_captures = re_free_captures,
+      .allocate_captures = re_allocate_captures,
       .reset_captures = re_reset_captures,
       .free_pat = re_free_pat,
       .parse_substitute = re_parse_substitute,
@@ -3338,14 +3343,19 @@ private int __ved_search__ (buf_t *this, search_t *sch) {
   int retval = NOTOK;
   int idx = sch->cur_idx;
   int flags = 0;
-  regexp_t *re = My(Re).new (sch->pat->bytes, flags, 0, My(Re).compile);
+  regexp_t *re = My(Re).new (sch->pat->bytes, flags, 9, My(Re).compile);
 
   sch->found = 0;
   SEARCH_PUSH (sch->cur_idx, sch->row);
 
   do {
-    if (0 <= My(Re).exec (re, sch->row->data->bytes,
-        sch->row->data->num_bytes)) {
+    int ret = My(Re).exec (re, sch->row->data->bytes, sch->row->data->num_bytes);
+    if (ret is RE_UNBALANCED_BRACKETS_ERROR) {
+      VED_MSG_ERROR (RE_UNBALANCED_BRACKETS_ERROR);
+      break;
+    }
+
+    if (0 <= ret) {
       sch->idx = idx;
       sch->found = 1;
       sch->col = re->match_idx;
@@ -3754,11 +3764,13 @@ searchandsub:;
       char prefix[bidx + re->match_idx + 1];
       memcpy (prefix, it->data->bytes, bidx + re->match_idx);
       prefix[bidx + re->match_idx] = '\0';
-      utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A'};
+      utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A', 'c', 'C'};
       utf8 c = quest (this, str_fmt (
           "|match at line %d byte idx %d|\n"
           "%s%s%s%s%s\n"
-          "Replace with %s%s%s or quit [yY|nN|qQ|[aA]ll]\n",
+          "|substitution string|\n"
+          "%s%s%s\n"
+          "replace? yY[es]|nN[o] replace all?aA[ll], continue next line? cC[ontinue], quit? qQ[uit]\n",
            idx, re->match_idx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), re->match->bytes,
            TERM_MAKE_COLOR(COLOR_MENU_BG), re->match_ptr + re->match_len,
            TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG)),
@@ -3767,6 +3779,7 @@ searchandsub:;
       switch (c) {
         case 'n': case 'N': goto if_global;
         case 'q': case 'Q': goto theend;
+        case 'c': case 'C': goto thecontinue;
         case 'a': case 'A': interactive = 0;
       }
     }
@@ -4090,7 +4103,7 @@ private int ved_normal_end_word (buf_t *this, int count, int run_insert_mode) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   int cur_idx = $mycur(cur_col_idx);
-  int retval;
+  int retval = NOTHING_TODO;
   for (int i = 0; i < count; i++) {
     while (($mycur(cur_col_idx) isnot (int) $mycur(data)->num_bytes - 1) and
           (0 is (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))))
@@ -7333,7 +7346,6 @@ thecontinue:
     rl->state &= ~RL_CONTINUE;
     if (rl->state & RL_IS_VISIBLE) rline_write (rl);
     rl->c = rl->getch (rl->term);
-
     retval = rl->at_beg (&rl);
     switch (retval) {
       case RL_BREAK: goto theend;
@@ -7426,7 +7438,7 @@ insert_char:
 
         if (rl->c < 0x80) {
           ch = AllocType (vstring);
-          ch->data = string_new_with (str_fmt ("%c", rl->c));
+          ch->data = string_new_with_fmt ("%c", rl->c);
         } else {
           ch = AllocType (vstring);
           char buf[5];
