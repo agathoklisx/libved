@@ -30,6 +30,7 @@
 #define MENU_FINALIZE (1 << 4)
 #define MENU_DONE (1 << 5)
 #define MENU_LIST_IS_ALLOCATED (1 << 6)
+#define MENU_REDO (1 << 7)
 
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)
@@ -928,17 +929,17 @@ static const utf8 offsetsFromUTF8[6] = {
   nr;                                                                     \
 })
 
-#define BYTES_TO_RLINE(rl_, bytes, len)                             \
-do {                                                                \
-  char *sp_ = (bytes);                                              \
-  for (int i__ = 0; i__ < (len); i__++) {                           \
-    int clen = char_byte_len ((bytes)[i__]);                        \
-    (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);                      \
-    (rl_)->c = utf8_code (sp_);                                     \
-    rline_edit ((rl_));                                             \
-    i__ += clen - 1;                                                \
-    sp_ += clen;                                                    \
-    }                                                               \
+#define BYTES_TO_RLINE(rl_, bytes, len)                                   \
+do {                                                                      \
+  char *sp_ = (bytes);                                                    \
+  for (int i__ = 0; i__ < (len); i__++) {                                 \
+    int clen = char_byte_len ((bytes)[i__]);                              \
+    (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);                            \
+    (rl_)->c = utf8_code (sp_);                                           \
+    rline_edit ((rl_));                                                   \
+    i__ += clen - 1;                                                      \
+    sp_ += clen;                                                          \
+    }                                                                     \
 } while (0)
 
 #define IS_MODE(mode__) str_eq ($my(mode), (mode__))

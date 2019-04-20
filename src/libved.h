@@ -337,7 +337,7 @@ NewClass (term,
 
 NewSelf (cstring,
    int  (*cmp_n) (const char *, const char *, size_t);
-  char *(*dup) (const char *);
+  char *(*dup) (const char *, size_t);
 );
 
 NewClass (cstring,

@@ -41,15 +41,12 @@ private int str_cmp_n (const char *sa, const char *sb, size_t n) {
 }
 
 /* in this namespace size has been already computed */
-private char *str_dup (const char *src) {
+private char *str_dup (const char *src, size_t len) {
   /* avoid recomputation if possible */
-    size_t len = bytelen (src);
-
+  // size_t len = bytelen (src);
   char *dest = Alloc (len + 1);
-  if (len)
-    memcpy (dest, src, len + 1);
-  else
-    dest[0] = '\0';
+  if (len)  memcpy (dest, src, len + 1);
+  else dest[0] = '\0';
   return dest;
 }
 
@@ -2861,7 +2858,7 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
     for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ ^ 26);
     $my(name)[num] = '\0';
   } else
-    $my(name) = str_dup (name);
+    $my(name) = str_dup (name, bytelen (name));
 
   $my(parent) = ed;
 
@@ -3633,7 +3630,7 @@ private int vundo_insert (buf_t *this, act_t *act, action_t *redoact) {
   act_t *ract = AllocType (act);
   vundo_set (ract, DELETE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes);
+  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   self(cur.delete);
@@ -3680,7 +3677,7 @@ private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
   act_t *ract = AllocType (act);
   vundo_set (ract, REPLACE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes);
+  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   My(String).replace_with ($mycur(data), act->bytes);
@@ -3741,7 +3738,7 @@ int interactive, int fidx, int lidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   int idx = 0;
@@ -3787,7 +3784,7 @@ searchandsub:;
     act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = idx - 1;
-    act->bytes = str_dup (it->data->bytes);
+    act->bytes = str_dup (it->data->bytes, it->data->num_bytes);
     stack_push (action, act);
 
     string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx + bidx,
@@ -4353,7 +4350,7 @@ private int ved_normal_replace_char (buf_t *this) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
   vundo_push (this, action);
 
@@ -4378,7 +4375,7 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
   vundo_push (this, action);
 
@@ -4473,14 +4470,14 @@ private int ved_join (buf_t *this) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   row_t *row = buf_current_pop_next (this);
   act_t *act2 = AllocType (act);
   vundo_set (act2, DELETE_LINE);
   act2->idx = this->cur_idx + 1;
-  act2->bytes = str_dup (row->data->bytes);
+  act2->bytes = str_dup (row->data->bytes, row->data->num_bytes);
 
   stack_push (action, act2);
   vundo_push (this, action);
@@ -4511,7 +4508,7 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
     act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes);
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     rg = &$my(regs)[regidx];
     My(Ed).free_reg ($my(root), rg);
     rg->reg = regidx;
@@ -4566,7 +4563,7 @@ private int ved_inc_dec_char (buf_t *this, utf8 com) {
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
   vundo_push (this, action);
 
@@ -4600,7 +4597,7 @@ private int ved_word_math (buf_t *this, int count, utf8 com) {
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
   vundo_push (this, action);
 
@@ -4701,7 +4698,7 @@ private int ved_complete_word (buf_t *this) {
     act_t *act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes);
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
     vundo_push (this, action);
     My(String).delete_numbytes_at ($mycur(data), orig_patlen, $my(shared_int));
@@ -4788,7 +4785,7 @@ ved_complete_line_callback, NULL, 0);
     act_t *act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes);
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
     vundo_push (this, action);
     My(String).clear ($mycur(data));
@@ -4945,7 +4942,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     act_t *act = AllocType (act);
     vundo_set (act, DELETE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes);
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
 
     reg_t *r = AllocType (reg);
@@ -5186,7 +5183,7 @@ setaction:
   act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   My(String).replace_numbytes_at_with ($mycur(data), bytelen (buf), $mycur(cur_col_idx), buf);
   stack_push (action, act);
   vundo_push (this, action);
@@ -5210,7 +5207,7 @@ private int ved_indent (buf_t *this, int count, utf8 com) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   int shiftwidth = ($my(ftype)->shiftwidth ? $my(ftype)->shiftwidth : DEFAULT_SHIFTWIDTH);
 
@@ -5341,7 +5338,7 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
     } else {
       vundo_set (act, REPLACE_LINE);
       act->idx = this->cur_idx;
-      act->bytes = str_dup ($mycur(data)->bytes);
+      act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
       My(String).insert_at ($mycur(data), reg->data->bytes, $mycur(cur_col_idx) +
         (('P' is com or 0 is $mycur(data)->num_bytes) ? 0 : char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)])));
     }
@@ -5447,7 +5444,7 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (*action, act);
   $my(flags) |= BUF_IS_MODIFIED;
   return DONE;
@@ -6049,7 +6046,7 @@ private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int force, in
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   self(cur.set, 0);
   ved_delete_line (this, this->num_items, REG_UNAMED);
@@ -6652,10 +6649,8 @@ private int ved_complete_filename (menu_t *menu) {
   char dir[PATH_MAX];
   int joinpath;
 
-  if (menu->state & MENU_FINALIZE)
-    goto finalize;
+  if (menu->state & MENU_FINALIZE)  goto finalize;
 
-parse_pat:
   dir[0] = '\0';
   joinpath = 0;
 
@@ -6749,8 +6744,7 @@ getlist:;
   vstring_t *it = dlist->list->head;
 
   $my(shared_int) = joinpath;
-  My(String).clear ($my(shared_str));
-  My(String).append ($my(shared_str), dir);
+  My(String).replace_with ($my(shared_str), dir);
 
   while (it isnot NULL) {
     if (end is NULL or (0 is str_cmp_n (it->data->bytes, end, endlen))) {
@@ -6782,15 +6776,11 @@ finalize:
   } else
     My(String).replace_with ($my(shared_str), menu->pat);
 
-  if (is_directory ($my(shared_str)->bytes) and
-     (0 is access ($my(shared_str)->bytes, R_OK))) {
-    menu->patlen = $my(shared_str)->num_bytes;
-    memcpy (menu->pat, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
-    menu->pat[menu->patlen] = '\0';
-    goto parse_pat;
-  }
+  if (is_directory ($my(shared_str)->bytes))
+    menu->state |= MENU_REDO;
+  else
+    menu->state |= MENU_DONE;
 
-  menu->state |= MENU_DONE;
   return DONE;
 }
 
@@ -7002,11 +6992,12 @@ private int ved_rline_tab_completion (rline_t *rl) {
   ed_t *this = rl->ed;
   buf_t *curbuf = this->current->current;
 
-  string_t *str = vstr_join (rl->line, "");
-  char *sp = str->bytes + rl->line->cur_idx;
+redo:;
+  string_t *currline = vstr_join (rl->line, "");
+  char *sp = currline->bytes + rl->line->cur_idx;
   char *cur = sp;
-  while (sp > str->bytes and *(sp - 1) isnot ' ') sp--;
-  int fidx = sp - str->bytes;
+  while (sp > currline->bytes and *(sp - 1) isnot ' ') sp--;
+  int fidx = sp - currline->bytes;
   char tok[cur - sp + 1];
   int toklen = 0;
   while (sp < cur) tok[toklen++] = *sp++;
@@ -7020,7 +7011,7 @@ private int ved_rline_tab_completion (rline_t *rl) {
     ved_rline_get_command (rl);
 
     curbuf->prop->shared_int = rl->com;
-    My(String).replace_with (curbuf->prop->shared_str, str->bytes);
+    My(String).replace_with (curbuf->prop->shared_str, currline->bytes);
 
     if (-1 isnot (rl->com)) {
       if (tok[0] is '-') {
@@ -7037,7 +7028,7 @@ private int ved_rline_tab_completion (rline_t *rl) {
     }
   }
 
-  My(String).free (str);
+  My(String).free (currline);
 
   ifnot (type) return retval;
 
@@ -7073,11 +7064,11 @@ private int ved_rline_tab_completion (rline_t *rl) {
 
     if (menu->process_list (menu) is NOTHING_TODO) goto theend;
 
-    if (menu->state & MENU_DONE) break;
+    if (menu->state & (MENU_REDO|MENU_DONE)) break;
   }
 
   if (type & RL_TOK_ARG_FILENAME)
-    item = menu->this->prop->shared_str->bytes;
+    item = curbuf->prop->shared_str->bytes;
 
   ifnot (type & RL_TOK_ARG_OPTION) {
     current_list_set (rl->line, fidx);
@@ -7090,6 +7081,11 @@ private int ved_rline_tab_completion (rline_t *rl) {
   }
 
   BYTES_TO_RLINE (rl, item, (int) bytelen (item));
+
+  if (menu->state & MENU_REDO) {
+    menu_free (menu);
+    goto redo;
+  }
 
 theend:
   menu_free (menu);
@@ -7950,7 +7946,7 @@ private int ved_insert (buf_t *this, utf8 com) {
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes);
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   action = stack_push (action, act);
 
