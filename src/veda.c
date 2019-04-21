@@ -1,3 +1,10 @@
+/* A simple utility that utilizes the library by linking against. */
+
+/* Some notes below might be outdated. The interface (the actual
+ * structure) won't change much, but the way it does things might.
+ * The way that someone access the structure is not yet guaranteed.
+ */
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,17 +15,21 @@
 
 #include <libved.h>
 
-ed_T *E = NULL;
+/* The only static variable, needs to be available on handler[s] */
+static ed_T *E = NULL;
 
+/* The ideal is to never need more than those two macros */
 #define Ed E->self
 #undef My
 #define My(__C__) E->__C__.self
 
+/* Here, we enable regexp support by overiding structure fields, the
+ * interface is exact the same */
 #ifdef HAS_REGEXP
 #include "modules/slre/slre.h"
 #include "modules/slre/slre.c"
 
-/* this is like slre_match(), with an aditional argument and two extra fields
+/* this is like slre_match(), with an aditional argument and three extra fields
  * in the slre regex_info structure */
 int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
                             struct slre_cap *caps, int num_caps, int flags) {
@@ -148,6 +159,9 @@ theerror:
 }
 #endif /* HAS_REGEXP */
 
+/* Surely not perfect handler. Never have the chance to test since
+ * my constant environ is fullscreen terminals. Here we need the E
+ * static variable to iterate over all the available editor instances */
 private void sigwinch_handler (int sig) {
   (void) sig;
   ed_t *ed = E->head;
@@ -163,6 +177,9 @@ private void sigwinch_handler (int sig) {
   }
 }
 
+/* one idea is to hold with a question, to give some time to the
+ * user to free resources and retry; in that case the signature
+ * should change to an int as return value plus the Alloc* macros */
 mutable public void __alloc_error_handler__ (
 int err, size_t size,  char *file, const char *func, int line) {
   fprintf (stderr, "MEMORY_ALLOCATION_ERROR\n");
@@ -184,9 +201,15 @@ int main (int argc, char **argv) {
 
   ++argv; --argc;
 
+/* initialize root structure, accessible from now on with: 
+ * Ed.method[.submethod] ([[arg],...])
+ * Ed.Class.self.method ([[arg],...]) // edsubclass class
+ * My(Class).method ([[arg],...])     // for short
+ */
   if (NULL is (E = __init_ved__ ()))
     return 1;
 
+/* overide */
 #ifdef HAS_REGEXP
   My(Re).exec = my_re_exec;
   My(Re).parse_substitute = my_re_parse_substitute;
@@ -194,17 +217,26 @@ int main (int argc, char **argv) {
 #endif
 
   ed_t *this = E->current;
+/* why we can't use self here like in the library? Because
+ * types are opaque pointers */
+
+/* at the begining at least a win_t type is allocated */
   win_t *w = Ed.get.current_win (this);
 
   ifnot (argc) {
+    /* just create a new empty buffer and append it to its
+     * parent win_t to the frame zero */
     buf_t *buf = My(Win).buf_new (w, NULL, 0);
     My(Win).append_buf (w, buf);
   } else
+    /* else just create a new buffer for every file in the argvlist
+     * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
       buf_t *buf = My(Win).buf_new (w, argv[i], 0);
       My(Win).append_buf (w, buf);
     }
 
+  /* set the first indexed name in the argvlist, as current */
   My(Win).set.current_buf (w, 0);
 
   int retval = 0;
@@ -214,15 +246,19 @@ int main (int argc, char **argv) {
     buf_t *buf = Ed.get.current_buf (this);
     retval = Ed.main (this, buf);
 
+    /* here the user suspended its editor instance, with CTRL-j */
     if (Ed.get.state (this) & ED_SUSPENDED) {
       if (E->num_items is 1) {
+        /* as an example, we simply create another independed instance */
         Ed.new (E, 1);
         this = E->current;
         w = Ed.get.current_win (this);
         buf = My(Win).buf_new (w, NULL, 0);
         My(Win).append_buf (w, buf);
         My(Win).set.current_buf (w, 0);
+        /* hope i got them right! surely this needs an improvement */
       } else {
+        /* else jump to the next or prev */
         ed_t *ed = Ed.get.next (this);
         if (NULL is ed) ed = Ed.get.prev (this);
         this = ed;
@@ -233,5 +269,6 @@ int main (int argc, char **argv) {
 theend:
   __deinit_ved__ (E);
 
+/* the end */
   return retval;
 }

@@ -42,7 +42,7 @@ private int str_cmp_n (const char *sa, const char *sb, size_t n) {
 
 /* in this namespace size has been already computed */
 private char *str_dup (const char *src, size_t len) {
-  /* avoid recomputation if possible */
+  /* avoid recomputation */
   // size_t len = bytelen (src);
   char *dest = Alloc (len + 1);
   if (len)  memcpy (dest, src, len + 1);
@@ -55,7 +55,7 @@ private char *str_dup (const char *src, size_t len) {
  * http://www.strudel.org.uk/itoa/
  */
 
-public char *itoa (int value, char *result, int base) {
+private char *itoa (int value, char *result, int base) {
   if (base < 2 || base > 36) {
     *result = '\0';
     return result;
@@ -190,12 +190,10 @@ private int string_prepend (string_t *this, const char *bytes) {
 
 private int string_append_fmt (string_t *this, const char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
-
   va_list ap;
   va_start(ap, fmt);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-
   return string_insert_at (this, bytes, -1);
 }
 
@@ -205,7 +203,6 @@ private int string_prepend_fmt (string_t *this, const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-
   return string_insert_at (this, bytes, 0);
 }
 
@@ -412,20 +409,20 @@ private char *char_from_code (utf8 c, char *buf) {
   return buf;
 }
 
-private char *char_nth (char *src, int nth, int len) {
+private char *char_nth (char *bytes, int nth, int len) {
   int n = 0;
   int clen = 0;
-  char *line = src;
+  char *sp = bytes;
 
   for (int i = 0; i < len and n < nth; i++) {
-    line += clen;
-    clen = char_byte_len (*line);
+    sp += clen;
+    clen = char_byte_len (*sp);
     n++;
   }
 
-  if (n isnot nth) return src;
+  if (n isnot nth) return bytes;
 
-  return line;
+  return sp;
 }
 
 private int char_num (char *bytes, int len) {
@@ -442,26 +439,26 @@ private int char_num (char *bytes, int len) {
   return n;
 }
 
-private utf8 char_get_nth_code (char *src, int nth, int len) {
-  char *line = char_nth (src, nth, len);
-  if (line is src and nth isnot 1)
+private utf8 char_get_nth_code (char *bytes, int nth, int len) {
+  char *sp = char_nth (bytes, nth, len);
+  if (sp is bytes and nth isnot 1)
     return 0;
 
-  return utf8_code (line);
+  return utf8_code (sp);
 }
 
-private int char_is_nth_at (char *src, int idx, int len) {
+private int char_is_nth_at (char *bytes, int idx, int len) {
   if (idx >= len) return -1;
 
   int n = 0;
   int clen = 0;
-  char *line = src;
+  char *sp = bytes;
 
   for (int i = 0; i < len and i <= idx; i++) {
 
-    line += clen;
-    if (*line is 0) return -1;
-    clen = char_byte_len (*line);
+    sp += clen;
+    ifnot (*sp) return -1;
+    clen = char_byte_len (*sp);
     i += clen - 1;
     n++;
   }
@@ -701,8 +698,8 @@ private dirlist_t *dirlist (char *dir) {
 
     len = bytelen (dp->d_name);
 
-    if (len < 3 && dp->d_name[0] == '.')
-      if (len == 1 || dp->d_name[1] == '.')
+    if (len < 3 and dp->d_name[0] is '.')
+      if (len is 1 or dp->d_name[1] is '.')
         continue;
 
     vstring_t *vstr = AllocType (vstring);
@@ -1053,7 +1050,6 @@ private term_t *term_new (void) {
   $my(columns) = 78;
   $my(out_fd) = STDOUT_FILENO;
   $my(in_fd) = STDIN_FILENO;
-
   return this;
 }
 
@@ -1238,19 +1234,16 @@ private void video_show_cursor (video_t *this) {
 }
 
 private void video_draw_all (video_t *this) {
-  vrow_t *row, *next;
-  int num_times = this->last_row;
-
   string_t *render = string_new_with_fmt ("%s%s", TERM_CURSOR_HIDE, TERM_FIRST_LEFT_CORNER);
   string_append_fmt (render, TERM_SCROLL_REGION_FMT, 0, this->num_rows);
   string_append     (render, "\033[0m\033[1m");
 
-  row = this->head;
+  int num_times = this->last_row;
+  vrow_t *row = this->head;
 
   loop (num_times - 1) {
-    next = row->next;
     string_append_fmt (render, "%s%s%s", TERM_LINE_CLR_EOL, row->data->bytes, TERM_BOL);
-    row = next;
+    row = row->next;
   }
 
   string_append_fmt (render, "%s" TERM_GOTO_PTR_POS_FMT,
@@ -1357,6 +1350,7 @@ int (*process_list) (menu_t *), char *pat, size_t patlen) {
   menu->min_first_row = 3;
   menu->last_row = last_row;
   menu->num_rows = menu->last_row - menu->first_row + 1;
+  menu->orig_num_rows = menu->num_rows;
   menu->first_col = first_col + 1;
   menu->num_cols = $my(dim)->num_cols;
   menu->cur_video = $my(video);
@@ -1401,7 +1395,7 @@ private int rline_menu_at_beg (rline_t **rl) {
 
 private char *menu_create (ed_t *this, menu_t *menu) {
   rline_t *rl = rline_new (this, $my(term), My(Input).get, $my(prompt_row),
-    $my(dim)->num_cols, $my(video));
+      $my(dim)->num_cols, $my(video));
   rl->at_beg = rline_menu_at_beg;
   rl->at_end = rline_break;
   rl->state |= RL_CURSOR_HIDE;
@@ -1440,12 +1434,16 @@ init_list:;
     num = avail_cols / maxlen;
     if ((num - 1) + (maxlen * num) > avail_cols)
       num--;
+  } else {
+    num = 1;
+    maxlen = avail_cols;
   }
 
   int mod = menu->list->num_items % num;
   int num_cols = (num * maxlen);
-  int num_rows = menu->list->num_items / num + (mod isnot 0);
-  int rend_rows = menu->num_rows;
+  int num_rows = (menu->list->num_items / num) + (mod isnot 0);
+  // +  (menu->header->num_bytes isnot 0);
+  int rend_rows = menu->orig_num_rows;
   int first_row = menu->first_row;
   int first_col = menu->first_col;
 
@@ -1461,9 +1459,8 @@ init_list:;
   menu->num_rows = rend_rows;
   menu->first_row = first_row;
 
-  //char *fmt = str_fmt ("\033[%%dm%%-%ds%%s", maxlen);
   char *fmt =  str_fmt ("\033[%%dm%%-%ds%%s", maxlen);
-//debug_append (fmt);
+
   int cur_idx = 0;
   int frow_idx = 0;
   int vrow_pos = first_row;
@@ -1496,12 +1493,11 @@ init_list:;
       string_append_fmt (render, TERM_GOTO_PTR_POS_FMT, start_row, first_col);
 
       for (iidx = 0; iidx < num and iidx + (ridx  * num) + (frow_idx * num) < menu->list->num_items; iidx++) {
-        if (iidx + (ridx * num) + (frow_idx * num) is cur_idx) {
-          string_append_fmt (render, fmt, COLOR_MENU_SEL, it->data->bytes, TERM_COLOR_RESET);
-        }
-        else
-          string_append_fmt (render, fmt, COLOR_MENU_BG, it->data->bytes, TERM_COLOR_RESET);
-
+        int len = ((int) it->data->num_bytes > maxlen ? maxlen : (int) it->data->num_bytes);
+        char item[len+1]; memcpy(item, it->data->bytes, len); item[len] = '\0';
+        int color = (iidx + (ridx * num) + (frow_idx * num) is cur_idx)
+           ? COLOR_MENU_SEL : COLOR_MENU_BG;
+        string_append_fmt (render, fmt, color, item, TERM_COLOR_RESET);
         it = it->next;
       }
 
@@ -3941,23 +3937,53 @@ private void buf_draw (buf_t *this) {
 }
 
 private int ved_quit (buf_t *this, int force) {
-  if (force) return EXIT;
+  int retval = EXIT;
+  if (force) return retval;
 
-  buf_t *it = $my(parent)->head;
+  win_t *w = $my(root)->head;
+  while (w) {
+    if (str_eq (w->prop->name, VED_SPECIAL_WIN))
+      goto winnext;
 
-  while (it isnot NULL) {
-    if (it->prop->flags & BUF_IS_MODIFIED) {
-      utf8 chars[] = {'y', 'Y', 'n', 'N'};
+    buf_t *it = w->head;
+
+    while (it isnot NULL) {
+      ifnot (it->prop->flags & BUF_IS_MODIFIED) goto bufnext;
+      if (str_eq (it->prop->fname, UNAMED)) goto bufnext;
+
+      if (force > 1) {
+        ved_write_buffer (it, 1);
+        goto bufnext;
+      }
+
+      utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C'};
       utf8 c = quest (this, str_fmt (
-          "%s has been modified since last change\n"
-          "continue writing? [yY|nN]", it->prop->fname), chars, ARRLEN (chars));
-      switch (c) {case 'y': case 'Y': ved_write_buffer (it, 1);}
+         "%s has been modified since last change\n"
+         "continue writing? [yY|nN] or [cC]ansel?",
+         it->prop->fname), chars, ARRLEN (chars));
+      switch (c) {
+        case 'y':
+        case 'Y':
+          ved_write_buffer (it, 1);
+        case 'n':
+        case 'N':
+          break;
+        case 'c':
+        case 'C':
+          retval = NOTHING_TODO;
+          goto theend;
+      }
+
+bufnext:
+      it = it->next;
     }
 
-    it = it->next;
+winnext:
+    w = w->next;
   }
 
-  return EXIT;
+theend:
+  return retval;
 }
 
 private void ved_on_blankline (buf_t *this) {

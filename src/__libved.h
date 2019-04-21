@@ -426,7 +426,8 @@ NewType (menu,
     min_first_row,
     space_selects,
     state,
-    orig_first_row;
+    orig_first_row,
+    orig_num_rows;
 
   utf8 c;
   vstr_t  *list;
