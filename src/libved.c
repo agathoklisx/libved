@@ -54,7 +54,6 @@ private char *str_dup (const char *src, size_t len) {
  * Original Source:
  * http://www.strudel.org.uk/itoa/
  */
-
 private char *itoa (int value, char *result, int base) {
   if (base < 2 || base > 36) {
     *result = '\0';
@@ -98,6 +97,7 @@ private size_t string_align (size_t size) {
   return sz;
 }
 
+/*
 private string_t *string_new (void) {
   string_t *s = AllocType (string);
   s->bytes = Alloc (1);
@@ -105,6 +105,7 @@ private string_t *string_new (void) {
   s->bytes[0] = '\0';
   return s;
 }
+*/
 
 private string_t *string_reallocate (string_t *this, size_t len) {
   size_t sz = string_align (this->mem_size + len + 1);
@@ -114,9 +115,8 @@ private string_t *string_reallocate (string_t *this, size_t len) {
   return this;
 }
 
-private string_t *string_new_with (const char *bytes) {
+private string_t *__string_new_with (const char *bytes, size_t len) {
   string_t *new = AllocType (string);
-  size_t len = bytelen (bytes);
   size_t sz = string_align (len + 1);
   char *buf = Alloc (sz);
   memcpy (buf, bytes, len);
@@ -127,13 +127,18 @@ private string_t *string_new_with (const char *bytes) {
   return new;
 }
 
+private string_t *string_new_with (const char *bytes) {
+  size_t len = (NULL is bytes ? 0 : bytelen (bytes));
+  return __string_new_with (bytes, len); /* this succeeds even if bytes is NULL */
+}
+
 private string_t *string_new_with_fmt (const char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  return string_new_with (bytes);
+  return __string_new_with (bytes, len);
 }
 
 private int string_insert_at (string_t *this, const char *bytes, int idx) {
@@ -224,7 +229,7 @@ private int string_delete_numbytes_at (string_t *this, int num, int idx) {
 }
 
 private int string_replace_numbytes_at_with (
-string_t *this, int num, int idx, const char *bytes) {
+        string_t *this, int num, int idx, const char *bytes) {
   if (string_delete_numbytes_at (this, num, idx) isnot OK)
     return NOTOK;
 
@@ -274,7 +279,7 @@ private void vstr_free (vstr_t *this) {
 }
 
 private string_t *vstr_join (vstr_t *this, char *sep) {
-  string_t *bytes = string_new ();
+  string_t *bytes = string_new_with (NULL);
   vstring_t *it = this->head;
   while (it) {
     string_append_fmt (bytes, "%s%s", it->data->bytes, sep);
@@ -583,13 +588,15 @@ private regexp_t *re_new (char *pat, int flags, int num_caps, int (*compile) (re
 }
 
 private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
-  (void) re;
-  string_t *substr = string_new ();
+  string_t *substr = string_new_with ("");
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
       case '\\':
-        if (*(sub_p + 1) is 0) goto theerror;
+        if (*(sub_p + 1) is 0) {
+          strcpy (re->errmsg, "awaiting escaped char, found (null byte) 0");
+          goto theerror;
+        }
 
         switch (*++sub_p) {
           case '&':
@@ -603,6 +610,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
             continue;
 
           default:
+            strcpy (re->errmsg, "awaiting \\,&");
             goto theerror;
         }
 
@@ -1169,7 +1177,7 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
   this->last_row = first_row + rows - 1;
   this->row_pos = this->first_row;
   this->col_pos = 1;
-  this->render = string_new ();
+  this->render = string_new_with (NULL);
   return this;
 }
 
@@ -1277,7 +1285,7 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
 
   while (l_p isnot NULL) {
     vstring_t *vs = AllocType (vstring);
-    vs->data = string_new ();
+    vs->data = string_new_with (NULL);
 
     l_p = strstr (l_p, "\n");
 
@@ -1357,7 +1365,7 @@ int (*process_list) (menu_t *), char *pat, size_t patlen) {
   menu->process_list = process_list;
   menu->state |= (MENU_INIT|RL_IS_VISIBLE);
   menu->space_selects = 1;
-  menu->header = string_new ();
+  menu->header = string_new_with (NULL);
   menu->this = self(get.current_buf);
   ifnot (NULL is pat) {
     memcpy (menu->pat, pat, patlen);
@@ -1770,7 +1778,7 @@ private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index
   (void) index; (void) row;
   ifnot (len) return line;
 
-  string_t *s = My(String).new ();
+  string_t *s = My(String).new_with (NULL);
   char ccbuf[16];
 
   uchar c;
@@ -1887,7 +1895,7 @@ private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index, row_
  (void) index;
   ifnot (len) return line;
 
-  string_t *s = My(String).new ();
+  string_t *s = My(String).new_with (NULL);
   char ccbuf[16];
 
   char *m_cmnt_p = strstr (line, $my(syn)->multiline_comment_start);
@@ -2209,7 +2217,7 @@ private env_t *env_new () {
 
   char *hdir = getenv ("HOME");
   if (NULL is hdir)
-    env->home_dir = string_new ();
+    env->home_dir = string_new_with (NULL);
   else {
     env->home_dir = string_new_with (hdir);
     if (hdir[env->home_dir->num_bytes - 1] is PATH_SEP)
@@ -2480,7 +2488,7 @@ private ssize_t buf_read_fname (buf_t *this) {
        return OK;
 
     } else {
-      SYS_MSG_ERROR(errno);
+      MSG_ERRNO(errno);
       return NOTOK;
     }
   }
@@ -2665,10 +2673,10 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(dim) = $myparents(frames_dim)[$my(at_frame)];
 
   $my(statusline_row) = $my(dim->last_row);
-  $my(statusline) = My(String).new ();
-  $my(promptline) = My(String).new ();
+  $my(statusline) = My(String).new_with (NULL);
+  $my(promptline) = My(String).new_with (NULL);
 
-  $my(shared_str) = My(String).new ();
+  $my(shared_str) = My(String).new_with (NULL);
 
   $my(is_visible) = 0;
   $my(flags) &= ~BUF_IS_MODIFIED;
@@ -2738,7 +2746,7 @@ change:
 
   if ($my(ftype)->autochdir)
     if (-1 is chdir ($my(cwd)))
-      SYS_MSG_ERROR(errno);
+      MSG_ERRNO(errno);
 
   if ($my(flags) & FILE_EXISTS) {
     struct stat st;
@@ -2945,7 +2953,7 @@ private void ed_append_message (ed_t *this, char *msg) {
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
-  char fmt[MAXERRLEN]; fmt[0] = '\0';
+  char fmt[MAXERRLEN]; fmt[0] = '%'; fmt[1] = 's'; fmt[2] = '\0';
   char pat[16]; snprintf (pat, 16, "%d:", msgid);
   char *sp = strstr (ED_MSGS_FMT, pat);
   if (sp isnot NULL) {
@@ -2954,6 +2962,7 @@ private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
     for (i = 0; *sp and *sp isnot '.'; sp++) fmt[i++] = *sp;
     fmt[i] = '\0';
   }
+
   char bytes[MAXLINE];
   va_list ap;
   va_start(ap, msgid);
@@ -2970,7 +2979,12 @@ private void ed_msg_send (ed_t *this, int color, char *msg) {
   int numchars = 0; int clen;
   for (int idx = 0; numchars < $my(dim)->num_cols and msg[idx]; idx++) {
     clen = char_byte_len (msg[idx]);
-    for (int i = 0; i < clen; i++) My(String).append_byte ($my(msgline), msg[idx + i]);
+    for (int i = 0; i < clen; i++) {
+      if ('\t' is msg[idx + 1])
+        My(String).append_byte ($my(msgline), ' ');
+      else
+        My(String).append_byte ($my(msgline), msg[idx + i]);
+    }
     numchars++;  idx += clen - 1;
   }
 
@@ -2979,11 +2993,7 @@ private void ed_msg_send (ed_t *this, int color, char *msg) {
   My(Video).Draw.row_at ($my(video), $my(msg_row));
 }
 
-private void ed_msg_error (ed_t *this, char *msg) {
-  My(Msg).send (this, COLOR_FAILURE, msg);
-}
-
-private void ed_msg_error_fmt (ed_t *this, char *fmt, ...) {
+private void ed_msg_error (ed_t *this, char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
@@ -3182,7 +3192,7 @@ private void buf_adjust_view (buf_t *this) {
 private string_t *get_current_number (buf_t *this, int *fidx) {
   if ($mycur(data)->num_bytes is 0) return NULL;
 
-  string_t *nb = string_new ();
+  string_t *nb = string_new_with (NULL);
   int type = 'd';
   int issign = 0;
 
@@ -3344,7 +3354,7 @@ private int __ved_search__ (buf_t *this, search_t *sch) {
   do {
     int ret = My(Re).exec (re, sch->row->data->bytes, sch->row->data->num_bytes);
     if (ret is RE_UNBALANCED_BRACKETS_ERROR) {
-      VED_MSG_ERROR (RE_UNBALANCED_BRACKETS_ERROR);
+      MSG_ERRNO (RE_UNBALANCED_BRACKETS_ERROR);
       break;
     }
 
@@ -3408,7 +3418,7 @@ private int ved_search (buf_t *this, char com) {
 
   histitem_t *his = $my(history)->search->head;
 
-  VED_MSG(" ");
+  MSG(" ");
 
   rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
     $my(dim)->num_cols, $my(video));
@@ -3441,7 +3451,7 @@ private int ved_search (buf_t *this, char com) {
       rline_edit (rl);
       goto search;
     } else
-      sch->pat = My(String).new ();
+      sch->pat = My(String).new_with ("");
   }
 
   for (;;) {
@@ -3466,7 +3476,7 @@ search:
       }
 
       if (sch->found) {
-        VED_MSG("|%d %d|%s%s%s%s%s", sch->idx + 1, sch->col, sch->prefix,
+        MSG("|%d %d|%s%s%s%s%s", sch->idx + 1, sch->col, sch->prefix,
             TERM_MAKE_COLOR(COLOR_RED), sch->match, TERM_COLOR_RESET, sch->end);
         sch->cur_idx = sch->idx;
       } else {
@@ -3477,7 +3487,7 @@ search:
           free (s);
         }
 
-      VED_MSG(" ");
+      MSG(" ");
       }
 
       continue;
@@ -3535,12 +3545,12 @@ search:
 theend:
   if (sch->found) {
     histitem_t *h = AllocType (histitem);
-    h->data = string_new_with (sch->pat->bytes);
+    h->data = __string_new_with (sch->pat->bytes, sch->pat->num_bytes);
     list_push ($my(history)->search, h);
     ved_normal_goto_linenr (this, sch->idx + 1);
   }
 
-  VED_MSG(" ");
+  MSG(" ");
 
   rline_clear (rl);
   rline_free (rl);
@@ -3750,8 +3760,10 @@ searchandsub:;
         it->data->num_bytes - bidx)) goto thecontinue;
 
     ifnot (NULL is substr) string_free (substr);
-    if (NULL is (substr = My(Re).parse_substitute (re, sub, re->match->bytes)))
+    if (NULL is (substr = My(Re).parse_substitute (re, sub, re->match->bytes))) {
+      MSG_ERROR ("Error: %s", re->errmsg);
       goto theend;
+    }
 
     if (interactive) {
       char prefix[bidx + re->match_idx + 1];
@@ -3826,7 +3838,7 @@ private int mark_set (buf_t *this, int mark) {
   $my(marks)[mark].cur_idx = this->cur_idx;
 
   if (mark isnot MARK_UNAMED)
-    VED_MSG("set [%c] mark", MARKS[mark]);
+    MSG("set [%c] mark", MARKS[mark]);
 
   return DONE;
 }
@@ -3857,6 +3869,72 @@ private int mark_goto (buf_t *this) {
   return DONE;
 }
 
+private void ed_selection_to_X (ed_t *this, char *bytes, size_t len) {
+  (void) this;
+  if (NULL is getenv ("DISPLAY")) return;
+  FILE *fp = popen ("xclip -i 2>/dev/null", "w");
+  if (NULL is fp) return;
+  fwrite (bytes, 1, len, fp);
+  pclose (fp);
+}
+
+private rg_t *ed_register_new (ed_t *this, int regidx) {
+  rg_t *rg = &$my(regs)[regidx];
+  self(free_reg, rg);
+  return rg;
+}
+
+private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
+  rg_t *rg = &$my(regs)[regidx];
+  rg->reg = regidx;
+  rg->type = type;
+  stack_push (rg, reg);
+  return rg;
+}
+
+private rg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg) {
+  rg_t *rg = &$my(regs)[regidx];
+  reg_t *it = rg->head;
+  if (it is NULL)
+    return ed_register_push (this, regidx, type, reg);
+
+  rg->reg = regidx;
+  rg->type = type;
+
+  while (it) {
+    if (it->next is NULL) break;
+    it = it->next;
+  }
+
+  reg->prev = it;
+  reg->next = NULL;
+  it->next = reg;
+
+  return rg;
+}
+
+private rg_t *ed_register_push_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
+  reg_t *reg = AllocType (reg);
+  reg->data = My(String).new_with (bytes);
+  if (dir is -1)
+    return ed_register_push_r (this, regidx, type, reg);
+  return ed_register_push (this, regidx, type, reg);
+}
+
+private rg_t *ed_register_set (ed_t *this, int regidx, int type, reg_t *reg) {
+  ed_register_new (this, regidx);
+  return ed_register_push (this, regidx, type, reg);
+}
+
+private rg_t *ed_register_set_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
+  ed_register_new (this, regidx);
+  reg_t *reg = AllocType (reg);
+  reg->data = My(String).new_with (bytes);
+  if (-1 is dir)
+    return ed_register_push_r (this, regidx, type, reg);
+  return ed_register_push (this, regidx, type, reg);
+}
+
 private utf8 quest (buf_t *this, char *qu, utf8 *chs, int len) {
   video_paint_rows_with ($my(video), -1, -1, -1, qu);
   SEND_ESC_SEQ ($my(video)->fd, TERM_CURSOR_HIDE);
@@ -3881,13 +3959,13 @@ private char *buf_parse_line (buf_t *this, row_t *row, char *line, int idx) {
 
   int maxn = row->data->num_bytes - row->first_col_idx;
   for (int i = 0; numchars < $my(dim)->num_cols && i < maxn; i++) {
-      int len = char_byte_len (row->data->bytes[row->first_col_idx + i]);
-      loop (len)
-        line[j++] = row->data->bytes[row->first_col_idx + i++];
+    int len = char_byte_len (row->data->bytes[row->first_col_idx + i]);
+    loop (len)
+      line[j++] = row->data->bytes[row->first_col_idx + i++];
 
-      i -= 1;
-      numchars++;
-    }
+    i -= 1;
+    numchars++;
+  }
 
   line[j] = '\0';
   return $my(syn)->parse (this, line, j, idx, row);
@@ -4405,12 +4483,6 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
   stack_push (action, act);
   vundo_push (this, action);
 
-  rg_t *rg = NULL;
-  rg = &$my(regs)[regidx];
-  My(Ed).free_reg ($my(root), rg);
-  rg->reg = regidx;
-  rg->type = CHARWISE;
-
   int clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]);
 
   int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
@@ -4419,9 +4491,7 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
   memcpy (buf, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
   buf[len] = '\0';
-  reg_t *reg = AllocType (reg);
-  reg->data = My(String).new_with (buf);
-  stack_push (rg, reg);
+  ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
 
   My(String).delete_numbytes_at ($mycur(data),
      $mycur(data)->num_bytes - $mycur(cur_col_idx), $mycur(cur_col_idx));
@@ -4524,7 +4594,6 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   action_t *action = NULL;  act_t *act = NULL;
-  rg_t *rg = NULL;
 
   int is_norm_mode = IS_MODE (NORMAL_MODE);
   int perfom_undo = is_norm_mode or IS_MODE (VISUAL_MODE_CW) or IS_MODE (VISUAL_MODE_BW);
@@ -4535,10 +4604,6 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
     act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
-    rg = &$my(regs)[regidx];
-    My(Ed).free_reg ($my(root), rg);
-    rg->reg = regidx;
-    rg->type = CHARWISE;
   }
 
   int len = 0;
@@ -4565,9 +4630,7 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
 
     stack_push (action, act);
     vundo_push (this, action);
-    reg_t *reg = AllocType (reg);
-    reg->data = My(String).new_with (buf);
-    stack_push (rg, reg);
+    ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
   }
 
   $my(flags) |= BUF_IS_MODIFIED;
@@ -4655,8 +4718,6 @@ private int ved_complete_word_callback (menu_t *menu) {
 
     idx++;
 
-    int clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]);
-
     menu->pat[0] = '\0';
     menu->patlen = 0;
 
@@ -4665,9 +4726,13 @@ private int ved_complete_word_callback (menu_t *menu) {
       idx++;
     }
 
-    if ($mycur(data)->bytes[idx] and IS_SPACE ($mycur(data)->bytes[idx]) is 0)
-      for (int i = 0; i < clen; i++)
-        menu->pat[menu->patlen++] =$mycur(data)->bytes[idx++];
+    while ($mycur(data)->bytes[idx]) {
+      if (IS_SPACE ($mycur(data)->bytes[idx]) or
+          NULL isnot memchr (Notword, $mycur(data)->bytes[idx], Notword_len))
+        break;
+      menu->pat[menu->patlen++] = $mycur(data)->bytes[idx];
+      idx++;
+    }
 
     menu->pat[menu->patlen] = '\0';
   } else
@@ -4947,22 +5012,16 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
   if (count > this->num_items - this->cur_idx)
     count = this->num_items - this->cur_idx;
 
-  rg_t *rg = &$my(regs)[regidx];
-  My(Ed).free_reg ($my(root), rg);
-  rg->reg = regidx;
-  rg->type = LINEWISE;
-
   int currow_idx = this->cur_idx;
   int curcol_idx = $mycur(cur_col_idx);
   int clen = char_byte_len ($mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   action_t *action = AllocType (action);
+  rg_t *rg = ed_register_new ($my(root), regidx);
 
   int fidx = this->cur_idx;
   int lidx = fidx + count - 1;
-
-  reg_t *reg = NULL;
 
   for (int idx = fidx; idx <= lidx; idx++) {
     act_t *act = AllocType (act);
@@ -4971,13 +5030,11 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
 
-    reg_t *r = AllocType (reg);
-    r->data = My(String).new_with ($mycur(data)->bytes);
+    rg = ed_register_push_with (
+      $my(root), regidx, LINEWISE, $mycur(data)->bytes, -1);
     rg->cur_col_idx = $mycur(cur_col_idx);
     rg->first_col_idx = $mycur(first_col_idx);
     rg->col_pos = $my(cur_video_col);
-    if (reg is NULL) { r->prev = NULL; reg = r; rg->head = reg; }
-    else { r->prev = reg; reg->next = r; reg = reg->next; }
 
     if (NULL is self(cur.delete)) break;
   }
@@ -5003,7 +5060,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
-  VED_MSG("deleted into register [%c]", REGISTERS[regidx]);
+  MSG("deleted into register [%c]", REGISTERS[regidx]);
   self(draw);
   vundo_push (this, action);
   return DONE;
@@ -5273,25 +5330,25 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
   if (count > this->num_items - this->cur_idx)
     count = this->num_items - this->cur_idx;
 
-  rg_t *rg = &$my(regs)[regidx];
-  My(Ed).free_reg ($my(root), rg);
-
-  rg->reg = regidx;
-  rg->type = LINEWISE;
-
   int currow_idx = this->cur_idx;
 
+  rg_t *rg = ed_register_new ($my(root), regidx);
+
+  My(String).clear ($my(shared_str));
+
   for (int i = 0; i < count; i++) {
-    reg_t *reg = AllocType (reg);
     self(cur.set, (currow_idx + count - 1) - i);
-    reg->data = My(String).new_with ($mycur(data)->bytes);
+    rg = ed_register_push_with (
+      $my(root), regidx, LINEWISE, $mycur(data)->bytes, 0);
+    My(String).append ($my(shared_str), $mycur(data)->bytes);
+    My(String).append_byte ($my(shared_str), '\n');
     rg->cur_col_idx = $mycur(cur_col_idx);
     rg->first_col_idx = $mycur(first_col_idx);
     rg->col_pos = $my(cur_video_col);
-    stack_push (rg, reg);
   }
 
-  VED_MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
+  ed_selection_to_X ($my(root), $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+  MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
@@ -5299,12 +5356,7 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
   if (count > (int) $mycur(data)->num_bytes - $mycur(cur_col_idx))
     count = $mycur(data)->num_bytes - $mycur(cur_col_idx);
 
-  rg_t *rg = &$my(regs)[regidx];
-  My(Ed).free_reg ($my(root), rg);
-  rg->reg = regidx;
-  rg->type = CHARWISE;
-  reg_t *reg = AllocType (reg);
-  char buf[count + 1];
+  char buf[(count * 4) + 1];
   char *bytes = $mycur(data)->bytes + $mycur(cur_col_idx);
 
   int bufidx = 0;
@@ -5318,10 +5370,10 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
 
   buf[bufidx] = '\0';
 
-  reg->data = My(String).new_with (buf);
-  stack_push (rg, reg);
+  ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
+  ed_selection_to_X ($my(root), buf, bufidx);
 
-  VED_MSG("yanked [charwise] into register [%c]", REGISTERS[regidx]);
+  MSG("yanked [charwise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
@@ -6199,7 +6251,7 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
 
   FILE *fp = fopen (fnstr->bytes, (append ? "a+" : "w"));
   if (NULL is fp) {
-    SYS_MSG_ERROR (errno);
+    MSG_ERRNO (errno);
     goto theend;
   }
 
@@ -6215,7 +6267,7 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
   }
 
   fclose (fp);
-  VED_MSG("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
+  MSG("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
 
   retval = DONE;
 
@@ -6264,7 +6316,7 @@ private int ved_write_buffer (buf_t *this, int force) {
 
   FILE *fp = fopen ($my(fname), "w");
   if (NULL is fp) {
-    SYS_MSG_ERROR(errno);
+    MSG_ERRNO(errno);
     return NOTHING_TODO;
   }
 
@@ -6281,7 +6333,7 @@ private int ved_write_buffer (buf_t *this, int force) {
 
   fstat (fileno (fp), &$my(st));
   fclose (fp);
-  VED_MSG("%s: %zd bytes written", $my(fname), bts);
+  MSG("%s: %zd bytes written", $my(fname), bts);
   return DONE;
 }
 
@@ -6293,7 +6345,7 @@ private int ved_buf_read (buf_t *this, char *fname) {
   row_t *row = this->current;
   FILE *fp = fopen (fname, "r");
   if (NULL is fp) {
-    SYS_MSG_ERROR(errno);
+    MSG_ERRNO(errno);
     return NOTHING_TODO;
   }
 
@@ -6981,7 +7033,7 @@ private void rline_clear (rline_t *rl) {
     rl->cur_idx = 0;
     rl->line = AllocType (vstr);
     vstring_t *vstr = AllocType (vstring);
-    vstr->data = string_new_with (" ");
+    vstr->data = __string_new_with (" ", 1);
     current_list_append (rl->line, vstr);
   }
 
@@ -7268,7 +7320,7 @@ int num_cols, video_t *video) {
   rl->fd = $my(out_fd);
   rl->line = AllocType (vstr);
   vstring_t *s = AllocType (vstring);
-  s->data = string_new_with (" ");
+  s->data = __string_new_with (" ", 1);
   current_list_append (rl->line, s);
 
   rl->ed = ed;
@@ -7500,7 +7552,6 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
   vstring_t *it = ved_rline_get_command (rl);
 
   while (it) {
-    int failed = 0;
     int type = 0;
     if (str_eq (it->data->bytes, " ")) goto itnext;
 
@@ -7515,19 +7566,25 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
         type |= RL_TOK_ARG_SHORT;
 
       it = it->next;
-      if (it is NULL) {failed = 1; goto itnext;}
+      if (it is NULL) {
+        MSG_ERRNO (RL_ARGUMENT_MISSING_ERROR);
+        goto theerror;
+      }
 
-      opt = My(String).new ();
+      opt = My(String).new_with (NULL);
       while (it) {
         if (it->data->bytes[0] is ' ')
           goto arg_type;
 
         if (it->data->bytes[0] is '=') {
-          if (it->next is NULL) {failed = 1; goto itnext;}
+          if (it->next is NULL) {
+            MSG_ERRNO (RL_ARG_AWAITING_STRING_OPTION_ERROR);
+            goto theerror;
+          }
 
           it = it->next;
 
-          arg->val = My(String).new ();
+          arg->val = My(String).new_with (NULL);
           int is_quoted = '"' is it->data->bytes[0];
           if (is_quoted) it = it->next;
 
@@ -7540,6 +7597,7 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
 
             if ('"' is it->data->bytes[0])
               if (is_quoted) {
+                is_quoted = 0;
                 if (arg->val->bytes[arg->val->num_bytes - 1] is '\\') {
                   arg->val->bytes[arg->val->num_bytes - 1] = '"';
                   it = it->next;
@@ -7553,6 +7611,11 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
 
             string_append (arg->val, it->data->bytes);
             it = it->next;
+          }
+
+          if (is_quoted){
+            MSG_ERRNO (RL_UNTERMINATED_QUOTED_STRING_ERROR);
+            goto theerror;
           }
 
           goto arg_type;
@@ -7572,8 +7635,10 @@ arg_type:
           arg->type |= RL_VED_ARG_RANGE;
         else if (str_eq (opt->bytes, "bufname"))
           arg->type |= RL_VED_ARG_BUFNAME;
-        else
-          goto argtype_failed;
+        else {
+          MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
+          goto theerror;
+        }
 
         goto argtype_succeed;
       } else {
@@ -7590,14 +7655,15 @@ arg_type:
         goto argtype_succeed;
       }
 
-argtype_failed:
+theerror:
       My(String).free (opt);
-      goto itnext;
+      free (arg);
+      rl->com = -1;
+      goto theend;
 argtype_succeed:
       My(String).free (opt);
       goto append_arg;
     } else {
-
       arg->option = My(String).new_with (it->data->bytes);
       it = it->next;
       while (it isnot NULL and 0 is (str_eq (it->data->bytes, " "))) {
@@ -7618,11 +7684,10 @@ argtype_succeed:
 append_arg:
     current_list_append (rl, arg);
 itnext:
-    if (failed) free (arg);
-    it = it->next;
+    if (it isnot NULL) it = it->next;
   }
 
-  (void) this;
+theend:
   return rl;
 }
 
@@ -7959,7 +8024,7 @@ private int ved_insert (buf_t *this, utf8 com) {
     c = '\n';
   }
 
-  string_t *cur_insert = string_new ();
+  string_t *cur_insert = string_new_with (NULL);
 
   char buf[16];
   char prev_mode[bytelen ($my(mode)) + 1];
@@ -8125,13 +8190,6 @@ new_char:
       buf[0] = c;
       buf[1] = '\0';
     }
-/*    else {
-      if (c <  ???? )
-        $mycur(cur_col_idx) = orig_col;
-        msg_error_fmt ("UnHandled char: |%c| int: %d", c, c);
-        goto get_char;
-      }
-*/
     else if (c is '\t') {
       if ($my(ftype)->tab_indents is 0 or ($my(state) & ACCEPT_TAB_WHEN_INSERT)) {
         $my(state) &= ~ACCEPT_TAB_WHEN_INSERT;
@@ -8677,7 +8735,7 @@ private void ed_resume (ed_t *this) {
 
 private void ed_free_reg (ed_t *this, rg_t *rg) {
   reg_t *reg = rg->head;
-  while (reg isnot NULL) {
+  while (reg) {
     reg_t *tmp = reg->next;
     My(String).free (reg->data);
     free (reg);
@@ -8751,8 +8809,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
   My(Term).raw ($my(term));
 
-  $my(topline) = My(String).new ();
-  $my(msgline) = My(String).new ();
+  $my(topline) = My(String).new_with (NULL);
+  $my(msgline) = My(String).new_with (NULL);
 
   $my(msg_row) = $my(term)->prop->lines;
   $my(prompt_row) = $my(msg_row) - 1;
@@ -8774,8 +8832,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
 
-  $my(last_insert) = My(String).new ();
-  $my(shared_str) = My(String).new ();
+  $my(last_insert) = My(String).new_with (NULL);
+  $my(shared_str) = My(String).new_with (NULL);
 
   $my(saved_cwd) = dir_get_current ();
 
@@ -8870,7 +8928,7 @@ public string_T __init_string__ (void) {
   return ClassInit (string,
     .self = SelfInit (string,
       .free = string_free,
-      .new = string_new,
+ //     .new = string_new,
       .new_with = string_new_with,
       .new_with_fmt = string_new_with_fmt,
       .insert_at  = string_insert_at,
@@ -9050,7 +9108,7 @@ private ed_T *editor_new (char *name) {
         .send = ed_msg_send,
         .send_fmt = ed_msg_send_fmt,
         .error = ed_msg_error,
-        .error_fmt = ed_msg_error_fmt,
+        //.error_fmt = ed_msg_error_fmt,
         .fmt = ed_msg_fmt
       ),
     ),

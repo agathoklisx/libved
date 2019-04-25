@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <locale.h>
 #include <errno.h>
 
 #include <libved.h>
@@ -100,12 +101,15 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
 }
 
 private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
-  string_t *substr = My(String).new ();
+  string_t *substr = My(String).new_with (NULL);
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
       case '\\':
-        if (*(sub_p + 1) is 0) goto theerror;
+        if (*(sub_p + 1) is 0) {
+          strcpy (re->errmsg, "awaiting escaped char, found (null byte) 0");
+          goto theerror;
+        }
 
         switch (*++sub_p) {
           case '&':
@@ -137,6 +141,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
             continue;
 
           default:
+            strcpy (re->errmsg, "awaiting \\,&,[0..9,...]");
             goto theerror;
         }
 
@@ -196,6 +201,12 @@ int err, size_t size,  char *file, const char *func, int line) {
 }
 
 int main (int argc, char **argv) {
+  ifnot (isatty (fileno (stdout))) {
+    fprintf (stderr, "Not controling terminal\n");
+    exit (1);
+  }
+
+  setlocale (LC_ALL, "");
 
   AllocErrorHandler = __alloc_error_handler__;
 

@@ -256,9 +256,13 @@ enum {
 
 #define ED_ERRORS "\
 -3: RE_UNBALANCHED_BRACKETS_ERROR Unbalanced brackets in the pattern,\
--11: INDEX_ERROR Index is out of range,\
--12: NULL_PTR_ERROR NULL Pointer,\
--13: INTEGEROVERFLOW_ERROR Integer overflow"
+-20: RL_ARG_AWAITING_STRING_OPTION_ERROR Awaiting a string after =,\
+-21: RL_ARGUMENT_MISSING_ERROR Awaiting argument after dash,\
+-22: RL_UNTERMINATED_QUOTED_STRING_ERROR Quoted String is unterminated,\
+-23: RL_UNRECOGNIZED_OPTION Unrecognized option,\
+-1000: INDEX_ERROR Index is out of range,\
+-1001: NULL_PTR_ERROR NULL Pointer,\
+-1002: INTEGEROVERFLOW_ERROR Integer overflow"
 
 #define MSG_FILE_EXISTS_AND_NO_FORCE 1
 #define MSG_FILE_EXISTS_AND_IS_A_DIRECTORY 2
@@ -283,14 +287,21 @@ enum {
 9:buffer has been modified, use bd! to delete it without writing.\
 10:can not write an unamed buffer."
 
+
+#define MSG_ERRNO(errno__) \
+  My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
+
+#define VED_MSG(err__, ...) \
+  My(Msg).send_fmt ($my(root), COLOR_NORMAL, My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
+
 #define VED_MSG_ERROR(err__, ...) \
   My(Msg).error ($my(root), My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
 
-#define SYS_MSG_ERROR(errno__) \
-  My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
-
-#define VED_MSG(fmt, ...) \
+#define MSG(fmt, ...) \
   My(Msg).send_fmt ($my(root), COLOR_NORMAL, fmt, ##__VA_ARGS__)
+
+#define MSG_ERROR(fmt, ...) \
+  My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
 
 NewProp (term,
   term_T *Me;
@@ -906,7 +917,7 @@ static const utf8 offsetsFromUTF8[6] = {
   int nr = 0;                                                             \
   string_t *ibuf = NULL, *sbuf = NULL;                                    \
   if (has_pop_pup) {                                                      \
-     ibuf = My(String).new (); sbuf = My(String).new ();                  \
+     ibuf = My(String).new_with (""); sbuf = My(String).new_with ("");    \
   }                                                                       \
   while (1) {                                                             \
     if (has_pop_pup) {                                                    \

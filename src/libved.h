@@ -79,19 +79,25 @@
 #define RE_MAX_NUM_CAPTURES 9
 
 /* These corespond to SLRE failure codes */
-#define RE_NO_MATCH                     -1
-#define RE_UNEXPECTED_QUANTIFIER_ERROR  -2
-#define RE_UNBALANCED_BRACKETS_ERROR    -3
-#define RE_INTERNAL_ERROR               -4
-#define RE_INVALID_CHARACTER_SET_ERROR  -5
-#define RE_INVALID_METACHARACTER_ERROR  -6
-#define RE_CAPS_ARRAY_TOO_SMALL_ERROR   -7
-#define RE_TOO_MANY_BRANCHES_ERROR      -8
-#define RE_TOO_MANY_BRACKETS_ERROR      -9
+#define RE_NO_MATCH                          -1
+#define RE_UNEXPECTED_QUANTIFIER_ERROR       -2
+#define RE_UNBALANCED_BRACKETS_ERROR         -3
+#define RE_INTERNAL_ERROR                    -4
+#define RE_INVALID_CHARACTER_SET_ERROR       -5
+#define RE_INVALID_METACHARACTER_ERROR       -6
+#define RE_CAPS_ARRAY_TOO_SMALL_ERROR        -7
+#define RE_TOO_MANY_BRANCHES_ERROR           -8
+#define RE_TOO_MANY_BRACKETS_ERROR           -9
+#define RE_SUBSTITUTION_STRING_PARSING_ERROR -10
 
-#define INDEX_ERROR                    -10
-#define NULL_PTR_ERROR                 -11
-#define INTEGEROVERFLOW_ERROR          -12
+#define RL_ARG_AWAITING_STRING_OPTION_ERROR  -20
+#define RL_ARGUMENT_MISSING_ERROR            -21
+#define RL_UNTERMINATED_QUOTED_STRING_ERROR  -22
+#define RL_UNRECOGNIZED_OPTION               -23
+
+#define INDEX_ERROR                          -1000
+#define NULL_PTR_ERROR                       -1001
+#define INTEGEROVERFLOW_ERROR                -1002
 
 typedef signed int utf8;
 typedef unsigned int uint;
@@ -256,6 +262,8 @@ NewType (regexp,
   int match_len;
   char *match_ptr;
   string_t *match;
+#define MAX_ERROR_MSG_LEN 256
+  char errmsg[MAX_ERROR_MSG_LEN];
 );
 
 NewSubSelf (video, draw,
@@ -537,8 +545,7 @@ NewSelf (msg,
   void
     (*send) (ed_t *, int, char *),
     (*send_fmt) (ed_t *, int, char *, ...),
-    (*error) (ed_t *, char *),
-    (*error_fmt) (ed_t *, char *, ...);
+    (*error) (ed_t *, char *, ...);
   char *(*fmt) (ed_t *, int, ...);
 );
 

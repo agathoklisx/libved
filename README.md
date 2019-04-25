@@ -4,11 +4,10 @@
  * a library and as it is.
 
  * That means an independed functional (ala vim) editor, that either can be
- * "include" it as a single file unit or by linking to it.
-
- * Because it [wa|s]s meant to be used in primitive environment[s], it should
- * replace (with time) even the libc functions.  As such it doesn't require a
- * curses library or|and it doesn't use the mb* family of functions.
+ * "include" it as a single file unit or by linking to it, without any other
+ * prerequisite. It was written (as a confession) somehow at the state in time,
+ * a little bit after the vt100 introduction, but with a c11 compiler and with
+ * the knowledge that a character can be represented with more than one byte.
 
  * The current state is at the bootstrap|prototype level. That means that the
  * editor can develop itself, and the basic interface is considered quite close
@@ -24,10 +23,9 @@
  *   functionality an expensive wcwidth() should be included and algorithms should
  *   adjust.
 
- * - the code is young and is tested (and develops) based on the usage and the
- *   needs, so time is needed for stabilization, and some crude algorithms that
- *   had been used during this bootstapped period, need a revision as the code
- *   learns by itself.
+ * - the code is young and fragile in places. It develops based on the itself
+ *   development, by usage and needs, and those crude algorithms that had been used
+ *   during this initiation, need revision.
 
  * It is published mainly for recording reasons and a personal one.
  * The original purpose was to record the development process so it could be
@@ -83,6 +81,14 @@
  * similarly with clang and tcc compilers, but the CC Makefile variable should be
  * set and one way to do this, is from the command line:
    make CC=tcc ...
+
+ * to run it under valgring
+
+   make check_veda_memory_leaks
+
+ * and under gdb (which is the preferred way)
+
+   make debug_veda
 
  * C
  * This compiles to C11 for two reasons:
