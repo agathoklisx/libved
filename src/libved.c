@@ -2472,6 +2472,14 @@ private int buf_set_fname (buf_t *this, char *fname) {
   return OK;
 }
 
+private ssize_t ed_readline_from_fp (char **line, size_t *len, FILE *fp) {
+  ssize_t nread;
+  if (-1 is (nread = getline (line, len, fp))) return -1;
+  if (nread and ((*line)[nread - 1] is '\n' or (*line)[nread - 1] is '\r'))
+    (*line)[nread - 1] = '\0';
+  return nread;
+}
+
 private ssize_t buf_read_fname (buf_t *this) {
   if ($my(fname) is NULL or str_eq ($my(fname), UNAMED)) return NOTOK;
 
@@ -2514,10 +2522,7 @@ private ssize_t buf_read_fname (buf_t *this) {
   size_t len = 0;
   ssize_t nread;
 
-  while (-1 != (nread = getline (&line, &len, fp))) {
-    if (nread and (line[nread - 1] is '\n' or line[nread - 1] is '\r'))
-      line[nread - 1] = '\0';
-
+  while (-1 isnot (nread = ed_readline_from_fp (&line, &len, fp))) {
     buf_current_append_with (this, line);
     t_len += nread;
   }
@@ -3869,10 +3874,22 @@ private int mark_goto (buf_t *this) {
   return DONE;
 }
 
-private void ed_selection_to_X (ed_t *this, char *bytes, size_t len) {
+private FILE *ed_file_pointer_from_X (ed_t *this, int target) {
+  (void) this;
+  if (NULL is getenv ("DISPLAY")) return NULL;
+  char command[64]; snprintf (command, 64, "xclip -o -selection %s",
+     (target is X_PRIMARY ? "primary" : "clipboard"));
+
+  return popen (command, "r");
+}
+
+private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target) {
   (void) this;
   if (NULL is getenv ("DISPLAY")) return;
-  FILE *fp = popen ("xclip -i 2>/dev/null", "w");
+  char command[64]; snprintf (command, 64, "xclip -i -selection %s 2>/dev/null",
+     (target is X_PRIMARY ? "primary" : "clipboard"));
+
+  FILE *fp = popen (command, "w");
   if (NULL is fp) return;
   fwrite (bytes, 1, len, fp);
   pclose (fp);
@@ -3916,7 +3933,7 @@ private rg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg) 
 private rg_t *ed_register_push_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
   reg_t *reg = AllocType (reg);
   reg->data = My(String).new_with (bytes);
-  if (dir is -1)
+  if (dir is REVERSE_ORDER)
     return ed_register_push_r (this, regidx, type, reg);
   return ed_register_push (this, regidx, type, reg);
 }
@@ -5347,7 +5364,11 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
     rg->col_pos = $my(cur_video_col);
   }
 
-  ed_selection_to_X ($my(root), $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+  char reg = REGISTERS[regidx];
+  if ('*' is reg or '+' is reg)
+    ed_selection_to_X ($my(root), $my(shared_str)->bytes, $my(shared_str)->num_bytes,
+        ('*' is reg ? X_PRIMARY : X_CLIPBOARD));
+
   MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
@@ -5371,13 +5392,29 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
   buf[bufidx] = '\0';
 
   ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
-  ed_selection_to_X ($my(root), buf, bufidx);
+  char reg = REGISTERS[regidx];
+  if ('*' is reg or '+' is reg)
+    ed_selection_to_X ($my(root), buf, bufidx, ('*' is reg ? X_PRIMARY : X_CLIPBOARD));
 
   MSG("yanked [charwise] into register [%c]", REGISTERS[regidx]);
   return DONE;
 }
 
 private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
+  char r = REGISTERS[regidx];
+  if ('*' is r or '+' is r) {
+    FILE *fp = ed_file_pointer_from_X ($my(root), ('*' is r ? X_PRIMARY : X_CLIPBOARD));
+    if (NULL is fp) return NOTHING_TODO;
+    ed_register_new ($my(root), regidx);
+    size_t len = 0;
+    char *line = NULL;
+
+    while (-1 isnot ed_readline_from_fp (&line, &len, fp))
+      ed_register_push_with ($my(root), regidx, LINEWISE, line, REVERSE_ORDER);
+    if (line isnot NULL) free (line);
+    pclose (fp);
+  }
+
   rg_t *rg = &$my(regs)[regidx];
   reg_t *reg = rg->head;
 
@@ -6351,34 +6388,26 @@ private int ved_buf_read (buf_t *this, char *fname) {
 
   action_t *action = AllocType (action);
 
-  int t_len = 0;
   char *line = NULL;
   size_t len = 0;
+  size_t t_len = 0;
   ssize_t nread;
-
-  while (-1 != (nread = getline (&line, &len, fp))) {
-    if (nread and (line[nread-1] is '\n' or line[nread-1] is '\r'))
-      line[nread-1] = '\0';
-
+  while (-1 isnot (nread = ed_readline_from_fp (&line, &len, fp))) {
+    t_len += nread;
     act_t *act = AllocType (act);
     vundo_set (act, INSERT_LINE);
-
     buf_current_append_with (this, line);
-    t_len += nread;
-
     act->idx = this->cur_idx;
-
     stack_push (action, act);
   }
 
   fclose (fp);
+  ifnot (NULL is line) free (line);
 
   ifnot (t_len)
     free (action);
   else
     vundo_push (this, action);
-
-  ifnot (NULL is line) free (line);
 
   $my(flags) |= BUF_IS_MODIFIED;
   state_restore (&t);
@@ -8272,7 +8301,7 @@ private int ved_normal_test3 (buf_t **cur) {
   return DONE;
 }
 
-private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int reg) {
+private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int regidx) {
   int count = 1;
 
   buf_t *this = *thisp;
@@ -8329,10 +8358,10 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
        return ved_indent (this, count, com);
 
     case 'y':
-      return ved_normal_yank (this, count, reg);
+      return ved_normal_yank (this, count, regidx);
 
     case 'Y':
-      return ved_normal_Yank (this, count, reg);
+      return ved_normal_Yank (this, count, regidx);
 
     case ' ':
       ifnot (SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE)
@@ -8348,14 +8377,14 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case 'p':
     case 'P':
-      return ved_normal_put (this, reg, com);
+      return ved_normal_put (this, regidx, com);
 
     case 'd':
-      return ved_cmd_delete (this, count, reg);
+      return ved_cmd_delete (this, count, regidx);
 
     case 'x':
     case DELETE_KEY:
-      return ved_normal_delete (this, count, reg);
+      return ved_normal_delete (this, count, regidx);
 
     case BACKSPACE_KEY:
       ifnot ($mycur(cur_col_idx)) {
@@ -8384,7 +8413,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case 'X':
        if (DONE is ved_normal_left (this, 1))
-         return ved_normal_delete (this, count, reg);
+         return ved_normal_delete (this, count, regidx);
        return NOTHING_TODO;
 
     case 'J':
@@ -8450,13 +8479,13 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       return ved_normal_visual_cw (this);
 
     case 'D':
-      return ved_normal_delete_eol (this, reg);
+      return ved_normal_delete_eol (this, regidx);
 
     case 'r':
       return ved_normal_replace_char (this);
 
     case 'C':
-       ved_normal_delete_eol (this, reg);
+       ved_normal_delete_eol (this, regidx);
        return ved_insert (this, com);
 
     case 'o':
@@ -8513,11 +8542,11 @@ private int ved_loop (ed_t *ed, buf_t *this) {
   int range[2];
   utf8 c;
   int cmd_retv;
-  int reg = -1;
+  int regidx = -1;
 
   for (;;) {
 new_state:
-    reg = -1;
+    regidx = -1;
     range[0] = range[1] = -1;
 
 get_char:
@@ -8538,12 +8567,12 @@ handle_char:
      case NOTOK: goto theend;
 
      case '"':
-       if (-1 isnot reg) goto exec_block;
+       if (-1 isnot regidx) goto exec_block;
 
-       reg = My(Input).get ($my(term_ptr));
+       regidx = My(Input).get ($my(term_ptr));
        {
-         char *r = strchr (REGISTERS, reg);
-         reg = (NULL is strchr (REGISTERS, reg)) ? -1 : r - REGISTERS;
+         char *r = strchr (REGISTERS, regidx);
+         regidx = (NULL is strchr (REGISTERS, regidx)) ? -1 : r - REGISTERS;
        }
 
        goto get_char;
@@ -8581,9 +8610,9 @@ handle_char:
 
       default:
 exec_block:
-        if (reg is -1) reg = REG_UNAMED;
+        if (regidx is -1) regidx = REG_UNAMED;
 
-        cmd_retv = My(Ed).exec.cmd (&this, c, range, reg);
+        cmd_retv = My(Ed).exec.cmd (&this, c, range, regidx);
 
         if (cmd_retv is DONE || cmd_retv is NOTHING_TODO)
           goto new_state;

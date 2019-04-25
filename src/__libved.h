@@ -75,6 +75,11 @@
 
 #define VUNDO_RESET (1 << 0)
 
+#define X_PRIMARY     0
+#define X_CLIPBOARD   1
+
+#define REVERSE_ORDER -1
+
 enum {
   NOTHING_TODO = 0,
   DONE,
