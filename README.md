@@ -176,6 +176,8 @@ Normal mode:
  | d[d]              | delete line[s]                 | yes
  | d[g|HOME]         | delete lines to the beg of file|
  | d[G|END]          | delete lines to the end of file|
+ | dw                | delete word                    |
+ | cw                | change word                    |
  | x|DELETE          | delete character               | yes
  | D                 | delete to end of line          |
  | X|BACKSPACE       | delete character to the left   | yes

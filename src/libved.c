@@ -3276,7 +3276,8 @@ theend:
   return nb;
 }
 
-private char *get_current_word (buf_t *this, char *word, char *Nwtype, int len) {
+private char *get_current_word (buf_t *this, char *word, char *Nwtype,
+                     int len, int *fidx, int *lidx) {
   int idx = $mycur(cur_col_idx);
 
   if (IS_SPACE ($mycur(data)->bytes[idx]) or
@@ -3296,12 +3297,16 @@ private char *get_current_word (buf_t *this, char *word, char *Nwtype, int len) 
       NULL isnot memchr (Nwtype, $mycur(data)->bytes[idx], len)))
     idx++;
 
+  *fidx = idx;
+
   int widx = 0;
   while (idx < (int) $mycur(data)->num_bytes and
       IS_SPACE ($mycur(data)->bytes[idx]) is 0 and
       IS_CNTRL ($mycur(data)->bytes[idx]) is 0 and
       NULL is memchr (Nwtype, $mycur(data)->bytes[idx], len))
     word[widx++] = $mycur(data)->bytes[idx++];
+
+  *lidx = idx - 1;
 
   word[widx] = '\0';
 
@@ -3435,8 +3440,8 @@ private int ved_search (buf_t *this, char com) {
   if (com is '*' or com is '#') {
     com = '*' is com ? '/' : '?';
 
-    char word[MAXLINE];
-    get_current_word (this, word, Notword, Notword_len);
+    char word[MAXLINE]; int fidx, lidx;
+    get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
       BYTES_TO_RLINE (rl, sch->pat->bytes, (int) sch->pat->num_bytes);
@@ -5025,6 +5030,39 @@ private int ved_handle_ctrl_x (buf_t *this) {
   return NOTHING_TODO;
 }
 
+private int ved_delete_word (buf_t *this, int regidx) {
+  ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
+
+  char word[MAXLINE]; int fidx, lidx;
+  if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
+    return NOTHING_TODO;
+
+  action_t *action = AllocType (action);
+  act_t *act = AllocType (act);
+  vundo_set (act, REPLACE_LINE);
+  act->idx = this->cur_idx;
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+
+  int len = $mycur(cur_col_idx) - fidx;
+  char buf[len + 1];
+  memcpy (buf, $mycur(data)->bytes + fidx, len);
+  buf[len] = '\0';
+
+  act->cur_col_idx = $mycur(cur_col_idx);
+  act->first_col_idx = $mycur(first_col_idx);
+
+  ved_normal_left (this, char_num (buf, len));
+  My(String).delete_numbytes_at ($mycur(data), bytelen (word), fidx);
+
+  stack_push (action, act);
+  vundo_push (this, action);
+  ed_register_set_with ($my(root), regidx, CHARWISE, word, 0);
+
+  $my(flags) |= BUF_IS_MODIFIED;
+  self(draw_cur_row);
+  return DONE;
+}
+
 private int ved_delete_line (buf_t *this, int count, int regidx) {
   if (count > this->num_items - this->cur_idx)
     count = this->num_items - this->cur_idx;
@@ -5489,7 +5527,19 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
   return DONE;
 }
 
-private int ved_cmd_delete (buf_t *this, int count, int reg) {
+private int ved_normal_handle_c (buf_t *this, int count, int regidx) {
+  (void) count;
+  utf8 c = My(Input).get ($my(term_ptr));
+  switch (c) {
+    case 'w':
+      ved_delete_word (this, regidx);
+      return ved_insert (this, 'c');
+  }
+
+  return NOTHING_TODO;
+}
+
+private int ved_normal_handle_d (buf_t *this, int count, int reg) {
   utf8 c = My(Input).get ($my(term_ptr));
   switch (c) {
     case 'G':
@@ -5509,6 +5559,9 @@ private int ved_cmd_delete (buf_t *this, int count, int reg) {
     case HOME_KEY:
     case 'd':
       return ved_delete_line (this, count, reg);
+
+    case 'w':
+      return ved_delete_word (this, reg);
 
     default:
       return NOTHING_TODO;
@@ -8380,7 +8433,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       return ved_normal_put (this, regidx, com);
 
     case 'd':
-      return ved_cmd_delete (this, count, regidx);
+      return ved_normal_handle_d (this, count, regidx);
 
     case 'x':
     case DELETE_KEY:
@@ -8483,6 +8536,9 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case 'r':
       return ved_normal_replace_char (this);
+
+    case 'c':
+      return ved_normal_handle_c (this, count, regidx);
 
     case 'C':
        ved_normal_delete_eol (this, regidx);
