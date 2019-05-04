@@ -203,6 +203,8 @@ DeclareType (term);
 DeclareType (string);
 DeclareType (vstritem);
 DeclareType (vstr);
+DeclareType (vchar);
+DeclareType (line);
 DeclareType (regexp);
 DeclareType (vrow);
 DeclareType (video);
@@ -298,7 +300,7 @@ NewSubSelf (term, screen,
     (*clear_eol) (term_t *);
 );
 
-NewClass(screen,
+NewClass (screen,
   SubSelf (term, screen) self;
 );
 
@@ -311,7 +313,7 @@ NewSubSelf (term, cursor,
   int (*get_pos) (term_t *, int *, int *);
 );
 
-NewClass(cursor,
+NewClass (cursor,
   SubSelf (term, cursor) self;
 );
 
@@ -319,7 +321,7 @@ NewSubSelf (term, input,
   utf8 (*get) (term_t *);
 );
 
-NewClass(input,
+NewClass (input,
   SubSelf (term, input) self;
 );
 

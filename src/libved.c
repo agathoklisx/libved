@@ -279,7 +279,7 @@ private void vstr_free (vstr_t *this) {
 }
 
 private string_t *vstr_join (vstr_t *this, char *sep) {
-  string_t *bytes = string_new_with (NULL);
+  string_t *bytes = string_new_with ("");
   vstring_t *it = this->head;
   while (it) {
     string_append_fmt (bytes, "%s%s", it->data->bytes, sep);
@@ -382,7 +382,7 @@ theend:
   return this;
 }
 
-private int char_byte_len(uchar c) {
+private int char_byte_len (uchar c) {
   if (c < 0x80) return 1;
   if ((c & 0xe0) is 0xc0) return 2;
   return 3 + ((c & 0xf0) isnot 0xe0);
@@ -665,7 +665,7 @@ private int is_directory (char *dname) {
 #define isnot_directory(dname) (0 is is_directory (dname))
 
 private char *dir_get_current (void) {
-  size_t size = PATH_MAX;
+  size_t size = 64;
   char *buf = Alloc (size);
   char *dir = NULL;
 
@@ -723,7 +723,7 @@ private dirlist_t *dirlist (char *dir) {
 }
 
 private char *path_basename (char *name) {
-  ifnot (*name) return name;
+  ifnot (name) return name;
   char *p = strchr (name, 0);
   if (p is NULL) p = name + bytelen (name) + 1;
   while (p > name and IsNotDirSep (*(p - 1))) --p;
@@ -731,7 +731,7 @@ private char *path_basename (char *name) {
 }
 
 private char *path_extname (char *name) {
-  ifnot (*name) return name;
+  ifnot (name) return name;
   char *p = strchr (name, 0);
   if (p is NULL) p = name + bytelen (name) + 1;
   while (p > name and (*(p - 1) isnot '.')) --p;
@@ -1177,7 +1177,7 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
   this->last_row = first_row + rows - 1;
   this->row_pos = this->first_row;
   this->col_pos = 1;
-  this->render = string_new_with (NULL);
+  this->render = string_new_with ("");
   return this;
 }
 
@@ -1283,9 +1283,9 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
 
   vstr_t *vsa = AllocType (vstr);
 
-  while (l_p isnot NULL) {
+  while (l_p) {
     vstring_t *vs = AllocType (vstring);
-    vs->data = string_new_with (NULL);
+    vs->data = string_new_with ("");
 
     l_p = strstr (l_p, "\n");
 
@@ -1365,7 +1365,7 @@ int (*process_list) (menu_t *), char *pat, size_t patlen) {
   menu->process_list = process_list;
   menu->state |= (MENU_INIT|RL_IS_VISIBLE);
   menu->space_selects = 1;
-  menu->header = string_new_with (NULL);
+  menu->header = string_new_with ("");
   menu->this = self(get.current_buf);
   ifnot (NULL is pat) {
     memcpy (menu->pat, pat, patlen);
@@ -1778,7 +1778,7 @@ private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index
   (void) index; (void) row;
   ifnot (len) return line;
 
-  string_t *s = My(String).new_with (NULL);
+  string_t *s = My(String).new_with ("");
   char ccbuf[16];
 
   uchar c;
@@ -1895,7 +1895,7 @@ private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index, row_
  (void) index;
   ifnot (len) return line;
 
-  string_t *s = My(String).new_with (NULL);
+  string_t *s = My(String).new_with ("");
   char ccbuf[16];
 
   char *m_cmnt_p = strstr (line, $my(syn)->multiline_comment_start);
@@ -2173,6 +2173,25 @@ private void buf_free_row (buf_t *this, row_t *row) {
   free (row);
 }
 
+private void buf_free_line_members (line_t *line) {
+  ifnot (line->num_items) return;
+  vchar_t *it = line->head;
+  while (it) {
+    vchar_t *tmp = it->next;
+    free (it);
+    it = tmp;
+  }
+  line->num_items = 0;
+  line->cur_idx = -1;
+  line->head = line->tail = line->current = NULL;
+}
+
+private void buf_free_line (buf_t *this) {
+  if (this is NULL or $myprop is NULL or $my(line) is NULL) return;
+  buf_free_line_members ($my(line));
+  free ($my(line));
+}
+
 private void buf_free_ftype (buf_t *this) {
   if (this is NULL or $myprop is NULL or $my(ftype) is NULL) return;
   free ($my(ftype));
@@ -2217,7 +2236,7 @@ private env_t *env_new () {
 
   char *hdir = getenv ("HOME");
   if (NULL is hdir)
-    env->home_dir = string_new_with (NULL);
+    env->home_dir = string_new_with ("");
   else {
     env->home_dir = string_new_with (hdir);
     if (hdir[env->home_dir->num_bytes - 1] is PATH_SEP)
@@ -2273,6 +2292,7 @@ private void buf_free_handler (buf_t *this) {
   My(String).free ($my(promptline));
   My(String).free ($my(shared_str));
 
+  buf_free_line (this);
   buf_free_ftype (this);
   buf_free_undo (this);
 
@@ -2413,6 +2433,101 @@ private char *buf_get_fname (buf_t *this) {
   return $my(fname);
 }
 
+private vchar_t *buf_get_line_nth (line_t *line, int idx) {
+  line->current = line->head;
+  int i = 0;
+  while (line->current) {
+    if (i is idx) return line->current;
+    i += line->current->len;
+    line->current = line->current->next;
+  }
+
+  return NULL;
+}
+
+private vchar_t *buf_get_line_idx (line_t *line, int idx) {
+  int cidx = current_list_set (line, idx);
+  if (cidx is INDEX_ERROR) return NULL;
+  return line->current;
+}
+
+private char *buf_get_line_data (buf_t *this, line_t *line) {
+  ifnot (line->num_items) return "";
+  My(String).clear ($my(shared_str));
+  vchar_t *it = line->head;
+  while (it) {
+    My(String).append ($my(shared_str), it->buf);
+    it = it->next;
+  }
+  return $my(shared_str)->bytes;
+}
+
+private vchar_t *buf_line_encode (line_t *line, char *bytes,
+            size_t len, int freeline, int tablen, int curidx) {
+  if (freeline) buf_free_line_members (line);
+  ifnot (len) {
+    line->num_items = 0;
+    return NULL;
+  }
+
+  int curpos = 0;
+
+  char *sp = bytes;
+  line->len = 0;
+
+  while (*sp) {
+    uchar c = (uchar) *sp;
+    vchar_t *chr = AllocType (vchar);
+    chr->code = c;
+    chr->width = chr->len = 1;
+    chr->buf[0] = *sp;
+
+    if (c < 0x80) {
+      if (chr->code is '\t')
+        chr->width += (tablen - 1);
+      chr->buf[1] = '\0';
+      goto push;
+    }
+
+    chr->buf[1] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+
+    if ((c & 0xe0) is 0xc0) {
+      chr->code -= offsetsFromUTF8[1];
+      chr->buf[2] = '\0';
+      goto push;
+    }
+
+    chr->buf[2] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+
+    if ((c & 0xf0) is 0xe0) {
+      chr->code -= offsetsFromUTF8[2];
+      chr->buf[3] = '\0';
+      goto push;
+    }
+
+    chr->buf[3] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+    chr->code -= offsetsFromUTF8[3];
+    chr->buf[4] = '\0';
+
+push:
+    current_list_append (line, chr);
+    if (curidx is line->len)
+      curpos = line->cur_idx;
+
+    line->len += chr->len;
+    sp++;
+  }
+
+  current_list_set (line, curpos);
+  return line->current;
+}
+
 private int buf_current_set (buf_t *this, int idx) {
   return current_list_set (this, idx);
 }
@@ -2469,6 +2584,12 @@ private int buf_set_fname (buf_t *this, char *fname) {
 
   $my(basename) = path_basename ($my(fname));
   $my(extname) = path_extname ($my(fname));
+  return OK;
+}
+
+private int buf_on_no_length (buf_t *this) {
+  buf_current_append_with (this, " ");
+  My(String).clear_at (this->current->data, 0);
   return OK;
 }
 
@@ -2532,11 +2653,6 @@ private ssize_t buf_read_fname (buf_t *this) {
 theend:
   fclose (fp);
   return t_len;
-}
-
-private void buf_on_no_length (buf_t *this) {
-  buf_current_append_with (this, " ");
-  My(String).clear_at (this->current->data, 0);
 }
 
 private void win_adjust_buf_dim (win_t *w) {
@@ -2678,10 +2794,12 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(dim) = $myparents(frames_dim)[$my(at_frame)];
 
   $my(statusline_row) = $my(dim->last_row);
-  $my(statusline) = My(String).new_with (NULL);
-  $my(promptline) = My(String).new_with (NULL);
+  $my(statusline) = My(String).new_with ("");
+  $my(promptline) = My(String).new_with ("");
 
-  $my(shared_str) = My(String).new_with (NULL);
+  $my(line) = AllocType(line);
+
+  $my(shared_str) = My(String).new_with ("");
 
   $my(is_visible) = 0;
   $my(flags) &= ~BUF_IS_MODIFIED;
@@ -2695,10 +2813,12 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
     ifnot (this->num_items)
       buf_on_no_length (this);
   } else
-    buf_on_no_length (this);
+      buf_on_no_length (this);
 
   for (int i = 0; i < NUM_MARKS; i++)
     $my(marks)[i] = (mark_t) {.mark = MARKS[i], .video_first_row = NULL};
+
+  $my(ftype) = self(set.ftype);
 
   self(cur.set, 0);
 
@@ -2707,7 +2827,6 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame) {
   $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
   $my(video)->col_pos = $my(cur_video_col) = 1;
 
-  $my(ftype) = self(set.ftype);
   $my(cwd) = str_eq ($my(fname), UNAMED) ? dir_get_current () : ved_dirname ($my(fname));
   this->free = buf_free_handler;
   return this;
@@ -2722,7 +2841,6 @@ private buf_t *win_buf_new_special (win_t *w, char *name) {
 
 private buf_t *win_set_current_buf (win_t *w, int idx) {
   buf_t *this = w->current;
-
   int cur_idx = w->cur_idx;
   int cur_frame = $from(w)->cur_frame;
 
@@ -2734,8 +2852,7 @@ private buf_t *win_set_current_buf (win_t *w, int idx) {
 
   if (lidx is INDEX_ERROR) return NULL;
 
-  if (cur_idx isnot lidx)
-    w->prev_idx = cur_idx;
+  if (cur_idx isnot lidx) w->prev_idx = cur_idx;
 
   this = w->current;
 
@@ -3087,9 +3204,7 @@ private int buf_adjust_col (buf_t *this, int previdx, int isatend) {
   if (this->current is NULL) return 1;
   if (0 is previdx or $mycur(data)->num_bytes is 0 or
       (int) $mycur(data)->num_bytes is char_byte_len ($mycur(data)->bytes[0])) {
-
     $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
-
     $my(video)->col_pos = $my(cur_video_col) = 1;
     return $my(video)->col_pos;
   }
@@ -3197,7 +3312,7 @@ private void buf_adjust_view (buf_t *this) {
 private string_t *get_current_number (buf_t *this, int *fidx) {
   if ($mycur(data)->num_bytes is 0) return NULL;
 
-  string_t *nb = string_new_with (NULL);
+  string_t *nb = string_new_with ("");
   int type = 'd';
   int issign = 0;
 
@@ -4103,6 +4218,40 @@ private void ved_on_blankline (buf_t *this) {
   }
 }
 
+private int ved_normal_right_ (buf_t *this, int count, int draw) {
+  int is_ins_mode = IS_MODE (INSERT_MODE);
+  if ($mycur(cur_col_idx) is ((int) $mycur(data)->num_bytes -
+      char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]) +
+      is_ins_mode) or 0 is $mycur(data)->num_bytes or
+      $mycur(data)->bytes[$mycur(cur_col_idx)] is 0 or
+      $mycur(data)->bytes[$mycur(cur_col_idx)] is '\n')
+    return NOTHING_TODO;
+
+  buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
+  vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
+  while (count-- and it) {
+    if (it->code is '\n') break;
+    $mycur(cur_col_idx) += it->len;
+
+    if ($my(video)->col_pos is $my(dim)->num_cols) {
+      if (is_ins_mode) {
+        $mycur(first_col_idx) = $mycur(cur_col_idx);
+        $my(video)->col_pos = $my(cur_video_col) = 1;
+      } else {
+        vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
+        $mycur(first_col_idx) += fcol->len;
+      }
+    }
+    else {
+      $my(video)->col_pos = $my(cur_video_col) = $my(video)->col_pos + 1;
+    }
+    it = it->next;
+  }
+
+  if (draw) self(draw_cur_row);
+  return DONE;
+}
+
 private int ved_normal_right (buf_t *this, int count, int draw) {
   int is_ins_mode = str_eq ($my(mode), INSERT_MODE);
 
@@ -4156,7 +4305,7 @@ private int ved_normal_noblnk (buf_t *this) {
 
   for (int i = 0; i < (int) $mycur(data)->num_bytes; i++) {
     if (IS_SPACE ($mycur(data)->bytes[i])) {
-      ved_normal_right (this, 1, 1);
+      ved_normal_right_ (this, 1, 1);
       continue;
     }
 
@@ -4167,7 +4316,65 @@ private int ved_normal_noblnk (buf_t *this) {
 }
 
 private int ved_normal_eol (buf_t *this) {
-  return ved_normal_right (this, $mycur(data)->num_bytes * 4, 1);
+  return ved_normal_right_ (this, $mycur(data)->num_bytes * 4, 1);
+}
+
+private int ved_normal_left_ (buf_t *this, int count) {
+  if ($mycur(cur_col_idx) is 0) return NOTHING_TODO;
+  int is_ins_mode = IS_MODE (INSERT_MODE);
+  buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
+  vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
+
+  if (it is NULL) {
+    //if (is_ins_mode)
+      it = $my(line)->tail;
+    //else
+     // return NOTHING_TODO;
+  } else
+    it = it->prev;
+
+  int curcol = $mycur(first_col_idx);
+
+  int i = 0;
+  while (it and count--) {
+    int len = it->len;
+    $mycur(cur_col_idx) -= len;
+    i += (len - 1);
+
+    if ($mycur(first_col_idx) and is_ins_mode) {
+      vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
+      $mycur(first_col_idx) -= fcol->prev->len;
+    } else {
+      if ($my(video)->col_pos is 1 and $mycur(first_col_idx)) {
+        vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
+        if ($my(line)->cur_idx >= $my(dim)->num_cols) {
+          loop ($my(dim)->num_cols) {
+            fcol = fcol->prev;
+            $mycur(first_col_idx) -= fcol->len;
+          }
+
+          $my(video)->col_pos = $my(cur_video_col) = $my(dim)->num_cols;
+        } else {
+          $mycur(first_col_idx) = 0;
+          buf_get_line_nth ($my(line), $mycur(cur_col_idx));
+          $my(video)->col_pos = $my(cur_video_col) = ($my(line)->cur_idx - 1) +
+              is_ins_mode;
+        }
+      } else {
+        $my(video)->col_pos -= $my(video)->col_pos > 1;
+        $my(cur_video_col) = $my(video)->col_pos;
+      }
+    }
+  }
+
+  if ($mycur(first_col_idx) isnot curcol) {
+    self(draw_cur_row);
+  } else {
+    buf_set_draw_statusline (this);
+    My(Cursor).set_pos ($my(term_ptr), $my(video)->row_pos, $my(video)->col_pos);
+  }
+
+  return DONE;
 }
 
 private int ved_normal_left (buf_t *this, int count) {
@@ -4219,7 +4426,7 @@ private int ved_normal_left (buf_t *this, int count) {
 }
 
 private int ved_normal_bol (buf_t *this) {
-  return ved_normal_left (this, $mycur(data)->num_bytes * 4);
+  return ved_normal_left_ (this, $mycur(data)->num_bytes * 4);
 }
 
 private int ved_normal_end_word (buf_t *this, int count, int run_insert_mode) {
@@ -4230,17 +4437,17 @@ private int ved_normal_end_word (buf_t *this, int count, int run_insert_mode) {
   for (int i = 0; i < count; i++) {
     while (($mycur(cur_col_idx) isnot (int) $mycur(data)->num_bytes - 1) and
           (0 is (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))))
-      retval = ved_normal_right (this, 1, 1);
+      retval = ved_normal_right_ (this, 1, 1);
 
     if (NOTHING_TODO is retval) break;
-    if (NOTHING_TODO is (retval = ved_normal_right (this, 1, 1))) break;
+    if (NOTHING_TODO is (retval = ved_normal_right_ (this, 1, 1))) break;
   }
 
   if (cur_idx is $mycur(cur_col_idx)) return NOTHING_TODO;
-  if (retval is DONE) ved_normal_left (this, 1);
+  if (retval is DONE) ved_normal_left_ (this, 1);
   if (run_insert_mode) return ved_insert (this, 'i');
   if (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))
-    ved_normal_left (this, 1);
+    ved_normal_left_ (this, 1);
 
   return DONE;
 }
@@ -4493,8 +4700,10 @@ private int ved_normal_replace_char (buf_t *this) {
 }
 
 private int ved_normal_delete_eol (buf_t *this, int regidx) {
+  int clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]);
+
   if ($mycur(data)->num_bytes is 0 or
-      $mycur(cur_col_idx) is (int) $mycur(data)->num_bytes)
+      $mycur(cur_col_idx) is (int) $mycur(data)->num_bytes - clen)
     return NOTHING_TODO;
 
   action_t *action = AllocType (action);
@@ -4505,10 +4714,7 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
   stack_push (action, act);
   vundo_push (this, action);
 
-  int clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]);
-
   int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
-
   char buf[len + 1];
   memcpy (buf, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
@@ -4536,7 +4742,7 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
   return DONE;
 }
 
-private int ved_insert_new_line (buf_t *this,  utf8 com) {
+private int ved_insert_new_line (buf_t *this, utf8 com) {
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
   vundo_set (act, INSERT_LINE);
@@ -4628,23 +4834,23 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
     act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   }
 
+  int clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]);
   int len = 0;
-  int clen = 1;
 
   while (count--) {
-    if ($mycur(cur_col_idx) + len is (int) $mycur(data)->num_bytes)
+    len += clen;
+    if ($mycur(cur_col_idx) + clen is (int) $mycur(data)->num_bytes)
       break;
 
-    clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx) + len++]);
-    len += clen - 1;
+    clen = char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx) + len]);
   }
 
   char buf[len + 1];
   memcpy (buf, $mycur(data)->bytes, len);  buf[len] = '\0';
   My(String).delete_numbytes_at ($mycur(data), len, $mycur(cur_col_idx));
 
-  if ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes - clen + (1 + (0 is is_norm_mode)))
-    ved_normal_left (this, 1);
+  if ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes + (0 is is_norm_mode))
+    ved_normal_left_ (this, 1);
 
   if (perfom_undo) {
     act->cur_col_idx = $mycur(cur_col_idx);
@@ -4817,7 +5023,7 @@ private int ved_complete_word (buf_t *this) {
     My(String).delete_numbytes_at ($mycur(data), orig_patlen, $my(shared_int));
     My(String).insert_at ($mycur(data), word, $my(shared_int));
     ved_normal_end_word (this, 1, 0);
-    ved_normal_right (this, 1, 1);
+    ved_normal_right_ (this, 1, 1);
     $my(flags) |= BUF_IS_MODIFIED;
     self(draw_cur_row);
   }
@@ -4996,7 +5202,9 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 }
 
 
-private int ved_normal_handle_g (buf_t *this, int count) {
+private int ved_normal_handle_g (buf_t **thisp, int count) {
+  buf_t *this = *thisp;
+
   if (1 isnot count)
     return ved_normal_goto_linenr (this, count);
 
@@ -5004,6 +5212,9 @@ private int ved_normal_handle_g (buf_t *this, int count) {
   switch (c) {
     case 'g':
       return ved_normal_bof (this);
+
+    case 'f':
+      return ved_open_fname_under_cursor (thisp);
 
     default:
       return NOTHING_TODO;
@@ -5051,7 +5262,7 @@ private int ved_delete_word (buf_t *this, int regidx) {
   act->cur_col_idx = $mycur(cur_col_idx);
   act->first_col_idx = $mycur(first_col_idx);
 
-  ved_normal_left (this, char_num (buf, len));
+  ved_normal_left_ (this, char_num (buf, len));
   My(String).delete_numbytes_at ($mycur(data), bytelen (word), fidx);
 
   stack_push (action, act);
@@ -5329,7 +5540,7 @@ setaction:
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
-  ved_normal_right (this, 1, 1);
+  ved_normal_right_ (this, 1, 1);
   return DONE;
 }
 
@@ -5600,7 +5811,7 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
     $mycur(cur_col_idx) = 0;
     ved_normal_down (this, 1, 0, 0);
     ADD_TRAILING_NEW_LINE;
-    ved_normal_right (this, $my(shared_int) + isatend, 0);
+    ved_normal_right_ (this, $my(shared_int) + isatend, 0);
 
     act->idx = this->cur_idx;
     stack_push (*action, act);
@@ -5675,7 +5886,7 @@ private int ved_insert_handle_ud_line_completion (buf_t *this, utf8 *c) {
 private int ved_insert_last_insert (buf_t *this) {
   if ($my(last_insert)->num_bytes is 0) return NOTHING_TODO;
   My(String).insert_at ($mycur(data), $my(last_insert)->bytes, $mycur(cur_col_idx));
-  ved_normal_right (this, char_num ($my(last_insert)->bytes, $my(last_insert)->num_bytes), 1);
+  ved_normal_right_ (this, char_num ($my(last_insert)->bytes, $my(last_insert)->num_bytes), 1);
   self(draw_cur_row);
   return DONE;
 }
@@ -5698,7 +5909,7 @@ do {                                        \
 #define VISUAL_RESTORE_STATE(vis__, mark__) \
    VISUAL_ADJUST_IDXS(vis__);               \
    state_restore (&(mark__));               \
-   self(cur.set, (mark__).cur_idx);         \
+   self(cur.set, (mark__).cur_idx);      \
    this->cur_idx = (mark__).cur_idx
 
 #define VISUAL_ADJUST_COL(idx)                                                        \
@@ -5706,7 +5917,7 @@ do {                                        \
   int nth_ = char_is_nth_at ($mycur(data)->bytes, (idx), $mycur(data)->num_bytes);    \
   if (nth_ isnot -1) {                                                                \
     ved_normal_bol (this);                                                            \
-    ved_normal_right (this, nth_ - 1, 1);                                             \
+    ved_normal_right_ (this, nth_ - 1, 1);                                             \
   }                                                                                   \
 })
 
@@ -5978,11 +6189,11 @@ handle_char:
       VIS_HNDL_CASE_INT(count);
 
       case ARROW_LEFT_KEY:
-        ved_normal_left (this, 1);
+        ved_normal_left_ (this, 1);
         continue;
 
       case ARROW_RIGHT_KEY:
-        ved_normal_right (this, 1, 1);
+        ved_normal_right_ (this, 1, 1);
         continue;
 
       case ESCAPE_KEY:
@@ -6096,11 +6307,11 @@ handle_char:
         continue;
 
       case ARROW_LEFT_KEY:
-        ved_normal_left (this, 1);
+        ved_normal_left_ (this, 1);
         continue;
 
       case ARROW_RIGHT_KEY:
-        ved_normal_right (this, 1, 1);
+        ved_normal_right_ (this, 1, 1);
         continue;
 
       case 'i':
@@ -6199,7 +6410,9 @@ private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int force, in
     buf_t *that = My(Win).buf_new ($my(parent), fname, frame);
     current_list_set (that, 0);
 
+    int cur_idx = $my(parent)->cur_idx;
     int idx = My(Win).append_buf ($my(parent), that);
+    current_list_set ($my(parent), cur_idx);
     My(Win).set.current_buf ($my(parent), idx);
 
     *thisp = that;
@@ -6220,12 +6433,22 @@ private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int force, in
   ved_delete_line (this, this->num_items, REG_UNAMED);
  // current_list_pop (this, row_t);
   self(read.fname);
+  self(cur.set, 0);
   if (draw) self(draw);
     /* todo: reload */
   return DONE;
 
 theend:
   return DONE;
+}
+
+private int ved_open_fname_under_cursor (buf_t **thisp) {
+  buf_t *this = *thisp;
+  char word[MAXLINE]; int fidx, lidx;
+  get_current_word (this, word, "", 0, &fidx, &lidx);
+  int fexists = file_exists (word);
+  ifnot (fexists) return NOTHING_TODO;
+  return ved_edit_fname (thisp, word, $myparents(cur_frame), 0, 1);
 }
 
 private int ved_split (buf_t **thisp, char *fname) {
@@ -7653,7 +7876,7 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
         goto theerror;
       }
 
-      opt = My(String).new_with (NULL);
+      opt = My(String).new_with ("");
       while (it) {
         if (it->data->bytes[0] is ' ')
           goto arg_type;
@@ -7666,7 +7889,7 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
 
           it = it->next;
 
-          arg->val = My(String).new_with (NULL);
+          arg->val = My(String).new_with ("");
           int is_quoted = '"' is it->data->bytes[0];
           if (is_quoted) it = it->next;
 
@@ -7940,6 +8163,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_EDIT:
     case VED_COM_EDIT_ALIAS:
       if (is_special_win) goto theend;
+
       {
         arg_t *arg = rline_get_arg (rl, RL_VED_ARG_FILENAME);
         retval = ved_edit_fname (thisp, (NULL is arg ? NULL : arg->option->bytes),
@@ -8106,7 +8330,7 @@ private int ved_insert (buf_t *this, utf8 com) {
     c = '\n';
   }
 
-  string_t *cur_insert = string_new_with (NULL);
+  string_t *cur_insert = string_new_with ("");
 
   char buf[16];
   char prev_mode[bytelen ($my(mode)) + 1];
@@ -8123,13 +8347,13 @@ private int ved_insert (buf_t *this, utf8 com) {
 
   action = stack_push (action, act);
 
-  if (com is 'A' or $mycur(cur_col_idx) is (int) $mycur(data)->num_bytes -
-      char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)])) {
+  if (com is 'A' or ((com is 'a' or com is 'C') and $mycur(cur_col_idx) is (int)
+      $mycur(data)->num_bytes - char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]))) {
     ADD_TRAILING_NEW_LINE;
 
     ved_normal_eol (this);
   } else if (com is 'a')
-    ved_normal_right (this, 1, 1);
+    ved_normal_right_ (this, 1, 1);
 
   if (c isnot 0) goto handle_char;
 
@@ -8188,7 +8412,7 @@ handle_char:
       case BACKSPACE_KEY:
         ifnot ($mycur(cur_col_idx)) goto get_char;
 
-        ved_normal_left (this, 1);
+        ved_normal_left_ (this, 1);
         ved_normal_delete (this, 1, -1);
         goto get_char;
 
@@ -8198,8 +8422,9 @@ handle_char:
             $mycur(data)->bytes[$mycur(cur_col_idx)] is 0 or
             $mycur(data)->bytes[$mycur(cur_col_idx)] is '\n') {
           if (HAS_THIS_LINE_A_TRAILING_NEW_LINE) {
-            if ($mycur(cur_col_idx) + 1 is (int) $mycur(data)->num_bytes)
-              ved_normal_left (this, 1);
+            if ($mycur(cur_col_idx) + char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]) 
+                is (int) $mycur(data)->num_bytes)
+              ved_normal_left_ (this, 1);
             RM_TRAILING_NEW_LINE;
           }
 
@@ -8211,11 +8436,12 @@ handle_char:
             }
           }
 
-          if ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes - 1)
+          if ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes -
+              char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]))
             ADD_TRAILING_NEW_LINE;
 
           if ($mycur(cur_col_idx) isnot 0)
-            ved_normal_right (this, 1, 1);
+            ved_normal_right_ (this, 1, 1);
 
           goto get_char;
         }
@@ -8236,11 +8462,11 @@ handle_char:
         if($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes -
             char_byte_len ($mycur(data)->bytes[$mycur(cur_col_idx)]))
           ADD_TRAILING_NEW_LINE;
-        ved_normal_right (this, 1, 1);
+        ved_normal_right_ (this, 1, 1);
         goto get_char;
 
       case ARROW_LEFT_KEY:
-        ved_normal_left (this, 1);
+        ved_normal_left_ (this, 1);
         goto get_char;
 
       case ARROW_UP_KEY:
@@ -8333,7 +8559,7 @@ theend:
   if ($mycur(data)->num_bytes)
     RM_TRAILING_NEW_LINE;
 
-  ved_normal_left (this, 1);
+  ved_normal_left_ (this, 1);
   strcpy ($my(mode), prev_mode);
   buf_set_draw_topline (this);
 
@@ -8465,7 +8691,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       //__fallthrough__;
 
     case 'X':
-       if (DONE is ved_normal_left (this, 1))
+       if (DONE is ved_normal_left_ (this, 1))
          return ved_normal_delete (this, count, regidx);
        return NOTHING_TODO;
 
@@ -8479,7 +8705,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       return ved_normal_handle_ctrl_w (thisp);
 
     case 'g':
-      return ved_normal_handle_g (this, count);
+      return ved_normal_handle_g (thisp, count);
 
     case 'G':
       return ved_normal_handle_G (this, count);
@@ -8494,11 +8720,11 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case ARROW_RIGHT_KEY:
     case 'l':
-      return ved_normal_right (this, 1, 1);
+      return ved_normal_right_ (this, 1, 1);
 
     case ARROW_LEFT_KEY:
     case 'h':
-      return ved_normal_left (this, 1);
+      return ved_normal_left_ (this, 1);
 
     case ARROW_UP_KEY:
     case 'k':
@@ -8894,8 +9120,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
   My(Term).raw ($my(term));
 
-  $my(topline) = My(String).new_with (NULL);
-  $my(msgline) = My(String).new_with (NULL);
+  $my(topline) = My(String).new_with ("");
+  $my(msgline) = My(String).new_with ("");
 
   $my(msg_row) = $my(term)->prop->lines;
   $my(prompt_row) = $my(msg_row) - 1;
@@ -8917,8 +9143,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
 
-  $my(last_insert) = My(String).new_with (NULL);
-  $my(shared_str) = My(String).new_with (NULL);
+  $my(last_insert) = My(String).new_with ("");
+  $my(shared_str) = My(String).new_with ("");
 
   $my(saved_cwd) = dir_get_current ();
 
@@ -8981,9 +9207,9 @@ private int __init__ (ed_T *this) {
 
   if (My(Term).raw ($my(term)) is NOTOK) return NOTOK;
 
-  setbuf (stdin, NULL);
-
-  My(Cursor).get_pos  ($my(term),
+  setvbuf (stdin, 0, _IONBF, 0);
+  //setbuf (stdin, NULL);
+  My(Cursor).get_pos ($my(term),
       &$my(term)->prop->orig_curs_row_pos,
       &$my(term)->prop->orig_curs_col_pos);
   My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);

@@ -369,6 +369,24 @@ NewType (vstr,
         int  num_items;
 );
 
+NewType (vchar,
+  utf8 code;
+  char buf[8];
+  int  len;
+  int width;
+  vchar_t *next;
+  vchar_t *prev;
+);
+
+NewType (line,
+  vchar_t *head;
+  vchar_t *tail;
+  vchar_t *current;
+      int  cur_idx;
+      int  num_items;
+      int  len;
+);
+
 NewType (dirlist,
   vstr_t *list;
   char dir[PATH_MAX];
@@ -734,6 +752,7 @@ NewProp (buf,
     *msg_row_ptr,
     *prompt_row_ptr;
 
+  line_t *line;
   size_t num_bytes;
   string_t *statusline;
   string_t *promptline;
@@ -821,6 +840,7 @@ private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
+private int ved_open_fname_under_cursor (buf_t **);
 private int ved_quit (buf_t *, int);
 private int ved_rline (buf_t **, rline_t *);
 private void send_msg (buf_t *, int, char *);

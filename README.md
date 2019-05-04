@@ -154,7 +154,7 @@ Normal mode:
  | __________________|________________________________|_______
  | CTRL-b, PG_UP     | scroll one page backward       | yes
  | CTRL-f, PG_DOWN   | scroll one page forward        | yes
- | HOME, gg          | home row                       |
+ | HOME              | home row                       |
  | END,  G           | end row                        |
  | h,l               | left|right cursor              | yes
  | ARROW[LEFT|RIGHT] | likewise                       | yes
@@ -163,6 +163,8 @@ Normal mode:
  | $                 | end of line                    |
  | 0                 | begining of line               |
  | count [gG]        | goes to line                   |
+ | gg                | home row                       |
+ | gf                | edit filename under the cursor |
  | e                 | end of word (goes insert)      | yes
  | E                 | end of word                    | yes
  | ~                 | switch case                    |

@@ -111,9 +111,9 @@ veda-all: veda-static veda-shared
 
 clean_veda: clean_veda_static clean_veda_shared
 clean_veda_shared:
-	@$(TEST) ! -f $(SYSED) || $(RM) $(SYSED) 
+	@$(TEST) ! -f $(SYSED) || $(RM) $(SYSED)
 clean_veda_static:
-	@$(TEST) ! -f $(SYSEDSTATIC) || $(RM) $(SYSEDSTATIC) 
+	@$(TEST) ! -f $(SYSEDSTATIC) || $(RM) $(SYSEDSTATIC)
 
 veda-shared: shared $(SYSED)
 $(SYSED):

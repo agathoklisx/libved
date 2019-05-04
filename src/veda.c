@@ -201,8 +201,8 @@ int err, size_t size,  char *file, const char *func, int line) {
 }
 
 int main (int argc, char **argv) {
-  ifnot (isatty (fileno (stdout))) {
-    fprintf (stderr, "Not controling terminal\n");
+  if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
+    fprintf (stderr, "Not a controlled terminal\n");
     exit (1);
   }
 
@@ -240,7 +240,7 @@ int main (int argc, char **argv) {
     buf_t *buf = My(Win).buf_new (w, NULL, 0);
     My(Win).append_buf (w, buf);
   } else
-    /* else just create a new buffer for every file in the argvlist
+    /* else create a new buffer for every file in the argvlist
      * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
       buf_t *buf = My(Win).buf_new (w, argv[i], 0);
