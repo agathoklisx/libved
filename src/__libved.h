@@ -840,6 +840,7 @@ private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
+private int ved_edit_fname (buf_t **, char *, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **);
 private int ved_quit (buf_t *, int);
 private int ved_rline (buf_t **, rline_t *);

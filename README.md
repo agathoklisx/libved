@@ -57,7 +57,7 @@
  * gcc, clang and tcc.
 
  * The development environment is void-linux and probably the code it won't compile
- * on other unixes without some ifdef's.
+ * on other unix like operating system without some ifdef's.
  *
  * Also included a very minimal executable that can be used to test the library code.
  * This can be compiled also as static with gcc and clang, but not with tcc.
@@ -143,7 +143,8 @@
  * Modes.
 
  * These are mostly like vim and which of course lack much of the rich feature set
- * of vim. That would require quite the double code i believe.
+ * of vim. That would require quite the double code i believe (actually much more
+ * than double).
  */
 
                 // FIRST DRAFT //
@@ -223,6 +224,7 @@ Insert Mode:
  | CTRL-a            | last insert                    |
  | CTRL-x            | completion mode                |
  |   CTRL-l or l     | complete line                  |
+ |   CTRL-f or f     | complete filename              |
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
@@ -242,6 +244,7 @@ Visual Mode:
  | i|I               | insert in front [blockwise|    |
  | c                 | change [blockwise]             |
  | x|d               | delete [[block|char]wise]      |
+ | e                 | edit as filename [charwise]    |
  | escape            | aborts                         |
 
 Search:
@@ -265,9 +268,28 @@ Search:
 /* Command line mode:
  * (note) Commands do not get a range as in vi[like], but from the command line
  * switch --range=. Generally speaking the experience in the command line should
- * feel more like a shell (the tab completion here works for commands, arguments
- * (if the token is an '-'), or for filename[s] and the intention is to provide
- * more completion types on every mode).
+ * feel more like a shell and specifically the zsh completion way.
+
+ * Auto completions (triggered with tab):
+ *   - commands
+ *   - arguments
+ *   - filenames
+
+ * If an argument (like a substitution string) needs a space, it should be quoted.
+
+ * If a command takes a filename or a bufname as an argument, tab completion
+ * will quote the argument (for embedded spaces).
+
+ * Command completion is triggered when the cursor is at the first word token.
+
+ * Arg completion is triggered when the first char word token is an '-' and
+ * when the current command, gets a bufname as an argument.
+
+ * In any other case a filename completion is perfomed.
+
+ * Options are usually long (that means prefixed with two dashes), unless some
+ * established/unambiguous like (for now):
+ *  -i  for interactive
 
  * Default command line switches:
  * --range=...
@@ -279,8 +301,8 @@ Search:
  *    --range=linenr,. from linenr to current line
  * without --range, assumed current line number
  *
- * --global          is like the g flag
- * --interactive,-i  is like the c flag
+ * --global          is like the g flag on vim substitute
+ * --interactive,-i  is like the c flag on vim substitute
  * --append          is like  >> redirection
 
  * Commands:
@@ -310,6 +332,8 @@ Search:
   * But Macros and other myriad endless vim features are not; this space (and
   * time) is reserved for specific extensions. It has to be noted here, that
   * for long, an ed (the venerable ed) interface cooexisted with the visual one.
+  *
+  * Registers [+*] send|receive text to|from X clipboard (if xclip is available).
   */
 
  /* Application Interface.
@@ -528,6 +552,21 @@ Search:
    - basically the ed interface.
 
   And the second level the obvious one.
+
+/* Acknowledgements.
+ *  - vim editor at vim.org
+ *  - kilo editor (https://github.com/antirez/kilo.git)
+ *  - dit editor (https://github.com/hishamhm/dit.git)
+ *  - vis editor (git://repo.or.cz/vis.git)
+ *  - gnu-ed at http://www.gnu.org/software/ed/ed.html
+ *  - ed2 editor (https://github.com/tylerneylon/ed2.git)
+ *  - oed editor (https://github.com/ibara/oed.git)
+ *  - e editor (https://github.com/hellerve/e.git)
+ *  - tte editor (https://github.com/GrenderG/tte.git)
+ *  - neatvi editor (https://github.com/aligrudi/neatvi.git)
+ *  - jed editor at http://www.jedsoft.org/jed/
+ *  - numerous stackoverflow posts
+ */
 
 /* My opinion on this editor.
 
