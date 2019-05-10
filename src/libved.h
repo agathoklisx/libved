@@ -429,8 +429,8 @@ NewSubSelf (buf, cur,
 
 NewSubSelf (buf, free,
   void
-     (*me) (buf_t *),
-     (*row) (buf_t *, row_t *);
+     (*row) (buf_t *, row_t *),
+     (*rows) (buf_t *);
 );
 
 NewSubSelf (buf, row,
@@ -453,7 +453,8 @@ NewSelf (buf,
   void
     (*draw) (buf_t *),
     (*flush) (buf_t *),
-    (*draw_cur_row) (buf_t *);
+    (*draw_cur_row) (buf_t *),
+    (*clear) (buf_t *);
 
   row_t *(*append_with) (buf_t *, char *);
 );
@@ -475,7 +476,7 @@ NewSubSelf (win, get,
   buf_t
     *(*current_buf) (win_t*),
     *(*buf_by_idx) (win_t *, int),
-    *(*buf_by_fname) (win_t *, const char *, int *);
+    *(*buf_by_name) (win_t *, const char *, int *);
 
   int (*num_buf) (win_t *);
 );
@@ -487,8 +488,7 @@ NewSelf (win,
 
   void (*draw) (win_t *);
 
-  buf_t *(*buf_new) (win_t *, char *, int);
-  buf_t *(*buf_new_special) (win_t *, char *);
+  buf_t *(*buf_new) (win_t *, char *, int, int);
 
   int
     (*append_buf)    (win_t *, buf_t *),
@@ -513,7 +513,8 @@ NewSubSelf (ed, get,
     *(*current_win) (ed_t *),
     *(*win_head) (ed_t *),
     *(*win_next) (ed_t *, win_t *),
-    *(*win_by_idx) (ed_t *, int);
+    *(*win_by_idx) (ed_t *, int),
+    *(*win_by_name) (ed_t *, char *, int *);
 
   ed_t *(*next) (ed_t *);
   ed_t *(*prev) (ed_t *);
@@ -541,6 +542,7 @@ NewSubSelf (ed, exec,
 
 NewSubSelf (ed, win,
   win_t *(*new) (ed_t *, char *, int);
+  win_t *(*new_special) (ed_t *, char *, int);
 );
 
 NewSelf (msg,

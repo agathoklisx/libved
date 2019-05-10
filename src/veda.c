@@ -237,13 +237,13 @@ int main (int argc, char **argv) {
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = My(Win).buf_new (w, NULL, 0);
+    buf_t *buf = My(Win).buf_new (w, NULL, 0, 0);
     My(Win).append_buf (w, buf);
   } else
     /* else create a new buffer for every file in the argvlist
      * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
-      buf_t *buf = My(Win).buf_new (w, argv[i], 0);
+      buf_t *buf = My(Win).buf_new (w, argv[i], 0, 0);
       My(Win).append_buf (w, buf);
     }
 
@@ -264,7 +264,7 @@ int main (int argc, char **argv) {
         Ed.new (E, 1);
         this = E->current;
         w = Ed.get.current_win (this);
-        buf = My(Win).buf_new (w, NULL, 0);
+        buf = My(Win).buf_new (w, NULL, 0, 0);
         My(Win).append_buf (w, buf);
         My(Win).set.current_buf (w, 0);
         /* hope i got them right! surely this needs an improvement */

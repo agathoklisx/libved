@@ -5,14 +5,19 @@
 #define MAXROWS 256
 #define MAX_COUNT_DIGITS 8
 
-#define VED_SPECIAL_WIN "__"
+#define VED_WIN_NORMAL_TYPE 0
+#define VED_WIN_SPECIAL_TYPE 1
+
+#define VED_MSG_WIN     "message"
 #define VED_MSG_BUF     "[messages]"
+#define VED_SEARCH_WIN  "search"
+#define VED_SEARCH_BUF  "[search]"
 #define UNAMED          "[No Name]"
 #define NORMAL_MODE     "normal"
 #define INSERT_MODE     "insert"
-#define VISUAL_MODE_LW  "visual"
-#define VISUAL_MODE_CW  "visual line"
-#define VISUAL_MODE_BW  "visual block"
+#define VISUAL_MODE_LW  "visual lw"
+#define VISUAL_MODE_CW  "visual cw"
+#define VISUAL_MODE_BW  "visual bw"
 
 #define CASE_A ",[]()+-:;}{<>_"
 #define CASE_B ".][)(-+;:{}><-"
@@ -72,6 +77,8 @@
 #define BUF_IS_VISIBLE   (1 << 6)
 #define BUF_IS_RDONLY    (1 << 7)
 #define BUF_IS_PAGER     (1 << 8)
+#define BUF_IS_SPECIAL   (1 << 9)
+#define BUF_FORCE_REOPEN (1 << 10)
 
 #define VUNDO_RESET (1 << 0)
 
@@ -79,6 +86,9 @@
 #define X_CLIPBOARD   1
 
 #define REVERSE_ORDER -1
+
+#define SHARED_ALLOCATION 0
+#define NEW_ALLOCATION 1
 
 enum {
   NOTHING_TODO = 0,
@@ -108,6 +118,7 @@ enum {
   VED_COM_EDIT,
   VED_COM_EDIT_ALIAS,
   VED_COM_ENEW,
+  VED_COM_GREP,
   VED_COM_MESSAGES,
   VED_COM_QUIT_FORCE,
   VED_COM_QUIT_FORCE_ALIAS,
@@ -115,6 +126,7 @@ enum {
   VED_COM_QUIT_ALIAS,
   VED_COM_READ,
   VED_COM_READ_ALIAS,
+  VED_COM_SEARCHES,
   VED_COM_SPLIT,
   VED_COM_SUBSTITUTE,
   VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE,
@@ -279,6 +291,7 @@ enum {
 #define MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE 8
 #define MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE 9
 #define MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER 10
+#define MSG_CAN_NOT_DETERMINATE_CURRENT_DIR 11
 
 #define ED_MSGS_FMT "\
 1:file %s: exists, use w! to overwrite.\
@@ -290,7 +303,8 @@ enum {
 7:buffer is read only.\
 8:buffer has not been modified, use w! to force.\
 9:buffer has been modified, use bd! to delete it without writing.\
-10:can not write an unamed buffer."
+10:can not write an unamed buffer.\
+11:can not get current directory!!!."
 
 
 #define MSG_ERRNO(errno__) \
@@ -635,6 +649,8 @@ NewType (buf,
   Prop (buf) *prop;
 
   void (*free) (buf_t *);
+  int (*on_normal_beg) (buf_t **, utf8, int *, int);
+  int (*on_normal_end) (buf_t **, utf8, int *, int);
 
   buf_t  *next;
   buf_t  *prev;
@@ -766,6 +782,7 @@ NewProp (buf,
 NewProp (win,
   char *name;
   int flags;
+  int type;
 
   MY_PROPERTIES;
   MY_CLASSES (win);
@@ -835,16 +852,18 @@ NewProp (ed,
 #undef MY_PROPERTIES
 
 private int ved_normal_goto_linenr (buf_t *, int);
+private int ved_normal_down (buf_t *, int, int, int);
+private int ved_normal_bol (buf_t *);
 private int ved_insert (buf_t *, utf8);
 private int ved_write_buffer (buf_t *, int);
+private int ved_quit (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
-private int ved_edit_fname (buf_t **, char *, int, int, int);
-private int ved_open_fname_under_cursor (buf_t **);
-private int ved_quit (buf_t *, int);
+private int ved_edit_fname (buf_t **, char *, int, int, int, int);
+private int ved_open_fname_under_cursor (buf_t **, int, int);
 private int ved_rline (buf_t **, rline_t *);
-private void send_msg (buf_t *, int, char *);
+private int ved_buf_change_bufname (buf_t **, char *);
 private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *rline_edit (rline_t *);
@@ -879,11 +898,8 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
-
-/*
-#define NotWord " \t\n"
-#define NotWord_len 3
-*/
+#define Notfname "|"
+#define Notfname_len 1
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \
@@ -993,12 +1009,6 @@ do {                                                                      \
 #define ADD_TRAILING_NEW_LINE                                        \
   if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] isnot '\n')   \
     My(String).append ($mycur(data), "\n")
-
-//#define msg_normal(msg) send_msg (this, COLOR_NORMAL, (msg))
-//#define msg_success(msg) send_msg (this, COLOR_SUCCESS, (msg))
-//#define msg_error(msg) send_msg (this, COLOR_FAILURE, (msg))
-//#define msg_error_fmt(fmt, ...) msg_error(str_fmt(fmt, __VA_ARGS__))
-//#define msg_fmt(fmt, ...) msg_normal(str_fmt(fmt, __VA_ARGS__))
 
 #define stack_free(list, type)                                      \
 do {                                                                \

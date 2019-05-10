@@ -172,7 +172,7 @@ Normal mode:
  | m[mark]           | mark[a-z]                      |
  | `[mark]           | mark[a-z]                      |
  | ^                 | first non blank character      |
- | CTRL-[A|X]        | [in|de]crements (ints only)    | yes
+ | CTRL-[A|X]        | [in|de]crements (ints|chars)   | yes
  | >, <              | indent [in|out]                | yes
  | [yY]              | yank [char|line]wise           | yes
  | [pP]              | put register                   |
@@ -300,10 +300,22 @@ Search:
  *    --range=[linenr,.],$  from linenr to the end
  *    --range=linenr,. from linenr to current line
  * without --range, assumed current line number
- *
+
  * --global          is like the g flag on vim substitute
  * --interactive,-i  is like the c flag on vim substitute
  * --append          is like  >> redirection
+
+ * --pat=`pat'       a string describes the pattern which by default is a literal
+                     string; the sample application can use a subset (the most basic)
+                     of perl regular expressions: in that case pattern can start with
+                     (?i) to denote `ignore case` and for syntax support see at:
+                     modules/slre/docs/syntax.md
+
+ * --sub=`substitute string'
+                     - '&' can be used to mean the full captured string
+                     -  to include a white space, the string should be (double) quoted,
+                     -  if has regular expression support, then \1\2... can be used
+                        to mean, `nth' captured substring numbering from one.
 
  * Commands:
  * ! as the last character indicates force
@@ -313,19 +325,31 @@ Search:
  * captured pattern (an '&' can be inserted by escaping). (UPDATE: It is possible
  * to use regular expressions, see below at the Sample Application section).
 
- * :w[rite][!] [filename [--range] [--append]]
- * :e[!] filename        (reloading has not been implemented properly)
- * :b[uf]p[rev]          (buffer previous)
- * :b[uf]n[ext]          (buffer next)
- * :b[uf][`|prevfocused] (buffer previously focused)
- * :b[uf]d[elete][!]     (buffer delete)
+ * :w[rite][!] [filename  [--range] [--append]]
+ * :e[!] filename         (reloading has not been implemented properly)
+ * :b[uf]p[rev]           (buffer previous)
+ * :b[uf]n[ext]           (buffer next)
+ * :b[uf][`|prevfocused]  (buffer previously focused)
+ * :b[uf]d[elete][!]      (buffer delete)
  * :w[*] (functions that implement the above buf functions, with regards to windows)
- * :enew filename        (new buffer on a new window)
- * :r[ead] filename      (read filename into current buffer)
- * :messages             (message buffer)
- * :wq!                  (write quite)
- * :q!                   (quit)
+ * :enew filename         (new buffer on a new window)
+ * :r[ead] filename       (read filename into current buffer)
+ * :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
+ * :messages              (message buffer)
+ * :wq!                   (write quite)
+ * :q!                    (quit)
  */
+
+ /* Glob Support
+   (for now)
+    - this is limited to just one directory depth
+    - it uses only '*'
+    - and understands (or should):
+      `*'
+      `/some/dir/*'
+      `*string' or `string*string' or `string*'
+      (likewise for directories)
+  */
 
  /* Registers and Marks are supported with the minimal features, same with
   * other myriad details that needs care.
@@ -334,6 +358,17 @@ Search:
   * for long, an ed (the venerable ed) interface cooexisted with the visual one.
   *
   * Registers [+*] send|receive text to|from X clipboard (if xclip is available).
+  */
+
+ /* Menus
+  * Navigation on those menus (usually completions) is using the tab, page down/up
+  * and arrow keys.
+  * Escape aborts.
+  * Enter accepts selection.
+  * Spacebar also accepts selection, unless a space is changing the pattern. This can
+  * change through individual selections. Using the spacebar is quick and handy so it
+  * is usually enabled even in cases like CTRL('n') in insert mode, where a space can
+  * change the behavior.
   */
 
  /* Application Interface.
@@ -459,11 +494,12 @@ Search:
  * Sample Application
  * This application adds regular expression support, by using a slightly modified
  * version of the slre machine, which is an ISO C library that implements a subset
- * of Perl regular expression syntax, see:
+ * of Perl regular expression syntax, see and clone at:
 
      https://github.com/cesanta/slre.git
 
  * Many thanks.
+
  * It is implemented outside of the library by overiding methods from the Re structure.
  * To enable it use "HAS_REGEXP=1" during compilation.
  *
@@ -527,13 +563,13 @@ Search:
  * When it happens (probably by the mark|save|restore|state quick implementation)
  * is critical, because you see different than it actually is, and this is the
  * worst that can happen to a visual editor (an ed doesn't suffer from this)).
- * so what i do? either gg|G first, to go to __a known reset point__ and then
+ * So what i do? either gg|G first, to go to __a known reset point__ and then
  * goback again, but !!not by using the a ` mark, but with an another way, either
  * with a search or a `goto to linenum' kind of thing.
 
  * That would be nice to catch those bugs. Would also be nice if i could reserve
  * sometime to fix the tabwidth stuff, which is something i do not have the slightest
- * will to do, because i hate tabs with a passion!!! in the code (nothing is perfect
+ * will to do, because i hate tabs with a passion in the code (nothing is perfect
  * in this life).
 
  * I'd rather give my time (as a side project though) to split those two different
@@ -566,6 +602,7 @@ Search:
  *  - neatvi editor (https://github.com/aligrudi/neatvi.git)
  *  - jed editor at http://www.jedsoft.org/jed/
  *  - numerous stackoverflow posts
+ *  - numerous codebases from the open source enormous pool
  */
 
 /* My opinion on this editor.
@@ -637,4 +674,39 @@ Search:
  */
 
 αγαθοκλής
+
+/* Grant Finale
+ * and the personal reason.
+
+ * I would love to continue to work on this library to make it stable.
+ * To the time i'm writting this (09 May of 2019), of course is not ready for
+ * publication, as it can not be used on sensitive environments.
+
+ * However it documents:
+   A programming C interface:
+     - variables usually are rich types/structures; those can be manipulated
+       with double linked lists, usually with a head and a tail and in many
+       cases extra pointers used either as iterators or to hold the current
+       working item. Pointers (at the worst case) have a very low price to pay
+       (do i think wrong ?), but they offer:
+         - quick access to the data
+         - and free borrowing
+
+     - a library as a single line unit, that can be include'd' or linked against;
+       i believe this is a crucial point for C!!! they call it easyness and it
+       always gurrantees success.
+
+     - a library exposed as struct (simplification, flexibility, easy to understand
+       and document, etc...)
+
+  A chance to formalize and stabilize some common in unix land and the programming
+    open source universe concepts.
+
+  It also documents and describes a vi[m] like basic interface, that means the level
+  of futures that someone can feel quite productive as in vim, without of course the
+  glory little details that make vim unique.
+
+  But why?
+
+  Well, i might die! And this is a proof of logic.
 ```
