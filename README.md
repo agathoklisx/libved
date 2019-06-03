@@ -1,13 +1,15 @@
 ```C
-/* This is a product that was born during C's educational period, and it is
- * nothing else but just another text visual editor, but that can be used as
- * a library and as it is.
+/* This code aims to be usefull as an independent text visual editor C library
+ * (with an "ala vim" interface), that either can be "#include" it as a single
+ * file unit, or by linking, without any other prerequisite other than libc and
+ * with a tendency to minimize this dependency by providing an own implementation
+ * of some standard C functions, so that can be used in primitive environments.
 
- * That means an independed functional (ala vim) editor, that either can be
- * "include" it as a single file unit or by linking to it, without any other
- * prerequisite. It was written (as a confession) somehow at the state in time,
- * a little bit after the vt100 introduction, but with a c11 compiler and with
- * the knowledge that a character can be represented with more than one byte.
+ * It was written (as a confession!) somehow at a state in time, a little bit
+ * after the vt100 introduction and Billy Joy's first "vi", cheating a bit by
+ * looking in the future and stole stable code and ideas, and knowing that a
+ * character can be represented with more than one byte in a universal character
+ * set and with an encodind "yet to be invented" in a restaurant.
 
  * The current state is at the bootstrap|prototype level. That means that the
  * editor can develop itself, and the basic interface is considered quite close
@@ -15,23 +17,33 @@
 
  * - it doesn't do any validation of the incoming data (the data it produces
  *   is rather controllable, but it cannot handle (for instance) data which
- *   it might be malformed (UTF-8) byte sequences, or escape sequences.
+ *   it might be malformed (UTF-8) byte sequences, or escape sequences).
 
- * - some motions don't behave properly when a character it occupies more than
+ * - some motions shouldn't behave properly when a character it occupies more than
  *   one cell width, or behave properly if this character is a tab but (for now)
  *   a tab it takes one single cell, much like a space. To implement some of this
  *   functionality an expensive wcwidth() should be included and algorithms should
  *   adjust.
 
- * - the code is young and fragile in places. It develops based on the itself
- *   development, by usage and needs, and those crude algorithms that had been used
- *   during this initiation, need revision.
+ * - the code is young and fragile in places and some crude algorithms that had
+ *   been used during this initiation, need revision and functions needs to catch
+ *   more conditions.
+
+ * - it is only tested under a Linux environment, but also the code makes a lot of
+ *   assumptions, as it awaits a POSIX environement.
 
  * It is published mainly for recording reasons and a personal one.
  * The original purpose was to record the development process so it could be
  * usefull as a (document) reference for an editor implementation, but the
- * git commits ended as huge incrementals commits and there were unusable to
- * describe this "step by step" guide. Perhaps in the next revision.
+ * git commits (during this initiation) ended as huge incrementals commits and
+ * there were unusable to describe this "step by step" guide. So it was better to
+ * reset git and start fresh.
+ * Today, the git commit log messages are serving as a general reference document,
+ * where they can describe intentions or semantics (both important, as the first
+ * helps the code to develop and the latter sets an expectation). The difference
+ * is that every new functionality should be recorded at these messages, though
+ * can be more than one (the commits were (and probably will (if there is a will))
+ * rather big for the usual conventions.
 
  * The project was initiated at the end of the autumn of 2018 and at the begining
  * was based at simted (below is the header of this single unit simted.c) and where
@@ -49,83 +61,110 @@
 
  * The code constantly runs under valgrind, so it is supposed to have no
  * memory leaks, which it is simple not true, because the conditions in a
- * editor are too many to ever be sure and true.
+ * editor are too many to ever be sure and true. Also diagnostics seems to
+ * be dependable from compiler's version which valgrind's version should adjust.
 
  * Also uncountable segmentation faults were diagnosed and fixed thanks to gdb.
 
  * The library code can be compiled as a shared or as a static library, with
- * gcc, clang and tcc.
+ * gcc, clang and tcc. */
 
- * The development environment is void-linux and probably the code it won't compile
- * on other unix like operating system without some ifdef's.
- *
- * Also included a very minimal executable that can be used to test the library code.
+ /* Testing
+
+ * Included is a very minimal executable that can be used to test the library code.
  * This can be compiled also as static with gcc and clang, but not with tcc.
 
- * To test the editor issue (using gcc as the default compiler):
+ * To test the editor issue (using gcc as the default compiler): */
+```
 
+```sh
    cd src && make veda-shared
 
-   * or to enable regular expression support issue:
+   # or to enable regular expression support issue:
 
    cd src && make HAS_REGEXP=1 veda-shared
 
-   * by default writing is disabled, unless in DEBUG mode:
+   # by default writing is disabled, unless in DEBUG mode:
 
    cd src && make HAS_REGEXP=1 DEBUG=1 veda-shared
 
-   * and finally to run the executable and open the source files from itself, issue:
+   # and finally to run the executable and open the source files from itself,
+   #  issue (assuming pwd is src directory):
 
    make run
 
- * similarly with clang and tcc compilers, but the CC Makefile variable should be
- * set and one way to do this, is from the command line:
-   make CC=tcc ...
+   # similarly with clang and tcc compilers, but the CC Makefile variable should be
+   # set and one way to do this, is from the command line:
 
- * to run it under valgring
+   # make CC=tcc ...
+
+   # to run it under valgring
 
    make check_veda_memory_leaks
 
- * and under gdb (which is the preferred way)
+   # to open another file use the FILE Makefile variable like:
+
+   make check_veda_memory_leaks FILE=/tmp/file 2>/tmp/valgrind-report
+
+   # to redirect also valgrind's messages
+
+   # you can always use the created binary in sys/bin/
+   # but the LD_LIBRARY_PATH should adjust to point to sys/lib
+
+   # of course you can run directly the static executable, that can be compiled
+   # with gcc or clang
+
+   # to run the shared executable under gdb:
 
    make debug_veda
 
- * C
- * This compiles to C11 for two reasons:
- * - the fvisibility flags that turns out the defaults, a global scope object
-     needs en explicit declaration
- * - the statement expressions that allow, local scope code with access to the
-     function scope, to return a value; also very usefull in macro definitions
+   # to preproccess only
 
-  * It uses the following macros:
+   make preproc
+
+   # to clean up and start over
+
+   make clean
+
+   # similar targets with the shared and for the static library or executable.
+```
+
+```C
+ /* C
+  * This compiles to C11 for two reasons:
+  * - the fvisibility flags that turns out the defaults, a global scope object
+  *   needs en explicit declaration
+  * - the statement expressions that allow, local scope code with access to the
+  *   function scope, to return a value; also very usefull in macro definitions
+
+  * It uses the following macros: */
 
   #define ifnot(__expr__) if (0 == (__expr__))
   /* clearly for clarity; also same semantics with SLang's ifnot */
 
   #define loop(__num__) for (int $i = 0; $i < (__num__); $i++)
-  /* likewise for both reasons; here also the $i variable can be used, though it
-   * violates the loop semantics if the variable change state into the block.
-   * But for a moment i liked the idea of an close implementation of SLang's _for.
-   * Anyway this loop macro is being used in a lot of repositories and though
-   * is defined it is not being used in current code.
+  /* likewise for both reasons; here also the $i variable can be used inside the
+   * block, though it will violate the semantics (if the variable change state),
+   * which is: "loop for `nth' times".
+   * Anyway this loop macro is being used in a lot of repositories.
    */
 
- /* also purely for linguistic and expressional reasons the followings:
-  * (again they being used by others too, see at github/orangeduck/Cello
-  */
+ /* also purely for linguistic and expressional reasons the followings: */
 
   #define is    ==
   #define isnot !=
   #define and   &&
   #define or    ||
+ /* again, those they being used by others too, see for instance the Cello project
+  * at github/orangeduck/Cello */
 
-  /* and for plain purism, the following */
+ /* and for plain purism, the following */
   #define bytelen strlen
-  /* SLang also implements strbytelen(), while strlen() returns character length
-   * I guess the most precise is bytelen() and charlen() in the utf8 era */
+ /* SLang also implements strbytelen(), while strlen() returns character length
+  * I guess the most precise is bytelen() and charlen() in the utf8 era */
 
-  /* defined but not being used, though i could happily use it (same with the loop
-   * macro) if it was enforced by a standard */
+  /* defined but not being used, though i could happily use it if it was enforced
+   * by a standard */
   #define forever for (;;)
 
 /* Interface and Semantics.
@@ -145,9 +184,7 @@
  * These are mostly like vim and which of course lack much of the rich feature set
  * of vim. That would require quite the double code i believe (actually much more
  * than double).
- */
 
-                // FIRST DRAFT //
 
 Normal mode:
  |
@@ -155,7 +192,7 @@ Normal mode:
  | __________________|________________________________|_______
  | CTRL-b, PG_UP     | scroll one page backward       | yes
  | CTRL-f, PG_DOWN   | scroll one page forward        | yes
- | HOME              | home row                       |
+ | HOME  gg          | home row                       |
  | END,  G           | end row                        |
  | h,l               | left|right cursor              | yes
  | ARROW[LEFT|RIGHT] | likewise                       | yes
@@ -163,16 +200,16 @@ Normal mode:
  | ARROW[UP|DOWN]    | likewise                       | yes
  | $                 | end of line                    |
  | 0                 | begining of line               |
+ | ^                 | first non blank character      |
  | count [gG]        | goes to line                   |
- | gg                | home row                       |
  | gf                | edit filename under the cursor |
- | e                 | end of word (goes insert)      | yes
+ | e                 | end of word (goes insert mode) | yes
  | E                 | end of word                    | yes
  | ~                 | switch case                    |
  | m[mark]           | mark[a-z]                      |
  | `[mark]           | mark[a-z]                      |
- | ^                 | first non blank character      |
- | CTRL-[A|X]        | [in|de]crements (ints|chars)   | yes
+ | CTRL-A            | increment (dec|octal|hex|char) | yes
+ | CTRL-X            | decrement (likewise)           | yes
  | >, <              | indent [in|out]                | yes
  | [yY]              | yank [char|line]wise           | yes
  | [pP]              | put register                   |
@@ -205,7 +242,7 @@ Normal mode:
  |   CTRL-w          | frame forward                  |
  |   w|j|ARROW_DOWN  | likewise                       |
  |   k|ARROW_UP      | frame backward                 |
- |   o               | frame only                     |
+ |   o               | make current frame the only one|
  |   s               | split                          |
  |   n               | new window                     |
  |   h, ARROW_LEFT   | window to the left             |
@@ -258,11 +295,13 @@ Search:
 /* In this implementation while performing a search, the focus do not change
  * until user accepts the match. The results and the dialog, are shown at the
  * bottom lines (the message line as the last line on screen).
- * Also at this state, pattern is just string literal and the code is using
- * strstr() to perform the searching. (UPDATE) The sample application can use
- * now regular expressions.
- * It searches once in the line, and it should highlight the captured string
- * with a proper message with the matched line, line number and byte index.
+ * Also by default, pattern is just string literal and the code is using strstr()
+ * to perform the searching. The sample application can use a subset of perl like
+ * regular expressions.
+ * It searches just once in a line, and it should highlight the captured string
+ * with a proper message composed as:
+     |line_nr byte_index| matched line
+
  */
 
 /* Command line mode:
@@ -282,7 +321,7 @@ Search:
 
  * Command completion is triggered when the cursor is at the first word token.
 
- * Arg completion is triggered when the first char word token is an '-' and
+ * Arg completion is triggered when the first char word token is an '-' or
  * when the current command, gets a bufname as an argument.
 
  * In any other case a filename completion is perfomed.
@@ -311,7 +350,7 @@ Search:
                      (?i) to denote `ignore case` and for syntax support see at:
                      modules/slre/docs/syntax.md
 
- * --sub=`substitute string'
+ * --sub=`replacement string'
                      - '&' can be used to mean the full captured string
                      -  to include a white space, the string should be (double) quoted,
                      -  if has regular expression support, then \1\2... can be used
@@ -321,24 +360,42 @@ Search:
  * ! as the last character indicates force
 
  * :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] --global
- * At this state `pat' is a string literal, `sub' can contain '&' to denote the
- * captured pattern (an '&' can be inserted by escaping). (UPDATE: It is possible
- * to use regular expressions, see below at the Sample Application section).
-
  * :w[rite][!] [filename  [--range] [--append]]
- * :e[!] filename         (reloading has not been implemented properly)
+ * :wq[!]                 (write and quit (if force, do not check for modified buffers))
+ * :e[!] [filename]       (when e!, reread from current buffer filename)
  * :b[uf]p[rev]           (buffer previous)
  * :b[uf]n[ext]           (buffer next)
  * :b[uf][`|prevfocused]  (buffer previously focused)
  * :b[uf]d[elete][!]      (buffer delete)
- * :w[*] (functions that implement the above buf functions, with regards to windows)
  * :enew filename         (new buffer on a new window)
+ * :w[in]p[rev]           (window previous)
+ * :w[in]n[ext]           (window next)
+ * :w[in][`|prevfocused]  (window previously focused)
  * :r[ead] filename       (read filename into current buffer)
  * :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
  * :messages              (message buffer)
- * :wq!                   (write quite)
- * :q!                    (quit)
+ * :q[!]                  (quit (if force do not check for modified buffers))
  */
+
+ /* Searching on files (a really quite basic emulation of quickfix vim's windows)
+  * The command :vgrep it takes a pattern and at least a filename as arguments:
+
+    :vgrep --pat=`pattern' file[s]
+
+  * This should open a unique window intented only for searches and re-accessible
+  * with:
+
+    :searches  (though it might be wise a `:copen' alias (to match vim's expectation))
+
+  * This window should open a frame at the bottom, with the results (if any) and it
+  * will set the pointer to the first item from the sorted and unique in items list.
+
+  * A carriage return should open the filename at the specific line number at the
+  * frame 0.
+
+  * A `q' on the results frame (the last one), will quit the window and focus again
+  * to the previous state (as it acts like a pager).
+  */
 
  /* Glob Support
    (for now)
@@ -348,27 +405,61 @@ Search:
       `*'
       `/some/dir/*'
       `*string' or `string*string' or `string*'
-      (likewise for directories)
+        (likewise for directories)
   */
 
  /* Registers and Marks are supported with the minimal features, same with
   * other myriad details that needs care.
-  * But Macros and other myriad endless vim features are not; this space (and
-  * time) is reserved for specific extensions. It has to be noted here, that
-  * for long, an ed (the venerable ed) interface cooexisted with the visual one.
   *
-  * Registers [+*] send|receive text to|from X clipboard (if xclip is available).
+  * Mark set:
+    [abcdghjklqwertyuiopzxcvbnm1234567890]
+  * Special Marks:
+    - unamed mark [`] jumps to the previous position
+
+  * Register set:
+    [abcdghjklqwertyuiopzxcvbnm1234567890]
+  * Special Registers:
+    - unamed register ["] (default)
+    - filename register [%]
+    - last search register [/]
+    - last command line register [:]
+    - registers [+*] send|receive text to|from X clipboard (if xclip is available)
+    - blackhole [_] register, which stores nothing
+    - [=] expression register (not yet implemented so does nothing)
   */
 
  /* Menus
-  * Navigation on those menus (usually completions) is using the tab, page down/up
-  * and arrow keys.
-  * Escape aborts.
-  * Enter accepts selection.
-  * Spacebar also accepts selection, unless a space is changing the pattern. This can
-  * change through individual selections. Using the spacebar is quick and handy so it
-  * is usually enabled even in cases like CTRL('n') in insert mode, where a space can
-  * change the behavior.
+  * Many completions (and there are many) are based on menus.
+  * Semantics and Keys:
+    * Navigation keys:
+      - left and right (for left and right motions)
+        the left key should move the focus to the previous item on line, unless the
+        focus is on the first item in line, which in that case should focus to the
+        previous item (the last one on the previous line, unless is on the first line
+        which in that case should jump to the last item (the last item to the last
+        line))
+
+      - the right key should jump to the next item, unless the focus is on the last
+        item, which in that case should focus to the next item (the first one on the
+        next line, unless is on the last line, which in that case should jump to the
+        first item (the first item to the first line))
+
+      - page down/up keys for page down|up motions
+
+      - tab key is like the right key
+
+    * Decision keys:
+      - Enter accepts selection; the function should return the focused item to the
+        caller
+
+      - Spacebar can also accept selection if it is enabled by the caller. That is
+        because a space can change the initial pattern|seed which calculates the
+        displayed results. But using the spacebar speeds a lot of those operations,
+        so in most cases is enabled, even in cases like CTRL('n') in insert mode.
+
+      - Escape key aborts the operation
+
+  * In all the cases the window state should be restored afterwards.
   */
 
  /* Application Interface.
@@ -376,35 +467,42 @@ Search:
   * de|initialize the structure and quite a lot of opaque pointers.
 
   * The code uses an object oriented style, though it is just for practical
-  * reasons. It is my belief that this is can be a wise way for C, as permits
-  * code organization, simplicity, abstraction, compacteness, relationship,
-  * easy integration and also quite a lot of freedom to develop or overide new
-  * functionality.
-  * But the main advantage of this approach is that there is no global state,
-  * the functions acts on a an instance of a type, or if not, simple their scope
-  * is narrow to a specific job that can not change state to the environment.
-  * In this whole library, there is neither one global variable and just one static
-  * that utilizes editor commands (even this can be avoided, by adding a property,
-  * however this (besides the needless overhead) abstracts abstraction, while the
-  * the route in code like this, should be the other way around)).
+  * reasons as permits mostly code organization, simplicity, abstraction,
+  * compacteness, relationship, and especially quite a lot of freedom to develop
+  * or overide functionality.
+    A generic comment:
+    * But the main advantage of this approach is that there is no global state;
+    * the functions acts on an instance of a type, or if not, simple their scope
+    * is narrow to a specific job that can not change state to the environment.
 
-  * In short, compact environments that can unified under a root structure, with
-  * functions that act on a known type or to expected arguments with narrow scope.
+    * In this whole library, there is neither one global variable and just one static
+    * that utilizes editor commands (even this can be avoided, by adding a property,
+    * however this (besides the needless overhead) abstracts abstraction, while the
+    * the route in code like this, should be the other way around)).
 
-  * The heavy duty is to the entry points or|and to the communication ports, that
-  * could check and sanitize external data, or|and to interfere with a known and
-  * controlled protocol with the outer environment, respectively.
-  * It's just then up to the internal implementation to get the facts right, by
-  * checking conditions, but in known and limited and with strong borders now space.
+    * In short, a compact, unified and controlled environment, under a root structure,
+    * with functions that act on an own and known type or|and expected and sanitized
+    * arguments, within a well defined (with limits) scope.
 
-  * This could also speed up execution time (by avoiding un-needed checks of a data
-  * that is known for certain that is valid, because, either it is produced (usually)
-  * by the self/own, or has already been checked, by previous users in the toolchain
-  * stack.
-  * But the main benefit, is that it brings clarity to the code and concentration
-  * to the actual details. However that it could also be considered as a functional
-  * envrironment (with the no-side-effect meaning) or as an algorithm environment.
-  * The 'wise future for C' reference to the later mostly.
+    * The heavy duty seems to be at the entry points or|and to the communication ports,
+    * that check and sanitize external data, or|and interfere with the outer environment.
+    * But afterwards, it looks that is just a matter of time, to catch the conditions
+    * that can be met and those logically have an end.
+       A comment about C.
+      * This is a great advantage for the C language, because the code is not going
+      * to ever change to adapt a new version; unless is a code mistake, that a new
+      * compiler uncovered but correct code is going to work forever.
+
+    * This could also speed up execution time (by avoiding un-needed checks of a data
+    * that is known for certain that is valid, because, either it is produced (usually)
+    * by the self/own, or has already been checked, by previous users in the toolchain
+    * stack.
+    * But the main benefit, is that it brings clarity to the code and concentration
+    * to the actual details. However that it could also be considered as a functional
+    * envrironment (with the no-side-effect meaning) or as an algorithm environment.
+
+    * It could be a wise future path for C, if it will consentrate just to implement
+    * algorithms or standard interfaces.
 
  * The main structure is the editor structure type, and contains other nested
  * relative structures (that contain others too):
@@ -422,19 +520,7 @@ Search:
  * the minimum) as an iterator;  but there is no specific list type (just
  * abstracted macros that act on structures. Those structs, and based on
  * the context (specific type), can contain (some or all) of those (everybody
- * C favorites) pointers;  that can be complicated and hard to get them right,
- * but if you got them right, then there is this direct and free of charge,
- * access to the underlying machine and finally, to the bits located to this
- * machine adress;  in my humble opinion is the (quite the one) property of C,
- * or the property that could deserve the pain;  opening and working with a
- * quite big lexicon file, the operations are instant (to move around is just
- * a matter of simple arithmetic, a[n] [in|de]crementation of the current buffer
- * pointer), and the memory consumption is ridicously low, as it is borrowing, and
- * this stuff is not an implementation, it is a property; and of course that was
- * a satisfaction and rather not a boring one).
-
- * Currently the library consists of two levels actually, the actual editing part
- * and the interface. Those is wise to split, to understand and simplify the code.
+ * C favorites) pointers.
 
  * A couple of notes regarding the inner code.
  * The inner code it uses a couple of macros to ease the development, like:
@@ -483,8 +569,8 @@ Search:
  * declared "this".
 
  * In the sample executable that uses the library, the "My" macro, has the same
- * semantics, but for the others macros should be no need, as they should be
- * covered with the following way:
+ * semantics, but for the others macros should be no need (though it is too early
+ * maybe even talk about an API), as they should be covered with the following way:
 
     Ed.[subclass or method] ([args, ...])
 
@@ -497,7 +583,6 @@ Search:
  * of Perl regular expression syntax, see and clone at:
 
      https://github.com/cesanta/slre.git
-
  * Many thanks.
 
  * It is implemented outside of the library by overiding methods from the Re structure.
@@ -550,30 +635,28 @@ Search:
  * machine so that can be considered primitive, and there shouldn't be any interpeter
  * in between, and finally because C is about algorithms and when implemented properly
  * the code hapilly lives for ever without a single change. Of course the properties
- * are machine properties and such endevour it never ends and needs responsibility,
+ * are machine properties and such endeavour it never ends and needs responsibility,
  * extensive study and so time. I do not know however if (time) is generous.
  */
 
 /* TO DO
- * Really. The real interest is to use this code as an underline machine.
- * It would be great if could catch and fix false conditions, as I fix things as i
- * catch them by using this editor since 20 something of february, (the bad thing
- * however is that i can survive of a current row miscalculation:
- *                             Seriously! ATTENTION BUFGS AROUND!
- * When it happens (probably by the mark|save|restore|state quick implementation)
- * is critical, because you see different than it actually is, and this is the
- * worst that can happen to a visual editor (an ed doesn't suffer from this)).
- * So what i do? either gg|G first, to go to __a known reset point__ and then
- * goback again, but !!not by using the a ` mark, but with an another way, either
- * with a search or a `goto to linenum' kind of thing.
+ * Seriously! Please do not use this on sensitive documents. There are many conditions
+ * that i know and for certain quite many that i don't know, that it might need to be
+ * handled.
+ * The bad thing here is that there is a workflow and in that workflow range i fix
+ * things or develop things. But for sure there are conditions or combinations of them
+ * out of this workflow.
 
- * That would be nice to catch those bugs. Would also be nice if i could reserve
- * sometime to fix the tabwidth stuff, which is something i do not have the slightest
- * will to do, because i hate tabs with a passion in the code (nothing is perfect
- * in this life).
+ * But Really. The real interest is to use this code as an underline machine to create
+ * another machine.
 
- * I'd rather give my time (as a side project though) to split those two different
- * consepts. The first level or better the zero level, the actual editor code:
+ * But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
+ * the tabwidth stuff, which is something i do not have the slightest will to do,
+ * because i hate tabs in code (nothing is perfect in this life).
+ * I'd rather give my time (with low priority though) to split those two different
+ * consepts.
+
+  The first level or better the zero level, the actual editor code:
 
    - inserting/deleting lines (this should meet or extend ed specifications)
 
@@ -585,22 +668,33 @@ Search:
 
    - /undo/redo
 
-   - basically the ed interface.
+   - basically the ed interface, which at the begining coexisted happily with
+     the visual one (at some point too much code were written at once and which
+     it should adjust to work in both interfaces, but the abstraction level wasn't
+     enough abstracted for this, so i had to move on); but it is a much much simpler
+     editor to implement, since there is absolutelly no need to handle the output
+     or|and to set the pointer to the right line pointed to the right cell at the
+     correct byte[s] (it is very natural such an interface to over complicate the
+     code and such code to have bugs).
+     From my humbled experience, the worst bug that can happen is to have a false
+     interpretation of the position, so you actually edit something else than what
+     you thing you edit.
 
-  And the second level the obvious one.
+  And the second level the obvious one (the above mentioned bugged one).
 
-/* Acknowledgements.
- *  - vim editor at vim.org
- *  - kilo editor (https://github.com/antirez/kilo.git)
- *  - dit editor (https://github.com/hishamhm/dit.git)
- *  - vis editor (git://repo.or.cz/vis.git)
- *  - gnu-ed at http://www.gnu.org/software/ed/ed.html
- *  - ed2 editor (https://github.com/tylerneylon/ed2.git)
- *  - oed editor (https://github.com/ibara/oed.git)
- *  - e editor (https://github.com/hellerve/e.git)
- *  - tte editor (https://github.com/GrenderG/tte.git)
- *  - neatvi editor (https://github.com/aligrudi/neatvi.git)
- *  - jed editor at http://www.jedsoft.org/jed/
+/* Acknowledgements, references and inspiration (besides the already mentioned):
+
+ *  - vim editor at vim.org (the vim we love from Bram (we owe him a lot) and his army)
+ *  - kilo editor (https://github.com/antirez/kilo.git) (the inspiration for many)
+ *  - e editor (https://github.com/hellerve/e.git) (a clone of kilo)
+ *  - tte editor (https://github.com/GrenderG/tte.git) (likewise)
+ *  - dit editor (https://github.com/hishamhm/dit.git) (and his very nice C)
+ *  - vis editor (git://repo.or.cz/vis.git) (quite advanced editor)
+ *  - gnu-ed at http://www.gnu.org/software/ed/ed.html (a stable ed)
+ *  - ed2 editor (https://github.com/tylerneylon/ed2.git) (another clone of ed)
+ *  - oed editor (https://github.com/ibara/oed.git) (from OpenBSD)
+ *  - neatvi editor (https://github.com/aligrudi/neatvi.git) (an excellent vi!)
+ *  - jed editor at http://www.jedsoft.org/jed/ (the stablest editor in the non-vi[m] world)
  *  - numerous stackoverflow posts
  *  - numerous codebases from the open source enormous pool
  */
@@ -611,60 +705,72 @@ Search:
  * is far far faaaar away to the completion, but is an editor which implements the
  * basic operation set that can be considered enough to be productive, which runs
  * really low in memory resources. Theoretically (assuming the code is good enough)
- * it could be used in many situations, since is indepented and that is the one
- * and only interesting point of this.
+ * it could be used in situations such primitive environments, since is indepentent
+ * and that is the main interesting point of this.
 
- * And this (probably) is the reason the persistence to self sufficiency.
+ * And this (probably) is the reason for the persistence to self sufficiency.
  * The other (probably again and by digging around the mind) is about some beliefs
- * about the language.
- *
+ * about the language and its ecosystem.
+
  * But first, there isn't such a thing as self sufficiency!
- * So our dependency, our libc environment, is more like a collection of individual
- * stable functions, which their body are usually only algorithms (and so and machine
- * code, because this is a property of C), and with as less is possible conditional
- * branches (personally, i do not like the situation when i have to code an else,
- * though i feel there is nothing wrong with a linear branching (an if after an if)).
- *
- * However those functions and for good reason, are unware for anything out of their
- * domain, which is execution.
- * They have no relationship between their (lets group), as they do not even have a
- * sense that belong to a group, such: "I am a string type function! (and what is a
- * string anyway?). But when i see code like *s++ = *sa++, I can point/direct to the
- * memory and without can't even care what points to but who to where".
- * Great! Primitive machine code with such an abstraction and freedom (C unbeatable
- * true power).
 
- * With regards to libc'es, (i strongly believe) that it would be great, if you could
- * just cherry pick (specific functionality) from a pool but without to carry all the
- * weight of the pool, to build an own independend pool, extracting as a code and as
- * (lets say) jit'ed library. As an example: i request your malloc, but an independend
- * malloc. Then i want to offer me an end|entry point to de|initialize this memory
- * interface and a method/point to communicate with you with a standardized protocol.
+ * Today our dependency, our libc environment, is more like a collection of individual
+ * functions, which their (usually tiny) body is mainly just algorithms (and so and
+ * machine code as this is a property of C), with few (or usually without) conditional
+ * branches.
 
- * Of course the exact same goes with the protocol whatever the protocol: function
- * calls, or good old sockets or modern ones like json, which is already implemented
- * using the standard and full optimized and known to do the expected thing everytime
- * and for ever, libc functions.
- *
- * But how about a little more complex task, an input functionality. It goes like
- * this: save terminal state - raw mode - get key - return the key - reset term.
+ * However those functions and for a reason, are unware for anything out of their
+ * own domain. They have no relationship between their (lets group), as they do not
+ * even have a sense that belong to a group, such: "I am a string type function!
+ * (and what is a string anyway?)".
+
+ * But first, libc'es are not thin at all. It would be great if you could just cherry pick
+ * (specific functionality) from this pool but without to carry all the weight of the
+ * pool. So it could be easy to build an own independent pool of functions with a way
+ * (something like the Linux kernel or gnu-lib projects do).
+
+ * It could be great if the programmer could extract the specific code and hook it to
+ * his program, so it could optimize it for the specific environment. As an example:
+ * At the begining this program implemented the strdup() function with the standard
+ * signature, having as "const char *src" as the only argument. Since this function
+ * it returns an allocated string, it should iterate over the "src" string to find its
+ * length. At some point i realized that in the 9/10 of the cases, the size was already
+ * known, so the extra call to strlen() it was overhead for no reason. So i changed the
+ * signature and added a "size_t len" argument. In this application the str_dup() is
+ * one of the most called functions. So this extra argument was a huge and for free
+ * and with total safety optimization. And from understanding C is about
+   - freedom
+   - flexibility and
+   - ... optimization
+
+ * But how about a little more complex task, like an input functionality.
+ * It goes like this:
+    save terminal state - raw mode - get key - return the key - reset term
 
  * All well except the get key () function. What it will return? An ascii code in
  * UTF-8 era is usually useless. You want a signed int (if i'm not wrong).
  * So there is no other way, when the first byte indicates a byte sequence, than
- * to deal with it, into the getkey() scope. So you probably need an utf-8 library.
- * This is (excuse me) a bit of stupid. It just needs 10/20 lines of code, see:
- * term_get_input (term_t *this), which i plan to publish it as a separate project.
+ * to deal with it, into the getkey() scope. So you probably need an UTF-8 library.
+ * But in reality is 10/20 lines of code, for example see:
+    term_get_input (term_t *this)
+ * which is going to be published as a separate project, if time permits.
 
  * It will also has to deal with the terminal escape sequenses and returns reliably
- * the code for all the keyboard keys. Again this is easy because is one time job
- * and boring testing or simply usage from different users on different terminals.
+ * the code for all the keyboard keys for all the known terminals.
+ * This is easy because is one time job and boring testing, or simply usage from
+ * different users on different terminals.
  * The above mentioned function, it looks that it deals well with xterm/linux/urxvt
  * and st from suckless terminals, in 110 lines of code reserved for this.
 
- * This specific example is an excellent candidate for this imaginery standard
- * C library. It's like forkpty() which wraps perfect the details. I guess what i'm
- * really talking about is a bit more broader scope/functionality than forkpty().
+ * This specific example is an example of a function that is written once and works
+ * forever, without a single change. But it is a function with a broader meaning (the
+ * functionality), but nevertheless a function. And surely can belong to a standard
+ * libc, with the logic sense as it makes sense, even if it is rather an interface
+ * (because it is not a standalone function).
+ * So point two: libc'es can broad a bit their scope, if C wants to have an evolution
+ * and a endless feature as it deserves.
+ * It's like forkpty() which wraps perfect the details of three different functions.
+ * I guess what i'm really talking about is a bit more synthetic than forkpty().
 
  * And it would be even greater if you could easily request a collection, that use
  * each other properties, to build a task, like an editor. As standard algrorithm!
@@ -677,34 +783,6 @@ Search:
 
 /* Grant Finale
  * and the personal reason.
-
- * I would love to continue to work on this library to make it stable.
- * To the time i'm writting this (09 May of 2019), of course is not ready for
- * publication, as it can not be used on sensitive environments.
-
- * However it documents:
-   A programming C interface:
-     - variables usually are rich types/structures; those can be manipulated
-       with double linked lists, usually with a head and a tail and in many
-       cases extra pointers used either as iterators or to hold the current
-       working item. Pointers (at the worst case) have a very low price to pay
-       (do i think wrong ?), but they offer:
-         - quick access to the data
-         - and free borrowing
-
-     - a library as a single line unit, that can be include'd' or linked against;
-       i believe this is a crucial point for C!!! they call it easyness and it
-       always gurrantees success.
-
-     - a library exposed as struct (simplification, flexibility, easy to understand
-       and document, etc...)
-
-  A chance to formalize and stabilize some common in unix land and the programming
-    open source universe concepts.
-
-  It also documents and describes a vi[m] like basic interface, that means the level
-  of futures that someone can feel quite productive as in vim, without of course the
-  glory little details that make vim unique.
 
   But why?
 

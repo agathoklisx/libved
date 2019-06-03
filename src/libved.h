@@ -264,8 +264,7 @@ NewType (regexp,
   int match_len;
   char *match_ptr;
   string_t *match;
-#define MAX_ERROR_MSG_LEN 256
-  char errmsg[MAX_ERROR_MSG_LEN];
+  char errmsg[256];
 );
 
 NewSubSelf (video, draw,
@@ -407,6 +406,7 @@ NewSubSelf (buf, get,
 NewSubSelf (buf, set,
   int  (*fname) (buf_t *, char *);
   void (*video_first_row) (buf_t *, int);
+  void (*mode) (buf_t *, char *);
   ftype_t *(*ftype) (buf_t *);
 );
 

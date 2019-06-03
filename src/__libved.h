@@ -1,11 +1,11 @@
-#define MAXWORDLEN 256
-#define MAXCOMLEN  32
-#define MAXERRLEN 256
+#define MAXWORDLEN  256
+#define MAXCOMLEN   32
+#define MAXERRLEN   256
 #define MAXPATLEN PATH_MAX
-#define MAXROWS 256
+#define MAX_SCREEN_ROWS  256
 #define MAX_COUNT_DIGITS 8
 
-#define VED_WIN_NORMAL_TYPE 0
+#define VED_WIN_NORMAL_TYPE  0
 #define VED_WIN_SPECIAL_TYPE 1
 
 #define VED_MSG_WIN     "message"
@@ -80,17 +80,30 @@
 #define BUF_IS_SPECIAL   (1 << 9)
 #define BUF_FORCE_REOPEN (1 << 10)
 
+/* buf is already open 
+  instances {...} */
+
+
 #define VUNDO_RESET (1 << 0)
 
 #define X_PRIMARY     0
 #define X_CLIPBOARD   1
 
+#define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
+#define AT_CURRENT_FRAME -1
+
+#define DONOT_OPEN_FILE_IFNOT_EXISTS 0
+#define OPEN_FILE_IFNOT_EXISTS 1
+
+#define DONOT_REOPEN_FILE_IF_LOADED 0
+#define REOPEN_FILE_IF_LOADED 1
 
 #define SHARED_ALLOCATION 0
 #define NEW_ALLOCATION 1
 
 enum {
+  NOK = -1,
   NOTHING_TODO = 0,
   DONE,
   NEWCHAR,
@@ -146,13 +159,11 @@ enum {
   VED_COM_END,
 };
 
-#define CASE_B ".][)(-+;:{}><-"
-
 #define MARKS          "`abcdghjklqwertyuiopzxcvbnm1234567890"
 #define NUM_MARKS      37
 #define MARK_UNAMED    0
 
-#define REGISTERS      "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890\n"
+#define REGISTERS      "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890_\n"
 #define NUM_REGISTERS  45
 
 enum {
@@ -163,7 +174,8 @@ enum {
   REG_STAR,
   REG_PLUS,
   REG_EXPR,
-  REG_RDONLY = NUM_REGISTERS - 1
+  REG_BLACKHOLE = NUM_REGISTERS - 2,
+  REG_RDONLY
 };
 
 #define TERM_LAST_RIGHT_CORNER      "\033[999C\033[999B"
@@ -207,11 +219,11 @@ enum {
 #define TERM_SET_COLOR_FMT_LEN      5
 
 #ifndef PATH_MAX
-#define PATH_MAX 4096  /* chars in a path name including nul */
+#define PATH_MAX 4096  /* bytes in a path name */
 #endif
 
 #ifndef NAME_MAX
-#define NAME_MAX 255  /* chars in a file name */
+#define NAME_MAX 255  /* bytes in a file name */
 #endif
 
 #ifndef MAXLINE
@@ -310,9 +322,6 @@ enum {
 #define MSG_ERRNO(errno__) \
   My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
 
-#define VED_MSG(err__, ...) \
-  My(Msg).send_fmt ($my(root), COLOR_NORMAL, My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
-
 #define VED_MSG_ERROR(err__, ...) \
   My(Msg).error ($my(root), My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
 
@@ -366,7 +375,7 @@ NewType (video,
       int  row_pos;
       int  col_pos;
 
-      int rows[MAXROWS];
+      int rows[MAX_SCREEN_ROWS];
 );
 
 NewType (vstring,
@@ -385,9 +394,9 @@ NewType (vstr,
 
 NewType (vchar,
   utf8 code;
-  char buf[8];
+  char buf[5];
   int  len;
-  int width;
+  int  width;
   vchar_t *next;
   vchar_t *prev;
 );
@@ -716,9 +725,17 @@ NewType (ftype,
   char name[8];
   char on_emptyline[2];
 
-  int tab_indents;
   int shiftwidth;
   int autochdir;
+
+  int
+    tab_indents,
+    cr_on_normal_is_like_insert_mode,
+    backspace_on_normal_is_like_insert_mode,
+    backspace_on_first_idx_remove_trailing_spaces,
+    space_on_normal_is_like_insert_mode,
+    small_e_on_normal_goes_insert_mode;
+
   string_t *(*autoindent) (buf_t *, row_t *);
 );
 
@@ -861,11 +878,11 @@ private int ved_split (buf_t **, char *);
 private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
 private int ved_edit_fname (buf_t **, char *, int, int, int, int);
-private int ved_open_fname_under_cursor (buf_t **, int, int);
-private int ved_rline (buf_t **, rline_t *);
+private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
-private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
+private int ved_rline (buf_t **, rline_t *);
 private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
+private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *rline_edit (rline_t *);
 private void rline_free (rline_t *);
 private void rline_clear (rline_t *);
@@ -875,15 +892,16 @@ private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);
 private void ed_resume (ed_t *);
 
-/* this code belongs to? the only reference found from the last research,
- * was at the julia programming language sources,
-  (this code is atleast 4/5 years old, lying (during a non network season))
- */
-
+/* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {
   0x00000000UL, 0x00003080UL, 0x000E2080UL,
   0x03C82080UL, 0xFA082080UL, 0x82082080UL
 };
+/* the only reference found from the last research,
+ * was at the julia programming language sources,
+ * (this code and the functions that make use of it,
+ * is atleast 4/5 years old, lying (during a non network season))
+ */
 
 #define ONE_PAGE ($my(dim->num_rows) - 1)
 #define ARRLEN(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -928,7 +946,7 @@ static const utf8 offsetsFromUTF8[6] = {
   code;                                                   \
 })
 
-#define cur_utf8_code                                     \
+#define CUR_UTF8_CODE                                     \
 ({                                                        \
   char *s_ = $mycur(data)->bytes + $mycur(cur_col_idx);   \
   int code = 0; int i_ = 0; int sz = 0;                   \
