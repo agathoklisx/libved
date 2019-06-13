@@ -76,7 +76,6 @@
 
  * To test the editor issue (using gcc as the default compiler): */
 ```
-
 ```sh
    cd src && make veda-shared
 
@@ -127,9 +126,15 @@
    make clean
 
    # similar targets with the shared and for the static library or executable.
-```
 
+```
 ```C
+ /* All the compilation options:
+  * HAS_REGEXP=1|0   (en|dis)able regular expression support (default 0)
+  * HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
+  * DEBUG=1|0 (en|dis)able debug and also writting (default 0)
+  */
+
  /* C
   * This compiles to C11 for two reasons:
   * - the fvisibility flags that turns out the defaults, a global scope object
@@ -177,7 +182,7 @@
  * A window can also be splited in frames.
  * An Editor instance can have unlimited independed windows.
 
- * There can be unlimited independed editor instances (can be (de|rea)ttached)¹.
+ * There can be unlimited independed editor instances that can be (de|rea)ttached¹.
 
  * Modes.
 
@@ -310,9 +315,9 @@ Search:
  * feel more like a shell and specifically the zsh completion way.
 
  * Auto completions (triggered with tab):
- *   - commands
- *   - arguments
- *   - filenames
+ *  - commands
+ *  - arguments
+ *  - filenames
 
  * If an argument (like a substitution string) needs a space, it should be quoted.
 
@@ -357,28 +362,34 @@ Search:
                         to mean, `nth' captured substring numbering from one.
 
  * Commands:
- * ! as the last character indicates force
+ * ! as the last character indicates force, unless is a shell command
 
  * :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] --global
  * :w[rite][!] [filename  [--range] [--append]]
  * :wq[!]                 (write and quit (if force, do not check for modified buffers))
  * :e[!] [filename]       (when e!, reread from current buffer filename)
+ * :enew filename         (new buffer on a new window)
+ * :etail                 (like :e! and 'G' (reload and go at the end of file))
+ * :split [filename]      (open filename at a new frame)
  * :b[uf]p[rev]           (buffer previous)
  * :b[uf]n[ext]           (buffer next)
  * :b[uf][`|prevfocused]  (buffer previously focused)
  * :b[uf]d[elete][!]      (buffer delete)
- * :enew filename         (new buffer on a new window)
  * :w[in]p[rev]           (window previous)
  * :w[in]n[ext]           (window next)
  * :w[in][`|prevfocused]  (window previously focused)
  * :r[ead] filename       (read filename into current buffer)
+ * :r! cmd                (read into buffer cmd's standard output)
+ * :!cmd                  (execute command)
  * :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
- * :messages              (message buffer)
- * :q[!]                  (quit (if force do not check for modified buffers))
+ * :searches              (change focus to the `search' window)
+ * :messages              (change focus to the message buffer)
+ * :q[!]                  (quit (if force, do not check for modified buffers))
  */
 
- /* Searching on files (a really quite basic emulation of quickfix vim's windows)
-  * The command :vgrep it takes a pattern and at least a filename as arguments:
+ /* Searching on files (a really quite basic emulation of quickfix vim's windows).
+
+  * The command :vgrep it takes a pattern and at least a filename as argument[s]:
 
     :vgrep --pat=`pattern' file[s]
 
@@ -491,7 +502,7 @@ Search:
        A comment about C.
       * This is a great advantage for the C language, because the code is not going
       * to ever change to adapt a new version; unless is a code mistake, that a new
-      * compiler uncovered but correct code is going to work forever.
+      * compiler uncovered, but correct code is going to work forever.
 
     * This could also speed up execution time (by avoiding un-needed checks of a data
     * that is known for certain that is valid, because, either it is produced (usually)
@@ -574,9 +585,11 @@ Search:
 
     Ed.[subclass or method] ([args, ...])
 
- * this code has acces to the root structure, and should use the get/set
+ * this code has access to the root structure, and should use the get/set
  * specific to types methods to access the underlying properties.
+ */
 
+/*
  * Sample Application
  * This application adds regular expression support, by using a slightly modified
  * version of the slre machine, which is an ISO C library that implements a subset
@@ -588,12 +601,19 @@ Search:
  * It is implemented outside of the library by overiding methods from the Re structure.
  * To enable it use "HAS_REGEXP=1" during compilation.
  *
- * The substitution string in the ":substitute command", can use '&' to denote the full
- * captured matched string, but also captures of which denoted with \nth.
+ * The substitution string in the ":substitute command", can use '&' to denote the
+ * full captured matched string, but also captures of which denoted with \nth.
  * It is also possible to force caseless searching, by using (like pcre) (?i) in front
  * of the pattern. This option won't work with multibyte characters. Searching for
  * multibyte characters it should work properly though.
+ *
+ * The application can also run shell commands or to read into current buffer
+ * the standard output of a shell command. Interactive applications might have
+ * unexpected behavior in this implementation. To disable these features (as they
+ * are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
+ */
 
+/*
  * Memory Interface
  * The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
  * integer overflows), and it exposes a public mutable handler function that is
@@ -608,6 +628,7 @@ Search:
  * The code defines two those memory wrappers.
  * Alloc (size) and Realloc (object, size). Both like their counterparts, they return
  * void *.
+ */
 
  /* LICENSE:
   * I wish we could do without LICENSES. In my world it is natural to give credits
@@ -630,7 +651,7 @@ Search:
 /* NOTE:
  * This code it contains quite a lot of idiomatic C and (probably) in many cases it
  * might do the wrong thing. It is written by a non programmer, that taughts himself
- * C at his fifty two and it is focused on the code intentionality (if such a word).
+ * C at his fifty two, and it is focused on the code intentionality (if such a word).
  * C was choosen because it is a high level language, but it is tighted up with the
  * machine so that can be considered primitive, and there shouldn't be any interpeter
  * in between, and finally because C is about algorithms and when implemented properly
@@ -647,8 +668,8 @@ Search:
  * things or develop things. But for sure there are conditions or combinations of them
  * out of this workflow.
 
- * But Really. The real interest is to use this code as an underline machine to create
- * another machine.
+ * But Really. The real interest is to use this code as a reference and probable as
+ * an underline machine to create another machine.
 
  * But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
  * the tabwidth stuff, which is something i do not have the slightest will to do,
@@ -701,12 +722,13 @@ Search:
 
 /* My opinion on this editor.
 
- * It is assumed of course, that this product is not meant for production use; it
- * is far far faaaar away to the completion, but is an editor which implements the
- * basic operation set that can be considered enough to be productive, which runs
- * really low in memory resources. Theoretically (assuming the code is good enough)
- * it could be used in situations such primitive environments, since is indepentent
- * and that is the main interesting point of this.
+ * It is assumed of course, that this product is not meant for wide production use;
+ * but even if it was, it is far far faaaar away to the completion, but is an editor
+ * which implements at least the basic operation set that can be considered enough
+ * to be productive, which runs really low in memory resources and with rather few
+ * lines of code. Theoretically (assuming the code is good enough) it could be used
+ * in situations (such primitive environments), since is indepentent and that is a
+ * very interesting point.
 
  * And this (probably) is the reason for the persistence to self sufficiency.
  * The other (probably again and by digging around the mind) is about some beliefs
@@ -738,7 +760,7 @@ Search:
  * known, so the extra call to strlen() it was overhead for no reason. So i changed the
  * signature and added a "size_t len" argument. In this application the str_dup() is
  * one of the most called functions. So this extra argument was a huge and for free
- * and with total safety optimization. And from understanding C is about
+ * and with total safety optimization. And from understanding, C is about:
    - freedom
    - flexibility and
    - ... optimization
@@ -753,7 +775,7 @@ Search:
  * to deal with it, into the getkey() scope. So you probably need an UTF-8 library.
  * But in reality is 10/20 lines of code, for example see:
     term_get_input (term_t *this)
- * which is going to be published as a separate project, if time permits.
+ * (which is going to be published as a separate project, if time permits).
 
  * It will also has to deal with the terminal escape sequenses and returns reliably
  * the code for all the keyboard keys for all the known terminals.

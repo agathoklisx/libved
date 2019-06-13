@@ -49,6 +49,12 @@ ifneq ($(HAS_REGEXP), 0)
   FLAGS += -DHAS_REGEXP
 endif
 
+HAS_SHELL_COMMANDS := 1
+
+ifneq ($(HAS_SHELL_COMMANDS), 0)
+  FLAGS += -DHAS_SHELL_COMMANDS
+endif
+
 DEBUG := 0
 
 ifneq ($(DEBUG), 0)

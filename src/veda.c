@@ -25,7 +25,7 @@ static ed_T *E = NULL;
 #define My(__C__) E->__C__.self
 
 /* Here, we enable regexp support by overiding structure fields, the
- * interface is exact the same */
+ * interface is exactly the same */
 #ifdef HAS_REGEXP
 #include "modules/slre/slre.h"
 #include "modules/slre/slre.c"
@@ -164,6 +164,38 @@ theerror:
 }
 #endif /* HAS_REGEXP */
 
+/* Here we enable the :r! cmd and :!cmd commands */
+#ifdef HAS_SHELL_COMMANDS
+#include "modules/proc/proc.c"
+
+private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
+  int read_stdout, int read_stderr) {
+  int retval = NOTOK;
+  proc_t *this = proc_new ();
+  $my(read_stdout) = read_stdout;
+  $my(read_stderr) = read_stderr;
+  $my(dup_stdin) = 1;
+  $my(read) = My(Buf).read.from_fp;
+  $my(buf) = buf;
+  proc_parse (this, com);
+  Ed.suspend (ed);
+  if (NOTOK is proc_open (this)) goto theend;
+  retval = proc_read (this);
+  proc_wait (this);
+
+theend:
+  if (0 is read_stdout and 0 is read_stderr) {
+    My(Msg).send (ed, COLOR_NORMAL, "Press any key to continue");
+    My(Term).raw (Ed.get.term (ed));
+    My(Input).get (Ed.get.term (ed));
+  }
+
+  Ed.resume (ed);
+  proc_free (this);
+  return retval;
+}
+
+#endif /* HAS_SHELL_COMMANDS */
 /* Surely not perfect handler. Never have the chance to test since
  * my constant environ is fullscreen terminals. Here we need the E
  * static variable to iterate over all the available editor instances */
@@ -201,6 +233,8 @@ int err, size_t size,  char *file, const char *func, int line) {
 }
 
 int main (int argc, char **argv) {
+  /* I do not know the way to read from stdin and at the same time to
+   * initialize and use the terminal state, when we are the end of the pipe */
   if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
     fprintf (stderr, "Not a controlled terminal\n");
     exit (1);
@@ -227,9 +261,13 @@ int main (int argc, char **argv) {
   My(Re).compile = my_re_compile;
 #endif
 
+#ifdef HAS_SHELL_COMMANDS
+  Ed.sh.popen = my_ed_sh_popen;
+#endif
+
   ed_t *this = E->current;
 /* why we can't use self here like in the library? Because
- * types are opaque pointers */
+ * almost all of the types are opaque pointers */
 
 /* at the begining at least a win_t type is allocated */
   win_t *w = Ed.get.current_win (this);
@@ -255,6 +293,7 @@ int main (int argc, char **argv) {
 
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
+    /* main loop */
     retval = Ed.main (this, buf);
 
     /* here the user suspended its editor instance, with CTRL-j */
@@ -279,6 +318,7 @@ int main (int argc, char **argv) {
 
 theend:
   __deinit_ved__ (E);
+
 
 /* the end */
   return retval;

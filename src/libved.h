@@ -18,6 +18,7 @@
 #define SMALL_E_ON_NORMAL_GOES_INSERT_MODE 1
 #define BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES 1
 #define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
+#define READ_FROM_SHELL 1
 
 #define ED_INIT_ERROR   (1 << 0)
 
@@ -439,6 +440,7 @@ NewSubSelf (buf, row,
 
 NewSubSelf (buf, read,
   ssize_t  (*fname) (buf_t *);
+  int (*from_fp) (buf_t *, FILE *);
 );
 
 NewSelf (buf,
@@ -516,6 +518,8 @@ NewSubSelf (ed, get,
     *(*win_by_idx) (ed_t *, int),
     *(*win_by_name) (ed_t *, char *, int *);
 
+  term_t *(*term) (ed_t *);
+
   ed_t *(*next) (ed_t *);
   ed_t *(*prev) (ed_t *);
 );
@@ -543,6 +547,10 @@ NewSubSelf (ed, exec,
 NewSubSelf (ed, win,
   win_t *(*new) (ed_t *, char *, int);
   win_t *(*new_special) (ed_t *, char *, int);
+);
+
+NewSubSelf (ed, sh,
+  int (*popen) (ed_t *, buf_t *, char *, int, int);
 );
 
 NewSelf (msg,
@@ -580,6 +588,7 @@ NewSelf (ed,
   SubSelf (ed, exec) exec;
   SubSelf (ed, readjust) readjust;
   SubSelf (ed, win) win;
+  SubSelf (ed, sh) sh;
 
   int
     (*loop)  (ed_t *, buf_t *),

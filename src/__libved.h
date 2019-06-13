@@ -103,9 +103,9 @@
 #define NEW_ALLOCATION 1
 
 enum {
-  NOK = -1,
-  NOTHING_TODO = 0,
-  DONE,
+  ERROR = -2,
+  NOTHING_TODO = -1,
+  DONE = 0,
   NEWCHAR,
   EXIT,
   WIN_EXIT,
@@ -131,6 +131,7 @@ enum {
   VED_COM_EDIT,
   VED_COM_EDIT_ALIAS,
   VED_COM_ENEW,
+  VED_COM_ETAIL,
   VED_COM_GREP,
   VED_COM_MESSAGES,
   VED_COM_QUIT_FORCE,
@@ -139,7 +140,9 @@ enum {
   VED_COM_QUIT_ALIAS,
   VED_COM_READ,
   VED_COM_READ_ALIAS,
+  VED_COM_READ_SHELL,
   VED_COM_SEARCHES,
+  VED_COM_SHELL,
   VED_COM_SPLIT,
   VED_COM_SUBSTITUTE,
   VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE,
@@ -734,19 +737,13 @@ NewType (ftype,
     backspace_on_normal_is_like_insert_mode,
     backspace_on_first_idx_remove_trailing_spaces,
     space_on_normal_is_like_insert_mode,
-    small_e_on_normal_goes_insert_mode;
+    small_e_on_normal_goes_insert_mode,
+    read_from_shell;
 
   string_t *(*autoindent) (buf_t *, row_t *);
 );
 
 NewProp (buf,
-  char
-    *fname,
-    *basename,
-    *extname,
-    *cwd,
-     mode[16];
-
   MY_PROPERTIES;
   MY_CLASSES (buf);
   ed_T  *Ed;
@@ -766,11 +763,16 @@ NewProp (buf,
   vis_t vis[2];
   string_t *last_insert;
 
-  int fd;
-
-  int state;
+  char
+    *fname,
+    *basename,
+    *extname,
+    *cwd,
+     mode[16];
 
   int
+    fd,
+    state,
     at_frame,
     video_first_row_idx,
     is_visible,
@@ -910,7 +912,7 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsNotDirSep(c) (c != '/')
 #define IsSeparator(c)                          \
   ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
-   strchr(",.()+-/=*~%<>[]:;", (c)) isnot NULL)
+   byte_in_str(",.()+-/=*~%<>[]:;", (c)) isnot NULL)
 
 #define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))

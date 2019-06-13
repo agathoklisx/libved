@@ -24,18 +24,22 @@
 static rlcom_t **VED_COMMANDS = NULL;
 
 private int str_eq (const char *sa, const char *sb) {
-  for (; *sa == *sb; sa++, sb++)
-    if (*sa == 0) return 1;
+  const uchar *spa = (const uchar *)sa;
+  const uchar *spb = (const uchar *)sb;
+  for (; *spa == *spb; spa++, spb++)
+    if (*spa == 0) return 1;
 
   return 0;
 }
 
 private int str_cmp_n (const char *sa, const char *sb, size_t n) {
-  for (;n--; sa++, sb++) {
-    if (*sa != *sb)
-      return (*(uchar *)sa - *(uchar *)sb);
+  const uchar *spa = (const uchar *)sa;
+  const uchar *spb = (const uchar *)sb;
+  for (;n--; spa++, spb++) {
+    if (*spa != *spb)
+      return (*(uchar *)spa - *(uchar *)spb);
 
-    if (*sa == 0) return 0;
+    if (*spa == 0) return 0;
   }
 
   return 0;
@@ -49,6 +53,15 @@ private char *str_dup (const char *src, size_t len) {
   if (len) memcpy (dest, src, len);
   dest[len] = '\0';
   return dest;
+}
+
+private char *byte_in_str (const char *s, int c) {
+  const char *sp = s;
+  while (*sp != c) {
+    if (*sp == 0) return NULL;
+    sp++;
+  }
+  return (char *)sp;
 }
 
 private int char_byte_len (uchar c) {
@@ -231,7 +244,6 @@ private string_t *string_new (void) {
 private string_t *string_reallocate (string_t *this, size_t len) {
   size_t sz = string_align (this->mem_size + len + 1);
   this->bytes = Realloc (this->bytes, sz);
-//  this->bytes = tmp;
   this->mem_size = sz;
   return this;
 }
@@ -443,7 +455,7 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
     goto theend;
   }
 
-  res = strcmp (bytes, this->head->data->bytes);
+  res = strcmp(bytes, this->head->data->bytes);
 
   ifnot (res) {
     goto theend;
@@ -464,7 +476,7 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
     goto theend;
   }
 
-  res = strcmp (bytes, this->tail->data->bytes);
+  res = strcmp(bytes, this->tail->data->bytes);
 
   if (0 < res) {
     this->tail->next = vs;
@@ -479,7 +491,7 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
   vstring_t *it = this->head->next;
 
   while (it) {
-    res = strcmp (bytes, it->data->bytes);
+    res = strcmp(bytes, it->data->bytes);
     ifnot (res) goto theend;
     if (0 > res) {
       it->prev->next = vs;
@@ -736,7 +748,7 @@ private dirlist_t *dirlist (char *dir, int flags) {
 
 private char *path_basename (char *name) {
   ifnot (name) return name;
-  char *p = strchr (name, 0);
+  char *p = byte_in_str (name, 0);
   if (p is NULL) p = name + bytelen (name) + 1;
   while (p > name and IsNotDirSep (*(p - 1))) --p;
   return p;
@@ -744,7 +756,7 @@ private char *path_basename (char *name) {
 
 private char *path_extname (char *name) {
   ifnot (name) return name;
-  char *p = strchr (name, 0);
+  char *p = byte_in_str (name, 0);
   if (p is NULL) p = name + bytelen (name) + 1;
   while (p > name and (*(p - 1) isnot '.')) --p;
   if (p is name) return "";
@@ -1720,7 +1732,7 @@ char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot", "forever",
     "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|",
-    "$mycur|", "$from|", "theend|", "OK|", "NOTOK|", "mutable|", "uchar", "uint",
+    "$mycur|", "$from|", "theend|", "OK|", "NOTOK|", "mutable|", "uchar|", "uint|",
     "switch", "if", "while", "for", "break", "continue", "else", "do",
     "default", "goto",
     "case|", "return|", "free|",
@@ -1820,11 +1832,11 @@ parse_char:;
     }
 
     ifnot (NULL is $my(syn->operators)) {
-      ifnot (NULL is strchr ($my(syn)->operators, c)) {
+      ifnot (NULL is byte_in_str ($my(syn)->operators, c)) {
         ADD_COLORED_CHAR (c, HL_OPERATOR);
         if (++idx is len) goto theend;
         c = line[idx];
-        ifnot (NULL is strchr ($my(syn)->operators, c)) { /* most likely one or two */
+        ifnot (NULL is byte_in_str ($my(syn)->operators, c)) { /* most likely one or two */
             ADD_COLORED_CHAR (c, HL_OPERATOR);
             goto thecontinue;
         }
@@ -2000,11 +2012,11 @@ open_comment:;
       c = line[idx];
     }
 
-    if (strchr ($my(syn)->operators, c) isnot NULL) {
+    if (byte_in_str ($my(syn)->operators, c) isnot NULL) {
       ADD_COLORED_CHAR (c, HL_OPERATOR);
       if (++idx is len) goto theend;
       c = line[idx];
-      if (strchr ($my(syn)->operators, c) isnot NULL) { /* most likely one or two */
+      if (byte_in_str ($my(syn)->operators, c) isnot NULL) { /* most likely one or two */
           ADD_COLORED_CHAR (c, HL_OPERATOR);
           goto thecontinue;
       }
@@ -2144,6 +2156,7 @@ string_t *(*indent_fun) (buf_t *, row_t *)) {
   $my(ftype)->backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES;
   $my(ftype)->small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE;
   $my(ftype)->space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE;
+  $my(ftype)->read_from_shell = READ_FROM_SHELL;
 
   $my(ftype)->autoindent = indent_fun;
   strcpy ($my(ftype)->on_emptyline, "~");
@@ -4151,7 +4164,7 @@ theend:
 private int mark_set (buf_t *this, int mark) {
   if (mark < 0) {
     utf8 c = My(Input).get ($my(term_ptr));
-    char *m = strchr (MARKS, c);
+    char *m = byte_in_str (MARKS, c);
     if (NULL is m) return NOTHING_TODO;
     mark = m - MARKS;
   }
@@ -4167,7 +4180,7 @@ private int mark_set (buf_t *this, int mark) {
 
 private int mark_goto (buf_t *this) {
   utf8 c = My(Input).get ($my(term_ptr));
-  char *m = strchr (MARKS, c);
+  char *m = byte_in_str (MARKS, c);
   if (NULL is m) return NOTHING_TODO;
   c = m - MARKS;
   mark_t *mark = &$my(marks)[c];
@@ -4277,7 +4290,7 @@ private int ed_register_special_set (ed_t *this, int regidx) {
       if ($my(history)->rline->num_items is 0) return NOTOK;
       {
         h_rlineitem_t *it = $my(history)->rline->head;
-        if (NULL is it) return NOTOK;
+        if (NULL is it) return ERROR;
         string_t *str = vstr_join (it->data->line, "");
         ed_register_push_with (this, regidx, CHARWISE, str->bytes, str->num_bytes);
 
@@ -4296,13 +4309,14 @@ private int ed_register_special_set (ed_t *this, int regidx) {
       {
         FILE *fp = ed_file_pointer_from_X (this, (REG_STAR is regidx
             ? X_PRIMARY : X_CLIPBOARD));
-        if (NULL is fp) return NOTOK;
+        if (NULL is fp) return ERROR;
         ed_register_new (this, regidx);
         size_t len = 0;
         char *line = NULL;
 
         while (-1 isnot ed_readline_from_fp (&line, &len, fp))
-          ed_register_push_with (this, regidx, LINEWISE, line, REVERSE_ORDER);
+          //ed_register_push_with (this, regidx, LINEWISE, line, REVERSE_ORDER);
+          ed_register_push_with (this, regidx, LINEWISE, line, DEFAULT_ORDER);
         if (line isnot NULL) free (line);
         pclose (fp);
         return DONE;
@@ -5688,7 +5702,7 @@ private int ved_normal_change_case (buf_t *this) {
   else if ('A' <= c and c <= 'Z')
     buf[0] = c + ('a' - 'A');
   else {
-    char *p = strchr (CASE_A, $mycur(data)->bytes[$mycur(cur_col_idx)]);
+    char *p = byte_in_str (CASE_A, $mycur(data)->bytes[$mycur(cur_col_idx)]);
     if (NULL is p) {
       if (c > 0x80) {
         utf8 new;
@@ -5832,7 +5846,7 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
 }
 
 private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
-  if (NOTOK is ed_register_special_set ($my(root), regidx))
+  if (ERROR is ed_register_special_set ($my(root), regidx))
     return NOTHING_TODO;
 
   rg_t *rg = &$my(regs)[regidx];
@@ -6113,8 +6127,8 @@ do {                                        \
                                                                          \
     (reg) = My(Input).get ($my(term_ptr));                               \
     {                                                                    \
-    char *r = strchr (REGISTERS, reg);                                   \
-    (reg) = (NULL is strchr (REGISTERS, (reg))) ? -1 : r - REGISTERS;    \
+    char *r = byte_in_str (REGISTERS, reg);                                   \
+    (reg) = (NULL is byte_in_str (REGISTERS, (reg))) ? -1 : r - REGISTERS;    \
     }                                                                    \
                                                                          \
     continue
@@ -6621,6 +6635,7 @@ private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int reload, i
     goto theend;
   }
 
+  int cur_idx = this->cur_idx;
   ved_normal_bof (this);
   ved_delete_line (this, this->num_items, REG_BLACKHOLE);
   self(read.fname);
@@ -6654,6 +6669,9 @@ private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int reload, i
   $my(video)->col_pos = $my(cur_video_col) = 1;
   $my(video_first_row) = this->current;
   $my(video_first_row_idx) = this->cur_idx;
+
+  if (cur_idx >= this->num_items) cur_idx = this->num_items - 1;
+  ved_normal_goto_linenr (this, cur_idx + 1);
 
   if (draw) self(draw);
   MSG("reloaded");
@@ -6897,18 +6915,9 @@ private int ved_write_buffer (buf_t *this, int force) {
   return DONE;
 }
 
-private int ved_buf_read (buf_t *this, char *fname) {
-  ifnot (file_exists (fname)) return NOTHING_TODO;
-  ifnot (file_is_reg (fname)) return NOTHING_TODO;
-  if (0 isnot access (fname, R_OK)) return NOTHING_TODO;
+private int ved_buf_read_from_fp (buf_t *this, FILE *fp) {
   mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
   row_t *row = this->current;
-  FILE *fp = fopen (fname, "r");
-  if (NULL is fp) {
-    MSG_ERRNO(errno);
-    return NOTHING_TODO;
-  }
-
   action_t *action = AllocType (action);
 
   char *line = NULL;
@@ -6924,7 +6933,6 @@ private int ved_buf_read (buf_t *this, char *fname) {
     stack_push (action, act);
   }
 
-  fclose (fp);
   ifnot (NULL is line) free (line);
 
   ifnot (t_len)
@@ -6937,6 +6945,32 @@ private int ved_buf_read (buf_t *this, char *fname) {
   this->current = row; this->cur_idx = t.cur_idx;
   self(draw);
   return DONE;
+}
+
+private int ved_buf_read_from_file (buf_t *this, char *fname) {
+  if (0 isnot access (fname, R_OK|F_OK)) return NOTHING_TODO;
+  ifnot (file_is_reg (fname)) return NOTHING_TODO;
+
+  FILE *fp = fopen (fname, "r");
+  if (NULL is fp) {
+    MSG_ERRNO(errno);
+    return NOTHING_TODO;
+  }
+
+  int retval = self(read.from_fp, fp);
+  fclose (fp);
+  return retval;
+}
+
+private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
+  int read_stdout, int read_stderr) {
+  (void) ed; (void) buf; (void) com; (void) read_stdout; (void) read_stderr;
+  return NOTHING_TODO;
+}
+
+private int ved_buf_read_from_shell (buf_t *this, char *com, int rlcom) {
+  ifnot ($my(ftype)->read_from_shell) return NOTHING_TODO;
+  return My(Ed).sh.popen ($my(root), this, com, rlcom is VED_COM_READ_SHELL, 0);
 }
 
 private int ved_buf_change_bufname (buf_t **thisp, char *bufname) {
@@ -7669,12 +7703,19 @@ private vstring_t *ved_rline_get_command (rline_t *rl) {
   char com[MAXCOMLEN]; com[0] = '\0';
   int com_idx = 0;
   while (it isnot NULL and it->data->bytes[0] is ' ') it = it->next;
+  if (it isnot NULL and it->data->bytes[0] is '!') {
+    com[0] = '!'; com[1] = '\0';
+    goto get_command;
+  }
+
   while (it isnot NULL and it->data->bytes[0] isnot ' ') {
     for (size_t zi = 0; zi < it->data->num_bytes; zi++)
       com[com_idx++] = it->data->bytes[zi];
     it = it->next;
   }
   com[com_idx] = '\0';
+
+get_command:
   rl->com = -1;
 
   int i = 0;
@@ -7702,6 +7743,7 @@ redo:;
   int fidx = sp - currline->bytes;
   char tok[cur - sp + 1];
   int toklen = 0;
+  char *com = NULL; (void) com;
   while (sp < cur) tok[toklen++] = *sp++;
   tok[toklen] = '\0';
 
@@ -7771,8 +7813,10 @@ redo:;
 
   if (type & RL_TOK_ARG_FILENAME) {
     ifnot (menu->state & MENU_REDO) {
-      string_prepend (curbuf->prop->shared_str, "--fname=\"");
-      string_append_byte (curbuf->prop->shared_str, '"');
+      if (rl->com isnot VED_COM_READ_SHELL and rl->com isnot VED_COM_SHELL) {
+        string_prepend (curbuf->prop->shared_str, "--fname=\"");
+        string_append_byte (curbuf->prop->shared_str, '"');
+      }
     }
 
     item = curbuf->prop->shared_str->bytes;
@@ -7860,6 +7904,7 @@ private void ved_init_commands (void) {
     [VED_COM_EDIT] = "edit",
     [VED_COM_EDIT_ALIAS] = "e",
     [VED_COM_ENEW] = "enew",
+    [VED_COM_ETAIL] = "etail",
     [VED_COM_GREP] = "vgrep",
     [VED_COM_MESSAGES] = "messages",
     [VED_COM_QUIT_FORCE] = "quit!",
@@ -7868,7 +7913,9 @@ private void ved_init_commands (void) {
     [VED_COM_QUIT_ALIAS] = "q",
     [VED_COM_READ] = "read",
     [VED_COM_READ_ALIAS] = "r",
+    [VED_COM_READ_SHELL] = "r!",
     [VED_COM_SEARCHES] = "searches",
+    [VED_COM_SHELL] = "!",
     [VED_COM_SPLIT] = "split",
     [VED_COM_SUBSTITUTE] = "substitute",
     [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
@@ -8318,7 +8365,7 @@ argtype_succeed:
         goto arg_type;
       }
 
-      char *glob = strchr (arg->option->bytes, '*');
+      char *glob = byte_in_str (arg->option->bytes, '*');
       ifnot (NULL is glob) {
         dirlist_t *dlist = NULL;
         string_t *dir = string_new_with ("");
@@ -8599,6 +8646,11 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       }
       goto theend;
 
+    case VED_COM_ETAIL:
+      retval = ved_edit_fname (thisp, NULL, $myparents(cur_frame), 1, 0, 1);
+      ved_normal_eof (this);
+      goto theend;
+
     case VED_COM_QUIT_FORCE_ALIAS:
       rl->com = VED_COM_QUIT_FORCE; //__fallthrough__;
     case VED_COM_QUIT_FORCE:
@@ -8659,7 +8711,17 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       {
         arg_t *fname = rline_get_arg (rl, RL_VED_ARG_FILENAME);
         if (NULL is fname) goto theend;
-        retval = ved_buf_read (this, fname->val->bytes);
+        retval = ved_buf_read_from_file (this, fname->val->bytes);
+        goto theend;
+      }
+
+    case VED_COM_SHELL:
+    case VED_COM_READ_SHELL:
+      {
+        string_t *com = vstr_join (rl->line, "");
+        string_delete_numbytes_at (com, (rl->com is VED_COM_SHELL ? 1 : 3), 0);
+        retval = ved_buf_read_from_shell (this, com->bytes, rl->com);
+        string_free (com);
         goto theend;
       }
 
@@ -9305,8 +9367,8 @@ handle_char:
 
        regidx = My(Input).get ($my(term_ptr));
        {
-         char *r = strchr (REGISTERS, regidx);
-         regidx = (NULL is strchr (REGISTERS, regidx)) ? -1 : r - REGISTERS;
+         char *r = byte_in_str (REGISTERS, regidx);
+         regidx = (NULL is byte_in_str (REGISTERS, regidx)) ? -1 : r - REGISTERS;
        }
 
        goto get_char;
@@ -9428,6 +9490,10 @@ private win_t *ed_get_win_by_idx (ed_t *this, int idx) {
   }
 
   return NULL;
+}
+
+private term_t *ed_get_term (ed_t *this) {
+  return $my(term);
 }
 
 private int ed_get_state (ed_t *this) {
@@ -9813,6 +9879,7 @@ private ed_T *editor_new (char *name) {
         .win_next = ed_get_win_next,
         .win_by_idx = ed_get_win_by_idx,
         .win_by_name = ed_get_win_by_name,
+        .term = ed_get_term,
         .next = ed_get_next,
         .prev = ed_get_prev,
       ),
@@ -9829,6 +9896,9 @@ private ed_T *editor_new (char *name) {
       .win = SubSelfInit (ed, win,
         .new = ed_win_new,
         .new_special = ed_win_new_special
+      ),
+      .sh = SubSelfInit (ed, sh,
+        .popen = ed_sh_popen
       ),
     ),
     .Win = ClassInit (win,
@@ -9882,7 +9952,8 @@ private ed_T *editor_new (char *name) {
           .new_with = buf_row_new_with
         ),
         .read = SubSelfInit (buf, read,
-          .fname = buf_read_fname
+          .fname = buf_read_fname,
+          .from_fp = ved_buf_read_from_fp
         ),
         .draw = buf_draw,
         .flush = buf_flush,
