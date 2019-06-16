@@ -1,5 +1,4 @@
 #include <stdarg.h>
-#include <fcntl.h>
 #include <sys/wait.h>
 
 NewProp (proc,
@@ -190,10 +189,17 @@ private int proc_open (proc_t *this) {
     return NOTOK;
   }
 
+  /* this code seems to prevent from execution many of interactive applications
+   * which is desirable (many, but not all), but this looks to work for commands
+   * that need to be executed and in the case of :r! to read from standard output
+   */
+
   ifnot ($my(pid)) {
+    setpgid (0, 0);
+    setsid ();
     if ($my(read_stderr)) {
-      close ($my(stderr_fds)[PIPE_READ_END]);
       dup2 ($my(stderr_fds)[PIPE_WRITE_END], fileno (stderr));
+      close ($my(stderr_fds)[PIPE_READ_END]);
     }
 
     if ($my(read_stdout)) {
@@ -202,8 +208,8 @@ private int proc_open (proc_t *this) {
     }
 
     if ($my(dup_stdin)) {
-      close ($my(stdin_fds)[PIPE_WRITE_END]);
       dup2 ($my(stdin_fds)[PIPE_READ_END], STDIN_FILENO);
+      close ($my(stdin_fds)[PIPE_WRITE_END]);
     }
 
     execvp ($my(argv)[0], $my(argv));
@@ -214,6 +220,7 @@ private int proc_open (proc_t *this) {
   if ($my(dup_stdin)) close ($my(stdin_fds)[PIPE_READ_END]);
   if ($my(read_stdout)) close ($my(stdout_fds)[PIPE_WRITE_END]);
   if ($my(read_stderr)) close ($my(stderr_fds)[PIPE_WRITE_END]);
+
   return $my(pid);
 }
 

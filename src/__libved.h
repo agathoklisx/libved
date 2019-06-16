@@ -141,6 +141,7 @@ enum {
   VED_COM_READ,
   VED_COM_READ_ALIAS,
   VED_COM_READ_SHELL,
+  VED_COM_REDRAW,
   VED_COM_SEARCHES,
   VED_COM_SHELL,
   VED_COM_SPLIT,
@@ -339,6 +340,7 @@ NewProp (term,
   struct termios orig_mode;
   struct termios raw_mode;
 
+  char mode;
   int
     in_fd,
     out_fd;
@@ -347,7 +349,6 @@ NewProp (term,
   int orig_curs_col_pos;
   int lines;
   int columns;
-  int is_initialized;
 );
 
 NewType (term,
@@ -882,6 +883,7 @@ private int ved_enew_fname (buf_t **, char *);
 private int ved_edit_fname (buf_t **, char *, int, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
+private int ved_buf_change (buf_t **, int);
 private int ved_rline (buf_t **, rline_t *);
 private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);

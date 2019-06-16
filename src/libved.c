@@ -64,7 +64,7 @@ private char *byte_in_str (const char *s, int c) {
   return (char *)sp;
 }
 
-private int char_byte_len (uchar c) {
+private int char_byte_len (utf8 c) {
   if (c < 0x80) return 1;
   if ((c & 0xe0) is 0xc0) return 2;
   return 3 + ((c & 0xf0) isnot 0xe0);
@@ -867,6 +867,30 @@ private int fd_write (int fd, char *buf, int len) {
 #define TERM_GET_ESC_SEQ(seq) \
 ({char b__[seq ## _LEN + 1];snprintf (b__, seq ## _LEN + 1, "%s", seq); b__;})
 
+private void term_screen_save (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_SCREEN_SAVE);
+}
+
+private void term_screen_restore (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_SCREEN_RESTORE);
+}
+
+private void term_screen_clear (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_SCREEN_CLEAR);
+}
+
+private void term_screen_clear_eol (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_LINE_CLR_EOL);
+}
+
+private void term_cursor_hide (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_CURSOR_HIDE);
+}
+
+private void term_cursor_restore (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_CURSOR_RESTORE);
+}
+
 private int term_get_ptr_pos (term_t *this, int *row, int *col) {
   if (NOTOK is TERM_SEND_ESC_SEQ (TERM_GET_PTR_POS))
     return NOTOK;
@@ -905,6 +929,119 @@ private void term_free (term_t *this) {
     $myprop = NULL;
   }
   free (this); this = NULL;
+}
+
+private term_t *term_new (void) {
+  term_t *this = AllocType (term);
+  $myprop = AllocProp (term);
+  $my(lines) = 24;
+  $my(columns) = 78;
+  $my(out_fd) = STDOUT_FILENO;
+  $my(in_fd) = STDIN_FILENO;
+  $my(mode) = 'o';
+  return this;
+}
+
+private void term_get_size (term_t *this, int *rows, int *cols) {
+  struct winsize wsiz;
+
+  do {
+    if (OK is ioctl ($my(out_fd), TIOCGWINSZ, &wsiz)) {
+      $my(lines) = (int) wsiz.ws_row;
+      $my(columns) = (int) wsiz.ws_col;
+      return;
+    }
+  } while (errno is EINTR);
+
+  int orig_row, orig_col;
+  term_get_ptr_pos (this, &orig_row, &orig_col);
+
+  TERM_SEND_ESC_SEQ (TERM_LAST_RIGHT_CORNER);
+  term_get_ptr_pos (this, rows, cols);
+  term_set_ptr_pos (this, orig_row, orig_col);
+}
+
+private int term_sane_mode (term_t *this) {
+  if ($my(mode) is 's') return OK;
+  // if (isnotatty ($my(in_fd))) return NOTOK;
+
+  struct termios mode;
+  while (NOTOK is tcgetattr ($my(in_fd), &mode))
+    if (errno isnot EINTR) return NOTOK;
+
+  mode.c_iflag |= (BRKINT|INLCR|ICRNL|IXON|ISTRIP);
+  mode.c_iflag &= ~(IGNBRK|INLCR|IGNCR|IXOFF);
+  mode.c_oflag |= (OPOST|ONLCR);
+  mode.c_lflag |= (ECHO|ECHOE|ECHOK|ECHOCTL|ISIG|ICANON|IEXTEN);
+  mode.c_lflag &= ~(ECHONL|NOFLSH|XCASE|TOSTOP|ECHOPRT);
+  mode.c_cc[VEOF] = 'D'^64; // splitvt
+  mode.c_cc[VMIN] = 1;   /* 0 */
+  mode.c_cc[VTIME] = 0;  /* 1 */
+
+  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &mode))
+    if (errno isnot EINTR) return NOTOK;
+
+  $my(mode) = 's';
+  return OK;
+}
+
+private int term_raw_mode (term_t *this) {
+   if ($my(mode) is 'r') return OK;
+   // if (isnotatty ($my(in_fd))) return NOTOK;
+
+  while (NOTOK is tcgetattr ($my(in_fd), &$my(orig_mode)))
+    if (errno isnot EINTR) return NOTOK;
+
+  $my(raw_mode) = $my(orig_mode);
+  $my(raw_mode).c_iflag &= ~(INLCR|ICRNL|IXON|ISTRIP);
+  $my(raw_mode).c_cflag |= (CS8);
+  $my(raw_mode).c_oflag &= ~(OPOST);
+  $my(raw_mode).c_lflag &= ~(ECHO|ISIG|ICANON|IEXTEN);
+  $my(raw_mode).c_lflag &= NOFLSH;
+  $my(raw_mode).c_cc[VEOF] = 1;
+  $my(raw_mode).c_cc[VMIN] = 0;   /* 1 */
+  $my(raw_mode).c_cc[VTIME] = 1;  /* 0 */
+
+  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &$my(raw_mode)))
+    ifnot (errno is EINTR) return NOTOK;
+
+  $my(mode) = 'r';
+  return OK;
+}
+
+private int term_orig_mode (term_t *this) {
+  if ($my(mode) is 'o') return OK;
+  // if (isnotatty ($my(in_fd))) return;
+
+  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &$my(orig_mode)))
+    ifnot (errno is EINTR) return NOTOK;
+
+  $my(mode) = 'o';
+  return OK;
+}
+
+private int term_set_mode (term_t *this, char mode) {
+  switch (mode) {
+    case 'o': return term_orig_mode (this);
+    case 's': return term_sane_mode (this);
+    case 'r': return term_raw_mode (this);
+  }
+  return NOTOK;
+}
+
+private int term_set (term_t *this) {
+  if (NOTOK is term_set_mode (this, 'r')) return NOTOK;
+  term_get_ptr_pos (this,  &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
+  term_get_size (this, &$my(lines), &$my(columns));
+  term_screen_save (this);
+  return OK;
+}
+
+private int term_reset (term_t *this) {
+  term_set_mode (this, 's');
+  term_set_ptr_pos (this, $my(orig_curs_row_pos), $my(orig_curs_col_pos));
+  term_screen_restore (this);
+  return OK;
 }
 
 /* this is an extended version of the same function of
@@ -1072,116 +1209,6 @@ private utf8 term_get_input (term_t *this) {
   }
 
   return NOTOK;
-}
-
-private term_t *term_new (void) {
-  term_t *this = AllocType (term);
-  $myprop = AllocProp (term);
-  $my(is_initialized) = 0;
-  $my(lines) = 24;
-  $my(columns) = 78;
-  $my(out_fd) = STDOUT_FILENO;
-  $my(in_fd) = STDIN_FILENO;
-  return this;
-}
-
-private int term_sane (term_t *this) {
-  if (isnotatty ($my(in_fd))) return NOTOK;
-
-  struct termios mode;
-  while (NOTOK is tcgetattr ($my(in_fd), &mode))
-    if (errno isnot EINTR) return NOTOK;
-
-  mode.c_iflag |= (BRKINT|INLCR|ICRNL|IXON|ISTRIP);
-  mode.c_iflag &= ~(IGNBRK|INLCR|IGNCR|IXOFF);
-  mode.c_oflag |= (OPOST|ONLCR);
-  mode.c_lflag |= (ECHO|ECHOE|ECHOK|ECHOCTL|ISIG|ICANON|IEXTEN);
-  mode.c_lflag &= ~(ECHONL|NOFLSH|XCASE|TOSTOP|ECHOPRT);
-  mode.c_cc[VEOF] = 'D'^64; // splitvt
-  mode.c_cc[VMIN] = 1;   /* 0 */
-  mode.c_cc[VTIME] = 0;  /* 1 */
-
-  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &mode))
-    if (errno isnot EINTR) return NOTOK;
-
-  return OK;
-}
-
-private int term_raw (term_t *this) {
-  if ($my(is_initialized) is 1) return OK;
-  if (isnotatty ($my(in_fd))) return NOTOK;
-
-  while (NOTOK is tcgetattr ($my(in_fd), &$my(orig_mode)))
-    if (errno isnot EINTR) return NOTOK;
-
-  $my(raw_mode) = $my(orig_mode);
-  $my(raw_mode).c_iflag &= ~(INLCR|ICRNL|IXON|ISTRIP);
-  $my(raw_mode).c_cflag |= (CS8);
-  $my(raw_mode).c_oflag &= ~(OPOST);
-  $my(raw_mode).c_lflag &= ~(ECHO|ISIG|ICANON|IEXTEN);
-  $my(raw_mode).c_lflag &= NOFLSH;
-  $my(raw_mode).c_cc[VEOF] = 1;
-  $my(raw_mode).c_cc[VMIN] = 0;   /* 1 */
-  $my(raw_mode).c_cc[VTIME] = 1;  /* 0 */
-
-  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &$my(raw_mode)))
-    ifnot (errno is EINTR) return NOTOK;
-
-  $my(is_initialized) = 1;
-  return OK;
-}
-
-private void term_restore (term_t *this) {
-  ifnot ($my(is_initialized)) return;
-  if (isnotatty ($my(in_fd))) return;
-
-  while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &$my(orig_mode)))
-    ifnot (errno is EINTR) return;
-
-  $my(is_initialized) = 0;
-}
-
-private void term_get_size (term_t *this, int *rows, int *cols) {
-  struct winsize wsiz;
-
-  do {
-    if (OK is ioctl ($my(out_fd), TIOCGWINSZ, &wsiz)) {
-      $my(lines) = (int) wsiz.ws_row;
-      $my(columns) = (int) wsiz.ws_col;
-      return;
-    }
-  } while (errno is EINTR);
-
-  int orig_row, orig_col;
-  term_get_ptr_pos (this, &orig_row, &orig_col);
-
-  TERM_SEND_ESC_SEQ (TERM_LAST_RIGHT_CORNER);
-  term_get_ptr_pos (this, rows, cols);
-  term_set_ptr_pos (this, orig_row, orig_col);
-}
-
-private void term_screen_save (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_SCREEN_SAVE);
-}
-
-private void term_screen_restore (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_SCREEN_RESTORE);
-}
-
-private void term_screen_clear (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_SCREEN_CLEAR);
-}
-
-private void term_screen_clear_eol (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_LINE_CLR_EOL);
-}
-
-private void term_cursor_hide (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_CURSOR_HIDE);
-}
-
-private void term_cursor_restore (term_t *this) {
-  TERM_SEND_ESC_SEQ (TERM_CURSOR_RESTORE);
 }
 
 private video_t *video_new (int fd, int rows, int cols, int first_row, int first_col) {
@@ -1731,8 +1758,8 @@ char *default_extensions[] = {".txt", NULL};
 char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot", "forever",
-    "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|",
-    "$mycur|", "$from|", "theend|", "OK|", "NOTOK|", "mutable|", "uchar|", "uint|",
+    "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|", "$mycur|",
+    "$from|", "theend|", "OK|", "NOTOK|", "mutable|", "uchar|", "uint|", "utf8|",
     "switch", "if", "while", "for", "break", "continue", "else", "do",
     "default", "goto",
     "case|", "return|", "free|",
@@ -1788,9 +1815,9 @@ syn_t HL_DB[] = {
   TERM_INVERTED "%s%c" TERM_COLOR_RESET, TERM_MAKE_COLOR ((clr)), (c));  \
   My(String).append (s, ccbuf)
 
-#define SYN_HAS_OPEN_COMMENT  (1 << 0)
+#define SYN_HAS_OPEN_COMMENT       (1 << 0)
 #define SYN_HAS_SINGLELINE_COMMENT (1 << 1)
-#define SYN_HAS_MULTILINE_COMMENT (1 << 2)
+#define SYN_HAS_MULTILINE_COMMENT  (1 << 2)
 
 /* Sorry but the highlight system is ridicolous simple (line by line), but is fast and works for me in C */
 private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index, row_t *row) {
@@ -2937,6 +2964,10 @@ private buf_t *win_get_current_buf (win_t *w) {
   return w->current;
 }
 
+private int win_get_current_buf_idx (win_t *w) {
+  return w->cur_idx;
+}
+
 private buf_t *win_get_buf_by_idx (win_t *w, int idx) {
   if (w is NULL) return NULL;
 
@@ -3794,7 +3825,7 @@ private int ved_grep_on_normal (buf_t **thisp, utf8 com, int *range, int regidx)
 
   buf_t *this = *thisp;
   ved_normal_bol (this);
-  return ved_open_fname_under_cursor (thisp, 0, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
+  return 1 + ved_open_fname_under_cursor (thisp, 0, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
 }
 
 private int ved_search_file (buf_t *this, char *fname, regexp_t *re) {
@@ -4848,7 +4879,7 @@ private int ved_normal_goto_linenr (buf_t *this, int lnr) {
   mark_set (this, MARK_UNAMED);
 
   if (lnr < currow_idx + 1)
-    return ved_normal_up (this, currow_idx - lnr + 1, 1 , 1);
+    return ved_normal_up (this, currow_idx - lnr + 1, 1, 1);
 
   return ved_normal_down (this, lnr - currow_idx - 1, 1, 1);
 }
@@ -5080,7 +5111,7 @@ private int ved_word_math (buf_t *this, int count, utf8 com) {
   int nr = 0;
   char *p = word->bytes;
   int type = *p++;
-  debug_append ("p is %s %zd\n", p, word->num_bytes);
+
   if (type is 'd') nr = atoi (p);
   else if (type is 'o')  nr = strtol (p, NULL, 8);
   else nr = strtol (p, NULL, 16);
@@ -5098,7 +5129,6 @@ private int ved_word_math (buf_t *this, int count, utf8 com) {
     snprintf (new, 32, "0%s%s", ('x' is type ? "x" : ""), s);
   }
 
-  debug_append ("new %s\n", new);
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
@@ -5418,6 +5448,23 @@ private int ved_normal_handle_G (buf_t *this, int count) {
     return ved_normal_goto_linenr (this, count);
 
   return ved_normal_eof (this);
+}
+
+private int ved_normal_handle_comma (buf_t **thisp) {
+  buf_t *this = *thisp;
+  utf8 c = My(Input).get ($my(term_ptr));
+  switch (c) {
+    case 'n':
+      return ved_buf_change (thisp, VED_COM_BUF_CHANGE_NEXT);
+
+    case 'm':
+      return ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV);
+
+    case ',':
+      return ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
+  }
+
+  return NOTHING_TODO;
 }
 
 private int ved_insert_complete_filename (buf_t *);
@@ -6720,7 +6767,7 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
     } while (0);
 
   if (frame is AT_CURRENT_FRAME) frame = $myparents(cur_frame);
-  if (NOTHING_TODO is ved_edit_fname (thisp, fname, frame, 0, 1, 1))
+  if (NOTHING_TODO is ved_edit_fname (thisp, fname, frame, 0, 0, 1))
     return NOTHING_TODO;
 
   return ved_normal_goto_linenr (*thisp, lnr);
@@ -7914,6 +7961,7 @@ private void ved_init_commands (void) {
     [VED_COM_READ] = "read",
     [VED_COM_READ_ALIAS] = "r",
     [VED_COM_READ_SHELL] = "r!",
+    [VED_COM_REDRAW] = "redraw",
     [VED_COM_SEARCHES] = "searches",
     [VED_COM_SHELL] = "!",
     [VED_COM_SPLIT] = "split",
@@ -8648,7 +8696,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
 
     case VED_COM_ETAIL:
       retval = ved_edit_fname (thisp, NULL, $myparents(cur_frame), 1, 0, 1);
-      ved_normal_eof (this);
+      ved_normal_eof (*thisp);
       goto theend;
 
     case VED_COM_QUIT_FORCE_ALIAS:
@@ -8674,6 +8722,11 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
            retval = ved_enew_fname (thisp, UNAMED);
         }
         goto theend;
+
+    case VED_COM_REDRAW:
+       My(Win).draw ($my(root)->current);
+       retval = DONE;
+       goto theend;
 
     case VED_COM_MESSAGES:
       retval = ed_msg_buf (thisp);
@@ -9219,6 +9272,9 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
     case 'G':
       retval = ved_normal_handle_G (this, count); break;
 
+    case ',':
+      retval = ved_normal_handle_comma (thisp); break;
+
     case '0':
       retval = ved_normal_bol (this); break;
 
@@ -9297,6 +9353,10 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
     case CTRL('r'):
     case 'u':
       retval = vundo (this, com); break;
+
+    case CTRL('l'):
+      My(Win).draw ($my(root)->current);
+      retval = DONE; break;
 
     case CTRL('j'):
       My(Ed).suspend ($my(root));
@@ -9394,6 +9454,7 @@ handle_char:
         goto get_char;
 
       case ',':
+        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
         if (ARE_BOTH_RANGES_OK) goto exec_block;
         ifnot (IS_FIRST_RANGE_OK) range[0] = this->cur_idx + 1;
           goto get_char;
@@ -9538,9 +9599,9 @@ private win_t *ed_set_current_win (ed_t *this, int idx) {
 }
 
 private void ed_set_screen_size (ed_t *this) {
-  My(Term).restore ($my(term));
+  My(Term).reset ($my(term));
   My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);
-  My(Term).raw ($my(term));
+  My(Term).set ($my(term));
   ifnot (NULL is $my(dim)) {
     free ($my(dim));
     $my(dim) = NULL;
@@ -9564,13 +9625,15 @@ private void ed_suspend (ed_t *this) {
   if ($my(state) & ED_SUSPENDED) return;
   $my(state) |= ED_SUSPENDED;
   My(Screen).clear ($my(term));
-  My(Term).restore ($my(term));
+  My(Term).reset ($my(term));
+  // My(Term).restore ($my(term));
 }
 
 private void ed_resume (ed_t *this) {
   ifnot ($my(state) & ED_SUSPENDED) return;
   $my(state) &= ~ED_SUSPENDED;
-  My(Term).raw ($my(term));
+  My(Term).set ($my(term));
+  // My(Term).raw ($my(term));
   My(Win).set.current_buf (this->current, this->current->cur_idx);
   My(Win).draw (this->current);
 }
@@ -9603,7 +9666,6 @@ private void ed_free (ed_t *this) {
     free ($my(dim));
     free ($my(saved_cwd));
 
-    My(Term).free ($my(term));
     My(String).free ($my(topline));
     My(String).free ($my(msgline));
     My(String).free ($my(last_insert));
@@ -9645,11 +9707,10 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(Msg) = &E->Msg;
   $my(Error) = &E->Error;
 
-  $my(term) = My(Term).new ();
+  $my(term) = E->prop->term;
   $my(term)->prop->Me = &E->Term;
-  My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);
   $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
-  My(Term).raw ($my(term));
+  My(Term).set ($my(term));
 
   $my(topline) = My(String).new_with ("");
   $my(msgline) = My(String).new_with ("");
@@ -9743,25 +9804,14 @@ private int __init__ (ed_T *this) {
 
   $my(term) = My(Term).new ();
   $my(term)->prop->Me = &this->Term;
-
-  if (My(Term).raw ($my(term)) is NOTOK) return NOTOK;
-
+  My(Term).set ($my(term));
+  My(Term).reset ($my(term));
   setvbuf (stdin, 0, _IONBF, 0);
-  //setbuf (stdin, NULL);
-  My(Cursor).get_pos ($my(term),
-      &$my(term)->prop->orig_curs_row_pos,
-      &$my(term)->prop->orig_curs_col_pos);
-  My(Term).get_size ($my(term), &$my(term)->prop->lines, &$my(term)->prop->columns);
-  My(Screen).save ($my(term));
-  My(Term).sane ($my(term));
   return OK;
 }
 
 private void __deinit__ (ed_T *this) {
-  My(Term).sane ($my(term));
-  My(Cursor).set_pos ($my(term), $my(term)->prop->orig_curs_row_pos,
-                      $my(term)->prop->orig_curs_col_pos);
-  My(Screen).restore ($my(term));
+  My(Term).reset ($my(term));
   __deallocate_prop__ (this);
 }
 
@@ -9804,9 +9854,9 @@ public void __deinit_string__ (string_T *this) {
 public term_T __init_term__ (void) {
   return ClassInit (term,
     .self = SelfInit (term,
-      .raw = term_raw,
-      .sane = term_sane,
-      .restore = term_restore,
+      .set_mode = term_set_mode,
+      .set = term_set,
+      .reset = term_reset,
       .new = term_new,
       .free  = term_free,
       .get_size = term_get_size,
@@ -9909,6 +9959,7 @@ private ed_T *editor_new (char *name) {
         ),
         .get = SubSelfInit (win, get,
           .current_buf = win_get_current_buf,
+          .current_buf_idx = win_get_current_buf_idx,
           .buf_by_idx = win_get_buf_by_idx,
           .buf_by_name = win_get_buf_by_name,
           .num_buf = win_get_num_buf
@@ -9992,7 +10043,7 @@ private ed_T *editor_new (char *name) {
 }
 
 public ed_T *__init_ved__ (void) {
-  ed_T *this = editor_new ("ved");
+  ed_T *this = editor_new ("veda");
 
   if (NOTOK is __init__ (this)) {
     this->error_state |= ED_INIT_ERROR;

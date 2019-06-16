@@ -337,8 +337,10 @@ NewSelf (term,
      (*restore) (term_t *),
      (*get_size) (term_t *, int *, int *);
 
-  int (*raw) (term_t *);
-  int (*sane) (term_t *);
+  int
+    (*set) (term_t *),
+    (*reset) (term_t *),
+    (*set_mode) (term_t *, char);
 );
 
 NewClass (term,
@@ -476,11 +478,13 @@ NewSubSelf (win, set,
 
 NewSubSelf (win, get,
   buf_t
-    *(*current_buf) (win_t*),
+    *(*current_buf) (win_t *),
     *(*buf_by_idx) (win_t *, int),
     *(*buf_by_name) (win_t *, const char *, int *);
 
-  int (*num_buf) (win_t *);
+  int
+    (*num_buf) (win_t *),
+    (*current_buf_idx) (win_t *);
 );
 
 NewSelf (win,

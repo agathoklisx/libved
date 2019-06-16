@@ -168,30 +168,51 @@ theerror:
 #ifdef HAS_SHELL_COMMANDS
 #include "modules/proc/proc.c"
 
+private int proc_output_to_stdout (buf_t *this, FILE *fp) {
+  (void) this;
+  char *line = NULL;
+  size_t len = 0;
+  while (-1 isnot getline (&line, &len, fp))
+    fprintf (stdout, "%s\r", line);
+  ifnot (NULL is line) free (line);
+  return 0;
+}
+
 private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int read_stdout, int read_stderr) {
+  int redir_stdout, int redir_stderr) {
   int retval = NOTOK;
   proc_t *this = proc_new ();
-  $my(read_stdout) = read_stdout;
-  $my(read_stderr) = read_stderr;
-  $my(dup_stdin) = 1;
-  $my(read) = My(Buf).read.from_fp;
+  $my(read_stderr) =  redir_stderr;
+  $my(read_stdout) = 1;
+  $my(dup_stdin) = 0;
   $my(buf) = buf;
+  if (redir_stdout)
+     $my(read) = My(Buf).read.from_fp;
+  else
+    $my(read) = proc_output_to_stdout;
+
   proc_parse (this, com);
-  Ed.suspend (ed);
+  term_t *term = Ed.get.term (ed);
+
+  ifnot (redir_stdout)
+    My(Term).reset (term);
+
   if (NOTOK is proc_open (this)) goto theend;
   retval = proc_read (this);
   proc_wait (this);
 
 theend:
-  if (0 is read_stdout and 0 is read_stderr) {
-    My(Msg).send (ed, COLOR_NORMAL, "Press any key to continue");
-    My(Term).raw (Ed.get.term (ed));
-    My(Input).get (Ed.get.term (ed));
+  ifnot (redir_stdout) {
+    My(Term).set_mode (term, 'r');
+    My(Input).get (term);
+    My(Term).set (term);
   }
 
-  Ed.resume (ed);
   proc_free (this);
+  win_t *w = Ed.get.current_win (ed);
+  int idx = My(Win).get.current_buf_idx (w);
+  My(Win).set.current_buf (w, idx);
+  My(Win).draw (w);
   return retval;
 }
 

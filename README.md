@@ -29,6 +29,12 @@
  *   been used during this initiation, need revision and functions needs to catch
  *   more conditions.
 
+ * - it doesn't try to catch conditions that don't make logical sense and expects
+ *   a common workflow, and there is not really a desire to flood the code with
+ *   conditional brances
+
+ * - the highlighted system is ridiculously simple and for now works only for C code
+
  * - it is only tested under a Linux environment, but also the code makes a lot of
  *   assumptions, as it awaits a POSIX environement.
 
@@ -234,6 +240,7 @@ Normal mode:
  | i|a|A|o|0         | insert mode                    |
  | u                 | undo                           |
  | CTRL-R            | redo                           |
+ | CTRL-L            | redraw current window          |
  | V                 | visual linewise mode           |
  | v                 | visual characterize mode       |
  | CTRL-V            | visual blockwise mode          |
@@ -253,6 +260,10 @@ Normal mode:
  |   h, ARROW_LEFT   | window to the left             |
  |   l, ARROW_RIGHT  | window to the right            |
  |   `               | previus focused window         |
+ | ,                 |                                |
+ |   n               | like :bn (next buffer)         |
+ |   m               | like :bp (previous buffer)     |
+ |   ,               | like :b` (prev focused buffer) |
  | :                 | command line mode              |
 ¹| CTRL-j            | detach editor [extension]      |
  | q                 | quit (not delete) and when buffer type is pager|
@@ -382,6 +393,7 @@ Search:
  * :r! cmd                (read into buffer cmd's standard output)
  * :!cmd                  (execute command)
  * :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
+ * :redraw                (redraw current window)
  * :searches              (change focus to the `search' window)
  * :messages              (change focus to the message buffer)
  * :q[!]                  (quit (if force, do not check for modified buffers))
