@@ -268,7 +268,7 @@ Normal mode:
 ¹| CTRL-j            | detach editor [extension]      |
  | q                 | quit (not delete) and when buffer type is pager|
 
-Insert Mode:
+Insert mode:
  |
  |   key[s]          |  Semantics                     | count
  |___________________|________________________________|_______
@@ -281,12 +281,13 @@ Insert Mode:
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
+ | CTRL-r            | insert register contents       |
  | motion normal mode commands with some differences explained bellow|
  | HOME              | goes to the begining of line   |
  | END               | goes to the end of line        |
  | escape            | aborts                         |
 
-Visual Mode:
+Visual mode:
  |   key[s]          |  Semantics                     | count
  |___________________|________________________________|_______
  | >, <              | indent [in|out]                | yes
@@ -300,13 +301,26 @@ Visual Mode:
  | e                 | edit as filename [charwise]    |
  | escape            | aborts                         |
 
+Command line mode:
+ |   key[s]          |  Semantics                     |
+ |___________________|________________________________|
+ | carriage return   | accepts                        |
+ | escape            | aborts                         |
+ | ARROW[UP|DOWN]    | search item on the history list|
+ | ARROW[LEFT|RIGHT] | left|right cursor              |
+ | CTRL-a|HOME       | cursor to the begining         |
+ | CTRL-e|END        | cursor to the end              |
+ | DELETE|BACKSPACE  | delete next|previous char      |
+ | CTRL-r            | insert register contents (charwise only)|
+ | TAB               | trigger completion[s]          |
+
 Search:
  |   key[s]          |  Semantics                     | count
  |___________________|________________________________|_______
  | CTRL-n            | next                           |
  | CTRL-p            | previous                       |
  | carriage return   | accepts                        |
- | escape            | aborts
+ | escape            | aborts                         |
 
 /* In this implementation while performing a search, the focus do not change
  * until user accepts the match. The results and the dialog, are shown at the

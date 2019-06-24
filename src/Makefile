@@ -32,9 +32,9 @@ THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
 
 BASE_FLAGS     := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
-DEBUG_FLAGS    := -Wextra -Werror -Wshadow -Wall
+DEBUG_FLAGS    := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
 # -fsanitize=undefined
-# -Wunused-macros -Wpedantic
+# -Wpedantic
 CHECK_PTR_BOUNDS_FLAGS := -mmpx -fcheck-pointer-bounds
 
 SHARED_CFLAGS  := -shared -fPIC
@@ -58,7 +58,7 @@ endif
 DEBUG := 0
 
 ifneq ($(DEBUG), 0)
-  FLAGS += -DENABLE_WRITING FLAGS += $(DEBUG_FLAGS)
+  FLAGS += -DENABLE_WRITING $(DEBUG_FLAGS)
 endif
 
 CHECK_PTR_BOUNDS := 0
@@ -67,8 +67,14 @@ ifneq ($(CHECK_PTR_BOUNDS), 0)
   FLAGS += $(CHECK_PTR_BOUNDS_FLAGS)
 endif
 
+ifeq (-$(CC), -gcc)
+  FLAGS += -Wimplicit-fallthrough=0
+endif
 #----------------------------------------------------------#
-LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
+LIBFLAGS := -I. -I$(SYSINCDIR) $(FLAGS)
+# clang complains about unused command line arguments
+#LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
+#LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
 
 all: shared static veda-all
 
@@ -148,7 +154,7 @@ CP_R = $(CP) -r
 INSTALL = install
 MAKE = make
 VALGRIND = valgrind
-VALGRIND_ARGS =	--leak-check=full --show-leak-kinds=all -v --track-origins=yes
+VALGRIND_ARGS = --leak-check=full --show-leak-kinds=all -v --track-origins=yes
 GDB = gdb
 GDB_ARGS = --quiet -ex "set logging file /tmp/gdb.txt" -ex "set logging on" -ex run --args
 #----------------------------------------------------------#

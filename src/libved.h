@@ -182,7 +182,8 @@ AllocErrorHandlerF AllocErrorHandler;
 #define $self(__f__) $myprop->___Me__->self.__f__
 #define self(__f__, ...) $self(__f__)(__this__, ##__VA_ARGS__)
 #define My(__C__) $my(__C__)->self
-#define $from(__v__) __v__->__prop__
+//#define $from(__v__) __v__->__prop__
+#define $from(__v__, __p__) __v__->__prop__->__p__
 #define $mycur(__v__) __this__->__current__->__v__
 #define $myparents(__p__) __this__->__prop__->__parent__->__prop__->__p__
 #define $myroots(__p__) __this__->__prop__->__root__->__prop__->__p__
@@ -333,9 +334,10 @@ NewSelf (term,
   term_t *(*new) (void);
 
   void
-     (*free) (term_t *),
-     (*restore) (term_t *),
-     (*get_size) (term_t *, int *, int *);
+    (*free) (term_t *),
+    (*restore) (term_t *),
+    (*set_name) (term_t *),
+    (*get_size) (term_t *, int *, int *);
 
   int
     (*set) (term_t *),

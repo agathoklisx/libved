@@ -340,7 +340,10 @@ NewProp (term,
   struct termios orig_mode;
   struct termios raw_mode;
 
-  char mode;
+  char
+     mode,
+    *name;
+
   int
     in_fd,
     out_fd;
