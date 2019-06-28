@@ -1,15 +1,20 @@
 ```C
-/* This code aims to be usefull as an independent text visual editor C library
- * (with an "ala vim" interface), that either can be "#include" it as a single
- * file unit, or by linking, without any other prerequisite other than libc and
- * with a tendency to minimize this dependency by providing an own implementation
- * of some standard C functions, so that can be used in primitive environments.
+/* Note: This is a component of a system, that supposedly has some conscience by
+ * trying to describe [your|it]self, and then set limits and develop capabilities.
+ */
+
+/* Theoretically this specific code, might be useful to some, as an independent
+ * text visual editor C library (with an "ala vim" interface), that either can be
+ * "#include" it as a single file unit into a project, or by linking as a shared or
+ * as a static library, without any other prerequisite other than libc; and with a
+ * tendency to minimize this dependency by providing an own implementation of some
+ * standard C functions, so it can be used even in primitive environments.
 
  * It was written (as a confession!) somehow at a state in time, a little bit
  * after the vt100 introduction and Billy Joy's first "vi", cheating a bit by
  * looking in the future and stole stable code and ideas, and knowing that a
  * character can be represented with more than one byte in a universal character
- * set and with an encodind "yet to be invented" in a restaurant.
+ * set and with an encoding "yet to be invented" in a restaurant.
 
  * The current state is at the bootstrap|prototype level. That means that the
  * editor can develop itself, and the basic interface is considered quite close
@@ -31,17 +36,18 @@
 
  * - it doesn't try to catch conditions that don't make logical sense and expects
  *   a common workflow, and there is not really a desire to flood the code with
- *   conditional brances
+ *   conditional branches
 
  * - the highlighted system is ridiculously simple and for now works only for C code
+ *   (this never is going to be nor ever intented as a general purpose editor)
 
  * - it is only tested under a Linux environment, but also the code makes a lot of
- *   assumptions, as it awaits a POSIX environement.
+ *   assumptions, as it awaits a POSIX environment.
 
  * It is published mainly for recording reasons and a personal one.
  * The original purpose was to record the development process so it could be
- * usefull as a (document) reference for an editor implementation, but the
- * git commits (during this initiation) ended as huge incrementals commits and
+ * useful as a (document) reference for an editor implementation, but the
+ * git commits (during this initiation) ended as huge incremental commits and
  * there were unusable to describe this "step by step" guide. So it was better to
  * reset git and start fresh.
  * Today, the git commit log messages are serving as a general reference document,
@@ -51,7 +57,7 @@
  * can be more than one (the commits were (and probably will (if there is a will))
  * rather big for the usual conventions.
 
- * The project was initiated at the end of the autumn of 2018 and at the begining
+ * The project was initiated at the end of the autumn of 2018 and at the beginning
  * was based at simted (below is the header of this single unit simted.c) and where
  * the author implements a simple ed (many thanks).
 
@@ -113,7 +119,7 @@
 
    # to redirect also valgrind's messages
 
-   # you can always use the created binary in sys/bin/
+   # you can always use the compiled executable located in sys/bin/
    # but the LD_LIBRARY_PATH should adjust to point to sys/lib
 
    # of course you can run directly the static executable, that can be compiled
@@ -136,9 +142,9 @@
 ```
 ```C
  /* All the compilation options:
-  * HAS_REGEXP=1|0   (en|dis)able regular expression support (default 0)
+  * DEBUG=1|0              (en|dis)able debug and also writing (default 0)
+  * HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
   * HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
-  * DEBUG=1|0 (en|dis)able debug and also writting (default 0)
   */
 
  /* C
@@ -146,7 +152,7 @@
   * - the fvisibility flags that turns out the defaults, a global scope object
   *   needs en explicit declaration
   * - the statement expressions that allow, local scope code with access to the
-  *   function scope, to return a value; also very usefull in macro definitions
+  *   function scope, to return a value; also very useful in macro definitions
 
   * It uses the following macros: */
 
@@ -180,22 +186,21 @@
 
 /* Interface and Semantics.
 
- * It is a vi[m] like interface with the adition of a topline that can be disabled,
+ * It is a vi[m] like interface with the addition of a topline that can be disabled,
  * and it is based on modes.
 
  * Every buffer belongs to a window.
  * A window can have unlimited buffers.
  * A window can also be splited in frames.
- * An Editor instance can have unlimited independed windows.
+ * An Editor instance can have unlimited in-depended windows.
 
- * There can be unlimited independed editor instances that can be (de|rea)ttached¹.
+ * There can be unlimited independent editor instances that can be (de|rea)ttached¹.
 
  * Modes.
 
  * These are mostly like vim and which of course lack much of the rich feature set
  * of vim. That would require quite the double code i believe (actually much more
  * than double).
-
 
 Normal mode:
  |
@@ -210,7 +215,7 @@ Normal mode:
  | k,j               | up|down line                   | yes
  | ARROW[UP|DOWN]    | likewise                       | yes
  | $                 | end of line                    |
- | 0                 | begining of line               |
+ | 0                 | beginning of line               |
  | ^                 | first non blank character      |
  | count [gG]        | goes to line                   |
  | gf                | edit filename under the cursor |
@@ -259,7 +264,7 @@ Normal mode:
  |   n               | new window                     |
  |   h, ARROW_LEFT   | window to the left             |
  |   l, ARROW_RIGHT  | window to the right            |
- |   `               | previus focused window         |
+ |   `               | previous focused window         |
  | ,                 |                                |
  |   n               | like :bn (next buffer)         |
  |   m               | like :bp (previous buffer)     |
@@ -283,7 +288,7 @@ Insert mode:
  | CTRL-k            | insert digraph                 |
  | CTRL-r            | insert register contents       |
  | motion normal mode commands with some differences explained bellow|
- | HOME              | goes to the begining of line   |
+ | HOME              | goes to the beginning of line   |
  | END               | goes to the end of line        |
  | escape            | aborts                         |
 
@@ -308,7 +313,7 @@ Command line mode:
  | escape            | aborts                         |
  | ARROW[UP|DOWN]    | search item on the history list|
  | ARROW[LEFT|RIGHT] | left|right cursor              |
- | CTRL-a|HOME       | cursor to the begining         |
+ | CTRL-a|HOME       | cursor to the beginning         |
  | CTRL-e|END        | cursor to the end              |
  | DELETE|BACKSPACE  | delete next|previous char      |
  | CTRL-r            | insert register contents (charwise only)|
@@ -354,7 +359,7 @@ Search:
  * Arg completion is triggered when the first char word token is an '-' or
  * when the current command, gets a bufname as an argument.
 
- * In any other case a filename completion is perfomed.
+ * In any other case a filename completion is performed.
 
  * Options are usually long (that means prefixed with two dashes), unless some
  * established/unambiguous like (for now):
@@ -406,10 +411,12 @@ Search:
  * :r[ead] filename       (read filename into current buffer)
  * :r! cmd                (read into buffer cmd's standard output)
  * :!cmd                  (execute command)
+ * :diff                  (shows a unified diff in a diff buffers, see Unified Diff)
+ * :diffbuf               (change focus to the `diff' window/buffer)
  * :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
  * :redraw                (redraw current window)
- * :searches              (change focus to the `search' window)
- * :messages              (change focus to the message buffer)
+ * :searches              (change focus to the `search' window/buffer)
+ * :messages              (change focus to the message window/buffer)
  * :q[!]                  (quit (if force, do not check for modified buffers))
  */
 
@@ -434,6 +441,30 @@ Search:
   * to the previous state (as it acts like a pager).
   */
 
+ /* Unified Diff
+  This feature requires (for now) the `diff' utility.
+
+  The :diff command open a dedicated "diff" buffer, with the results (if any) of
+  the differences (in a unified format), between the buffer in memory with the one
+  that is written on the disk. This buffer can be quickly closed with 'q' as in a
+  pager (likewise for the other special buffers, like the message buffer).
+  Note that it first clears the previous diff.
+
+  The :diffbuf command gives the focus to this same buffer.
+
+  Another usage of this feature is when quiting normally (without forcing).
+  In that case a dialog (below) presents some options:
+
+    "[bufname] has been modified since last change
+     continue writing? [yY|nN], [cC]ansel, unified [d]iff?"
+
+   on 'y': write the buffer and continue
+   on 'n': continue without writing
+   on 'c': cansel operation at this point (some buffers might be closed already)
+   on 'd': print to the stdout the unified diff and redo the question (note that
+           when printing to the stdout, the previous terminal state is restored;
+           any key can bring back the focus)
+
  /* Glob Support
    (for now)
     - this is limited to just one directory depth
@@ -451,12 +482,12 @@ Search:
   * Mark set:
     [abcdghjklqwertyuiopzxcvbnm1234567890]
   * Special Marks:
-    - unamed mark [`] jumps to the previous position
+    - unnamed mark [`] jumps to the previous position
 
   * Register set:
     [abcdghjklqwertyuiopzxcvbnm1234567890]
   * Special Registers:
-    - unamed register ["] (default)
+    - unnamed register ["] (default)
     - filename register [%]
     - last search register [/]
     - last command line register [:]
@@ -505,8 +536,8 @@ Search:
 
   * The code uses an object oriented style, though it is just for practical
   * reasons as permits mostly code organization, simplicity, abstraction,
-  * compacteness, relationship, and especially quite a lot of freedom to develop
-  * or overide functionality.
+  * compactness, relationship, and especially quite a lot of freedom to develop
+  * or overridde functionality.
     A generic comment:
     * But the main advantage of this approach is that there is no global state;
     * the functions acts on an instance of a type, or if not, simple their scope
@@ -536,9 +567,9 @@ Search:
     * stack.
     * But the main benefit, is that it brings clarity to the code and concentration
     * to the actual details. However that it could also be considered as a functional
-    * envrironment (with the no-side-effect meaning) or as an algorithm environment.
+    * environment (with the no-side-effect meaning) or as an algorithm environment.
 
-    * It could be a wise future path for C, if it will consentrate just to implement
+    * It could be a wise future path for C, if it will concentrate just to implement
     * algorithms or standard interfaces.
 
  * The main structure is the editor structure type, and contains other nested
@@ -564,14 +595,14 @@ Search:
 
     self(method, [arg,...])
 
- * This awaits an accesible "this" declared variable and it passes the specific
+ * This awaits an accessible "this" declared variable and it passes the specific
  * type as the first argument to the calling function.
  * In this context "this" is an abstracted variable and works with objects with
  * specific fields. Types like these, have a "prop" field that holds object's
  * variables and as well a "self" dedicated field for methods (function pointers
  * that their function signature contains "this" type as their first argument).
 
- * The properties of such types are accesible with the following way:
+ * The properties of such types are accessible with the following way:
 
    $my(prop)
 
@@ -589,8 +620,8 @@ Search:
  * any argument[s] should be given explicitly.
 
  * Generally speaking, those macros, are just syntactic sugar, no code optimization,
- * or the oposite, neither a single bit of penalty. It allows mainly expressionism
- * and focus to the intentions and not to __how__ to get right writting.
+ * or the opposite, neither a single bit of penalty. It allows mainly expressionism
+ * and focus to the intentions and not to __how__ to get right writing.
 
  * In that spirit, also available also are macros, that their sole role is to
  * abstract the details over type creation/declaration/allocation, that assists to
@@ -624,7 +655,7 @@ Search:
      https://github.com/cesanta/slre.git
  * Many thanks.
 
- * It is implemented outside of the library by overiding methods from the Re structure.
+ * It is implemented outside of the library by overriding methods from the Re structure.
  * To enable it use "HAS_REGEXP=1" during compilation.
  *
  * The substitution string in the ":substitute command", can use '&' to denote the
@@ -667,10 +698,10 @@ Search:
   * However the MIT like LICENSES are more close to the described above spirit,
   * though they don't emphasize on the code freedom as GPL does (many thanks for
   * that).
-  * The trueth is that my heart is with GNU, but my mind refuces to accept the existance
+  * The truth is that my heart is with GNU, but my mind refuses to accept the existence
   * of the word LICENSE.
   * I wish there was a road to an unlicense, together with a certain certainity, that
-  * we (humans) full of the gained consciense, can guard it and keep it safe, as it
+  * we (humans) full of the gained conscience, can guard it and keep it safe, as it
   * is also (besides ideology) the road to paradise.
   */
 
@@ -679,10 +710,10 @@ Search:
  * might do the wrong thing. It is written by a non programmer, that taughts himself
  * C at his fifty two, and it is focused on the code intentionality (if such a word).
  * C was choosen because it is a high level language, but it is tighted up with the
- * machine so that can be considered primitive, and there shouldn't be any interpeter
+ * machine so that can be considered primitive, and there shouldn't be any interpreter
  * in between, and finally because C is about algorithms and when implemented properly
- * the code hapilly lives for ever without a single change. Of course the properties
- * are machine properties and such endeavour it never ends and needs responsibility,
+ * the code happily lives for ever without a single change. Of course the properties
+ * are machine properties and such endeavor it never ends and needs responsibility,
  * extensive study and so time. I do not know however if (time) is generous.
  */
 
@@ -694,14 +725,15 @@ Search:
  * things or develop things. But for sure there are conditions or combinations of them
  * out of this workflow.
 
- * But Really. The real interest is to use this code as a reference and probable as
- * an underline machine to create another machine.
+ * But Really. The real interest is to use this code as the underline machine to
+ * create another machine. Of course can have some value as a reference, if there is
+ * something with a value to deserve that reference.
 
  * But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
  * the tabwidth stuff, which is something i do not have the slightest will to do,
  * because i hate tabs in code (nothing is perfect in this life).
  * I'd rather give my time (with low priority though) to split those two different
- * consepts.
+ * concepts.
 
   The first level or better the zero level, the actual editor code:
 
@@ -715,11 +747,11 @@ Search:
 
    - /undo/redo
 
-   - basically the ed interface, which at the begining coexisted happily with
+   - basically the ed interface, which at the beginning coexisted happily with
      the visual one (at some point too much code were written at once and which
      it should adjust to work in both interfaces, but the abstraction level wasn't
      enough abstracted for this, so i had to move on); but it is a much much simpler
-     editor to implement, since there is absolutelly no need to handle the output
+     editor to implement, since there is absolutely no need to handle the output
      or|and to set the pointer to the right line pointed to the right cell at the
      correct byte[s] (it is very natural such an interface to over complicate the
      code and such code to have bugs).
@@ -729,7 +761,7 @@ Search:
 
   And the second level the obvious one (the above mentioned bugged one).
 
-/* Acknowledgements, references and inspiration (besides the already mentioned):
+/* Acknowledgments, references and inspiration (besides the already mentioned):
 
  *  - vim editor at vim.org (the vim we love from Bram (we owe him a lot) and his army)
  *  - kilo editor (https://github.com/antirez/kilo.git) (the inspiration for many)
@@ -753,7 +785,7 @@ Search:
  * which implements at least the basic operation set that can be considered enough
  * to be productive, which runs really low in memory resources and with rather few
  * lines of code. Theoretically (assuming the code is good enough) it could be used
- * in situations (such primitive environments), since is indepentent and that is a
+ * in situations (such primitive environments), since is independent and that is a
  * very interesting point.
 
  * And this (probably) is the reason for the persistence to self sufficiency.
@@ -767,7 +799,7 @@ Search:
  * machine code as this is a property of C), with few (or usually without) conditional
  * branches.
 
- * However those functions and for a reason, are unware for anything out of their
+ * However those functions and for a reason, are unaware for anything out of their
  * own domain. They have no relationship between their (lets group), as they do not
  * even have a sense that belong to a group, such: "I am a string type function!
  * (and what is a string anyway?)".
@@ -779,7 +811,7 @@ Search:
 
  * It could be great if the programmer could extract the specific code and hook it to
  * his program, so it could optimize it for the specific environment. As an example:
- * At the begining this program implemented the strdup() function with the standard
+ * At the beginning this program implemented the strdup() function with the standard
  * signature, having as "const char *src" as the only argument. Since this function
  * it returns an allocated string, it should iterate over the "src" string to find its
  * length. At some point i realized that in the 9/10 of the cases, the size was already
@@ -803,7 +835,7 @@ Search:
     term_get_input (term_t *this)
  * (which is going to be published as a separate project, if time permits).
 
- * It will also has to deal with the terminal escape sequenses and returns reliably
+ * It will also has to deal with the terminal escape sequences and returns reliably
  * the code for all the keyboard keys for all the known terminals.
  * This is easy because is one time job and boring testing, or simply usage from
  * different users on different terminals.
@@ -823,7 +855,7 @@ Search:
  * And it would be even greater if you could easily request a collection, that use
  * each other properties, to build a task, like an editor. As standard algrorithm!
  * I could [fore]see used a lot. This particular is a prototype and not yet ready,
- * but this is the idea and is a general one and it seems that it could be usefull
+ * but this is the idea and is a general one and it seems that it could be useful
  * for all; they just have to connect to C and use these algorithms.
  */
 

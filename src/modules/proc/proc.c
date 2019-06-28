@@ -134,7 +134,7 @@ add_arg:
     sp++;
   }
 
-  $my(argv)[$my(argc)] = NULL;
+  $my(argv)[$my(argc)] = (char *) NULL;
   return $my(argv);
 
 theerror:

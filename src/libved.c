@@ -13,6 +13,8 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <termios.h>
 #include <time.h>
 #include <dirent.h>
@@ -662,6 +664,10 @@ private int file_exists (const char *fname) {
   return (0 is access (fname, F_OK));
 }
 
+private int file_is_executable (const char *fname) {
+  return (0 is access (fname, F_OK|X_OK));
+}
+
 private int is_directory (char *dname) {
   struct stat st;
   if (NOTOK is stat (dname, &st)) return 0;
@@ -736,7 +742,7 @@ private dirlist_t *dirlist (char *dir, int flags) {
 /* continue logic (though not sure where to store) */
     switch (dp->d_type) {
       case DT_DIR:
-        string_append_byte (vstr->data, PATH_SEP);
+        string_append_byte (vstr->data, DIR_SEP);
     }
 
     current_list_append (dlist->list, vstr);
@@ -744,6 +750,98 @@ private dirlist_t *dirlist (char *dir, int flags) {
 
   closedir (dh);
   return dlist;
+}
+
+private void tmpfname_free (tmpname_t *this) {
+  ifnot (this) return;
+  ifnot (NULL is this->fname) {
+    unlink (this->fname->bytes);
+    string_free (this->fname);
+    this->fname = NULL;
+  }
+  free (this);
+}
+
+private tmpname_t *tmpfname (char *dname, char *prefix) {
+  static unsigned int seed = 12252;
+  ifnot (is_directory (dname)) return NULL;
+
+  tmpname_t *this = NULL;
+
+  char bpid[6];
+  pid_t pid = getpid ();
+  itoa ((int) pid, bpid, 10);
+
+  int len = bytelen (dname) + bytelen (bpid) + bytelen (prefix) + 10;
+
+  char name[len];
+  snprintf (name, len, "%s/%s-%s.xxxxxx", dname, prefix, bpid);
+
+  srand ((unsigned int) time (NULL) + (unsigned int) pid + seed++);
+
+  dirlist_t *dlist = dirlist (dname, 0);
+  if (NULL is dlist) return NULL;
+
+  int
+    found = 0,
+    loops = 0,
+    max_loops = 1024,
+    inner_loops = 0,
+    max_inner_loops = 1024;
+  char c;
+
+  while (1) {
+again:
+    found = 0;
+    if (++loops is max_loops) goto theend;
+
+    for (int i = 0; i < 6; i++) {
+      inner_loops = 0;
+      while (1) {
+        if (++inner_loops is max_inner_loops) goto theend;
+
+        c = (char) (rand () % 123);
+        if ((c <= 'z' and c >= 'a') or (c >= '0' and c <= '9') or
+            (c >= 'A' and c <= 'Z') or c is '_') {
+          name[len - i - 2] = c;
+          break;
+        }
+      }
+    }
+
+    vstring_t *it = dlist->list->head;
+    while (it) {
+      if (str_eq (name, it->data->bytes)) goto again;
+      it = it->next;
+    }
+
+    found = 1;
+    break;
+  }
+
+  ifnot (found) goto theend;
+
+  this = Alloc (sizeof (tmpname_t));
+  this->fd = open (name, O_RDWR|O_CREAT|O_EXCL, S_IRUSR|S_IWUSR);
+
+  if (-1 is this->fd) goto theerror;
+  if (-1 is fchmod (this->fd, 0600)) {
+    close (this->fd);
+    goto theerror;
+  }
+
+  this->fname = string_new_with (name);
+  goto theend;
+
+theerror:
+  ifnot (NULL is this) {
+    tmpfname_free (this);
+    this = NULL;
+  }
+
+theend:
+  dlist->free (dlist);
+  return this;
 }
 
 private char *path_basename (char *name) {
@@ -776,25 +874,25 @@ private char *path_dirname (char *name) {
 
   /* trailing slashes */
   while (sep isnot name) {
-    ifnot (IS_PATH_SEP (*sep)) break;
+    ifnot (IS_DIR_SEP (*sep)) break;
     sep--;
   }
 
   /* first found */
   while (sep isnot name) {
-    if (IS_PATH_SEP (*sep)) break;
+    if (IS_DIR_SEP (*sep)) break;
     sep--;
   }
 
   /* trim again */
   while (sep isnot name) {
-    ifnot (IS_PATH_SEP (*sep)) break;
+    ifnot (IS_DIR_SEP (*sep)) break;
     sep--;
   }
 
   if (sep is name) {
     dname = Alloc (2);
-    dname[0] = (IS_PATH_SEP (*name)) ? PATH_SEP : '.'; dname[1] = '\0';
+    dname[0] = (IS_DIR_SEP (*name)) ? DIR_SEP : '.'; dname[1] = '\0';
     return dname;
   }
 
@@ -1761,21 +1859,17 @@ char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot", "forever",
     "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|", "$mycur|",
-    "$from|", "theend|", "OK|", "NOTOK|", "mutable|", "uchar|", "uint|", "utf8|",
-    "switch", "if", "while", "for", "break", "continue", "else", "do",
-    "default", "goto",
-    "case|", "return|", "free|",
-    "struct|", "union|", "typedef|", "static|", "enum|", "#include|",
+    "$from|", "theend|", "theerror|", "OK|", "NOTOK|", "mutable|", "uchar|",
+    "uint|", "utf8|",
+    "switch", "if", "while", "for", "break", "continue", "else", "do", "default", "goto",
+    "case|", "return|", "free|", "struct|", "union|", "typedef|", "static|", "enum|", "#include|",
     "volatile|", "register|", "sizeof|", "union|",
     "const|", "auto|",
-    "#define|", "#endif|", "#error|", "#ifdef|", "#ifndef|", "#undef|", "#if|",
+    "#define|", "#endif|", "#error|", "#ifdef|", "#ifndef|", "#undef|", "#if|", "#else",
     "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
     "void|", "bool|", "NULL|",
     NULL
 };
-
-#define FTYPE_DEFAULT 0
-#define FTYPE_C 1
 
 syn_t HL_DB[] = {
   [FTYPE_DEFAULT] = {
@@ -2203,7 +2297,10 @@ private ftype_t *buf_default_ftype (buf_t *this) {
   return buf_ftype_init_default (this, FTYPE_DEFAULT, buf_autoindent_default);
 }
 
-private ftype_t *buf_set_ftype (buf_t *this) {
+private ftype_t *buf_set_ftype (buf_t *this, int ftype) {
+  if (FTYPE_DEFAULT < ftype and ftype < FTYPE_END)
+    return HL_DB[ftype].init (this);
+
   if (NULL is $my(extname)) return buf_default_ftype (this);
 
   for (int i = 0; i < (int) ARRLEN(HL_DB); i++) {
@@ -2284,6 +2381,7 @@ private void buf_free_undo (buf_t *this) {
   free ($my(redo));
 }
 
+private string_t *find_executable_in_path (char *, char *);
 private env_t *env_new () {
   env_t *env = AllocType (env);
   env->pid = getpid ();
@@ -2295,16 +2393,25 @@ private env_t *env_new () {
     env->home_dir = string_new_with ("");
   else {
     env->home_dir = string_new_with (hdir);
-    if (hdir[env->home_dir->num_bytes - 1] is PATH_SEP)
+    if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
       string_set_nullbyte_at (env->home_dir, env->home_dir->num_bytes - 1);
   }
 
+  env->tmp_dir = string_new_with (TMPDIR);
+  char *path = getenv ("PATH");
+  env->diff_exec = find_executable_in_path ("diff", path);
+  env->xclip_exec = find_executable_in_path ("xclip", path);
+  env->path = (path is NULL) ? NULL : string_new_with (path);
   return env;
 }
 
 private void env_free (env_t **env) {
   if (NULL is env) return;
   string_free ((*env)->home_dir);
+  string_free ((*env)->tmp_dir);
+  ifnot (NULL is (*env)->diff_exec) string_free ((*env)->diff_exec);
+  ifnot (NULL is (*env)->xclip_exec) string_free ((*env)->xclip_exec);
+  ifnot (NULL is (*env)->path) string_free ((*env)->path);
   free (*env); *env = NULL;
 }
 
@@ -2494,10 +2601,12 @@ private vchar_t *buf_get_line_nth (line_t *line, int idx) {
   int i = 0;
   while (line->current) {
     if (i is idx) return line->current;
+
     i += line->current->len;
     line->current = line->current->next;
   }
 
+  if (i is idx) return line->tail;
   return NULL;
 }
 
@@ -2900,7 +3009,7 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   for (int i = 0; i < NUM_MARKS; i++)
     $my(marks)[i] = (mark_t) {.mark = MARKS[i], .video_first_row = NULL};
 
-  $my(ftype) = self(set.ftype);
+  $my(ftype) = self(set.ftype, FTYPE_DEFAULT);
 
   self(cur.set, 0);
 
@@ -3161,18 +3270,23 @@ private void ed_check_msg_status (buf_t *this) {
   }
 }
 
-private int ed_search_buf (buf_t **thisp) {
-  ved_win_change (thisp, 0, VED_SEARCH_WIN, 1);
-  return ved_buf_change_bufname (thisp, VED_SEARCH_BUF);
+private buf_t *ed_get_buf (ed_t *this, char *wname, char *bname) {
+  int idx;
+  win_t *w = self(get.win_by_name, wname, &idx);
+  ifnot (w) return NULL;
+  return My(Win).get.buf_by_name (w, bname, &idx);
 }
 
-private int ed_msg_buf (buf_t **thisp) {
-  ved_win_change (thisp, 0, VED_MSG_WIN, 1);
-  return ved_buf_change_bufname (thisp, VED_MSG_BUF);
+private int ed_change_buf (ed_t *this, buf_t **thisp, char *wname, char *bname) {
+  if (NOTHING_TODO is self(win.change, thisp, NO_COMMAND, wname, NO_OPTION))
+    return NOTHING_TODO;
+  return ved_buf_change_bufname (thisp, bname);
 }
 
 private void ed_append_message (ed_t *this, char *msg) {
-  My(Buf).append_with (this->head->head, msg);
+  buf_t *b = self(buf.get, VED_MSG_WIN, VED_MSG_BUF);
+  ifnot (b) return;
+  My(Buf).append_with (b, msg);
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
@@ -3818,14 +3932,16 @@ theend:
 
 private int ved_grep_on_normal (buf_t **thisp, utf8 com, int *range, int regidx) {
   (void) range; (void) regidx;
+  buf_t *this = *thisp;
+
   if (com isnot '\r' and com isnot 'q') return 0;
   if (com is 'q') {
-    if (NOTHING_TODO is ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0))
+    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0))
       return EXIT;
     return -1;
   }
 
-  buf_t *this = *thisp;
+  this = *thisp;
   ved_normal_bol (this);
   return 1 + ved_open_fname_under_cursor (thisp, 0, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
 }
@@ -3885,7 +4001,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 
   ifnot (NULL is dname) {
     free ($my(cwd));
-    if (*dname is '.' or *dname isnot PATH_SEP)
+    if (*dname is '.' or *dname isnot DIR_SEP)
       $my(cwd) = dir_get_current ();
     else
       $my(cwd) = path_dirname (dname);
@@ -3898,8 +4014,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   self(set.video_first_row, 0);
   self(cur.set, 0);
   ved_normal_down (this, 1, 0, 0);
-  ed_search_buf (thisp);
-  return DONE;
+  return ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
 }
 
 #define state_cp(v__, a__)                                 \
@@ -4238,19 +4353,23 @@ private int mark_goto (buf_t *this) {
 }
 
 private FILE *ed_file_pointer_from_X (ed_t *this, int target) {
-  (void) this;
+  if (NULL is $my(env)->xclip_exec) return NULL;
   if (NULL is getenv ("DISPLAY")) return NULL;
-  char command[64]; snprintf (command, 64, "xclip -o -selection %s",
-     (target is X_PRIMARY ? "primary" : "clipboard"));
+  size_t len = $my(env)->xclip_exec->num_bytes + 32;
+  char command[len];
+  snprintf (command, len, "%s -o -selection %s", $my(env)->xclip_exec->bytes,
+      (target is X_PRIMARY) ? "primary" : "clipboard");
 
   return popen (command, "r");
 }
 
 private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target) {
-  (void) this;
+  if (NULL is $my(env)->xclip_exec) return;
   if (NULL is getenv ("DISPLAY")) return;
-  char command[64]; snprintf (command, 64, "xclip -i -selection %s 2>/dev/null",
-     (target is X_PRIMARY ? "primary" : "clipboard"));
+  size_t ex_len = $my(env)->xclip_exec->num_bytes + 32;
+  char command[ex_len + 32];
+  snprintf (command, ex_len + 32, "%s -i -selection %s 2>/dev/null",
+    $my(env)->xclip_exec->bytes, (target is X_PRIMARY) ? "primary" : "clipboard");
 
   FILE *fp = popen (command, "w");
   if (NULL is fp) return;
@@ -4340,8 +4459,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
     case REG_PLUS:
     case REG_STAR:
       {
-        FILE *fp = ed_file_pointer_from_X (this, (REG_STAR is regidx
-            ? X_PRIMARY : X_CLIPBOARD));
+        FILE *fp = ed_file_pointer_from_X (this, (REG_STAR is regidx) ? X_PRIMARY : X_CLIPBOARD);
         if (NULL is fp) return ERROR;
         ed_register_new (this, regidx);
         size_t len = 0;
@@ -4461,29 +4579,68 @@ private void buf_draw (buf_t *this) {
   self(flush);
 }
 
-private int ved_quit (buf_t *this, int force) {
+private int ved_diff (buf_t **thisp, int to_stdout) {
+#if (HAS_SHELL_COMMANDS == 0)
+  return NOTOK;
+#endif
+  buf_t *this = *thisp;
+  if (NULL is $myroots(env)->diff_exec) {
+    My(Msg).error ($my(root), "diff executable can not be found in $PATH");
+    return NOTOK;
+  }
+
+  ifnot (file_exists ($my(fname))) return NOTOK;
+  tmpname_t *tmpn = tmpfname ($myroots(env)->tmp_dir->bytes, $my(basename));
+  if (NULL is tmpn or -1 is tmpn->fd) return NOTOK;
+  ved_write_to_fname (this, tmpn->fname->bytes, NO_APPEND, 0, this->num_items - 1, FORCE, VERBOSE_OFF);
+  size_t len = $myroots(env)->diff_exec->num_bytes + tmpn->fname->num_bytes +
+       bytelen ($my(fname)) + 6;
+  char com[len];
+  snprintf (com, len, "%s -u %s %s", $myroots(env)->diff_exec->bytes, tmpn->fname->bytes,
+    $my(fname));
+  com[len] = '\0';
+
+  int retval = NOTHING_TODO;
+  if (to_stdout)
+    retval = My(Ed).sh.popen ($my(root), this, com, 0, 0, NULL);
+  else {
+    this = My(Ed).buf.get ($my(root), VED_DIFF_WIN, VED_DIFF_BUF);
+    if (this) {
+      self(clear);
+      retval = My(Ed).sh.popen ($my(root), this, com, 1, 0, NULL);
+      if (retval is DONE)
+        retval = My(Ed).buf.change ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
+    }
+  }
+
+  tmpfname_free (tmpn);
+
+  return retval;
+}
+
+private int ved_quit (ed_t *ed, int force) {
   int retval = EXIT;
   if (force) return retval;
 
-  win_t *w = $my(root)->head;
+  win_t *w = ed->head;
 
  while (w) {
     if (w->prop->type is VED_WIN_SPECIAL_TYPE) goto winnext;
 
-    buf_t *it = w->head;
-    while (it isnot NULL) {
-      if (it->prop->flags & BUF_IS_SPECIAL) goto bufnext;
-      ifnot (it->prop->flags & BUF_IS_MODIFIED) goto bufnext;
-
-      utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C'};
+    buf_t *this = w->head;
+    while (this isnot NULL) {
+      if ($my(flags) & BUF_IS_SPECIAL) goto bufnext;
+      ifnot ($my(flags) & BUF_IS_MODIFIED) goto bufnext;
+      utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C','d'};
+thequest:;
       utf8 c = quest (this, str_fmt (
          "%s has been modified since last change\n"
-         "continue writing? [yY|nN] or [cC]ansel?",
-         it->prop->fname), chars, ARRLEN (chars));
+         "continue writing? [yY|nN], [cC]ansel, unified [d]iff?",
+         $my(fname)), chars, ARRLEN (chars));
       switch (c) {
         case 'y':
         case 'Y':
-          ved_write_buffer (it, 1);
+          self(write, FORCE);
         case 'n':
         case 'N':
           break;
@@ -4491,10 +4648,13 @@ private int ved_quit (buf_t *this, int force) {
         case 'C':
           retval = NOTHING_TODO;
           goto theend;
+        case 'd':
+          ved_diff (&this, 1);
+          goto thequest;
       }
 
 bufnext:
-      it = it->next;
+      this = this->next;
     }
 
 winnext:
@@ -5408,14 +5568,14 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 
     case 'l':
     case ARROW_RIGHT_KEY:
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
 
     case 'h':
     case ARROW_LEFT_KEY:
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV, NULL, 0);
 
     case '`':
-      return ved_win_change (thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
 
     default:
       break;
@@ -6754,12 +6914,12 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
     do {
       int idx;
       buf_t *bn = NULL;
-      if (*fname isnot PATH_SEP) {
+      if (*fname isnot DIR_SEP) {
         char *cwd = buf_get_current_dir (this, SHARED_ALLOCATION);
         if (NULL is cwd) return NOTHING_TODO;
         int len = bytelen (cwd) + bytelen (fname) + 1;
         char nfn[len + 1];
-        snprintf (nfn, len + 1, "%s%c%s", cwd, PATH_SEP, fname);
+        snprintf (nfn, len + 1, "%s%c%s", cwd, DIR_SEP, fname);
         bn = My(Win).get.buf_by_name ($my(parent), nfn,  &idx);
       } else
         bn = My(Win).get.buf_by_name ($my(parent), fname, &idx);
@@ -6801,7 +6961,8 @@ private int ved_enew_fname (buf_t **thisp, char *fname) {
   return DONE;
 }
 
-private int ved_win_change (buf_t **thisp, int com, char *name, int accept_rdonly) {
+private int ed_win_change (ed_t *root, buf_t **thisp, int com, char *name, int accept_rdonly) {
+  (void) root;
   buf_t *this = *thisp;
 
   if ($my(root)->num_items is 1) return NOTHING_TODO;
@@ -6858,7 +7019,8 @@ private int ved_win_delete (ed_t *root, buf_t **thisp) {
   return DONE;
 }
 
-private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, int lidx, int force) {
+private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx,
+                                            int lidx, int force, int verbose) {
   if (NULL is fname) return NOTHING_TODO;
   int retval = NOTHING_TODO;
 
@@ -6896,7 +7058,8 @@ private int ved_write_to_fname (buf_t *this, char *fname, int append, int fidx, 
   }
 
   fclose (fp);
-  MSG("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
+  if (verbose)
+    MSG("%s: %zd bytes written%s", fnstr->bytes, bts, (append ? " [appended]" : " "));
 
   retval = DONE;
 
@@ -6905,7 +7068,7 @@ theend:
   return retval;
 }
 
-private int ved_write_buffer (buf_t *this, int force) {
+private int buf_write (buf_t *this, int force) {
   if (str_eq ($my(fname), UNAMED)) {
     VED_MSG_ERROR(MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER);
     return NOTHING_TODO;
@@ -7013,15 +7176,42 @@ private int ved_buf_read_from_file (buf_t *this, char *fname) {
   return retval;
 }
 
-private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int read_stdout, int read_stderr) {
+private string_t *find_executable_in_path (char *ex, char *path) {
+  if (NULL is ex or NULL is path) return NULL;
+  size_t
+    ex_len = bytelen (ex),
+    p_len = bytelen (path);
+
+  ifnot (ex_len and p_len) return NULL;
+  char sep[2]; sep[0] = PATH_SEP; sep[1] = '\0';
+
+  char *alpath = str_dup (path, p_len);
+  char *sp = strtok (alpath, sep);
+
+  string_t *ex_path = NULL;
+
+  while (sp) {
+    size_t toklen = bytelen (sp) + 1;
+    char tok[ex_len + toklen + 1];
+    snprintf (tok, ex_len + toklen + 1, "%s/%s", sp, ex);
+    if (file_is_executable (tok)) {ex_path = string_new_with (tok); break;}
+    sp = strtok (NULL, sep);
+  }
+
+  free (alpath);
+  return ex_path;
+}
+
+private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com, int read_stdout,
+                      int read_stderr, int (*read_cb) (buf_t *, FILE *)) {
   (void) ed; (void) buf; (void) com; (void) read_stdout; (void) read_stderr;
+  (void) read_cb;
   return NOTHING_TODO;
 }
 
 private int ved_buf_read_from_shell (buf_t *this, char *com, int rlcom) {
   ifnot ($my(ftype)->read_from_shell) return NOTHING_TODO;
-  return My(Ed).sh.popen ($my(root), this, com, rlcom is VED_COM_READ_SHELL, 0);
+  return My(Ed).sh.popen ($my(root), this, com, rlcom is VED_COM_READ_SHELL, 0, NULL);
 }
 
 private int ved_buf_change_bufname (buf_t **thisp, char *bufname) {
@@ -7419,7 +7609,7 @@ private int ved_complete_filename (menu_t *menu) {
       end = NULL;
     } else {
       end = menu->pat + 1;
-      if (*end is PATH_SEP) { if (*(end + 1)) end++; else end = NULL; }
+      if (*end is DIR_SEP) { if (*(end + 1)) end++; else end = NULL; }
     }
 
     memcpy (dir, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
@@ -7437,7 +7627,7 @@ private int ved_complete_filename (menu_t *menu) {
   }
 
   if (sp is menu->pat) {
-   if (*sp is PATH_SEP) {
+   if (*sp is DIR_SEP) {
       dir[0] = *sp; dir[1] = '\0';
       joinpath = 1;
       end = NULL;
@@ -7451,7 +7641,7 @@ private int ved_complete_filename (menu_t *menu) {
     goto getlist;
   }
 
-  if (*sp is PATH_SEP) {
+  if (*sp is DIR_SEP) {
     memcpy (dir, menu->pat, menu->patlen - 1);
     dir[menu->patlen - 1] = '\0';
     end = NULL;
@@ -7459,7 +7649,7 @@ private int ved_complete_filename (menu_t *menu) {
     goto getlist;
   }
 
-  while (sp > menu->pat and *(sp - 1) isnot PATH_SEP) sp--;
+  while (sp > menu->pat and *(sp - 1) isnot DIR_SEP) sp--;
   if (sp is menu->pat) {
     end = sp;
     char *cwd = dir_get_current ();
@@ -7510,12 +7700,12 @@ finalize:
   menu->state &= ~MENU_FINALIZE;
 
   if ($my(shared_int)) {
-    if ($my(shared_str)->bytes[$my(shared_str)->num_bytes - 1] is PATH_SEP)
+    if ($my(shared_str)->bytes[$my(shared_str)->num_bytes - 1] is DIR_SEP)
       My(String).clear_at ($my(shared_str), $my(shared_str)->num_bytes - 1);
 
     int len = menu->patlen + $my(shared_str)->num_bytes + 1;
     char tmp[len + 1];
-    snprintf (tmp, len + 1, "%s%c%s", $my(shared_str)->bytes, PATH_SEP, menu->pat);
+    snprintf (tmp, len + 1, "%s%c%s", $my(shared_str)->bytes, DIR_SEP, menu->pat);
     My(String).replace_with ($my(shared_str), tmp);
   } else
     My(String).replace_with ($my(shared_str), menu->pat);
@@ -7956,6 +8146,8 @@ private void ved_init_commands (void) {
     [VED_COM_BUF_DELETE_ALIAS] = "bd",
     [VED_COM_BUF_CHANGE] = "buffer",
     [VED_COM_BUF_CHANGE_ALIAS] = "b",
+    [VED_COM_DIFF_BUF] = "diffbuf",
+    [VED_COM_DIFF] = "diff",
     [VED_COM_EDIT_FORCE] = "edit!",
     [VED_COM_EDIT_FORCE_ALIAS] = "e!",
     [VED_COM_EDIT] = "edit",
@@ -8463,10 +8655,10 @@ argtype_succeed:
         char *sp = glob;
         ifnot (sp is arg->option->bytes) {
           pre = string_new_with ("");
-          while (--sp >= arg->option->bytes and *sp isnot PATH_SEP)
+          while (--sp >= arg->option->bytes and *sp isnot DIR_SEP)
             string_prepend_byte (pre, *sp);
 
-          ifnot (*sp is PATH_SEP) sp++;
+          ifnot (*sp is DIR_SEP) sp++;
         }
 
         if (sp is arg->option->bytes)
@@ -8488,7 +8680,7 @@ getlist:
         while (fit) {
           char *fname = fit->data->bytes;
            /* matter to change */
-          if (fname[fit->data->num_bytes - 1] is PATH_SEP) goto next_fname;
+          if (fname[fit->data->num_bytes - 1] is DIR_SEP) goto next_fname;
 
           if (pre isnot NULL)
             if (str_cmp_n (fname, pre->bytes, pre->num_bytes)) goto next_fname;
@@ -8699,7 +8891,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         if (NULL is fname) {
           if (is_special_win) goto theend;
           if (NULL isnot range or NULL isnot append) goto theend;
-          retval = ved_write_buffer (this, VED_COM_WRITE_FORCE is rl->com);
+          retval = self(write, VED_COM_WRITE_FORCE is rl->com);
         } else {
           if (NULL is range) {
             rl->range[0] = 0;
@@ -8708,7 +8900,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
             if (NOTOK is ved_rline_parse_range (this, rl, range))
               goto theend;
           retval = ved_write_to_fname (this, fname->val->bytes, NULL isnot append,
-            rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com);
+            rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com, VERBOSE_ON);
         }
       }
 #else
@@ -8739,13 +8931,13 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_QUIT_FORCE:
     case VED_COM_QUIT:
     case VED_COM_QUIT_ALIAS:
-      retval = ved_quit (this, VED_COM_QUIT_FORCE is rl->com);
+      retval = ved_quit ($my(root), VED_COM_QUIT_FORCE is rl->com);
       goto theend;
 
     case VED_COM_WRITE_QUIT:
     case VED_COM_WRITE_QUIT_FORCE:
-      ved_write_buffer (this, 0);
-      retval = ved_quit (this, VED_COM_WRITE_QUIT_FORCE is rl->com);
+      self(write, NO_FORCE);
+      retval = ved_quit ($my(root), VED_COM_WRITE_QUIT_FORCE is rl->com);
       goto theend;
 
     case VED_COM_ENEW:
@@ -8764,11 +8956,19 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        goto theend;
 
     case VED_COM_MESSAGES:
-      retval = ed_msg_buf (thisp);
+      retval = ed_change_buf ($my(root), thisp, VED_MSG_WIN, VED_MSG_BUF);
       goto theend;
 
     case VED_COM_SEARCHES:
-      retval = ed_search_buf (thisp);
+      retval = ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
+      goto theend;
+
+    case VED_COM_DIFF_BUF:
+      retval = ed_change_buf ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
+      goto theend;
+
+    case VED_COM_DIFF:
+      retval = ved_diff (thisp, 0);
       goto theend;
 
     case VED_COM_GREP:
@@ -8872,19 +9072,19 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV:
-      retval = ved_win_change (thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_WIN_CHANGE_NEXT_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_WIN_CHANGE_NEXT:
-      retval = ved_win_change (thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_FOCUSED_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-      retval = ved_win_change (thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
       goto theend;
 
     case VED_COM_BUF_DELETE_FORCE_ALIAS:
@@ -9553,7 +9753,7 @@ exec_block:
         if (cmd_retv is BUF_QUIT) {
           retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
           if (retval is NOTHING_TODO) {
-            retval = ved_win_change (&this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
             if (retval is NOTHING_TODO)
               cmd_retv = EXIT;
             else
@@ -9826,19 +10026,25 @@ private ed_t *ed_new (ed_T *E, int num_wins) {
 
   int num_frames = 1;
 
-  win_t *w = self(win.new_special, VED_MSG_WIN, 1);
-  My(Win).append_buf (w, My(Win).buf_new (w, VED_MSG_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
-  self(append.win, w);
+  win_t *mw = self(win.new_special, VED_MSG_WIN, 1);
+  My(Win).append_buf (mw, My(Win).buf_new (mw, VED_MSG_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
+  self(append.win, mw);
 
-  w = self(win.new_special, VED_SEARCH_WIN, 2);
-  buf_t *sbuf = My(Win).buf_new (w, VED_SEARCH_BUF, 1, BUF_IS_RDONLY|BUF_IS_SPECIAL);
+  win_t *sw = self(win.new_special, VED_SEARCH_WIN, 2);
+  buf_t *sbuf = My(Win).buf_new (sw, VED_SEARCH_BUF, 1, BUF_IS_RDONLY|BUF_IS_SPECIAL);
   sbuf->on_normal_beg = ved_grep_on_normal;
-  My(Win).append_buf (w, sbuf);
-  w->prop->cur_frame = 1;
-  current_list_set (w, 0);
-  My(Win).set.current_buf (w, 0);
-  self(append.win, w);
+  My(Win).append_buf (sw, sbuf);
+  sw->prop->cur_frame = 1;
+  current_list_set (sw, 0);
+  My(Win).set.current_buf (sw, 0);
+  self(append.win, sw);
 
+  win_t *dw = self(win.new_special, VED_DIFF_WIN, 1);
+  buf_t *dbuf = My(Win).buf_new (dw, VED_DIFF_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
+  My(Win).append_buf (dw, dbuf);
+  self(append.win, dw);
+
+  win_t *w;
   loop (num_wins) {
     w = self(win.new, NULL, num_frames);
     self(append.win, w);
@@ -9985,6 +10191,7 @@ private ed_T *editor_new (char *name) {
     .self = SelfInit (ed,
       .new = ed_new,
       .free = ed_free,
+      .quit = ved_quit,
       .free_reg = ed_free_reg,
       .loop = ved_loop,
       .main = ved_main,
@@ -10020,9 +10227,14 @@ private ed_T *editor_new (char *name) {
       .exec = SubSelfInit (ed, exec,
         .cmd = ved_buf_exec_cmd_handler
       ),
+      .buf = SubSelfInit (ed, buf,
+        .change = ed_change_buf,
+        .get = ed_get_buf
+      ),
       .win = SubSelfInit (ed, win,
         .new = ed_win_new,
-        .new_special = ed_win_new_special
+        .new_special = ed_win_new_special,
+        .change = ed_win_change
       ),
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
@@ -10087,7 +10299,8 @@ private ed_T *editor_new (char *name) {
         .flush = buf_flush,
         .draw_cur_row = buf_draw_cur_row,
         .clear = ved_buf_clear,
-        .append_with = buf_append_with
+        .append_with = buf_append_with,
+        .write = buf_write
       ),
     ),
     .Msg = ClassInit (msg,

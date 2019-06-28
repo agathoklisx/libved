@@ -8,6 +8,7 @@
 #define UNDO_NUM_ENTRIES 20
 #define DEFAULT_SHIFTWIDTH 2
 #define DEFAULT_PROMPT_CHAR ':'
+#define TMPDIR "/tmp"
 
 /* this is not configurable as the code will not count the change in the calculations */
 #define TABLENGTH 1
@@ -23,6 +24,12 @@
 #define ED_INIT_ERROR   (1 << 0)
 
 #define ED_SUSPENDED    (1 << 0)
+
+enum {
+  FTYPE_DEFAULT,
+  FTYPE_C,
+  FTYPE_END
+ };
 
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
@@ -404,6 +411,26 @@ NewClass (re,
   Self (re) self;
 );
 
+NewSelf (msg,
+  void
+    (*send) (ed_t *, int, char *),
+    (*send_fmt) (ed_t *, int, char *, ...),
+    (*error) (ed_t *, char *, ...);
+  char *(*fmt) (ed_t *, int, ...);
+);
+
+NewClass (msg,
+  Self (msg) self;
+);
+
+NewSelf (error,
+  char *(*string) (ed_t *, int);
+);
+
+NewClass (error,
+  Self (error) self;
+);
+
 NewSubSelf (buf, get,
   char *(*fname) (buf_t *);
 );
@@ -412,7 +439,7 @@ NewSubSelf (buf, set,
   int  (*fname) (buf_t *, char *);
   void (*video_first_row) (buf_t *, int);
   void (*mode) (buf_t *, char *);
-  ftype_t *(*ftype) (buf_t *);
+  ftype_t *(*ftype) (buf_t *, int);
 );
 
 NewSubSelf (buf, to,
@@ -461,6 +488,8 @@ NewSelf (buf,
     (*flush) (buf_t *),
     (*draw_cur_row) (buf_t *),
     (*clear) (buf_t *);
+
+  int (*write) (buf_t *, int);
 
   row_t *(*append_with) (buf_t *, char *);
 );
@@ -550,33 +579,19 @@ NewSubSelf (ed, exec,
   int (*cmd) (buf_t **, utf8, int *, int);
 );
 
+NewSubSelf (ed, buf,
+  int (*change) (ed_t  *, buf_t **, char *, char *);
+  buf_t *(*get) (ed_t  *, char *, char *);
+);
+
 NewSubSelf (ed, win,
   win_t *(*new) (ed_t *, char *, int);
   win_t *(*new_special) (ed_t *, char *, int);
+  int (*change) (ed_t  *, buf_t **, int, char *, int);
 );
 
 NewSubSelf (ed, sh,
-  int (*popen) (ed_t *, buf_t *, char *, int, int);
-);
-
-NewSelf (msg,
-  void
-    (*send) (ed_t *, int, char *),
-    (*send_fmt) (ed_t *, int, char *, ...),
-    (*error) (ed_t *, char *, ...);
-  char *(*fmt) (ed_t *, int, ...);
-);
-
-NewClass (msg,
-  Self (msg) self;
-);
-
-NewSelf (error,
-  char *(*string) (ed_t *, int);
-);
-
-NewClass (error,
-  Self (error) self;
+  int (*popen) (ed_t *, buf_t *, char *, int, int, int (*) (buf_t *, FILE *));
 );
 
 NewSelf (ed,
@@ -593,12 +608,14 @@ NewSelf (ed,
   SubSelf (ed, append) append;
   SubSelf (ed, exec) exec;
   SubSelf (ed, readjust) readjust;
+  SubSelf (ed, buf) buf;
   SubSelf (ed, win) win;
   SubSelf (ed, sh) sh;
 
   int
-    (*loop)  (ed_t *, buf_t *),
-    (*main)  (ed_t *, buf_t *);
+    (*quit) (ed_t *, int),
+    (*loop) (ed_t *, buf_t *),
+    (*main) (ed_t *, buf_t *);
 );
 
 NewClass (ed,

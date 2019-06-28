@@ -179,17 +179,20 @@ private int proc_output_to_stdout (buf_t *this, FILE *fp) {
 }
 
 private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int redir_stdout, int redir_stderr) {
+  int redir_stdout, int redir_stderr, int (*read_cb) (buf_t *, FILE *fp)) {
   int retval = NOTOK;
   proc_t *this = proc_new ();
   $my(read_stderr) =  redir_stderr;
   $my(read_stdout) = 1;
   $my(dup_stdin) = 0;
   $my(buf) = buf;
-  if (redir_stdout)
-     $my(read) = My(Buf).read.from_fp;
+  ifnot (NULL is read_cb)
+    $my(read) = read_cb;
   else
-    $my(read) = proc_output_to_stdout;
+    if (redir_stdout)
+      $my(read) = My(Buf).read.from_fp;
+    else
+      $my(read) = proc_output_to_stdout;
 
   proc_parse (this, com);
   term_t *term = Ed.get.term (ed);

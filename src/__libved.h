@@ -12,6 +12,8 @@
 #define VED_MSG_BUF     "[messages]"
 #define VED_SEARCH_WIN  "search"
 #define VED_SEARCH_BUF  "[search]"
+#define VED_DIFF_WIN    "diff"
+#define VED_DIFF_BUF    "[diff]"
 #define UNAMED          "[No Name]"
 #define NORMAL_MODE     "normal"
 #define INSERT_MODE     "insert"
@@ -83,7 +85,6 @@
 /* buf is already open 
   instances {...} */
 
-
 #define VUNDO_RESET (1 << 0)
 
 #define X_PRIMARY     0
@@ -91,7 +92,20 @@
 
 #define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
+
 #define AT_CURRENT_FRAME -1
+
+#define VERBOSE_OFF 0
+#define VERBOSE_ON 1
+
+#define NO_COMMAND 0
+#define NO_OPTION 0
+
+#define NO_APPEND 0
+#define APPEND 1
+
+#define NO_FORCE 0
+#define FORCE 1
 
 #define DONOT_OPEN_FILE_IFNOT_EXISTS 0
 #define OPEN_FILE_IFNOT_EXISTS 1
@@ -126,6 +140,8 @@ enum {
   VED_COM_BUF_DELETE_ALIAS,
   VED_COM_BUF_CHANGE,
   VED_COM_BUF_CHANGE_ALIAS,
+  VED_COM_DIFF_BUF,
+  VED_COM_DIFF,
   VED_COM_EDIT_FORCE,
   VED_COM_EDIT_FORCE_ALIAS,
   VED_COM_EDIT,
@@ -235,9 +251,10 @@ enum {
 #endif
 
 #define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
-#define PATH_SEP        '/'
-#define IS_PATH_SEP(c)   (c == PATH_SEP)
-#define IS_PATH_ABS(p)  IS_PATH_SEP (p[0])
+#define PATH_SEP       ':'
+#define DIR_SEP        '/'
+#define IS_DIR_SEP(c)  (c == DIR_SEP)
+#define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
 #define IS_CNTRL(c)     (c < 0x20 || c == 0x7f)
 #define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
@@ -421,6 +438,11 @@ NewType (dirlist,
   vstr_t *list;
   char dir[PATH_MAX];
   void (*free) (dirlist_t *);
+);
+
+NewType (tmpname,
+  int fd;
+  string_t *fname;
 );
 
 NewType (arg,
@@ -833,7 +855,13 @@ NewType (env,
   uid_t uid;
   gid_t gid;
 
-  string_t *home_dir;
+  string_t
+     *home_dir,
+     *tmp_dir,
+     *diff_exec,
+     *xclip_exec,
+     *path,
+     *display;
 );
 
 NewProp (ed,
@@ -874,16 +902,16 @@ NewProp (ed,
 #undef MY_CLASSES
 #undef MY_PROPERTIES
 
+private int ved_quit (ed_t *, int);
 private int ved_normal_goto_linenr (buf_t *, int);
 private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
 private int ved_insert (buf_t *, utf8);
 private int ved_write_buffer (buf_t *, int);
-private int ved_quit (buf_t *, int);
 private int ved_split (buf_t **, char *);
-private int ved_win_change (buf_t **, int, char *, int);
 private int ved_enew_fname (buf_t **, char *);
 private int ved_edit_fname (buf_t **, char *, int, int, int, int);
+private int ved_write_to_fname (buf_t *, char *, int, int, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
 private int ved_buf_change (buf_t **, int);
@@ -898,6 +926,7 @@ private utf8 quest (buf_t *, char *, utf8 *, int);
 private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);
 private void ed_resume (ed_t *);
+private int ed_win_change (ed_t *, buf_t **, int, char *, int);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {
