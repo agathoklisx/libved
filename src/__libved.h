@@ -183,8 +183,12 @@ enum {
 #define NUM_MARKS      37
 #define MARK_UNAMED    0
 
-#define REGISTERS      "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890_\n"
-#define NUM_REGISTERS  45
+/* this produce wrong results when compiled with tcc
+  char *r = strchr (REGISTERS, register); r - REGISTERS;
+ */
+
+#define REGISTERS      "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890^_\n"
+#define NUM_REGISTERS  46
 
 enum {
   REG_UNAMED = 0,
@@ -194,7 +198,8 @@ enum {
   REG_STAR,
   REG_PLUS,
   REG_EXPR,
-  REG_BLACKHOLE = NUM_REGISTERS - 2,
+  REG_CURWORD = NUM_REGISTERS - 3,
+  REG_BLACKHOLE,
   REG_RDONLY
 };
 
@@ -248,6 +253,10 @@ enum {
 
 #ifndef MAXLINE
 #define MAXLINE 4096
+#endif
+
+#ifndef MAXWORD
+#define MAXWORD 64
 #endif
 
 #define IS_UTF8(c)      (((c) & 0xC0) == 0x80)

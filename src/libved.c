@@ -3801,7 +3801,7 @@ private int ved_search (buf_t *this, char com) {
   if (com is '*' or com is '#') {
     com = '*' is com ? '/' : '?';
 
-    char word[MAXLINE]; int fidx, lidx;
+    char word[MAXWORD]; int fidx, lidx;
     get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
@@ -4309,12 +4309,17 @@ theend:
   return retval;
 }
 
+private int mark_get_idx (int c) {
+  char marks[] = MARKS; /* this is for tcc */
+  char *m = byte_in_str (marks, c);
+  if (NULL is m) return -1;
+  return m - marks;
+}
+
 private int mark_set (buf_t *this, int mark) {
   if (mark < 0) {
-    utf8 c = My(Input).get ($my(term_ptr));
-    char *m = byte_in_str (MARKS, c);
-    if (NULL is m) return NOTHING_TODO;
-    mark = m - MARKS;
+    mark = mark_get_idx (My(Input).get ($my(term_ptr)));
+    if (-1 is mark) return NOTHING_TODO;
   }
 
   state_set (&$my(marks)[mark]);
@@ -4327,10 +4332,9 @@ private int mark_set (buf_t *this, int mark) {
 }
 
 private int mark_goto (buf_t *this) {
-  utf8 c = My(Input).get ($my(term_ptr));
-  char *m = byte_in_str (MARKS, c);
-  if (NULL is m) return NOTHING_TODO;
-  c = m - MARKS;
+  int c = mark_get_idx (My(Input).get ($my(term_ptr)));
+  if (-1 is c) return NOTHING_TODO;
+
   mark_t *mark = &$my(marks)[c];
   if (mark->video_first_row is NULL) return NOTHING_TODO;
   if (mark->cur_idx is this->cur_idx) return NOTHING_TODO;
@@ -4377,11 +4381,41 @@ private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target)
   pclose (fp);
 }
 
+private void ed_register_free (ed_t *this, rg_t *rg) {
+  reg_t *reg = rg->head;
+  while (reg) {
+    reg_t *tmp = reg->next;
+    My(String).free (reg->data);
+    free (reg);
+    reg = tmp;
+  }
+
+  rg->head = NULL;
+}
+
 private rg_t *ed_register_new (ed_t *this, int regidx) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
   rg_t *rg = &$my(regs)[regidx];
   self(free_reg, rg);
   return rg;
+}
+
+private void ed_register_init_all (ed_t *this) {
+  for (int i = 0; i < NUM_REGISTERS; i++)
+    $my(regs)[i] = (rg_t) {.reg = REGISTERS[i]};
+
+  $my(regs)[REG_RDONLY].head = AllocType (reg);
+  $my(regs)[REG_RDONLY].head->data = My(String).new_with ("     ");
+  $my(regs)[REG_RDONLY].head->next = NULL;
+  $my(regs)[REG_RDONLY].head->prev = NULL;
+}
+
+private int ed_register_get_idx (ed_t *this, int c) {
+  (void) this;
+  if (c is 0x17) c = '^';
+  char regs[] = REGISTERS; /* this is for tcc */
+  char *r = byte_in_str (regs, c);
+  return (NULL isnot r) ? (r - regs) : -1;
 }
 
 private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
@@ -4425,7 +4459,7 @@ private rg_t *ed_register_push_with (ed_t *this, int regidx, int type, char *byt
 }
 
 private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
-  if (REG_SEARCH > regidx or (regidx > REG_EXPR and regidx isnot REG_BLACKHOLE))
+  if (REG_SEARCH > regidx or (regidx > REG_EXPR and regidx < REG_CURWORD))
     return NOTHING_TODO;
 
   switch (regidx) {
@@ -4472,6 +4506,18 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         pclose (fp);
         return DONE;
       }
+
+    case REG_CURWORD:
+      {
+        char word[MAXWORD]; int fidx, lidx;
+        ifnot (NULL is get_current_word (buf, word, Notword, Notword_len,
+            &fidx, &lidx)) {
+          ed_register_new (this, regidx);
+          ed_register_push_with (this, regidx, CHARWISE, word, lidx - fidx + 1);
+        } else
+          return ERROR;
+      }
+      return DONE;
 
     case REG_EXPR:
     case REG_BLACKHOLE:
@@ -4694,7 +4740,7 @@ private int ved_normal_right (buf_t *this, int count, int draw) {
   buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
   while (count-- and it) {
-    if (it->code is '\n') break;
+    if (it->code is '\n' or it is $my(line)->tail) break;
     $mycur(cur_col_idx) += it->len;
 
     if ($my(video)->col_pos is $my(dim)->num_cols) {
@@ -4739,8 +4785,8 @@ private int ved_normal_eol (buf_t *this) {
 }
 
 private int ved_normal_left (buf_t *this, int count) {
-  if ($mycur(cur_col_idx) is 0) return NOTHING_TODO;
   int is_ins_mode = IS_MODE (INSERT_MODE);
+  if ($mycur(cur_col_idx) is 0) return NOTHING_TODO;
   buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
 
@@ -4749,16 +4795,15 @@ private int ved_normal_left (buf_t *this, int count) {
       it = $my(line)->tail;
     //else
      // return NOTHING_TODO;
-  } else
-    it = it->prev;
+  } else     /* otherwise it->prev is null and pass the loop */
+    ifnot ($my(line)->num_items is 1 and is_ins_mode)
+      it = it->prev;
 
   int curcol = $mycur(first_col_idx);
 
-  int i = 0;
-  while (it and count--) {
+  while (it and count-- and $mycur(cur_col_idx)) {
     int len = it->len;
     $mycur(cur_col_idx) -= len;
-    i += (len - 1);
 
     if ($mycur(first_col_idx) and is_ins_mode) {
       vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
@@ -4784,6 +4829,8 @@ private int ved_normal_left (buf_t *this, int count) {
         $my(cur_video_col) = $my(video)->col_pos;
       }
     }
+
+    it = it->prev;
   }
 
   if ($mycur(first_col_idx) isnot curcol) {
@@ -5650,7 +5697,7 @@ private int ved_handle_ctrl_x (buf_t *this) {
 private int ved_delete_word (buf_t *this, int regidx) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
-  char word[MAXLINE]; int fidx, lidx;
+  char word[MAXWORD]; int fidx, lidx;
   if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
@@ -6332,32 +6379,26 @@ do {                                        \
     .fidx = $mycur(cur_col_idx), .lidx = $mycur(cur_col_idx), .orig_syn_parser = $my(syn)->parse};\
   $my(syn)->parse = (parse_fun)
 
-#define VIS_HNDL_CASE_REG(reg)                                           \
-  case '"':                                                              \
-    if (-1 isnot (reg)) goto theend;                                     \
-                                                                         \
-    (reg) = My(Input).get ($my(term_ptr));                               \
-    {                                                                    \
-    char *r = byte_in_str (REGISTERS, reg);                                   \
-    (reg) = (NULL is byte_in_str (REGISTERS, (reg))) ? -1 : r - REGISTERS;    \
-    }                                                                    \
-                                                                         \
+#define VIS_HNDL_CASE_REG(reg)                                              \
+  case '"':                                                                 \
+    if (-1 isnot (reg)) goto theend;                                        \
+    (reg) = ed_register_get_idx ($my(root), My(Input).get ($my(term_ptr))); \
     continue
 
-#define VIS_HNDL_CASE_INT(count)                                         \
-  case '1'...'9':                                                        \
-    {                                                                    \
-      char intbuf[8];                                                    \
-      intbuf[0] = c;                                                     \
-      int idx = 1;                                                       \
-      c = BUF_GET_NUMBER (intbuf, idx);                                  \
-      if (idx is MAX_COUNT_DIGITS) goto handle_char;                     \
-      intbuf[idx] = '\0';                                                \
-      count = atoi (intbuf);                                             \
-                                                                         \
-      goto handle_char;                                                  \
-    }                                                                    \
-                                                                         \
+#define VIS_HNDL_CASE_INT(count)                                            \
+  case '1'...'9':                                                           \
+    {                                                                       \
+      char intbuf[8];                                                       \
+      intbuf[0] = c;                                                        \
+      int idx = 1;                                                          \
+      c = BUF_GET_NUMBER (intbuf, idx);                                     \
+      if (idx is MAX_COUNT_DIGITS) goto handle_char;                        \
+      intbuf[idx] = '\0';                                                   \
+      count = atoi (intbuf);                                                \
+                                                                            \
+      goto handle_char;                                                     \
+    }                                                                       \
+                                                                            \
     continue
 
 private char *ved_syn_parse_visual_lw (buf_t *this, char *line, int len, int idx, row_t *row) {
@@ -6894,7 +6935,7 @@ theend:
 
 private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_open, int reopen) {
   buf_t *this = *thisp;
-  char fname[MAXLINE]; int fidx, lidx;
+  char fname[PATH_MAX]; int fidx, lidx;
   if (NULL is get_current_word (this, fname, Notfname, Notfname_len, &fidx, &lidx))
     return NOTHING_TODO;
 
@@ -8330,11 +8371,9 @@ private void rline_write (rline_t *rl) {
 
 private void ved_rline_reg (rline_t *rl) {
   ed_t *this = rl->ed;
-  int regidx = (int) My(Input).get ($my(term));
-  char *r = byte_in_str (REGISTERS, regidx);
-  regidx = (NULL is r) ? -1 : r - REGISTERS;
-
+  int regidx = ed_register_get_idx (this, My(Input).get ($my(term)));
   if (-1 is regidx) return;
+
   buf_t *buf = self(get.current_buf);
   if (ERROR is ed_register_special_set (this, buf, regidx))
     return;
@@ -9177,10 +9216,7 @@ private void ved_insert_char_rout (buf_t *this, utf8 c, string_t *cur_insert) {
 
 private int ved_insert_reg (buf_t *this, string_t *cur_insert) {
   MSG ("insert register:");
-  int regidx = (int) My(Input).get ($my(term_ptr));
-  char *r = byte_in_str (REGISTERS, regidx);
-  regidx = (NULL is r) ? -1 : r - REGISTERS;
-
+  int regidx = ed_register_get_idx ($my(root), My(Input).get ($my(term_ptr)));
   if (-1 is regidx) return NOTHING_TODO;
 
   if (ERROR is ed_register_special_set ($my(root), this, regidx))
@@ -9562,11 +9598,11 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case ARROW_RIGHT_KEY:
     case 'l':
-      retval = ved_normal_right (this, 1, 1); break;
+      retval = ved_normal_right (this, count, 1); break;
 
     case ARROW_LEFT_KEY:
     case 'h':
-      retval = ved_normal_left (this, 1); break;
+      retval = ved_normal_left (this, count); break;
 
     case ARROW_UP_KEY:
     case 'k':
@@ -9686,28 +9722,22 @@ get_char:
     c = My(Input).get ($my(term_ptr));
 
 handle_char:
-   switch (c) {
-     case 't':
-     case CTRL('k'):
-       ved_normal_test3 (&this);
-       continue;
+    switch (c) {
+      case 't':
+      case CTRL('k'):
+        ved_normal_test3 (&this);
+        continue;
 
-     case CTRL('l'):
-       self(draw);
-       continue;
+      case CTRL('l'):
+        self(draw);
+        continue;
 
-     case NOTOK: goto theend;
+      case NOTOK: goto theend;
 
-     case '"':
-       if (-1 isnot regidx) goto exec_block;
-
-       regidx = My(Input).get ($my(term_ptr));
-       {
-         char *r = byte_in_str (REGISTERS, regidx);
-         regidx = (NULL is byte_in_str (REGISTERS, regidx)) ? -1 : r - REGISTERS;
-       }
-
-       goto get_char;
+      case '"':
+        if (-1 isnot regidx) goto exec_block;
+        regidx = ed_register_get_idx (ed, My(Input).get ($my(term_ptr)));
+        goto get_char;
 
      case '0':
         if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
@@ -9914,18 +9944,6 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
-private void ed_free_reg (ed_t *this, rg_t *rg) {
-  reg_t *reg = rg->head;
-  while (reg) {
-    reg_t *tmp = reg->next;
-    My(String).free (reg->data);
-    free (reg);
-    reg = tmp;
-  }
-
-  rg->head = NULL;
-}
-
 private void ed_free (ed_t *this) {
   if (this is NULL) return;
 
@@ -9952,7 +9970,7 @@ private void ed_free (ed_t *this) {
     env_free (&$my(env));
 
     for (int i = 0; i < NUM_REGISTERS; i++)
-      ed_free_reg (this, &$my(regs)[i]);
+      self(free_reg, &$my(regs)[i]);
 
     free ($myprop);
   }
@@ -9993,13 +10011,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(msg_row) = $my(term)->prop->lines;
   $my(prompt_row) = $my(msg_row) - 1;
 
-  for (int i = 0; i < NUM_REGISTERS; i++)
-    $my(regs)[i] = (rg_t) {.reg = REGISTERS[i]};
-
-  $my(regs)[REG_RDONLY].head = AllocType (reg);
-  $my(regs)[REG_RDONLY].head->data = My(String).new_with ("     ");
-  $my(regs)[REG_RDONLY].head->next = NULL;
-  $my(regs)[REG_RDONLY].head->prev = NULL;
+  ed_register_init_all (this);
 
   $my(env) = env_new ();
 
@@ -10192,7 +10204,7 @@ private ed_T *editor_new (char *name) {
       .new = ed_new,
       .free = ed_free,
       .quit = ved_quit,
-      .free_reg = ed_free_reg,
+      .free_reg = ed_register_free,
       .loop = ved_loop,
       .main = ved_main,
       .resume = ed_resume,

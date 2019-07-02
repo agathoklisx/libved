@@ -41,6 +41,8 @@
  * - the highlighted system is ridiculously simple and for now works only for C code
  *   (this never is going to be nor ever intented as a general purpose editor)
 
+ * - there are no tests to warranty correctness
+
  * - it is only tested under a Linux environment, but also the code makes a lot of
  *   assumptions, as it awaits a POSIX environment.
 
@@ -493,6 +495,7 @@ Search:
     - last command line register [:]
     - registers [+*] send|receive text to|from X clipboard (if xclip is available)
     - blackhole [_] register, which stores nothing
+    - CTRL('w') current word
     - [=] expression register (not yet implemented so does nothing)
   */
 
