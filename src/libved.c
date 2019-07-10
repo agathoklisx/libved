@@ -433,6 +433,12 @@ private void vstr_append_current_with (vstr_t *this, char *bytes) {
   current_list_append (this, vstr);
 }
 
+private void vstr_prepend_current_with (vstr_t *this, char *bytes) {
+  vstring_t *vstr = AllocType (vstring);
+  vstr->data = string_new_with (bytes);
+  current_list_prepend (this, vstr);
+}
+
 private vstr_t *vstr_dup (vstr_t *this) {
   vstr_t *vs = AllocType (vstr);
   vstring_t *it = this->head;
@@ -3107,13 +3113,26 @@ private buf_t *win_get_buf_by_name (win_t *w, const char *fname, int *idx) {
   return NULL;
 }
 
+private int win_get_num_buf (win_t *w) {
+  return w->num_items;
+}
+
 private int win_append_buf (win_t *this, buf_t *buf) {
   current_list_append (this, buf);
   return this->cur_idx;
 }
 
-private int win_get_num_buf (win_t *w) {
-  return w->num_items;
+private int win_pop_current_buf (win_t *this) {
+  ifnot (this->num_items) return NOTOK;
+  if ($from(this->current, flags) & BUF_IS_SPECIAL) return NOTOK;
+  int prev_idx = this->prev_idx;
+  buf_t *tmp = current_list_pop (this, buf_t);
+  buf_free (tmp);
+  if (this->num_items is 1)
+    this->prev_idx = this->cur_idx;
+  else
+    if (prev_idx >= this->cur_idx) this->prev_idx--;
+  return this->cur_idx;
 }
 
 private void win_draw (win_t *w) {
@@ -4552,9 +4571,10 @@ private utf8 quest (buf_t *this, char *qu, utf8 *chs, int len) {
   int found = 0;
   for (;;) {
     c = My(Input).get ($my(term_ptr));
-    for (int i = 0; i < len; i++) {
+
+    for (int i = 0; i < len; i++)
       if ((found = chs[i] is c)) break;
-    }
+
     if (found) break;
   }
 
@@ -6363,10 +6383,10 @@ do {                                        \
 })
 
 #define VISUAL_INIT_FUN(fmode, parse_fun)                                             \
-  buf_set_draw_topline (this);                                                        \
   char prev_mode[bytelen ($my(mode)) + 1];                                            \
   memcpy (prev_mode, $my(mode), sizeof (prev_mode));                                  \
   self(set.mode, (fmode));                                                            \
+  buf_set_draw_topline (this);                                                        \
   mark_t mark; state_set (&mark); mark.cur_idx = this->cur_idx;                       \
   draw_buf dbuf = $self(draw);                                                        \
   draw_cur_row drow = $self(draw_cur_row);                                            \
@@ -6421,6 +6441,11 @@ private char *ved_syn_parse_visual_lw (buf_t *this, char *line, int len, int idx
   return $my(vis)[0].orig_syn_parser (this, line, len, idx, row);
 }
 
+private int ed_lw_mode_cb (buf_t *this, vstr_t *vstr, utf8 c) {
+  (void) this; (void) vstr; (void) c;
+  return 1;
+}
+
 private int ved_normal_visual_lw (buf_t *this) {
   VISUAL_INIT_FUN (VISUAL_MODE_LW, ved_syn_parse_visual_lw);
   $my(vis)[0] = $my(vis)[1];
@@ -6433,6 +6458,13 @@ private int ved_normal_visual_lw (buf_t *this) {
 
 handle_char:
     switch (c) {
+      case '\t':
+        c = quest (this,
+            $myroots(lw_mode_quest),
+            $myroots(lw_mode_chars),
+            $myroots(lw_mode_chars_len));
+        goto handle_char;
+
       VIS_HNDL_CASE_REG(reg);
       VIS_HNDL_CASE_INT(count);
 
@@ -6512,7 +6544,7 @@ handle_char:
           this->cur_idx = $my(vis)[0].fidx;
         }
 
-        if (-1 is reg) reg = REG_UNAMED;
+        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNAMED);
 
         if (c is 'd')
           ved_delete_line (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
@@ -6526,32 +6558,80 @@ handle_char:
       case 's':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-        rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-          $my(dim)->num_cols, $my(video));
-        string_t *str = My(String).new_with_fmt ("substitute --range=%d,%d --global -i --pat=",
-            $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
-        BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
-        rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
-        ved_rline (&this, rl);
-        My(String).free (str);
+          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
+            $my(dim)->num_cols, $my(video));
+          string_t *str = My(String).new_with_fmt ("substitute --range=%d,%d --global -i --pat=",
+              $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
+          BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
+          rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
+          ved_rline (&this, rl);
+          My(String).free (str);
         }
         goto theend;
 
       case 'w':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-        rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-          $my(dim)->num_cols, $my(video));
-        string_t *str = My(String).new_with_fmt ("write --range=%d,%d ",
-            $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
-        BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
-        rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
-        ved_rline (&this, rl);
-        My(String).free (str);
+          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
+            $my(dim)->num_cols, $my(video));
+          string_t *str = My(String).new_with_fmt ("write --range=%d,%d ",
+              $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
+          BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
+          rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
+          ved_rline (&this, rl);
+          My(String).free (str);
         }
         goto theend;
 
+      case '+':
+      case '*':
+        if ($my(vis)[0].fidx <= $my(vis)[0].lidx) {
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+        } else {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+          self(cur.set, $my(vis)[0].fidx);
+          this->cur_idx = $my(vis)[0].fidx;
+        }
+
+        {
+          row_t *row = this->current;
+          vstr_t *rows = AllocType (vstr);
+          for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++) {
+            vstr_prepend_current_with (rows, row->data->bytes);
+            row = row->next;
+          }
+          string_t *str = vstr_join (rows, "\n");
+          ed_selection_to_X ($my(root), str->bytes, str->num_bytes,
+              ('*' is c ? X_PRIMARY : X_CLIPBOARD));
+          string_free (str);
+          vstr_free (rows);
+          goto theend;
+        }
+
       default:
+        for (int i = 0; i < $myroots(lw_mode_chars_len); i++)
+          if (c is $myroots(lw_mode_chars)[i]) {
+            if ($my(vis)[0].fidx <= $my(vis)[0].lidx) {
+              VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+            } else {
+              VISUAL_ADJUST_IDXS($my(vis)[0]);
+              self(cur.set, $my(vis)[0].fidx);
+              this->cur_idx = $my(vis)[0].fidx;
+            }
+
+            row_t *row = this->current;
+            vstr_t *rows = AllocType (vstr);
+            for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++) {
+              vstr_append_current_with (rows, row->data->bytes);
+              row = row->next;
+            }
+
+            int retval = $myroots(lw_mode_cb) (this, rows, c);
+            vstr_free (rows);
+            if (retval) goto theend;
+            break;
+          }
+
         continue;
     }
   }
@@ -6607,6 +6687,11 @@ private char *ved_syn_parse_visual_cw (buf_t *this, char *line, int len, int idx
   return ved_syn_parse_visual_line (this, line, len, row);
 }
 
+private int ed_cw_mode_cb (buf_t *this, string_t *str, utf8 c) {
+  (void) this; (void) str; (void) c;
+  return 1;
+}
+
 private int ved_normal_visual_cw (buf_t **thisp) {
   buf_t *this = *thisp;
 
@@ -6623,6 +6708,13 @@ private int ved_normal_visual_cw (buf_t **thisp) {
 
 handle_char:
     switch (c) {
+      case '\t':
+        c = quest (this,
+            $myroots(cw_mode_quest),
+            $myroots(cw_mode_chars),
+            $myroots(cw_mode_chars_len));
+        goto handle_char;
+
       VIS_HNDL_CASE_REG(reg);
       VIS_HNDL_CASE_INT(count);
 
@@ -6662,26 +6754,59 @@ handle_char:
       case 'x':
       case 'y':
       case 'Y':
-        if (-1 is reg) reg = REG_UNAMED;
+        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNAMED);
 
-        if (c is 'd' or c is 'x') {
-          if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
-            VISUAL_ADJUST_IDXS($my(vis)[0]);
-          } else {   /* MACRO BLOCKS ARE EVIL */
-            VISUAL_RESTORE_STATE ($my(vis)[0], mark);
-          }
-          ved_normal_delete (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
-        } else {
-          if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
-            VISUAL_ADJUST_IDXS($my(vis)[0]);
-          } else {   /* MACRO BLOCKS ARE EVIL */
-            VISUAL_RESTORE_STATE ($my(vis)[0], mark);
-          }
-          ved_normal_yank (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+        if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+        } else {   /* MACRO BLOCKS ARE EVIL */
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
         }
 
+        if (c is 'd' or c is 'x')
+          ved_normal_delete (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+        else
+          ved_normal_yank (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+
         goto theend;
+
+      case '+':
+      case '*':
+        if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+        } else {   /* MACRO BLOCKS ARE EVIL */
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+        }
+
+        {
+          string_t *str = string_new_with ("");
+          for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
+            string_append_byte (str, $mycur(data)->bytes[ii]);
+          ed_selection_to_X ($my(root), str->bytes, str->num_bytes,
+              ('*' is c ? X_PRIMARY : X_CLIPBOARD));
+          string_free (str);
+          goto theend;
+        }
+
       default:
+        for (int i = 0; i < $myroots(cw_mode_chars_len); i++)
+          if (c is $myroots(cw_mode_chars)[i]) {
+            if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
+              VISUAL_ADJUST_IDXS($my(vis)[0]);
+            } else {   /* MACRO BLOCKS ARE EVIL */
+              VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+            }
+
+            string_t *str = string_new_with ("");
+            for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
+              string_append_byte (str, $mycur(data)->bytes[ii]);
+
+            int retval = $myroots(cw_mode_cb) (this, str, c);
+            string_free (str);
+            if (retval) goto theend;
+            break;
+          }
+
+
         continue;
 
     }
@@ -6715,7 +6840,7 @@ private char *ved_syn_parse_visual_bw (buf_t *this, char *line, int len, int idx
 }
 
 
-private int ved_visual_bwise (buf_t *this) {
+private int ved_normal_visual_bw (buf_t *this) {
   VISUAL_INIT_FUN (VISUAL_MODE_BW, ved_syn_parse_visual_bw);
 
   for (;;) {
@@ -6727,6 +6852,17 @@ private int ved_visual_bwise (buf_t *this) {
 
 handle_char:
     switch (c) {
+      case '\t':
+        {
+          utf8 chars[] = {'i', 'c', 'd', 033};
+          c = quest (this,
+              "i - insert text in front of the selected block\n"
+              "c - insert text and change/replace selected block\n"
+              "d - delete selected block\n", chars, ARRLEN (chars));
+
+         goto handle_char;
+       }
+
       VIS_HNDL_CASE_REG(reg);
       VIS_HNDL_CASE_INT(count);
 
@@ -7047,16 +7183,16 @@ change_idx:
   return DONE;
 }
 
-private int ved_win_delete (ed_t *root, buf_t **thisp) {
-  if (1 is root->num_items) return EXIT;
-  win_t * tmp = current_list_pop (root, win_t);
-  win_free (tmp);
+private int ved_win_delete (ed_t *this, buf_t **thisp, int count_special) {
+  if (1 is self(get.num_win, count_special)) return EXIT;
+  win_t *parent = current_list_pop (this, win_t);
+  win_free (parent);
 
-  buf_t *this = root->current->current;
-  $my(parent) = root->current;
-  *thisp = My(Win).set.current_buf ($my(parent), $my(parent)->cur_idx); 
-  My(Win).set.video_dividers ($my(parent));
-  My(Win).draw ($my(parent));
+  parent = this->current;
+
+  *thisp = My(Win).set.current_buf (parent, parent->cur_idx);
+  My(Win).set.video_dividers (parent);
+  My(Win).draw (parent);
   return DONE;
 }
 
@@ -7398,7 +7534,6 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
   int cur_idx = parent->cur_idx;
   int at_frame =$my(at_frame);
 
-  buf_t *tmp;
   if (cur_idx is idx) {
     if ($my(flags) & BUF_IS_SPECIAL) return NOTHING_TODO;
     if ($my(flags) & BUF_IS_MODIFIED) {
@@ -7408,9 +7543,8 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
       }
     }
 
-    tmp = current_list_pop (parent, buf_t);
-    buf_free (tmp);
-    if (parent->num_items is 0) return WIN_EXIT;
+    My(Win).pop.current_buf (parent);
+    ifnot (parent->num_items) return WIN_EXIT;
   } else {
     current_list_set (parent, idx);
     this = parent->current;
@@ -7422,12 +7556,12 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
     if ($my(flags) & BUF_IS_MODIFIED) {
       ifnot (force) {
         VED_MSG_ERROR(MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE);
+        current_list_set (parent, cur_idx);
         return NOTHING_TODO;
       }
     }
 
-    tmp = current_list_pop (parent, buf_t);
-    buf_free (tmp);
+    My(Win).pop.current_buf (parent);
     current_list_set (parent, (idx > cur_idx) ? cur_idx : cur_idx - 1);
   }
 
@@ -7443,7 +7577,7 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
     this = this->next;
   }
 
-  if (found is 0) win_delete_frame (parent, at_frame);
+  ifnot (found) win_delete_frame (parent, at_frame);
 
   this = parent->current;
 
@@ -7451,11 +7585,11 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
 
   if (cur_idx is idx) {
     if (found is 1 or parent->prop->num_frames is 1) {
-      ved_buf_change (thisp, VED_COM_BUF_CHANGE_NEXT);
+      ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
     } else {
       int frame = parent->prop->cur_frame + 1;
       if (frame is parent->prop->num_frames) frame = 0;
-      *thisp = win_change_frame (parent, frame);
+      *thisp = win_change_frame ($my(parent), frame);
     }
   }
 
@@ -9627,7 +9761,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       retval = ved_normal_eof (this); break;
 
     case CTRL('v'):
-      retval = ved_visual_bwise (this); break;
+      retval = ved_normal_visual_bw (this); break;
 
     case 'V':
       retval = ved_normal_visual_lw (this); break;
@@ -9795,7 +9929,7 @@ exec_block:
         if (cmd_retv is EXIT) {retval = OK; goto theend;}
 
         if (cmd_retv is WIN_EXIT) {
-          retval = ved_win_delete (ed, &this);
+          retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
           if (retval is DONE) goto new_state;
           if (retval is EXIT) {retval = OK; goto theend;}
           goto theend;
@@ -9861,6 +9995,17 @@ private win_t *ed_get_win_by_idx (ed_t *this, int idx) {
 
 private term_t *ed_get_term (ed_t *this) {
   return $my(term);
+}
+
+private int ed_get_num_win (ed_t *this, int count_special) {
+  if (count_special) return this->num_items;
+  int num = 0;
+  win_t *it = this->head;
+  while (it) {
+    ifnot (it->prop->type is VED_WIN_SPECIAL_TYPE) num++;
+    it = it->next;
+  }
+  return num;
 }
 
 private int ed_get_state (ed_t *this) {
@@ -9944,6 +10089,57 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
+private void ed_set_cw_mode_quest (ed_t *this, utf8 *chars, int len, char *quest,
+                                   int (*cb) (buf_t *, string_t *, utf8)) {
+  $my(cw_mode_chars) = Alloc (sizeof (int *) * len);
+  for (int i = 0; i < len; i++)
+    $my(cw_mode_chars)[i] = chars[i];
+
+  $my(cw_mode_quest) = str_dup (quest, bytelen (quest));
+  $my(cw_mode_chars_len) = len;
+  $my(cw_mode_cb) = cb;
+}
+
+private void ed_set_cw_mode_quest_default (ed_t *this) {
+  utf8 chars[] = {'e', 'd', 'y', 'Y', '+', '*', 033};
+  char quest[] =
+    "e - edit selected as filename\n"
+    "d - delete selected\n"
+    "y - yank selected\n"
+    "Y - yank selected and also send selected to XA_PRIMARY\n"
+    "+ - send selected to XA_CLIPBOARD\n"
+    "* - send selected to XA_PRIMARY";
+
+ self(set.cw_mode_quest, chars, ARRLEN (chars), quest, ed_cw_mode_cb);
+}
+
+private void ed_set_lw_mode_quest (ed_t *this, utf8 *chars, int len, char *quest,
+                                   int (*cb) (buf_t *, vstr_t *, utf8)) {
+  $my(lw_mode_chars) = Alloc (sizeof (int *) * len);
+  for (int i = 0; i < len; i++)
+    $my(lw_mode_chars)[i] = chars[i];
+
+  $my(lw_mode_quest) = str_dup (quest, bytelen (quest));
+  $my(lw_mode_chars_len) = len;
+  $my(lw_mode_cb) = cb;
+}
+
+private void ed_set_lw_mode_quest_default (ed_t *this) {
+  utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', 033};
+  char quest[] =
+    "s - perform substitution on the selected lines\n"
+    "w - write selected to file\n"
+    "d - delete selected\n"
+    "y - yank selected\n"
+    "Y - yank selected and also send selected to XA_PRIMARY\n"
+    "> - indent in\n"
+    "< - indent out\n"
+    "+ - send selected to XA_CLIPBOARD\n"
+    "* - send selected to XA_PRIMARY";
+
+ self(set.lw_mode_quest, chars, ARRLEN (chars), quest, ed_lw_mode_cb);
+}
+
 private void ed_free (ed_t *this) {
   if (this is NULL) return;
 
@@ -9971,6 +10167,9 @@ private void ed_free (ed_t *this) {
 
     for (int i = 0; i < NUM_REGISTERS; i++)
       self(free_reg, &$my(regs)[i]);
+
+    free ($my(cw_mode_chars)); free ($my(cw_mode_quest));
+    free ($my(lw_mode_chars)); free ($my(lw_mode_quest));
 
     free ($myprop);
   }
@@ -10028,6 +10227,9 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(saved_cwd) = dir_get_current ();
 
   ved_init_commands ();
+
+  ed_set_cw_mode_quest_default (this);
+  ed_set_lw_mode_quest_default (this);
 
   return this;
 }
@@ -10213,7 +10415,9 @@ private ed_T *editor_new (char *name) {
         .dim = ed_set_dim,
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
-        .topline = buf_set_topline
+        .topline = buf_set_topline,
+        .lw_mode_quest = ed_set_lw_mode_quest,
+        .cw_mode_quest = ed_set_cw_mode_quest
       ),
       .get = SubSelfInit (ed, get,
         .bufname = ed_get_bufname,
@@ -10225,6 +10429,7 @@ private ed_T *editor_new (char *name) {
         .win_next = ed_get_win_next,
         .win_by_idx = ed_get_win_by_idx,
         .win_by_name = ed_get_win_by_name,
+        .num_win = ed_get_num_win,
         .term = ed_get_term,
         .next = ed_get_next,
         .prev = ed_get_prev,
@@ -10264,6 +10469,9 @@ private ed_T *editor_new (char *name) {
           .buf_by_idx = win_get_buf_by_idx,
           .buf_by_name = win_get_buf_by_name,
           .num_buf = win_get_num_buf
+        ),
+        .pop = SubSelfInit (win, pop,
+          .current_buf = win_pop_current_buf
         ),
         .adjust = SubSelfInit (win, adjust,
           .buf_dim = win_adjust_buf_dim,

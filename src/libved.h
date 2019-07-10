@@ -518,9 +518,14 @@ NewSubSelf (win, get,
     (*current_buf_idx) (win_t *);
 );
 
+NewSubSelf (win, pop,
+  int (*current_buf) (win_t *);
+);
+
 NewSelf (win,
   SubSelf (win, set) set;
   SubSelf (win, get) get;
+  SubSelf (win, pop) pop;
   SubSelf (win, adjust) adjust;
 
   void (*draw) (win_t *);
@@ -543,6 +548,7 @@ NewSubSelf (ed, get,
     *(*current_buf) (ed_t *);
 
   int
+    (*num_win) (ed_t *, int),
     (*current_win_idx) (ed_t *),
     (*state) (ed_t *);
 
@@ -560,8 +566,12 @@ NewSubSelf (ed, get,
 );
 
 NewSubSelf (ed, set,
-   void  (*screen_size) (ed_t *);
-   void  (*topline) (buf_t *);
+   void
+     (*screen_size) (ed_t *),
+     (*topline) (buf_t *),
+     (*cw_mode_quest) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
+     (*lw_mode_quest) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8));
+
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, int, int, int, int);
 );
@@ -637,6 +647,7 @@ NewClass (ed,
   Class (cursor) Cursor;
   Class (msg) Msg;
   Class (error) Error;
+
   ed_t *head;
   ed_t *tail;
   ed_t *current;

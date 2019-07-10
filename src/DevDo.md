@@ -24,3 +24,5 @@ Extend:
 
 Search:
   - re-search (new pattern) (after an accepted (with a way) result)
+
+Escape on normal Mode:

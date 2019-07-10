@@ -107,6 +107,9 @@
 #define NO_FORCE 0
 #define FORCE 1
 
+#define NO_COUNT_SPECIAL 0
+#define COUNT_SPECIAL 1
+
 #define DONOT_OPEN_FILE_IFNOT_EXISTS 0
 #define OPEN_FILE_IFNOT_EXISTS 1
 
@@ -906,6 +909,12 @@ NewProp (ed,
   string_t *shared_str;
   hist_t *history;
   rg_t regs[NUM_REGISTERS];
+
+  utf8 *lw_mode_chars, *cw_mode_chars;
+  int lw_mode_chars_len, cw_mode_chars_len;
+  char *lw_mode_quest, *cw_mode_quest;
+  int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
+  int (*cw_mode_cb) (buf_t *, string_t *, utf8);
 );
 
 #undef MY_CLASSES
@@ -961,8 +970,8 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
-#define Notfname "|"
-#define Notfname_len 1
+#define Notfname "|\""
+#define Notfname_len 2
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \

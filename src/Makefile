@@ -111,10 +111,10 @@ EDNAME := veda
 THIS_APPSRC  := $(EDNAME).c
 THIS_APPVERS := $(VER)$(API)$(REV)
 
-ED          := $(EDNAME)-$(THIS_APPVERS)
-EDSTATIC    := $(ED)-static
-SYSED       := $(SYSBINDIR)/$(ED)
-SYSEDSTATIC := $(SYSED)-static
+EDSHARED    := $(EDNAME)-$(THIS_APPVERS)_shared
+EDSTATIC    := $(EDNAME)-$(THIS_APPVERS)_static
+SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
+SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
 APPFLAGS    := -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(LIBNAME) $(FLAGS)
@@ -123,15 +123,15 @@ veda-all: veda-static veda-shared
 
 clean_veda: clean_veda_static clean_veda_shared
 clean_veda_shared:
-	@$(TEST) ! -f $(SYSED) || $(RM) $(SYSED)
+	@$(TEST) ! -f $(SYSEDSHARED) || $(RM) $(SYSEDSHARED)
 clean_veda_static:
 	@$(TEST) ! -f $(SYSEDSTATIC) || $(RM) $(SYSEDSTATIC)
 
-veda-shared: shared $(SYSED)
-$(SYSED):
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -o $(ED)
-	@$(INSTALL) -v $(ED) $(SYSBINDIR)
-	@$(RM) $(ED)
+veda-shared: shared $(SYSEDSHARED)
+$(SYSEDSHARED):
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -o $(EDSHARED)
+	@$(INSTALL) -v $(EDSHARED) $(SYSBINDIR)
+	@$(RM) $(EDSHARED)
 
 veda-static: static $(SYSEDSTATIC)
 $(SYSEDSTATIC):
@@ -180,13 +180,13 @@ ifneq ($(VERBOSE), 0)
   VALGRIND_V = -v
 endif
 
-run:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(SYSED) $(FILE)
-run_veda_static:
+run_shared:
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(SYSEDSHARED) $(FILE)
+run_static:
 	@$(SYSEDSTATIC) $(FILE)
 check_veda_memory_leaks:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(VALGRIND) $(VALGRIND_ARGS) $(VALGRIND_V) $(SYSED) $(FILE)
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(VALGRIND) $(VALGRIND_ARGS) $(VALGRIND_V) $(SYSEDSHARED) $(FILE)
 debug_veda_static:
 	@$(GDB) $(GDB_ARGS) $(SYSEDSTATIC) $(FILE)
-debug_veda:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(GDB) $(GDB_ARGS) $(SYSED) $(FILE)
+debug_veda_shared:
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(GDB) $(GDB_ARGS) $(SYSEDSHARED) $(FILE)
