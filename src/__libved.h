@@ -39,6 +39,21 @@
 #define MENU_LIST_IS_ALLOCATED (1 << 6)
 #define MENU_REDO (1 << 7)
 
+#define RL_OPT_HAS_TAB_COMPLETION (1 << 0)
+#define RL_OPT_HAS_HISTORY_COMPLETION (1 << 1)
+
+#define RL_OK (1 << 0)
+#define RL_CONTINUE (1 << 1)
+#define RL_BREAK (1 << 2)
+#define RL_PROCESS_CHAR (1 << 3)
+#define RL_INSERT_CHAR (1 << 4)
+#define RL_CLEAR (1 << 5)
+#define RL_WRITE (1 << 6)
+#define RL_IS_VISIBLE (1 << 7)
+#define RL_CURSOR_HIDE (1 << 8)
+#define RL_CLEAR_FREE_LINE (1 << 9)
+#define RL_POST_PROCESS (1 << 10)
+
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)
 #define RL_TOK_ARG_SHORT (1 << 2)
@@ -55,18 +70,6 @@
 #define RL_VED_ARG_APPEND (1 << 6)
 #define RL_VED_ARG_BUFNAME (1 << 7)
 #define RL_VED_ARG_ANYTYPE (1 << 8)
-
-#define RL_OK (1 << 0)
-#define RL_CONTINUE (1 << 1)
-#define RL_BREAK (1 << 2)
-#define RL_PROCESS_CHAR (1 << 3)
-#define RL_INSERT_CHAR (1 << 4)
-#define RL_CLEAR (1 << 5)
-#define RL_WRITE (1 << 6)
-#define RL_IS_VISIBLE (1 << 7)
-#define RL_CURSOR_HIDE (1 << 8)
-#define RL_CLEAR_FREE_LINE (1 << 9)
-#define RL_POST_PROCESS (1 << 10)
 
 #define ACCEPT_TAB_WHEN_INSERT (1 << 0)
 
@@ -490,7 +493,8 @@ NewType (rline,
     first_row,
     com,
     range[2],
-    state;
+    state,
+    opts;
 
   utf8 c;
   term_t *term;
@@ -943,6 +947,7 @@ private int ved_rline (buf_t **, rline_t *);
 private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
 private rline_t *rline_edit (rline_t *);
+private void rline_write_and_break (rline_t *);
 private void rline_free (rline_t *);
 private void rline_clear (rline_t *);
 private int  rline_break (rline_t **);

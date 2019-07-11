@@ -3904,8 +3904,7 @@ private int ved_search (buf_t *this, char com) {
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
       BYTES_TO_RLINE (rl, sch->pat->bytes, (int) sch->pat->num_bytes);
-      rl->state |= RL_WRITE|RL_BREAK;
-      rline_edit (rl);
+      rline_write_and_break (rl);
       goto search;
     }
   } else {
@@ -3916,8 +3915,7 @@ private int ved_search (buf_t *this, char com) {
 
       com = 'n' is com ? '/' : '?';
       rl->prompt_char = com;
-      rl->state |= RL_WRITE|RL_BREAK;
-      rline_edit (rl);
+      rline_write_and_break (rl);
       goto search;
     } else
       sch->pat = My(String).new_with ("");
@@ -4597,7 +4595,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         char *line = NULL;
 
         /* while (-1 isnot ed_readline_from_fp (&line, &len, fp)) { */
-        /* do it by hand to look for new lines and set the type */
+        /* do it by hand to look for new lines and proper set the type */
         ssize_t nread;
         int type = CHARWISE;
         while (-1 isnot (nread = getline (&line, &len, fp))) {
@@ -4608,9 +4606,10 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
             }
 
             ed_register_push_with (this, regidx, type, line, REVERSE_ORDER);
-            //ed_register_push_with (this, regidx, LINEWISE, line, DEFAULT_ORDER);
+            //ed_register_push_with (this, regidx, type, line, DEFAULT_ORDER);
           }
         }
+
         if (line isnot NULL) free (line);
         pclose (fp);
         return DONE;
@@ -6707,7 +6706,7 @@ handle_char:
           string_t *str = My(String).new_with_fmt ("substitute --range=%d,%d --global -i --pat=",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
-          rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
+          rline_write_and_break (rl);
           ved_rline (&this, rl);
           My(String).free (str);
         }
@@ -6721,7 +6720,7 @@ handle_char:
           string_t *str = My(String).new_with_fmt ("write --range=%d,%d ",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
-          rl->state |= (RL_WRITE|RL_BREAK); rline_edit (rl);
+          rline_write_and_break (rl);
           ved_rline (&this, rl);
           My(String).free (str);
         }
@@ -8116,23 +8115,22 @@ private rline_t *rline_complete_history (rline_t *rl, int *idx, int dir) {
   if ($my(history)->rline->num_items is 0) return rl;
 
   if (dir is -1) {
-     if (*idx is 0)
-       *idx = $my(history)->rline->num_items - 1;
-     else
-        *idx -= 1;
-   } else {
-      if (*idx is $my(history)->rline->num_items - 1)
-        *idx = 0;
-      else
-        *idx += 1;
-   }
+    if (*idx is 0)
+      *idx = $my(history)->rline->num_items - 1;
+    else
+      *idx -= 1;
+  } else {
+    if (*idx is $my(history)->rline->num_items - 1)
+      *idx = 0;
+    else
+      *idx += 1;
+  }
 
   int lidx = 0;
   h_rlineitem_t *it = $my(history)->rline->head;
 
   while (lidx < *idx) { it = it->next; lidx++; }
 
-  lidx += dir;
   rline_t *lrl = rline_new (this, $my(term), My(Input).get, $my(prompt_row),
     $my(dim)->num_cols, $my(video));
 
@@ -8146,7 +8144,6 @@ private rline_t *rline_complete_history (rline_t *rl, int *idx, int dir) {
 
   goto thecheck;
 
-  lidx += dir;
 theiter:
   if (dir is -1) {
     if (it->prev is NULL) {
@@ -8173,9 +8170,10 @@ thecheck:;
   string_t *cur = vstr_join (rl->line, "");
   if (cur->bytes[cur->num_bytes - 1] is ' ')
     My(String).clear_at (cur, cur->num_bytes - 1);
+  int match = (0 is str_cmp_n (str->bytes, cur->bytes, cur->num_bytes));
 
-  if (lidx is *idx or 0 is cur->num_bytes or $my(history)->rline->num_items is 1 or
-     (0 is str_cmp_n (str->bytes, cur->bytes, cur->num_bytes))) {
+//  if (lidx is *idx or 0 is cur->num_bytes 
+  if (0 is cur->num_bytes or $my(history)->rline->num_items is 1 or match) {
     __free_strings__;
     goto theinput;
   }
@@ -8189,8 +8187,7 @@ theinput:
   lrl->first_row = it->data->first_row;
   lrl->row_pos = it->data->row_pos;
 
-  lrl->state |= (RL_WRITE|RL_BREAK);
-  rline_edit (lrl);
+  rline_write_and_break (lrl);
 
   utf8 c = rline_edit (rl)->c;
   switch (c) {
@@ -8553,6 +8550,16 @@ private void ved_init_commands (void) {
 #undef add_arg
 }
 
+private void rline_write_and_break (rline_t *rl){
+  rl->state |= (RL_WRITE|RL_BREAK);
+  rline_edit (rl);
+}
+
+private void rline_insert_char_and_break (rline_t *rl) {
+  rl->state |= (RL_INSERT_CHAR|RL_BREAK);
+  rline_edit (rl);
+}
+
 private rline_t *rline_new (ed_t *ed, term_t *this, utf8 (*getch) (term_t *), int prompt_row,
 int num_cols, video_t *video) {
   rline_t *rl = AllocType (rline);
@@ -8576,6 +8583,7 @@ int num_cols, video_t *video) {
   rl->tab_completion = rline_tab_completion;
 
   rl->state |= (RL_OK|RL_IS_VISIBLE);
+  rl->opts |= (RL_OPT_HAS_HISTORY_COMPLETION|RL_OPT_HAS_TAB_COMPLETION);
   return rl;
 }
 
@@ -8657,7 +8665,7 @@ private void ved_rline_reg (rline_t *rl) {
 }
 
 private rline_t *rline_edit (rline_t *rl) {
-  ed_t *this = rl->ed;
+  ed_t *this = rl->ed; (void) this;
   vstring_t *ch;
   int retval;
 
@@ -8700,11 +8708,12 @@ process_char:
         goto theend;
 
       case ARROW_UP_KEY:
-        rl = rline_complete_history (rl, &$my(history)->rline->history_idx, 1);
-        goto post_process;
-
       case ARROW_DOWN_KEY:
-        rl = rline_complete_history (rl, &$my(history)->rline->history_idx, -1);
+        ifnot (rl->opts & RL_OPT_HAS_HISTORY_COMPLETION) goto post_process;
+        $my(history)->rline->history_idx = (rl->c is ARROW_DOWN_KEY
+           ? 0 : $my(history)->rline->num_items - 1);
+        rl = rline_complete_history (rl, &$my(history)->rline->history_idx,
+           (rl->c is ARROW_DOWN_KEY ? -1 : 1));
         goto post_process;
 
       case ARROW_LEFT_KEY:
@@ -8751,7 +8760,6 @@ process_char:
           vstring_t *tmp = current_list_pop (rl->line, vstring_t);
           if (NULL isnot tmp) {string_free (tmp->data); free (tmp);}
         }
-
         goto post_process;
 
       case CTRL('r'):
@@ -8759,6 +8767,7 @@ process_char:
          goto post_process;
 
       case '\t':
+        ifnot (rl->opts & RL_OPT_HAS_TAB_COMPLETION) goto post_process;
         retval = rl->tab_completion (rl);
         switch (retval) {
           case RL_PROCESS_CHAR: goto process_char;
@@ -8774,8 +8783,10 @@ insert_char:
            (rl->c > 0x7f and (rl->c < 0x0a0 or (rl->c >= FN_KEY(1) and rl->c <= FN_KEY(12)) or
            (rl->c >= ARROW_DOWN_KEY and rl->c < HOME_KEY) or
            (rl->c > HOME_KEY and (rl->c is PAGE_DOWN_KEY or rl->c is PAGE_UP_KEY or rl->c is END_KEY))
-           )))
+           ))) {
+          if (rl->state & RL_BREAK) goto theend;
           goto post_process;
+        }
 
         if (rl->c < 0x80) {
           ch = AllocType (vstring);
@@ -8797,6 +8808,8 @@ insert_char:
         }
         else
           current_list_append (rl->line, ch);
+
+        if (rl->state & RL_BREAK) goto theend;
         goto post_process;
     }
 
