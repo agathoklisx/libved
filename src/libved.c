@@ -523,6 +523,23 @@ theend:
   return this;
 }
 
+private vstr_t *str_tok (char *buf, char *tok,
+    void (*cb) (vstr_t *, char *, void *), void *obj) {
+  vstr_t *ts = AllocType (vstr);
+  char *src = str_dup (buf, bytelen (buf));
+  char *sp = strtok (src, tok);
+  while (sp) {
+    ifnot (NULL is cb)
+      cb (ts, sp, obj);
+    else
+      vstr_append_current_with (ts, sp);
+    sp = strtok (NULL, tok);
+  }
+
+  free (src);
+  return ts;
+}
+
 private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
   (void) buf_len;
   char *sp = strstr (bytes, re->pat->bytes);
@@ -672,6 +689,20 @@ private int file_exists (const char *fname) {
 
 private int file_is_executable (const char *fname) {
   return (0 is access (fname, F_OK|X_OK));
+}
+
+private int file_is_elf (char *file) {
+  int fd = open (file, O_RDONLY);
+  if (-1 is fd) return 0;
+  int retval = 0;
+  char buf[8];
+  ssize_t bts = fd_read (fd, buf, 4);
+  if (bts < 4) goto theend;
+  buf[bts] = '\0';
+  retval = str_eq (buf + 1, "ELF");
+theend:
+  close (fd);
+  return retval;
 }
 
 private int is_directory (char *dname) {
@@ -924,7 +955,7 @@ private int fd_read (int fd, char *buf, size_t len) {
   if (1 > len) return NOTOK;
 
   char *s = buf;
-  int bts;
+  ssize_t bts;
   int tbts = 0;
 
   while (1) {
@@ -1675,6 +1706,7 @@ init_list:;
 
     menu->c = rline_edit (rl)->c;
 
+handle_char:
     switch (menu->c) {
       case ESCAPE_KEY: goto theend;
 
@@ -1685,7 +1717,7 @@ init_list:;
 
         it = menu->list->head;
         for (int i = 0; i < cur_idx; i++) it = it->next;
-        match = it->data->bytes;
+          match = it->data->bytes;
         goto theend;
 
       case ARROW_LEFT_KEY:
@@ -1794,6 +1826,12 @@ insert_char:
         }
 
         menu->process_list (menu);
+        if (menu->list->num_items is 1)
+          if (menu->return_if_one_item) {
+            menu->c = '\r';
+            goto handle_char;
+          }
+
         if (menu->state & MENU_QUIT) goto theend;
         if (menu->state & MENU_REINIT_LIST) goto init_list;
 
@@ -2707,67 +2745,108 @@ private void buf_set_mode (buf_t *this, char *mode) {
   strcpy ($my(mode), mode);
 }
 
-private int buf_set_fname (buf_t *this, char *fname) {
-  if (fname is NULL or 0 is bytelen (fname) or str_eq (fname, UNAMED) or
-      ($my(flags) & BUF_IS_SPECIAL)) {
-    ifnot (($my(flags) & BUF_IS_SPECIAL)) {
-      strcpy ($my(fname), UNAMED);
-      $my(flags) |= BUF_IS_SPECIAL;
-    } else
-      strcpy ($my(fname), fname);
+private void *mem_should_realloc (void *obj, size_t allocated, size_t len) {
+  if (len > allocated) return Realloc (obj, len);
+  return obj;
+}
 
-    $my(basename) = $my(fname); $my(extname) = NULL;
-    $my(flags) &= ~FILE_EXISTS;
+private void buf_set_as_non_existant (buf_t *this) {
+  $my(basename) = $my(fname); $my(extname) = NULL;
+  $my(flags) &= ~FILE_EXISTS;
+}
+
+private void buf_set_as_unamed (buf_t *this) {
+  size_t len = bytelen (UNAMED);
+  /* static size_t len = bytelen (UNAMED); fails on tcc with:
+     error: initializer element is not constant
+   */
+  $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
+  strcpy ($my(fname), UNAMED);
+  self(set.as.non_existant);
+}
+
+private int buf_set_fname (buf_t *this, char *filename) {
+  int is_null = (NULL is filename);
+  int is_unamed = (is_null ? 0 : str_eq (filename, UNAMED));
+  size_t len = ((is_null or is_unamed) ? 0 : bytelen (filename));
+
+  if (is_null or 0 is len or is_unamed) {
+    buf_set_as_unamed (this);
     return OK;
+  }
+
+  int retval = OK;
+
+  char *fname = str_dup (filename, len);
+  for (int i = len - 1; i > 0 /* at least a char */; i--) {
+    ifnot (fname[i] is DIR_SEP) break;
+    fname[i] = '\0';
+    len--;
+  }
+
+  if ($my(flags) & BUF_IS_SPECIAL) {
+    $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
+    strncpy ($my(fname), fname, len + 1);
+    self(set.as.non_existant);
+    goto theend;
   }
 
   int fname_exists = file_exists (fname);
   int is_abs = IS_PATH_ABS (fname);
 
   if (fname_exists) {
-    if (is_directory (fname)) {
-      VED_MSG_ERROR(MSG_FILE_EXISTS_AND_IS_A_DIRECTORY, fname);
-      strcpy ($my(fname), UNAMED);
-      $my(basename) = $my(fname);
-      $my(flags) &= ~FILE_EXISTS;
-      return NOTOK;
+    ifnot (file_is_reg (fname)) {
+      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE, fname);
+      buf_set_as_unamed (this);
+      retval = NOTOK;
+      goto theend;
     }
 
+    if (file_is_elf (fname)) {
+      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE, fname);
+      buf_set_as_unamed (this);
+      retval = NOTOK;
+      goto theend;
+    }
+
+    $my(flags) |= FILE_EXISTS;
+
+    ifnot (is_abs)
+      goto concat_with_cwd;
+    else {
+      $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
+      strncpy ($my(fname), fname, len + 1);
+    }
+  } else {
+    $my(flags) &= ~FILE_EXISTS;
     if (is_abs) {
-      strncpy ($my(fname), fname, PATH_MAX);
+      $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
+      strncpy ($my(fname), fname, len + 1);
     } else {
+concat_with_cwd:;
       char *cwd = dir_get_current ();
-      size_t len = bytelen (cwd) + bytelen (fname) + 2;
-      char tmp[len]; snprintf (tmp, len, "%s/%s", cwd, fname);
+      len += bytelen (cwd) + 1;
+      char tmp[len + 1]; snprintf (tmp, len + 1, "%s/%s", cwd, fname);
+      $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
       /* $my(fname) = realpath (tmp, NULL); aborts with invalid argument on tcc */
       realpath (tmp, $my(fname));
       free (cwd);
     }
-
-    $my(flags) |= FILE_EXISTS;
-  } else {
-    if (is_abs) {
-      strncpy ($my(fname), fname, PATH_MAX);
-    } else {
-      char *cwd = dir_get_current ();
-      snprintf ($my(fname), PATH_MAX + 1, "%s/%s", cwd, fname);
-      free (cwd);
-    }
-
-    $my(flags) &= ~FILE_EXISTS;
   }
 
-/* maybe at this point, check for regular files/directories/pipes... */
 
   buf_t *buf = My(Ed).get.bufname ($my(root), $my(fname));
   if (buf isnot NULL) {
-    VED_MSG_ERROR(MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER, fname);
+    VED_MSG_ERROR(MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER, $my(fname));
     $my(flags) |= BUF_IS_RDONLY;
   }
 
   $my(basename) = path_basename ($my(fname));
   $my(extname) = path_extname ($my(fname));
-  return OK;
+
+theend:
+  free (fname);
+  return retval;
 }
 
 private int buf_on_no_length (buf_t *this) {
@@ -2999,9 +3078,9 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   $my(flags) = flags;
   $my(flags) &= ~BUF_IS_MODIFIED;
 
-  $my(fname) = Alloc (PATH_MAX + 1);
-
   self(set.mode, NORMAL_MODE);
+
+  $my(fname) = Alloc (PATH_MAX + 1);
   self(set.fname, fname);
 
   if ($my(flags) & FILE_EXISTS) {
@@ -4389,6 +4468,7 @@ private FILE *ed_file_pointer_from_X (ed_t *this, int target) {
 private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target) {
   if (NULL is $my(env)->xclip_exec) return;
   if (NULL is getenv ("DISPLAY")) return;
+
   size_t ex_len = $my(env)->xclip_exec->num_bytes + 32;
   char command[ex_len + 32];
   snprintf (command, ex_len + 32, "%s -i -selection %s 2>/dev/null",
@@ -4486,8 +4566,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
       {
         histitem_t *his = $my(history)->search->head;
         if (NULL is his) return NOTOK;
-        ed_register_push_with (this, regidx, CHARWISE, his->data->bytes,
-            his->data->num_bytes);
+        ed_register_push_with (this, regidx, CHARWISE, his->data->bytes, DEFAULT_ORDER);
         return DONE;
       }
 
@@ -4497,7 +4576,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         h_rlineitem_t *it = $my(history)->rline->head;
         if (NULL is it) return ERROR;
         string_t *str = vstr_join (it->data->line, "");
-        ed_register_push_with (this, regidx, CHARWISE, str->bytes, str->num_bytes);
+        ed_register_push_with (this, regidx, CHARWISE, str->bytes, DEFAULT_ORDER);
 
         string_free (str);
         return DONE;
@@ -4505,8 +4584,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
 
     case REG_FNAME:
       ed_register_new (this, regidx);
-      ed_register_push_with (this, regidx, CHARWISE, buf->prop->fname,
-          bytelen (buf->prop->fname));
+      ed_register_push_with (this, regidx, CHARWISE, buf->prop->fname, DEFAULT_ORDER);
       return DONE;
 
     case REG_PLUS:
@@ -4518,9 +4596,21 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         size_t len = 0;
         char *line = NULL;
 
-        while (-1 isnot ed_readline_from_fp (&line, &len, fp))
-          //ed_register_push_with (this, regidx, LINEWISE, line, REVERSE_ORDER);
-          ed_register_push_with (this, regidx, LINEWISE, line, DEFAULT_ORDER);
+        /* while (-1 isnot ed_readline_from_fp (&line, &len, fp)) { */
+        /* do it by hand to look for new lines and set the type */
+        ssize_t nread;
+        int type = CHARWISE;
+        while (-1 isnot (nread = getline (&line, &len, fp))) {
+          if (nread) {
+            if (line[nread - 1] is '\n' or line[nread - 1] is '\r') {
+              line[nread - 1] = '\0';
+              type = LINEWISE;
+            }
+
+            ed_register_push_with (this, regidx, type, line, REVERSE_ORDER);
+            //ed_register_push_with (this, regidx, LINEWISE, line, DEFAULT_ORDER);
+          }
+        }
         if (line isnot NULL) free (line);
         pclose (fp);
         return DONE;
@@ -4532,7 +4622,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         ifnot (NULL is get_current_word (buf, word, Notword, Notword_len,
             &fidx, &lidx)) {
           ed_register_new (this, regidx);
-          ed_register_push_with (this, regidx, CHARWISE, word, lidx - fidx + 1);
+          ed_register_push_with (this, regidx, CHARWISE, word, DEFAULT_ORDER);
         } else
           return ERROR;
       }
@@ -5770,7 +5860,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     stack_push (action, act);
 
     rg = ed_register_push_with (
-      $my(root), regidx, LINEWISE, $mycur(data)->bytes, -1);
+      $my(root), regidx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
     rg->cur_col_idx = $mycur(cur_col_idx);
     rg->first_col_idx = $mycur(first_col_idx);
     rg->col_pos = $my(cur_video_col);
@@ -6071,25 +6161,30 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
 
   int currow_idx = this->cur_idx;
 
-  rg_t *rg = ed_register_new ($my(root), regidx);
+  rg_t *rg = NULL;
+
+  if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
+    rg = ed_register_new ($my(root), regidx);
+  }
 
   My(String).clear ($my(shared_str));
 
   for (int i = 0; i < count; i++) {
     self(cur.set, (currow_idx + count - 1) - i);
-    rg = ed_register_push_with (
-      $my(root), regidx, LINEWISE, $mycur(data)->bytes, 0);
-    My(String).append ($my(shared_str), $mycur(data)->bytes);
-    My(String).append_byte ($my(shared_str), '\n');
-    rg->cur_col_idx = $mycur(cur_col_idx);
-    rg->first_col_idx = $mycur(first_col_idx);
-    rg->col_pos = $my(cur_video_col);
+    if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
+      rg = ed_register_push_with (
+          $my(root), regidx, LINEWISE, $mycur(data)->bytes, DEFAULT_ORDER);
+      rg->cur_col_idx = $mycur(cur_col_idx);
+      rg->first_col_idx = $mycur(first_col_idx);
+      rg->col_pos = $my(cur_video_col);
+    } else {
+      My(String).prepend_fmt ($my(shared_str), "%s\n", $mycur(data)->bytes);
+    }
   }
 
-  char reg = REGISTERS[regidx];
-  if ('*' is reg or '+' is reg)
+  if (regidx is REG_STAR or regidx is REG_PLUS)
     ed_selection_to_X ($my(root), $my(shared_str)->bytes, $my(shared_str)->num_bytes,
-        ('*' is reg ? X_PRIMARY : X_CLIPBOARD));
+        (REG_STAR is regidx ? X_PRIMARY : X_CLIPBOARD));
 
   MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
   return DONE;
@@ -6113,10 +6208,11 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
 
   buf[bufidx] = '\0';
 
-  ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
-  char reg = REGISTERS[regidx];
-  if ('*' is reg or '+' is reg)
-    ed_selection_to_X ($my(root), buf, bufidx, ('*' is reg ? X_PRIMARY : X_CLIPBOARD));
+  if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
+    ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
+  } else
+    ed_selection_to_X ($my(root), buf, bufidx, (REG_STAR is regidx
+        ? X_PRIMARY : X_CLIPBOARD));
 
   MSG("yanked [charwise] into register [%c]", REGISTERS[regidx]);
   return DONE;
@@ -6446,6 +6542,57 @@ private int ed_lw_mode_cb (buf_t *this, vstr_t *vstr, utf8 c) {
   return 1;
 }
 
+private void ved_visual_token_cb (vstr_t *str, char *tok, void *menu_o) {
+  menu_t *menu = (menu_t *) menu_o;
+  if (menu->patlen)
+    if (str_cmp_n (tok, menu->pat, menu->patlen)) return;
+
+  vstr_append_current_with (str, tok);
+}
+
+private int ved_visual_complete_actions_cb (menu_t *menu) {
+  if (menu->state & MENU_INIT) {
+    menu->state &= ~MENU_INIT;
+  } else
+    menu_free_list (menu);
+
+  buf_t *this = menu->this;
+
+  vstr_t *items;
+  if (IS_MODE(VISUAL_MODE_CW))
+    items = str_tok ($myroots(cw_mode_actions), "\n", ved_visual_token_cb, menu);
+  else if (IS_MODE(VISUAL_MODE_LW))
+    items = str_tok ($myroots(lw_mode_actions), "\n", ved_visual_token_cb, menu);
+  else
+    items = str_tok (
+      "insert text in front of the selected block\n"
+      "change/replace selected block\n"
+      "delete selected block\n", "\n",
+      ved_visual_token_cb, menu);
+
+  menu->list = items;
+  menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
+  return DONE;
+}
+
+private utf8 ved_visual_complete_actions (buf_t *this) {
+  int retval = DONE;
+  utf8 c = ESCAPE_KEY;
+  menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
+    $my(video)->col_pos, ved_visual_complete_actions_cb, NULL, 0);
+  menu->this = this;
+  menu->return_if_one_item = 1;
+
+  if ((retval = menu->retval) is NOTHING_TODO) goto theend;
+
+  char *item = menu_create ($my(root), menu);
+  if (item isnot NULL) c = *item;
+
+theend:
+  menu_free (menu);
+  return c;
+}
+
 private int ved_normal_visual_lw (buf_t *this) {
   VISUAL_INIT_FUN (VISUAL_MODE_LW, ved_syn_parse_visual_lw);
   $my(vis)[0] = $my(vis)[1];
@@ -6459,10 +6606,7 @@ private int ved_normal_visual_lw (buf_t *this) {
 handle_char:
     switch (c) {
       case '\t':
-        c = quest (this,
-            $myroots(lw_mode_quest),
-            $myroots(lw_mode_chars),
-            $myroots(lw_mode_chars_len));
+        c = ved_visual_complete_actions (this);
         goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
@@ -6597,7 +6741,7 @@ handle_char:
           row_t *row = this->current;
           vstr_t *rows = AllocType (vstr);
           for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++) {
-            vstr_prepend_current_with (rows, row->data->bytes);
+            vstr_append_current_with (rows, row->data->bytes);
             row = row->next;
           }
           string_t *str = vstr_join (rows, "\n");
@@ -6709,10 +6853,7 @@ private int ved_normal_visual_cw (buf_t **thisp) {
 handle_char:
     switch (c) {
       case '\t':
-        c = quest (this,
-            $myroots(cw_mode_quest),
-            $myroots(cw_mode_chars),
-            $myroots(cw_mode_chars_len));
+        c = ved_visual_complete_actions (this);
         goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
@@ -6853,15 +6994,8 @@ private int ved_normal_visual_bw (buf_t *this) {
 handle_char:
     switch (c) {
       case '\t':
-        {
-          utf8 chars[] = {'i', 'c', 'd', 033};
-          c = quest (this,
-              "i - insert text in front of the selected block\n"
-              "c - insert text and change/replace selected block\n"
-              "d - delete selected block\n", chars, ARRLEN (chars));
-
-         goto handle_char;
-       }
+        c = ved_visual_complete_actions (this);
+        goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
       VIS_HNDL_CASE_INT(count);
@@ -9349,7 +9483,7 @@ private void ved_insert_char_rout (buf_t *this, utf8 c, string_t *cur_insert) {
 }
 
 private int ved_insert_reg (buf_t *this, string_t *cur_insert) {
-  MSG ("insert register:");
+  MSG ("insert register (charwise mode):");
   int regidx = ed_register_get_idx ($my(root), My(Input).get ($my(term_ptr)));
   if (-1 is regidx) return NOTHING_TODO;
 
@@ -10089,56 +10223,54 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
-private void ed_set_cw_mode_quest (ed_t *this, utf8 *chars, int len, char *quest,
+private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len, char *actions,
                                    int (*cb) (buf_t *, string_t *, utf8)) {
   $my(cw_mode_chars) = Alloc (sizeof (int *) * len);
   for (int i = 0; i < len; i++)
     $my(cw_mode_chars)[i] = chars[i];
-
-  $my(cw_mode_quest) = str_dup (quest, bytelen (quest));
   $my(cw_mode_chars_len) = len;
+  $my(cw_mode_actions) = str_dup (actions, bytelen (actions));
   $my(cw_mode_cb) = cb;
 }
 
-private void ed_set_cw_mode_quest_default (ed_t *this) {
+private void ed_set_cw_mode_actions_default (ed_t *this) {
   utf8 chars[] = {'e', 'd', 'y', 'Y', '+', '*', 033};
-  char quest[] =
-    "e - edit selected as filename\n"
-    "d - delete selected\n"
-    "y - yank selected\n"
-    "Y - yank selected and also send selected to XA_PRIMARY\n"
-    "+ - send selected to XA_CLIPBOARD\n"
-    "* - send selected to XA_PRIMARY";
+  char actions[] =
+    "edit selected area as filename\n"
+    "delete selected area\n"
+    "yank selected area\n"
+    "Yank selected and also send selected area to XA_PRIMARY\n"
+    "+send selected area to XA_CLIPBOARD\n"
+    "*send selected area to XA_PRIMARY";
 
- self(set.cw_mode_quest, chars, ARRLEN (chars), quest, ed_cw_mode_cb);
+ self(set.cw_mode_actions, chars, ARRLEN(chars), actions, ed_cw_mode_cb);
 }
 
-private void ed_set_lw_mode_quest (ed_t *this, utf8 *chars, int len, char *quest,
+private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len, char *actions,
                                    int (*cb) (buf_t *, vstr_t *, utf8)) {
   $my(lw_mode_chars) = Alloc (sizeof (int *) * len);
   for (int i = 0; i < len; i++)
     $my(lw_mode_chars)[i] = chars[i];
-
-  $my(lw_mode_quest) = str_dup (quest, bytelen (quest));
   $my(lw_mode_chars_len) = len;
+  $my(lw_mode_actions) = str_dup (actions, bytelen (actions));
   $my(lw_mode_cb) = cb;
 }
 
-private void ed_set_lw_mode_quest_default (ed_t *this) {
+private void ed_set_lw_mode_actions_default (ed_t *this) {
   utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', 033};
-  char quest[] =
-    "s - perform substitution on the selected lines\n"
-    "w - write selected to file\n"
-    "d - delete selected\n"
-    "y - yank selected\n"
-    "Y - yank selected and also send selected to XA_PRIMARY\n"
-    "> - indent in\n"
-    "< - indent out\n"
-    "+ - send selected to XA_CLIPBOARD\n"
-    "* - send selected to XA_PRIMARY";
+  char actions[] =
+    "substitute command for the selected lines\n"
+    "write selected lines to file\n"
+    "delete selected lines\n"
+    "yank selected lines\n"
+    "Yank selected and also send selected lines to XA_PRIMARY\n"
+    ">indent in\n"
+    "<indent out\n"
+    "+send selected lines to XA_CLIPBOARD\n"
+    "*send selected lines to XA_PRIMARY";
 
- self(set.lw_mode_quest, chars, ARRLEN (chars), quest, ed_lw_mode_cb);
-}
+ self(set.lw_mode_actions, chars, ARRLEN(chars), actions, ed_lw_mode_cb);
+ }
 
 private void ed_free (ed_t *this) {
   if (this is NULL) return;
@@ -10168,8 +10300,8 @@ private void ed_free (ed_t *this) {
     for (int i = 0; i < NUM_REGISTERS; i++)
       self(free_reg, &$my(regs)[i]);
 
-    free ($my(cw_mode_chars)); free ($my(cw_mode_quest));
-    free ($my(lw_mode_chars)); free ($my(lw_mode_quest));
+    free ($my(cw_mode_chars)); free ($my(cw_mode_actions));
+    free ($my(lw_mode_chars)); free ($my(lw_mode_actions));
 
     free ($myprop);
   }
@@ -10228,8 +10360,8 @@ private ed_t *__ed_new__ (ed_T *E) {
 
   ved_init_commands ();
 
-  ed_set_cw_mode_quest_default (this);
-  ed_set_lw_mode_quest_default (this);
+  ed_set_cw_mode_actions_default (this);
+  ed_set_lw_mode_actions_default (this);
 
   return this;
 }
@@ -10416,8 +10548,8 @@ private ed_T *editor_new (char *name) {
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
         .topline = buf_set_topline,
-        .lw_mode_quest = ed_set_lw_mode_quest,
-        .cw_mode_quest = ed_set_cw_mode_quest
+        .lw_mode_actions = ed_set_lw_mode_actions,
+        .cw_mode_actions = ed_set_cw_mode_actions
       ),
       .get = SubSelfInit (ed, get,
         .bufname = ed_get_bufname,
@@ -10495,6 +10627,10 @@ private ed_T *editor_new (char *name) {
           .video_first_row = buf_set_video_first_row,
           .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .as = SubSelfInit (bufset, as,
+            .unamed = buf_set_as_unamed,
+            .non_existant = buf_set_as_non_existant
+           ),
         ),
         .to = SubSelfInit (buf, to,
           .video = buf_to_video

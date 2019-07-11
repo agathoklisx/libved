@@ -1,5 +1,5 @@
 ```C
-/* This is the groundwork code that serves first, as the underground keystone to support
+/* This is the groundwork code that serves, first as the underground keystone to support
    the foundation of a system, and secondly as constructor, simce it writes this code,
    as foremost is an editor. An editor that develops first itself, from the very early
    days, and supposedly is built on conscience, as it implements a vi(m) like interface,
@@ -94,9 +94,6 @@
    be dependable from compiler's version which valgrind's version should adjust.
 
    Also uncountable segmentation faults were diagnosed and fixed thanks to gdb.
-
-   The library code can be compiled as a shared or as a static library, with
-   gcc, clang and tcc.
  */
 
 /* Buildind and Testing:
@@ -129,7 +126,7 @@
    make run_shared
 
    # otherwise the LD_LIBRARY_PATH should be used to find the installed shared library,
-     like:
+   # like:
 
    LD_LIBRARY_PATH=sys/lib sys/bin/veda-101_shared
 
@@ -147,6 +144,7 @@
    # to run the shared executable under gdb:
 
    make debug_veda_shared
+
    # or the static one
 
    make debug_veda_static
@@ -217,7 +215,7 @@
 
    - A window can have unlimited buffers.
 
-   - A window can also be splited in frames.
+   - A window can be splited in frames.
 
    - An Editor instance can have unlimited in-depended windows.
 
@@ -313,7 +311,7 @@ Insert mode:
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
- | CTRL-r            | insert register contents       |
+ | CTRL-r            | insert register contents (charwise only) |
  | motion normal mode commands with some differences explained bellow|
  | HOME              | goes to the beginning of line   |
  | END               | goes to the end of line        |
@@ -333,8 +331,8 @@ Visual mode:
  | +                 | send selected to XA_CLIPBOARD (char|line)wise|
  | *                 | send selected to XA_PRIMARY   (char|line)wise|
  | e                 | edit as filename [charwise]    |
- | TAB               | trigger a question with the correspondent to the specific
- |                   | mode above actions             |
+ | TAB               | triggers a completion menu with the correspondent to the
+ |                     specific mode above actions    |
  | escape            | aborts                         |
  | HOME|END|PAGE(UP|DOWN)|G|ARROW(RIGHT|LEFT|UP|DOWN) |
  | extend or narrow the selected area (same semantics with the normal mode)
@@ -346,7 +344,7 @@ Command line mode:
  | escape            | aborts                         |
  | ARROW[UP|DOWN]    | search item on the history list|
  | ARROW[LEFT|RIGHT] | left|right cursor              |
- | CTRL-a|HOME       | cursor to the beginning         |
+ | CTRL-a|HOME       | cursor to the beginning        |
  | CTRL-e|END        | cursor to the end              |
  | DELETE|BACKSPACE  | delete next|previous char      |
  | CTRL-r            | insert register contents (charwise only)|
@@ -405,13 +403,13 @@ Search:
       --range=%    for the whole buffer
       --range=linenr,linenr counted from 1
       --range=.    for current line
-      --range=[linenr,.],$  from linenr to the end
+      --range=[linenr|.],$  from linenr to the end
       --range=linenr,. from linenr to current line
    without --range, assumed current line number
 
    --global          is like the g flag on vim substitute
    --interactive,-i  is like the c flag on vim substitute
-   --append          is like  >> redirection
+   --append          is like  >> redirection (used when writing to another file)
 
    --pat=`pat'       a string describes the pattern which by default is a literal
                      string; the sample application can use a subset (the most basic)
@@ -432,7 +430,7 @@ Search:
    :w[rite][!] [filename  [--range] [--append]]
    :wq[!]                 (write and quit (if force, do not check for modified buffers))
    :e[!] [filename]       (when e!, reread from current buffer filename)
-   :enew filename         (new buffer on a new window)
+   :enew [filename]       (new buffer on a new window)
    :etail                 (like :e! and 'G' (reload and go at the end of file))
    :split [filename]      (open filename at a new frame)
    :b[uf]p[rev]           (buffer previous)
@@ -445,7 +443,7 @@ Search:
    :r[ead] filename       (read filename into current buffer)
    :r! cmd                (read into buffer cmd's standard output)
    :!cmd                  (execute command)
-   :diff                  (shows a unified diff in a diff buffers, see Unified Diff)
+   :diff                  (shows a unified diff in a diff buffer, see Unified Diff)
    :diffbuf               (change focus to the `diff' window/buffer)
    :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
    :redraw                (redraw current window)
@@ -658,9 +656,9 @@ Search:
    or the opposite, neither a single bit of penalty. It allows mainly expressionism
    and focus to the intentions and not to __how__ to get right writing.
 
-   In that spirit, also available also are macros, that their sole role is to
-   abstract the details over type creation/declaration/allocation, that assists to
-   quick development.
+   In that spirit, also available are macros, that their sole role is to abstract
+   the details over type creation/declaration/allocation, that assists to quick
+   development.
    The significant ones: AllocType, NewType, DeclareType. Those are getting an
    argument with the type name but without the _t extension, which is the actual
    type.
@@ -788,7 +786,7 @@ Search:
      or|and to set the pointer to the right line pointed to the right cell at the
      correct byte[s] (it is very natural such an interface to over complicate the
      code and such code to have bugs).
-     From my humbled experience, the worst bug that can happen is to have a false
+     From my humble experience, the worst bug that can happen is to have a false
      interpretation of the position, so you actually edit something else than what
      you thing you edit.
 
@@ -805,7 +803,7 @@ Search:
     - vis editor (git://repo.or.cz/vis.git) (quite advanced editor)
     - gnu-ed at http://www.gnu.org/software/ed/ed.html (a stable ed)
     - ed2 editor (https://github.com/tylerneylon/ed2.git) (another clone of ed)
-    - oed editor (https://github.com/ibara/oed.git) (from OpenBSD)
+    - oed editor (https://github.com/ibara/oed.git) (ed from OpenBSD)
     - neatvi editor (https://github.com/aligrudi/neatvi.git) (an excellent vi!)
     - jed editor at http://www.jedsoft.org/jed/ (the stablest editor in the non-vi[m] world)
     - numerous stackoverflow posts
@@ -881,7 +879,7 @@ Search:
    libc, with the logic sense as it makes sense, even if it is rather an interface
    (because it is not a standalone function).
    So point two: libc'es can broad a bit their scope, if C wants to have an evolution
-   and a endless feature as it deserves.
+   and a endless future as it deserves.
    It's like forkpty() which wraps perfect the details of three different functions.
    I guess what i'm really talking about is a bit more synthetic than forkpty().
 

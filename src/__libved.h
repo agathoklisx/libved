@@ -326,31 +326,36 @@ enum {
 -1001: NULL_PTR_ERROR NULL Pointer,\
 -1002: INTEGEROVERFLOW_ERROR Integer overflow"
 
-#define MSG_FILE_EXISTS_AND_NO_FORCE 1
-#define MSG_FILE_EXISTS_AND_IS_A_DIRECTORY 2
-#define MSG_FILE_IS_NOT_READABLE 3
-#define MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER 4
-#define MSG_FILE_REMOVED_FROM_FILESYSTEM 5
-#define MSG_FILE_HAS_BEEN_MODIFIED 6
-#define MSG_BUF_IS_READ_ONLY 7
-#define MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE 8
-#define MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE 9
-#define MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER 10
-#define MSG_CAN_NOT_DETERMINATE_CURRENT_DIR 11
+enum {
+  MSG_FILE_EXISTS_AND_NO_FORCE = 1,
+  MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE,
+  MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE,
+  MSG_FILE_EXISTS_AND_IS_A_DIRECTORY,
+  MSG_FILE_IS_NOT_READABLE,
+  MSG_FILE_IS_LOADED_IN_ANOTHER_BUFFER,
+  MSG_FILE_REMOVED_FROM_FILESYSTEM,
+  MSG_FILE_HAS_BEEN_MODIFIED,
+  MSG_BUF_IS_READ_ONLY,
+  MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE,
+  MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE,
+  MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER,
+  MSG_CAN_NOT_DETERMINATE_CURRENT_DIR
+};
 
 #define ED_MSGS_FMT "\
 1:file %s: exists, use w! to overwrite.\
-2:file %s: exists and is a directory.\
-3:file %s: is not readable.\
-4:file %s: is loaded in another buffer.\
-5:[Warning]%s: removed from filesystem since last operation.\
-6:[Warning]%s: has been modified since last operation.\
-7:buffer is read only.\
-8:buffer has not been modified, use w! to force.\
-9:buffer has been modified, use bd! to delete it without writing.\
-10:can not write an unamed buffer.\
-11:can not get current directory!!!."
-
+2:file %s: exists but is not a regular file.\
+3:file %s: exists but is an object (elf) file.\
+4:file %s: exists and is a directory.\
+5:file %s: is not readable.\
+6:file %s: is loaded in another buffer.\
+7:[Warning]%s: removed from filesystem since last operation.\
+8:[Warning]%s: has been modified since last operation.\
+9:buffer is read only.\
+10:buffer has not been modified, use w! to force.\
+11:buffer has been modified, use bd! to delete it without writing.\
+12:can not write an unamed buffer.\
+13:can not get current directory!!!."
 
 #define MSG_ERRNO(errno__) \
   My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
@@ -523,6 +528,7 @@ NewType (menu,
     col_pos,
     min_first_row,
     space_selects,
+    return_if_one_item,
     state,
     orig_first_row,
     orig_num_rows;
@@ -910,9 +916,9 @@ NewProp (ed,
   hist_t *history;
   rg_t regs[NUM_REGISTERS];
 
+  char *lw_mode_actions, *cw_mode_actions, *bw_mode_actions;
   utf8 *lw_mode_chars, *cw_mode_chars;
-  int lw_mode_chars_len, cw_mode_chars_len;
-  char *lw_mode_quest, *cw_mode_quest;
+  int   lw_mode_chars_len, cw_mode_chars_len;
   int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
   int (*cw_mode_cb) (buf_t *, string_t *, utf8);
 );
@@ -945,6 +951,7 @@ private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);
 private void ed_resume (ed_t *);
 private int ed_win_change (ed_t *, buf_t **, int, char *, int);
+private int fd_read (int, char *, size_t);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

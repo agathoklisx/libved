@@ -64,8 +64,8 @@ enum {
 #define COLOR_NORMAL      COLOR_FG_NORMAL
 #define COLOR_PROMPT      COLOR_YELLOW
 #define COLOR_BOX         COLOR_YELLOW
-#define COLOR_MENU_BG     COLOR_YELLOW
-#define COLOR_MENU_SEL    COLOR_RED
+#define COLOR_MENU_BG     COLOR_RED
+#define COLOR_MENU_SEL    COLOR_GREEN
 #define COLOR_MENU_HEADER COLOR_CYAN
 #define COLOR_DIVIDER     COLOR_MAGENTA
 
@@ -435,10 +435,20 @@ NewSubSelf (buf, get,
   char *(*fname) (buf_t *);
 );
 
+NewSubSelf (bufset, as,
+  void
+    (*unamed) (buf_t *),
+    (*non_existant) (buf_t *);
+);
+
 NewSubSelf (buf, set,
   int  (*fname) (buf_t *, char *);
-  void (*video_first_row) (buf_t *, int);
-  void (*mode) (buf_t *, char *);
+  void
+    (*video_first_row) (buf_t *, int),
+    (*mode) (buf_t *, char *);
+
+  SubSelf (bufset, as) as;
+
   ftype_t *(*ftype) (buf_t *, int);
 );
 
@@ -569,8 +579,8 @@ NewSubSelf (ed, set,
    void
      (*screen_size) (ed_t *),
      (*topline) (buf_t *),
-     (*cw_mode_quest) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
-     (*lw_mode_quest) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8));
+     (*cw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
+     (*lw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8));
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, int, int, int, int);
