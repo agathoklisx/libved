@@ -53,6 +53,7 @@
 #define RL_CURSOR_HIDE (1 << 8)
 #define RL_CLEAR_FREE_LINE (1 << 9)
 #define RL_POST_PROCESS (1 << 10)
+#define RL_SET_POS (1 << 11)
 
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)
@@ -395,33 +396,6 @@ NewType (term,
   Prop (term) *prop;
 );
 
-NewType (vrow,
-  string_t  *data;
-    vrow_t  *next;
-    vrow_t  *prev;
-);
-
-NewType (video,
-    vrow_t *head;
-    vrow_t *tail;
-    vrow_t *current;
-      int   cur_idx;
-      int   num_items;
-
-  string_t *render;
-
-  int  fd;
-      int  num_cols;
-      int  num_rows;
-      int  first_row;
-      int  first_col;
-      int  last_row;
-      int  row_pos;
-      int  col_pos;
-
-      int rows[MAX_SCREEN_ROWS];
-);
-
 NewType (vstring,
    string_t *data;
   vstring_t *next;
@@ -465,6 +439,27 @@ NewType (tmpname,
   string_t *fname;
 );
 
+NewType (video,
+  vstring_t *head;
+  vstring_t *tail;
+  vstring_t *current;
+        int  cur_idx;
+        int  num_items;
+
+  string_t *render;
+
+  int  fd;
+      int  num_cols;
+      int  num_rows;
+      int  first_row;
+      int  first_col;
+      int  last_row;
+      int  row_pos;
+      int  col_pos;
+
+      int rows[MAX_SCREEN_ROWS];
+);
+
 NewType (arg,
   int type;
   int type_val;
@@ -491,6 +486,7 @@ NewType (rline,
     num_cols,
     num_rows,
     first_row,
+    first_col,
     com,
     range[2],
     state,
@@ -510,6 +506,8 @@ NewType (rline,
    arg_t *current;
      int  cur_idx;
      int  num_items;
+
+  string_t *render;
 
   rlcom_t **commands;
 
@@ -944,8 +942,8 @@ private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
 private int ved_buf_change (buf_t **, int);
 private int ved_rline (buf_t **, rline_t *);
-private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
-private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, video_t *);
+private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
+private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
 private rline_t *rline_edit (rline_t *);
 private void rline_write_and_break (rline_t *);
 private void rline_free (rline_t *);

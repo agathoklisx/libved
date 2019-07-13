@@ -206,9 +206,26 @@
   #define forever for (;;)
 
 /* Interface and Semantics.
+   The is almost a vi[m] like interface and is based on modes, with some of the
+   differences explained below to this document:
 
-   It is a vi[m] like interface with the addition of a topline that can be disabled,
-   and it is based on modes.
+     - a topline (the first line on screen) that can be disabled, and which by
+       default draws:
+
+         current mode - filetype - pid - time
+
+     - the last line on buffer is the statusline and by default draws:
+
+         filename - line number/total lines - current idx - line len - char integer
+
+     - the message line is the last line on screen; the message should be cleared
+       after a keypress
+
+     - the prompt row position is one before the message line
+
+     - the command line grows to the top, if it doesn't fit on the line
+
+     - insert/normal/visual/cline modes
 
    The structure:
    - Every buffer belongs to a window.
@@ -348,6 +365,7 @@ Command line mode:
  | CTRL-e|END        | cursor to the end              |
  | DELETE|BACKSPACE  | delete next|previous char      |
  | CTRL-r            | insert register contents (charwise only)|
+ | CTRL-l            | redraw line                    |
  | TAB               | trigger completion[s]          |
 
 Search:

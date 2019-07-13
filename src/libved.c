@@ -1352,7 +1352,7 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
   video_t *this = AllocType (video);
 
   loop (rows) {
-    vrow_t *row = AllocType (vrow);
+    vstring_t *row = AllocType (vstring);
     row->data = string_new_with (" ");
     current_list_append (this, row);
   }
@@ -1372,10 +1372,10 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
 private void video_free (video_t *this) {
   if (this is NULL) return;
 
-  vrow_t *it = this->head;
+  vstring_t *it = this->head;
 
   while (it isnot NULL) {
-    vrow_t *next = it->next;
+    vstring_t *next = it->next;
     string_free (it->data);
     free (it);
     it = next;
@@ -1408,7 +1408,7 @@ private void video_draw_at (video_t *this, int at) {
 
   if (current_list_set(this, idx) is INDEX_ERROR) return;
 
-  vrow_t *row = this->current;
+  vstring_t *row = this->current;
 
   string_t *render = string_new_with_fmt (
       "%s" TERM_GOTO_PTR_POS_FMT "%s%s%s" TERM_GOTO_PTR_POS_FMT,
@@ -1430,7 +1430,7 @@ private void video_draw_all (video_t *this) {
   string_append     (render, "\033[0m\033[1m");
 
   int num_times = this->last_row;
-  vrow_t *row = this->head;
+  vstring_t *row = this->head;
 
   loop (num_times - 1) {
     string_append_fmt (render, "%s%s%s", TERM_LINE_CLR_EOL, row->data->bytes, TERM_BOL);
@@ -1446,7 +1446,7 @@ private void video_draw_all (video_t *this) {
 
 private void video_set_row_with (video_t *this, int idx, char *bytes) {
   if (current_list_set (this, idx) is INDEX_ERROR) return;
-  vrow_t *row = this->current;
+  vstring_t *row = this->current;
   string_replace_with (row->data, bytes);
 }
 
@@ -1586,7 +1586,7 @@ private int rline_menu_at_beg (rline_t **rl) {
 
 private char *menu_create (ed_t *this, menu_t *menu) {
   rline_t *rl = rline_new (this, $my(term), My(Input).get, $my(prompt_row),
-      $my(dim)->num_cols, $my(video));
+      1, $my(dim)->num_cols, $my(video));
   rl->at_beg = rline_menu_at_beg;
   rl->at_end = rline_break;
   rl->state |= RL_CURSOR_HIDE;
@@ -3889,8 +3889,8 @@ private int ved_search (buf_t *this, char com) {
 
   MSG(" ");
 
-  rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-    $my(dim)->num_cols, $my(video));
+  rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get,
+      *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
   rl->at_beg = rline_search_at_beg;
   rl->at_end = rline_break;
 
@@ -6701,8 +6701,8 @@ handle_char:
       case 's':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-            $my(dim)->num_cols, $my(video));
+          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+              *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
           string_t *str = My(String).new_with_fmt ("substitute --range=%d,%d --global -i --pat=",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
@@ -6715,8 +6715,8 @@ handle_char:
       case 'w':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-            $my(dim)->num_cols, $my(video));
+          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+              *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
           string_t *str = My(String).new_with_fmt ("write --range=%d,%d ",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
@@ -8092,6 +8092,7 @@ private void rline_free_members (rline_t *rl) {
 
 private void rline_free (rline_t *rl) {
   rline_free_members (rl);
+  string_free (rl->render);
   free (rl);
 }
 
@@ -8132,7 +8133,7 @@ private rline_t *rline_complete_history (rline_t *rl, int *idx, int dir) {
   while (lidx < *idx) { it = it->next; lidx++; }
 
   rline_t *lrl = rline_new (this, $my(term), My(Input).get, $my(prompt_row),
-    $my(dim)->num_cols, $my(video));
+      1, $my(dim)->num_cols, $my(video));
 
   lrl->prompt_row = rl->first_row - 1;
   lrl->prompt_char = 0;
@@ -8560,20 +8561,19 @@ private void rline_insert_char_and_break (rline_t *rl) {
   rline_edit (rl);
 }
 
-private rline_t *rline_new (ed_t *ed, term_t *this, utf8 (*getch) (term_t *), int prompt_row,
-int num_cols, video_t *video) {
-  rline_t *rl = AllocType (rline);
-  rl->prompt_char = DEFAULT_PROMPT_CHAR;
-  rl->prompt_row = prompt_row;
-  rl->num_cols = num_cols;
-  rl->first_row = prompt_row;
-  rl->row_pos = rl->prompt_row;
-  rl->fd = $my(out_fd);
-  rl->line = AllocType (vstr);
-  vstring_t *s = AllocType (vstring);
-  s->data = __string_new_with (" ", 1);
-  current_list_append (rl->line, s);
+private string_t *rline_get_string (rline_t *rl) {
+  return vstr_join (rl->line, "");
+}
 
+private int rline_calc_columns (rline_t *rl, int num_cols) {
+  int cols = rl->first_col + num_cols;
+  while (cols > $from(rl->ed, dim)->num_cols) cols--;
+  return cols;
+}
+
+private rline_t *rline_new (ed_t *ed, term_t *this, utf8 (*getch) (term_t *),
+  int prompt_row, int first_col, int num_cols, video_t *video) {
+  rline_t *rl = AllocType (rline);
   rl->ed = ed;
   rl->term = this;
   rl->cur_video = video;
@@ -8582,22 +8582,80 @@ int num_cols, video_t *video) {
   rl->at_end = rline_call_at_end;
   rl->tab_completion = rline_tab_completion;
 
+  rl->prompt_char = DEFAULT_PROMPT_CHAR;
+  rl->prompt_row = prompt_row;
+  rl->first_row = prompt_row;
+  rl->first_col = first_col;
+  rl->num_cols = rline_calc_columns (rl, num_cols);
+  rl->row_pos = rl->prompt_row;
+  rl->fd = $my(out_fd);
+  rl->render = string_new_with ("");
+  rl->line = AllocType (vstr);
+  vstring_t *s = AllocType (vstring);
+  s->data = __string_new_with (" ", 1);
+  current_list_append (rl->line, s);
+
   rl->state |= (RL_OK|RL_IS_VISIBLE);
   rl->opts |= (RL_OPT_HAS_HISTORY_COMPLETION|RL_OPT_HAS_TAB_COMPLETION);
   return rl;
 }
 
-private rline_t *ved_rline_new (ed_t *ed, term_t *this, utf8 (*getch) (term_t *), int prompt_row,
-int num_cols, video_t *video) {
-  rline_t *rl = rline_new (ed, this, getch , prompt_row, num_cols, video) ;
+private rline_t *ved_rline_new (ed_t *ed, term_t *this, utf8 (*getch) (term_t *),
+   int prompt_row, int first_col, int num_cols, video_t *video) {
+  rline_t *rl = rline_new (ed, this, getch , prompt_row, first_col, num_cols, video) ;
   if (VED_COMMANDS is NULL) ved_init_commands ();
   rl->commands = VED_COMMANDS;
   rl->tab_completion = ved_rline_tab_completion;
   return rl;
 }
 
+private void rline_render (rline_t *rl) {
+  int has_prompt_char = (rl->prompt_char isnot 0);
+  string_clear (rl->render);
+
+  if (rl->state & RL_SET_POS) goto set_pos;
+
+  vstring_t *chars = rl->line->head;
+  rl->row_pos = rl->prompt_row - rl->num_rows + 1;
+
+  string_append_fmt (rl->render, "%s" TERM_GOTO_PTR_POS_FMT
+      TERM_SET_COLOR_FMT "%c", TERM_CURSOR_HIDE, rl->first_row,
+      rl->first_col, COLOR_PROMPT, rl->prompt_char);
+
+  int cidx = 0;
+
+  for (int i = 0; i < rl->num_rows; i++) {
+    if (i)
+      string_append_fmt (rl->render, TERM_GOTO_PTR_POS_FMT, rl->first_row + i,
+          rl->first_col);
+
+    for (cidx = 0; (cidx + (i * rl->num_cols) + (i == 0 ? has_prompt_char : 0))
+       < rl->line->num_items and cidx < (rl->num_cols -
+          (i == 0 ? has_prompt_char : 0)); cidx++) {
+      string_append (rl->render, chars->data->bytes);
+      chars = chars->next;
+    }
+  }
+
+  while (cidx++ < rl->num_cols) string_append_byte (rl->render, ' ');
+
+  string_append_fmt (rl->render, "%s%s", TERM_COLOR_RESET,
+    (rl->state & RL_CURSOR_HIDE) ? "" : TERM_CURSOR_SHOW);
+
+set_pos:
+  rl->state &= ~RL_SET_POS;
+  int row = rl->first_row;
+  int col = rl->first_col;
+
+  row += ((rl->line->cur_idx + has_prompt_char) / rl->num_cols);
+  col += ((rl->line->cur_idx + has_prompt_char) < rl->num_cols
+    ? has_prompt_char + rl->line->cur_idx
+    : ((rl->line->cur_idx + has_prompt_char) % rl->num_cols));
+
+  string_append_fmt (rl->render, TERM_GOTO_PTR_POS_FMT, row, col);
+}
+
 private void rline_write (rline_t *rl) {
-  rl->state &= ~RL_WRITE;
   int orig_first_row = rl->first_row;
 
   if (rl->line->num_items + 1 <= rl->num_cols) {
@@ -8613,36 +8671,9 @@ private void rline_write (rline_t *rl) {
   while (rl->first_row > orig_first_row)
     video_draw_at (rl->cur_video, orig_first_row++);
 
-  string_t *render = string_new_with_fmt ("%s" TERM_GOTO_PTR_POS_FMT
-      TERM_SET_COLOR_FMT "%c",
-      TERM_CURSOR_HIDE, rl->first_row, 1, COLOR_PROMPT, rl->prompt_char);
-
-  rl->row_pos = rl->prompt_row - rl->num_rows + 1;
-
-  vstring_t *chars = rl->line->head;
-
-  int cidx = 0;
-  for (int i = 0; i < rl->num_rows; i++) {
-    for (cidx = 0; cidx + (i * rl->num_cols) < rl->line->num_items and cidx < rl->num_cols; cidx++) {
-      string_append (render, chars->data->bytes);
-      chars = chars->next;
-    }
-  }
-
-  while (cidx++ < rl->num_cols - 1) string_append_byte (render, ' ');
-
-  int row = rl->first_row + (rl->line->cur_idx / (rl->line->num_items + 1));
-  int col = 1 + (rl->prompt_char isnot 0) + rl->line->cur_idx;
-  int i;
-  for (i = 0; i + 1 < rl->num_rows and rl->line->cur_idx > ((i + 1) * (rl->num_cols)) - 1
-     - (rl->prompt_char isnot 0); i++) col -= rl->num_cols;
-  row = rl->first_row + i;
-
-  string_append_fmt (render, "%s%s", TERM_COLOR_RESET,
-    (rl->state & RL_CURSOR_HIDE) ? "" : TERM_CURSOR_SHOW);
-  string_append_fmt (render, TERM_GOTO_PTR_POS_FMT, row, col);
-  fd_write (rl->fd, render->bytes, render->num_bytes);
-  string_free (render);
+  rline_render (rl);
+  fd_write (rl->fd, rl->render->bytes, rl->render->num_bytes);
+  rl->state &= ~RL_WRITE;
 }
 
 private void ved_rline_reg (rline_t *rl) {
@@ -8720,6 +8751,7 @@ process_char:
          if (rl->line->cur_idx > 0) {
            rl->line->current = rl->line->current->prev;
            rl->line->cur_idx--;
+           rl->state |= RL_SET_POS;
          }
          goto post_process;
 
@@ -8727,6 +8759,7 @@ process_char:
          if (rl->line->cur_idx < (rl->line->num_items - 1)) {
            rl->line->current = rl->line->current->next;
            rl->line->cur_idx++;
+           rl->state |= RL_SET_POS;
          }
          goto post_process;
 
@@ -8734,12 +8767,14 @@ process_char:
       case CTRL('a'):
         rl->line->cur_idx = 0;
         rl->line->current = rl->line->head;
+        rl->state |= RL_SET_POS;
         goto post_process;
 
       case END_KEY:
       case CTRL('e'):
         rl->line->cur_idx = (rl->line->num_items - 1);
         rl->line->current =  rl->line->tail;
+        rl->state |= RL_SET_POS;
         goto post_process;
 
       case DELETE_KEY:
@@ -8762,9 +8797,14 @@ process_char:
         }
         goto post_process;
 
+      case CTRL('l'):
+        rl->state |= RL_CLEAR_FREE_LINE;
+        rline_clear (rl);
+        goto post_process;
+
       case CTRL('r'):
-         ved_rline_reg (rl);
-         goto post_process;
+        ved_rline_reg (rl);
+        goto post_process;
 
       case '\t':
         ifnot (rl->opts & RL_OPT_HAS_TAB_COMPLETION) goto post_process;
@@ -9758,8 +9798,8 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case ':':
       {
-      rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get, *$my(prompt_row_ptr),
-        $my(dim)->num_cols, $my(video));
+      rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+          *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
       retval = ved_rline (thisp, rl);
       }
 
