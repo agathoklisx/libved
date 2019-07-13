@@ -949,6 +949,7 @@ private void rline_write_and_break (rline_t *);
 private void rline_free (rline_t *);
 private void rline_clear (rline_t *);
 private int  rline_break (rline_t **);
+private string_t *input_box (buf_t *, int, int, int);
 private utf8 quest (buf_t *, char *, utf8 *, int);
 private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);

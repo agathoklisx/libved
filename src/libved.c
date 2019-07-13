@@ -7042,17 +7042,8 @@ handle_char:
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         VISUAL_ADJUST_IDXS($my(vis)[1]);
         {
-          char buf[MAXLINE];
-          utf8 cc = 0;
-          int len = 0;
-          for (;;) {
-            cc = My(Input).get ($my(term_ptr));
-            if (cc is ESCAPE_KEY) break;
-            buf[len++] = cc;
-          }
-
-          buf[len] = '\0';
-
+          string_t *str = input_box (this, $my(vis)[1].fidx + 1, $my(vis)[0].fidx,
+            0);
           for (int idx = $my(vis)[1].fidx; idx <= $my(vis)[1].lidx; idx++) {
             self(cur.set, idx);
             buf_adjust_view (this);
@@ -7065,9 +7056,10 @@ handle_char:
                 ved_normal_delete (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, REG_BLACKHOLE);
             }
 
-            My(String).insert_at ($mycur(data), buf, $my(vis)[0].fidx);
+            My(String).insert_at ($mycur(data), str->bytes, $my(vis)[0].fidx);
             $my(flags) |= BUF_IS_MODIFIED;
           }
+          My(String).free (str);
         }
 
         VISUAL_RESTORE_STATE ($my(vis)[1], mark);
@@ -8563,6 +8555,32 @@ private void rline_insert_char_and_break (rline_t *rl) {
 
 private string_t *rline_get_string (rline_t *rl) {
   return vstr_join (rl->line, "");
+}
+
+private string_t *input_box (buf_t *this, int row, int col, int escape_aborts) {
+  string_t *str = NULL;
+  rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, row,
+      col, $my(dim)->num_cols - col + 1, $my(video));
+  rl->opts &= ~RL_OPT_HAS_HISTORY_COMPLETION;
+  rl->opts &= ~RL_OPT_HAS_TAB_COMPLETION;
+  rl->prompt_char = 0;
+
+  utf8 c;
+  for (;;) {
+     c = rline_edit (rl)->c;
+     switch (c) {
+       case ESCAPE_KEY:
+          if (escape_aborts) {
+            str = string_new_with ("");
+            goto theend;
+          }
+       case '\r': str = rline_get_string (rl); goto theend;
+     }
+  }
+
+theend:
+   rline_free (rl);
+   return str;
 }
 
 private int rline_calc_columns (rline_t *rl, int num_cols) {

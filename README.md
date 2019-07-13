@@ -344,6 +344,7 @@ Visual mode:
  | w                 | write selected [linewise]      |
  | i|I               | insert in front [blockwise|    |
  | c                 | change [blockwise]             |
+ | both commands above use a readline instance (but without tab|history completion)|
  | x|d               | delete [[block|char]wise]      |
  | +                 | send selected to XA_CLIPBOARD (char|line)wise|
  | *                 | send selected to XA_PRIMARY   (char|line)wise|
