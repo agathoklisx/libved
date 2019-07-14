@@ -22,8 +22,8 @@
  */
 
 /* State:
-   The current state is little beyond the bootstrap|prototype level as the basic interface
-   is considered quite close to completion, however:
+   The current state is little beyond the bootstrap|prototype level as the basic
+   interface is considered quite close to completion, however:
 
    - it doesn't do any validation of the incoming data (the data it produces
      is rather controllable, but it cannot handle (for instance) data which
@@ -468,6 +468,7 @@ Search:
    :redraw                (redraw current window)
    :searches              (change focus to the `search' window/buffer)
    :messages              (change focus to the message window/buffer)
+   :testkey               (test keyboard keys)
    :q[!]                  (quit (if force, do not check for modified buffers))
  */
 

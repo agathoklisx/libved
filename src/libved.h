@@ -316,6 +316,7 @@ NewSubSelf (term, cursor,
   void
     (*set_pos) (term_t *, int, int),
     (*hide) (term_t *),
+    (*show) (term_t *),
     (*restore) (term_t *);
 
   int (*get_pos) (term_t *, int *, int *);

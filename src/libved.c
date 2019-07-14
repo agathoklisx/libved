@@ -1016,6 +1016,10 @@ private void term_cursor_hide (term_t *this) {
   TERM_SEND_ESC_SEQ (TERM_CURSOR_HIDE);
 }
 
+private void term_cursor_show (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_CURSOR_SHOW);
+}
+
 private void term_cursor_restore (term_t *this) {
   TERM_SEND_ESC_SEQ (TERM_CURSOR_RESTORE);
 }
@@ -1417,11 +1421,6 @@ private void video_draw_at (video_t *this, int at) {
 
   video_flush (this, render);
   string_free (render);
-}
-
-private void video_show_cursor (video_t *this) {
-  string_replace_with_fmt (this->render, "%s\r",  TERM_CURSOR_SHOW);
-  video_flush (this, this->render);
 }
 
 private void video_draw_all (video_t *this) {
@@ -7042,8 +7041,12 @@ handle_char:
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         VISUAL_ADJUST_IDXS($my(vis)[1]);
         {
-          string_t *str = input_box (this, $my(vis)[1].fidx + 1, $my(vis)[0].fidx,
-            0);
+          string_t *str = input_box (this, $my(vis)[1].fidx + 1, $my(vis)[0].fidx + 1, 
+              DONOT_ABORT_ON_ESCAPE);
+
+          action_t *action = AllocType (action);
+          action_t *baction =AllocType (action);
+
           for (int idx = $my(vis)[1].fidx; idx <= $my(vis)[1].lidx; idx++) {
             self(cur.set, idx);
             buf_adjust_view (this);
@@ -7054,12 +7057,33 @@ handle_char:
                 continue;
               else
                 ved_normal_delete (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, REG_BLACKHOLE);
+
+              action_t *paction = vundo_pop (this);
+              act_t *act = stack_pop (paction, act_t);
+              stack_push (baction, act);
+              free (paction);
+            } else {
+              act_t *act = AllocType (act);
+              vundo_set (act, REPLACE_LINE);
+              act->idx = this->cur_idx;
+              act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+              stack_push (baction, act);
             }
 
             My(String).insert_at ($mycur(data), str->bytes, $my(vis)[0].fidx);
             $my(flags) |= BUF_IS_MODIFIED;
           }
+
           My(String).free (str);
+
+          act_t *bact = stack_pop (baction, act_t);
+          while (bact isnot NULL) {
+            stack_push (action, bact);
+            bact = stack_pop (baction, act_t);
+          }
+
+          free (baction);
+          vundo_push (this, action);
         }
 
         VISUAL_RESTORE_STATE ($my(vis)[1], mark);
@@ -8469,6 +8493,7 @@ private void ved_init_commands (void) {
     [VED_COM_SUBSTITUTE] = "substitute",
     [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
+    [VED_COM_TEST_KEY] = "testkey",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
     [VED_COM_WIN_CHANGE_PREV_FOCUSED] = "winprevfocused",
@@ -8557,7 +8582,7 @@ private string_t *rline_get_string (rline_t *rl) {
   return vstr_join (rl->line, "");
 }
 
-private string_t *input_box (buf_t *this, int row, int col, int escape_aborts) {
+private string_t *input_box (buf_t *this, int row, int col, int abort_on_escape) {
   string_t *str = NULL;
   rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, row,
       col, $my(dim)->num_cols - col + 1, $my(video));
@@ -8570,7 +8595,7 @@ private string_t *input_box (buf_t *this, int row, int col, int escape_aborts) {
      c = rline_edit (rl)->c;
      switch (c) {
        case ESCAPE_KEY:
-          if (escape_aborts) {
+          if (abort_on_escape) {
             str = string_new_with ("");
             goto theend;
           }
@@ -8579,8 +8604,9 @@ private string_t *input_box (buf_t *this, int row, int col, int escape_aborts) {
   }
 
 theend:
-   rline_free (rl);
-   return str;
+  My(String).clear_at (str, -1);
+  rline_free (rl);
+  return str;
 }
 
 private int rline_calc_columns (rline_t *rl, int num_cols) {
@@ -9241,6 +9267,23 @@ private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
   return OK;
 }
 
+private int ved_test_key (buf_t *this) {
+  utf8 c;
+  MSG("press any key to test. Press escape to end the test");
+  char str[128]; char bin[32]; char chr[8];
+  for (;;) {
+    My(Cursor).hide ($my(term_ptr));
+    c = My(Input).get ($my(term_ptr));
+    snprintf (str, 128, "decimal: %d hex: 0x%x octal: 0%o bin: %s char: %s",
+        c, c, c, itoa (c, bin, 2), char_from_code (c, chr));
+    MSG(str);
+    if (c is ESCAPE_KEY) break;
+  }
+
+  My(Cursor).show ($my(term_ptr));
+  return DONE;
+}
+
 private int ved_rline (buf_t **thisp, rline_t *rl) {
   int retval = NOTHING_TODO;
 
@@ -9482,6 +9525,11 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         retval = ved_buf_delete (thisp, idx, rl->com is VED_COM_BUF_DELETE_FORCE);
         goto theend;
       }
+
+     case VED_COM_TEST_KEY:
+       ved_test_key (this);
+       retval = DONE;
+       goto theend;
 
     default: goto theend;
   }
@@ -9781,11 +9829,6 @@ theend:
   return DONE;
 }
 
-private int ved_normal_test3 (buf_t **cur) {
-  (void) cur;
-  return DONE;
-}
-
 private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int regidx) {
   int count = 1;
 
@@ -10062,15 +10105,6 @@ get_char:
 
 handle_char:
     switch (c) {
-      case 't':
-      case CTRL('k'):
-        ved_normal_test3 (&this);
-        continue;
-
-      case CTRL('l'):
-        self(draw);
-        continue;
-
       case NOTOK: goto theend;
 
       case '"':
@@ -10564,6 +10598,7 @@ public term_T __init_term__ (void) {
         .get_pos = term_get_ptr_pos,
         .set_pos = term_set_ptr_pos,
         .hide = term_cursor_hide,
+        .show = term_cursor_show,
         .restore = term_cursor_restore
       ),
       .Screen = SubSelfInit (term, screen,
