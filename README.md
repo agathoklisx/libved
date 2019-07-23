@@ -1,6 +1,6 @@
 ```C
 /* This is the groundwork code that serves, first as the underground keystone to support
-   the foundation of a system, and secondly as constructor, simce it writes this code,
+   the foundation of a system, and secondly as constructor, since it writes this code,
    as foremost is an editor. An editor that develops first itself, from the very early
    days, and supposedly is built on conscience, as it implements a vi(m) like interface,
    though at the beginning cooexisted happily with an ed interface.
@@ -58,8 +58,17 @@
    - it is written and tested under a Linux environment, but also the code makes a lot of
      assumptions, as expects a POSIX environment.
 
+   - the code requires at least 6 screen lines and it will result on segmentation
+     fault on less (though i could catch the condition on startup or on sigwinch
+     (but the constant environment is full screen terminals here, so this isn't an
+     issue, that bothers me enough to write the code))
+
    - bugs that could result in data loss, so it's not smart, to use it with sensitive documents,
-     but is a quite functional editor that runs really low in resources.
+     but is a quite functional editor that runs really low in resources in full speed
+
+   - the code should be compact and for that reason sometimes it does more than it
+     was destined to do, as such the only you can do is to pray to got the whole
+     things right
 
    It is published of course for recording reasons and a personal one.
 
@@ -84,7 +93,7 @@
    *  $logon: jtywu$
    *  Simple Editor written in C using Linked List with undo
 
-   Code snippets from outer sources should mention this source on top of
+   Other code snippets from outer sources should mention this source on top of
    those blocks; if not, I'm sorry but this is probably an omission and should
    be fixed.
 
@@ -130,7 +139,7 @@
 
    LD_LIBRARY_PATH=sys/lib sys/bin/veda-101_shared
 
-   # for static targets, replace "shared" with "static", but in that case setting the
+   # for static targets, replace "shared" with "static", but in that case setting
      the LD_LIBRARY_PATH in the last step is not required.
 
    # to run it under valgring (requires the shared targets):
@@ -290,6 +299,7 @@ Normal mode:
  | CTRL-L            | redraw current window          |
  | V                 | visual linewise mode           |
  | v                 | visual characterize mode       |
+ | W                 | word operations (menu selection)|
  | CTRL-V            | visual blockwise mode          |
  | /                 | search forward                 |
  | ?                 | search backward                |
@@ -504,7 +514,8 @@ Search:
 
   The :diffbuf command gives the focus to this same buffer.
 
-  Another usage of this feature is when quiting normally (without forcing).
+  Another usage of this feature is when quiting normally (without forcing) and
+  the buffer has been modified.
   In that case a dialog (below) presents some options:
 
     "[bufname] has been modified since last change

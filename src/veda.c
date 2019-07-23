@@ -42,7 +42,7 @@ int main (int argc, char **argv) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */
   if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
-    fprintf (stderr, "Not a controlled terminal\n");
+    tostderr ("Not a controlled terminal\n");
     exit (1);
   }
 

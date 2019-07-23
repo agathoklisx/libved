@@ -8,6 +8,8 @@
 #define VED_WIN_NORMAL_TYPE  0
 #define VED_WIN_SPECIAL_TYPE 1
 
+#define VED_SCRATCH_WIN "scratch"
+#define VED_SCRATCH_BUF "[scratch]"
 #define VED_MSG_WIN     "message"
 #define VED_MSG_BUF     "[messages]"
 #define VED_SEARCH_WIN  "search"
@@ -99,8 +101,13 @@
 
 #define AT_CURRENT_FRAME -1
 
+#define NO_CB_FN NULL
+
 #define VERBOSE_OFF 0
 #define VERBOSE_ON 1
+
+#define DONOT_DRAW 0
+#define DRAW 1
 
 #define NO_COMMAND 0
 #define NO_OPTION 0
@@ -167,6 +174,7 @@ enum {
   VED_COM_READ,
   VED_COM_READ_ALIAS,
   VED_COM_READ_SHELL,
+  VED_COM_SCRATCH,
   VED_COM_REDRAW,
   VED_COM_SEARCHES,
   VED_COM_SHELL,
@@ -923,10 +931,15 @@ NewProp (ed,
   rg_t regs[NUM_REGISTERS];
 
   char *lw_mode_actions, *cw_mode_actions, *bw_mode_actions;
+  vstr_t *word_actions;
   utf8 *lw_mode_chars, *cw_mode_chars;
+  utf8 *word_actions_chars;
   int   lw_mode_chars_len, cw_mode_chars_len;
+  int   word_actions_chars_len;
+
   int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
   int (*cw_mode_cb) (buf_t *, string_t *, utf8);
+  int (*word_actions_cb) (buf_t *, char *, utf8);
 );
 
 #undef MY_CLASSES
@@ -936,7 +949,8 @@ private int ved_quit (ed_t *, int);
 private int ved_normal_goto_linenr (buf_t *, int);
 private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
-private int ved_insert (buf_t *, utf8);
+private int ved_normal_eof (buf_t *, int);
+private int ved_insert (buf_t **, utf8);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_enew_fname (buf_t **, char *);
@@ -945,7 +959,9 @@ private int ved_write_to_fname (buf_t *, char *, int, int, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
 private int ved_buf_change (buf_t **, int);
+private int ved_insert_complete_filename (buf_t **);
 private int ved_rline (buf_t **, rline_t *);
+private int ved_grep_on_normal (buf_t **, utf8, int *, int);
 private rline_t *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
 private rline_t *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
 private rline_t *rline_edit (rline_t *);

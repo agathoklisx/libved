@@ -107,6 +107,8 @@ enum {
 #define NULL_PTR_ERROR                       -1001
 #define INTEGEROVERFLOW_ERROR                -1002
 
+#define NL "\n"
+
 typedef signed int utf8;
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -255,6 +257,12 @@ NewType (string,
     char *bytes;
 );
 
+NewType (fp,
+  FILE   *fp;
+  size_t  num_bytes;
+  int     error;
+);
+
 NewType (capture,
   const char *ptr;
   int len;
@@ -370,24 +378,25 @@ NewSelf (string,
   void
      (*free) (string_t *),
      (*clear) (string_t *),
-     (*clear_at) (string_t *, int),
-     (*append_byte) (string_t *, char);
+     (*clear_at) (string_t *, int);
 
   string_t
     *(*new) (void),
     *(*new_with) (const char *),
-    *(*new_with_fmt) (const char *, ...);
+    *(*new_with_fmt) (const char *, ...),
+    *(*append_byte) (string_t *, char),
+    *(*prepend_byte) (string_t *, char),
+    *(*append)    (string_t *, const char *),
+    *(*prepend)   (string_t *, const char *);
+  string_t
+    *(*append_fmt) (string_t *, const char *, ...),
+    *(*prepend_fmt) (string_t *, const char *, ...),
+    *(*insert_at) (string_t *, const char *, int),
+    *(*replace_with) (string_t *, char *),
+    *(*replace_with_fmt) (string_t *, const char *, ...),
+    *(*replace_numbytes_at_with) (string_t *, int, int, const char *);
 
-   int
-     (*replace_with) (string_t *, char *),
-     (*replace_with_fmt) (string_t *, const char *, ...),
-     (*insert_at) (string_t *, const char *, int),
-     (*append)    (string_t *, const char *),
-     (*prepend)   (string_t *, const char *),
-     (*append_fmt) (string_t *, const char *, ...),
-     (*prepend_fmt) (string_t *, const char *, ...),
-     (*delete_numbytes_at) (string_t *, int, int),
-     (*replace_numbytes_at_with) (string_t *, int, int, const char *);
+    int (*delete_numbytes_at) (string_t *, int, int);
 );
 
 NewClass (string,
@@ -581,7 +590,9 @@ NewSubSelf (ed, set,
      (*screen_size) (ed_t *),
      (*topline) (buf_t *),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
-     (*lw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8));
+     (*lw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8)),
+     (*word_actions_cb) (ed_t *, int (*) (buf_t *, char *, utf8)),
+     (*word_actions)    (ed_t *, utf8 *, int, char *, int (*) (buf_t *, char *, utf8));
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, int, int, int, int);
@@ -668,5 +679,8 @@ NewClass (ed,
 
 public ed_T *__init_ved__ (void);
 public void __deinit_ved__ (ed_T *);
+
+public mutable size_t tostderr (char *);
+public mutable size_t tostdout (char *);
 
 #endif /* LIBVED_H */
