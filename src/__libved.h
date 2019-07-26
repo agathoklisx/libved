@@ -133,6 +133,8 @@
 #define DONOT_ABORT_ON_ESCAPE 0
 #define ABORT_ON_ESCAPE 1
 
+#define NO_AT_EOF 0
+#define AT_EOF 1
 enum {
   ERROR = -2,
   NOTHING_TODO = -1,
@@ -697,7 +699,8 @@ NewType (hist,
   Class (screen) *Screen;        \
   Class (cursor) *Cursor;        \
   Class (msg) *Msg;              \
-  Class (error) *Error
+  Class (error) *Error;          \
+  Class (file) *File
 
 NewType (dim,
   int
@@ -939,7 +942,7 @@ NewProp (ed,
 
   int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
   int (*cw_mode_cb) (buf_t *, string_t *, utf8);
-  int (*word_actions_cb) (buf_t *, char *, utf8);
+  int (*word_actions_cb) (buf_t **, char *, utf8);
 );
 
 #undef MY_CLASSES

@@ -441,6 +441,18 @@ NewClass (error,
   Self (error) self;
 );
 
+NewSelf (file,
+  int
+    (*exists) (const char *),
+    (*is_executable) (const char *),
+    (*is_reg) (const char *),
+    (*is_elf) (const char *);
+);
+
+NewClass (file,
+  Self (file) self;
+);
+
 NewSubSelf (buf, get,
   char *(*fname) (buf_t *);
 );
@@ -591,8 +603,8 @@ NewSubSelf (ed, set,
      (*topline) (buf_t *),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8)),
-     (*word_actions_cb) (ed_t *, int (*) (buf_t *, char *, utf8)),
-     (*word_actions)    (ed_t *, utf8 *, int, char *, int (*) (buf_t *, char *, utf8));
+     (*word_actions_cb) (ed_t *, int (*) (buf_t **, char *, utf8)),
+     (*word_actions)    (ed_t *, utf8 *, int, char *, int (*) (buf_t **, char *, utf8));
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, int, int, int, int);
@@ -645,6 +657,7 @@ NewSelf (ed,
   SubSelf (ed, sh) sh;
 
   int
+    (*scratch) (ed_t *, buf_t **, int),
     (*quit) (ed_t *, int),
     (*loop) (ed_t *, buf_t *),
     (*main) (ed_t *, buf_t *);
@@ -669,6 +682,7 @@ NewClass (ed,
   Class (cursor) Cursor;
   Class (msg) Msg;
   Class (error) Error;
+  Class (file) File;
 
   ed_t *head;
   ed_t *tail;
@@ -682,5 +696,6 @@ public void __deinit_ved__ (ed_T *);
 
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);
+public void toscratch (ed_t *, char *, int);
 
 #endif /* LIBVED_H */

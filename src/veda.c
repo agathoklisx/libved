@@ -24,6 +24,8 @@ static ed_T *E = NULL;
 #undef My
 #define My(__C__) E->__C__.self
 
+#define $myed E->current
+
 /* Here, we enable regexp support by overiding structure fields, the
  * interface is exactly the same */
 #ifdef HAS_REGEXP
@@ -37,6 +39,10 @@ static ed_T *E = NULL;
 
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"
+
+#ifdef HAS_USER_EXTENSIONS
+#include "usr/usr_libved.c"
+#endif
 
 int main (int argc, char **argv) {
   /* I do not know the way to read from stdin and at the same time to
@@ -72,8 +78,10 @@ int main (int argc, char **argv) {
 #endif
 
   ed_t *this = E->current;
-/* why we can't use self here like in the library? Because
- * almost all of the types are opaque pointers */
+
+#ifdef HAS_USER_EXTENSIONS
+  __init_usr__ (this);
+#endif
 
 /* at the begining at least a win_t type is allocated */
   win_t *w = Ed.get.current_win (this);

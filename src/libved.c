@@ -751,7 +751,7 @@ private int file_is_executable (const char *fname) {
   return (0 is access (fname, F_OK|X_OK));
 }
 
-private int file_is_elf (char *file) {
+private int file_is_elf (const char *file) {
   int fd = open (file, O_RDONLY);
   if (-1 is fd) return 0;
   int retval = 0;
@@ -763,6 +763,17 @@ private int file_is_elf (char *file) {
 theend:
   close (fd);
   return retval;
+}
+
+public file_T __init_file__ (void) {
+  return ClassInit (file,
+    .self = SelfInit (file,
+      .exists = file_exists,
+      .is_executable = file_is_executable,
+      .is_elf = file_is_elf,
+      .is_reg = file_is_reg
+    )
+  );
 }
 
 private int is_directory (char *dname) {
@@ -3109,6 +3120,7 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   $my(Input) = $myparents(Input);
   $my(Cursor) = $myparents(Cursor);
   $my(Screen)= $myparents(Screen);
+  $my(File) = $myparents(File);
 
   $my(term_ptr) = $myroots(term);
   $my(msg_row_ptr) = &$myroots(msg_row);
@@ -3356,6 +3368,7 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   $my(Input) = $myparents(Input);
   $my(Cursor) = $myparents(Cursor);
   $my(Screen)= $myparents(Screen);
+  $my(File) = $myparents(File);
 
   $my(video) = $myparents(video);
   $my(min_rows) = 1;
@@ -3501,18 +3514,21 @@ private buf_t *ved_scratch_buf (ed_t *this) {
   return buf;
 }
 
-private int ved_scratch (ed_t *this, buf_t **bufp) {
+private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
   self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF))
    (*bufp) = ved_scratch_buf (this);
-  ved_normal_eof (*bufp, DRAW);
+
+  if (at_eof) ved_normal_eof (*bufp, DRAW);
   return DONE;
 }
 
-private void ved_msg_to_scratch (ed_t *this, char *msg) {
+public void toscratch (ed_t *this, char *msg, int clear_first) {
   buf_t *buf = self(buf.get, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   if (NULL is buf)
     buf = ved_scratch_buf (this);
+
+  if (clear_first) My(Buf).clear (buf);
 
   vstr_t *lines = str_chop (msg, '\n', NULL, NO_CB_FN, NULL);
   vstring_t *it = lines->head;
@@ -4200,7 +4216,7 @@ private int ved_search_file (buf_t *this, char *fname, regexp_t *re) {
   int idx = 0;
   while (-1 isnot (int) (nread = ed_readline_from_fp (&line, &len, fp))) {
     idx++;
-     int ret = My(Re).exec (re, line, nread);
+    int ret = My(Re).exec (re, line, nread);
     if (ret is RE_UNBALANCED_BRACKETS_ERROR) {
       MSG_ERRNO (RE_UNBALANCED_BRACKETS_ERROR);
       break;
@@ -5863,7 +5879,8 @@ theend:                                   /* avoid list (de|re)allocation */
   return c;
 }
 
-private int ved_normal_handle_W (buf_t *this) {
+private int ved_normal_handle_W (buf_t **thisp) {
+  buf_t *this = *thisp;
   utf8 c = ved_complete_word_actions (this);
   if (c is ESCAPE_KEY) return NOTHING_TODO;
 
@@ -5881,7 +5898,7 @@ private int ved_normal_handle_W (buf_t *this) {
     default:
       for (int i = 0; i < $myroots(word_actions_chars_len); i++)
         if (c is $myroots(word_actions_chars)[i]) {
-          int retval = $myroots(word_actions_cb) (this, word, c);
+          int retval = $myroots(word_actions_cb) (thisp, word, c);
           if (retval) return NOTHING_TODO;
         }
 
@@ -9597,7 +9614,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       goto theend;
 
     case VED_COM_SCRATCH:
-      retval = ved_scratch ($my(root), thisp);
+      retval = ved_scratch ($my(root), thisp, AT_EOF);
       goto theend;
 
     case VED_COM_SEARCHES:
@@ -10281,7 +10298,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       return EXIT;
 
     case 'W':
-      retval = ved_normal_handle_W (this);
+      retval = ved_normal_handle_W (thisp);
       break;
 
     default:
@@ -10556,12 +10573,12 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
-private void ed_set_word_actions_cb (ed_t *this, int (*fn) (buf_t *, char *, utf8)) {
+private void ed_set_word_actions_cb (ed_t *this, int (*fn) (buf_t **, char *, utf8)) {
   ifnot (NULL is fn) $my(word_actions_cb) = fn;
 }
 
 private void ed_set_word_actions (ed_t *this, utf8 *chars, int len, char *actions,
-                                   int (*cb) (buf_t *, char *, utf8)) {
+                                   int (*cb) (buf_t **, char *, utf8)) {
   ifnot (len) return;
   int tlen = $my(word_actions_chars_len) + len;
 
@@ -10570,15 +10587,15 @@ private void ed_set_word_actions (ed_t *this, utf8 *chars, int len, char *action
   else
     $my(word_actions_chars) = Realloc ($my(word_actions_chars), sizeof (int *) * tlen);
 
-  for (int i = $my(word_actions_chars_len), j = 0; i < len; i++, j++)
+  for (int i = $my(word_actions_chars_len), j = 0; i < tlen; i++, j++)
     $my(word_actions_chars)[i] = chars[j];
-  $my(word_actions_chars_len) = len;
+  $my(word_actions_chars_len) = tlen;
   $my(word_actions) = str_chop (actions, '\n', $my(word_actions), NULL, NULL);
   self(set.word_actions_cb, cb);
 }
 
-private int ed_word_actions_cb (buf_t *this, char *word, utf8 c) {
-  (void) this; (void) word; (void) c;
+private int ed_word_actions_cb (buf_t **thisp, char *word, utf8 c) {
+  (void) thisp; (void) word; (void) c;
   return 1;
 }
 
@@ -10703,6 +10720,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(Buf) = &E->Buf;
   $my(Msg) = &E->Msg;
   $my(Error) = &E->Error;
+  $my(File) = &E->File;
 
   $my(term) = E->prop->term;
   $my(video) = My(Video).new (OUTPUT_FD, $my(term)->prop->lines, $my(term)->prop->columns, 1, 1);
@@ -10747,21 +10765,8 @@ private ed_t *ed_new (ed_T *E, int num_wins) {
   ved_scratch_buf (this);
   ved_msg_buf (this);
   ved_diff_buf (this);
- // win_t *mw = self(win.new_special, VED_MSG_WIN, 1);
-//  My(Win).append_buf (mw, My(Win).buf_new (mw, VED_MSG_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
-//  self(append.win, mw);
-
-//  win_t *sw = self(win.new_special, VED_SEARCH_WIN, 2);
-//  buf_t *sbuf = My(Win).buf_new (sw, VED_SEARCH_BUF, 1, BUF_IS_RDONLY|BUF_IS_SPECIAL);
   ved_search_buf (this);
 
- /* sbuf->on_normal_beg = ved_grep_on_normal;
-  My(Win).append_buf (sw, sbuf);
-  sw->prop->cur_frame = 1;
-  current_list_set (sw, 0);
-  My(Win).set.current_buf (sw, 0);
-  self(append.win, sw);
-*/
   win_t *w;
   loop (num_wins) {
     w = self(win.new, NULL, num_frames);
@@ -10786,6 +10791,7 @@ private ed_T *__allocate_prop__ (ed_T *this) {
   $my(Buf) = &this->Buf;
   $my(Msg) = &this->Msg;
   $my(Error) = &this->Error;
+  $my(File) = &this->File;
   $my(Me) = this;
  // $my(term)->prop->Me = &this->Term;
   return this;
@@ -10914,6 +10920,7 @@ private ed_T *editor_new (char *name) {
       .free_reg = ed_register_free,
       .loop = ved_loop,
       .main = ved_main,
+      .scratch = ved_scratch,
       .resume = ed_resume,
       .suspend = ed_suspend,
       .set = SubSelfInit (ed, set,
@@ -11052,7 +11059,8 @@ private ed_T *editor_new (char *name) {
     .Term = __init_term__ (),
     .String = __init_string__ (),
     .Cstring = __init_cstring__ (),
-    .Re = __init_re__ ()
+    .Re = __init_re__ (),
+    .File = __init_file__ ()
   );
 
   this->Cursor.self = this->Term.self.Cursor;
