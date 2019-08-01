@@ -21,6 +21,35 @@
 #define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #define READ_FROM_SHELL 1
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096  /* bytes in a path name */
+#endif
+
+#ifndef NAME_MAX
+#define NAME_MAX 255  /* bytes in a file name */
+#endif
+
+#ifndef MAXLINE
+#define MAXLINE 4096
+#endif
+
+#ifndef MAXWORD
+#define MAXWORD 64
+#endif
+
+#define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
+#define PATH_SEP       ':'
+#define DIR_SEP        '/'
+#define IS_DIR_SEP(c)  (c == DIR_SEP)
+#define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
+#define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
+#define IS_CNTRL(c)     (c < 0x20 || c == 0x7f)
+#define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
+#define IS_ALPHA(c)     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
+#define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
+#define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
+
+
 #define ED_INIT_ERROR   (1 << 0)
 
 #define ED_SUSPENDED    (1 << 0)
@@ -98,10 +127,12 @@ enum {
 #define RE_TOO_MANY_BRACKETS_ERROR           -9
 #define RE_SUBSTITUTION_STRING_PARSING_ERROR -10
 
-#define RL_ARG_AWAITING_STRING_OPTION_ERROR  -20
-#define RL_ARGUMENT_MISSING_ERROR            -21
-#define RL_UNTERMINATED_QUOTED_STRING_ERROR  -22
-#define RL_UNRECOGNIZED_OPTION               -23
+#define RL_ERROR                             -20
+#define RL_NO_COMMAND                        -21
+#define RL_ARG_AWAITING_STRING_OPTION_ERROR  -22
+#define RL_ARGUMENT_MISSING_ERROR            -23
+#define RL_UNTERMINATED_QUOTED_STRING_ERROR  -24
+#define RL_UNRECOGNIZED_OPTION               -25
 
 #define INDEX_ERROR                          -1000
 #define NULL_PTR_ERROR                       -1001
@@ -212,7 +243,7 @@ AllocErrorHandlerF AllocErrorHandler;
 
 DeclareType (term);
 DeclareType (string);
-DeclareType (vstritem);
+DeclareType (vstring);
 DeclareType (vstr);
 DeclareType (vchar);
 DeclareType (line);
@@ -251,10 +282,33 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
+typedef int (*Rline_cb) (buf_t **, rline_t *, utf8);
+typedef void (*StrChop_cb) (vstr_t *, char *, void *);
+
 NewType (string,
   size_t  num_bytes;
   size_t  mem_size;
     char *bytes;
+);
+
+NewType (vstring,
+   string_t *data;
+  vstring_t *next;
+  vstring_t *prev;
+);
+
+NewType (vstr,
+  vstring_t *head;
+  vstring_t *tail;
+  vstring_t *current;
+        int  cur_idx;
+        int  num_items;
+);
+
+NewType (dirlist,
+  vstr_t *list;
+  char dir[PATH_MAX];
+  void (*free) (dirlist_t *);
 );
 
 NewType (fp,
@@ -366,8 +420,12 @@ NewClass (term,
 );
 
 NewSelf (cstring,
-   int  (*cmp_n) (const char *, const char *, size_t);
   char *(*dup) (const char *, size_t);
+  int
+    (*eq) (const char *, const char *),
+    (*cmp_n) (const char *, const char *, size_t);
+
+  vstr_t *(*chop) (char *, char, vstr_t *, StrChop_cb, void *);
 );
 
 NewClass (cstring,
@@ -401,6 +459,27 @@ NewSelf (string,
 
 NewClass (string,
   Self (string) self;
+);
+
+NewSelf (vstr,
+  string_t *(*join) (vstr_t *, char *sep);
+);
+
+NewClass (vstr,
+  Self (vstr) self;
+);
+
+NewSubSelf (rline, get,
+  string_t *(*line) (rline_t *);
+  string_t *(*command) (rline_t *);
+);
+
+NewSelf (rline,
+  SubSelf (rline, get) get;
+);
+
+NewClass (rline,
+  Self (rline) self;
 );
 
 NewSelf (re,
@@ -451,6 +530,14 @@ NewSelf (file,
 
 NewClass (file,
   Self (file) self;
+);
+
+NewSelf (dir,
+  dirlist_t *(*list) (char *, int);
+);
+
+NewClass (dir,
+  Self (dir) self;
 );
 
 NewSubSelf (buf, get,
@@ -580,6 +667,7 @@ NewSubSelf (ed, get,
     *(*current_buf) (ed_t *);
 
   int
+    (*num_rline_commands) (ed_t *),
     (*num_win) (ed_t *, int),
     (*current_win_idx) (ed_t *),
     (*state) (ed_t *);
@@ -601,6 +689,7 @@ NewSubSelf (ed, set,
    void
      (*screen_size) (ed_t *),
      (*topline) (buf_t *),
+     (*rline_cb) (ed_t *, Rline_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, string_t *, utf8)),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, int (*) (buf_t *, vstr_t *, utf8)),
      (*word_actions_cb) (ed_t *, int (*) (buf_t **, char *, utf8)),
@@ -612,7 +701,10 @@ NewSubSelf (ed, set,
 
 NewSubSelf (ed, append,
    int (*win) (ed_t *, win_t *);
-  void (*message) (ed_t *, char *);
+  void
+    (*message) (ed_t *, char *),
+    (*rline_commands) (ed_t *, char **, int, int[], int[]);
+
 );
 
 NewSubSelf (ed, readjust,
@@ -683,6 +775,9 @@ NewClass (ed,
   Class (msg) Msg;
   Class (error) Error;
   Class (file) File;
+  Class (dir) Dir;
+  Class (rline) Rline;
+  Class (vstr) Vstr;
 
   ed_t *head;
   ed_t *tail;

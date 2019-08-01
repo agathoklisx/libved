@@ -20,7 +20,7 @@ SYSKERNEL     := $(shell uname -s)
 SYSARCH       := $(shell uname -m)
 SYS           := $(SYSKERNEL)-$(SYSARCH)
 
-SYSDIR := sys
+SYSDIR     := sys
 SYSLIBDIR  := $(SYSDIR)/lib
 SYSBINDIR  := $(SYSDIR)/bin
 SYSINCDIR  := $(SYSDIR)/include
@@ -31,18 +31,41 @@ LIBNAME        := $(THIS_LIBNAME)-$(THIS_LIBVERS)
 THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
 
-BASE_FLAGS     := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
-DEBUG_FLAGS    := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
+BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
+
+DEBUG_FLAGS := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
 # -fsanitize=undefined
 # -Wpedantic
+
+SHARED_CFLAGS := -shared -fPIC
+STATIC_CFLAGS := -static
+
+FLAGS         := $(BASE_FLAGS)
+
 CHECK_PTR_BOUNDS_FLAGS := -mmpx -fcheck-pointer-bounds
 
-SHARED_CFLAGS  := -shared -fPIC
-STATIC_CFLAGS  := -static
+CHECK_PTR_BOUNDS := 0
 
-FLAGS          := $(BASE_FLAGS)
+ifneq ($(CHECK_PTR_BOUNDS), 0)
+  FLAGS += $(CHECK_PTR_BOUNDS_FLAGS)
+endif
+
+ifeq (-$(CC), -gcc)
+  FLAGS += -Wimplicit-fallthrough=0
+endif
 
 #----------------------------------------------------------#
+DEBUG := 0
+ENABLE_WRITING := 0
+
+ifneq ($(DEBUG), 0)
+  FLAGS += $(DEBUG_FLAGS) -DENABLE_WRITING
+else
+  ifneq ($(ENABLE_WRITING), 0)
+    FLAGS += -DENABLE_WRITING $(DEBUG_FLAGS)
+  endif
+endif
+
 HAS_REGEXP := 0
 
 ifneq ($(HAS_REGEXP), 0)
@@ -53,12 +76,6 @@ HAS_SHELL_COMMANDS := 1
 
 ifneq ($(HAS_SHELL_COMMANDS), 0)
   FLAGS += -DHAS_SHELL_COMMANDS
-endif
-
-DEBUG := 0
-
-ifneq ($(DEBUG), 0)
-  FLAGS += -DENABLE_WRITING $(DEBUG_FLAGS)
 endif
 
 HAS_USER_EXTENSIONS := 0
@@ -73,15 +90,7 @@ ifdef WORD_LEXIKON_FILE
   FLAGS += -DWORD_LEXIKON_FILE='"$(WORD_LEXIKON_FILE)"'
 endif
 
-CHECK_PTR_BOUNDS := 0
-
-ifneq ($(CHECK_PTR_BOUNDS), 0)
-  FLAGS += $(CHECK_PTR_BOUNDS_FLAGS)
-endif
-
-ifeq (-$(CC), -gcc)
-  FLAGS += -Wimplicit-fallthrough=0
-endif
+FLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
 
 #----------------------------------------------------------#
 LIBFLAGS := -I. -I$(SYSINCDIR) $(FLAGS)

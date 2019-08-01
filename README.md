@@ -3,7 +3,7 @@
    the foundation of a system, and secondly as constructor, since it writes this code,
    as foremost is an editor. An editor that develops first itself, from the very early
    days, and supposedly is built on conscience, as it implements a vi(m) like interface,
-   though at the beginning cooexisted happily with an ed interface.
+   though at the beginning coexisted happily with an ed interface.
 
    It was written (and this isnot almost a joke) somehow at a state in time, a little 
    bit after the vt100 introduction and Billy Joy's first "vi", cheating of course a bit
@@ -13,7 +13,7 @@
    But without a curses library and with really basic unicode unaware libc functions.
 
    It is written in the form of a library and theoretically, might be useful to some, as an
-   independent text visual editor C library that can be embeded in an application, either
+   independent text visual editor C library that can be embedded in an application, either
    by just "#include" it as a single file unit, or by linking to it as a shared or as a 
    static library, without any other prerequisite other than libc; and with a tendency to
    minimize this dependency (whenever the chance) by providing either an own implementation of some
@@ -40,15 +40,16 @@
      more conditions.
 
    - it doesn't try to catch conditions that don't make logical sense and expects
-     a common workflow, and there is not really a desire to flood the code with
-     conditional branches.
+     a common workflow, and there is not really a desire to overflow the universe
+     with conditional branches to catch conditions, that never met, and when met,
+     there are ways to know where to meet them.
 
    - the highlighted system is ridiculously simple (note: this never is going to be
      nor ever intented as a general purpose editor; it strives to achieve this level of
      the functionality that can be considered productive but with quite few lines of code;
      as such is full of hand written calculations, which, yes, are compact but fragile)
 
-   - there are no tests to guarrantee correctness and probably never will (it just follows,
+   - there are no tests to guarantee correctness and probably never will (it just follows,
      and as an excuse, the waterfall model).
 
    - there are no comments to the code, so it is probably hard to understand and hack happily
@@ -66,7 +67,9 @@
    - bugs that could result in data loss, so it's not smart, to use it with sensitive documents,
      but is a quite functional editor that runs really low in resources in full speed
 
-   - the code should be compact and for that reason sometimes it does more than it
+   - the code is (possibly) a way too compact (though obviously in places there
+     are ways to reduce verbosity or|and to reuse existing sources (to be a bit
+     more compact):)), and for that good reason sometimes, it does more than it
      was destined to do, as such the only you can do is to pray to got the whole
      things right
 
@@ -111,11 +114,13 @@
   not provide a static executable). To compile the library and the test application
   using gcc as the default compiler (use the CC variable during compilation to change
   that) issue from the src directory of this distribution (every step implies a zero
-  exit code to considered succesfull (catch that):
+  exit code to considered successful (catch that):
  */
 
 ```
 ```sh
+   cd src
+
    # build the shared library
    make shared
 
@@ -126,11 +131,11 @@
 
    make HAS_REGEXP=1 veda-shared
 
-   # by default writing is disabled, unless in DEBUG mode:
+   # by default writing is disabled unless in DEBUG mode or with:
 
-   make HAS_REGEXP=1 DEBUG=1 veda-shared
+   make ENABLE_WRITING=1 veda-shared
 
-   # to run the executable and open the source files from itself issue:
+   # to run the executable and open the source files from itself and destroy issue:
 
    make run_shared
 
@@ -173,6 +178,11 @@
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
+   ENABLE_WRITING=1|0     (en|dis)able writing (default 0)
+
+   /* this provides a way to extend the behavior and|or as an API documentation,
+    * but is intended for development (safely ignore much of it) */
+   HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr_libved.c (default 0)
 
  */
 
@@ -480,6 +490,23 @@ Search:
    :messages              (change focus to the message window/buffer)
    :testkey               (test keyboard keys)
    :q[!]                  (quit (if force, do not check for modified buffers))
+
+   User defined (through an API mechanism):
+   The test application provides a sample battery command to print the status and capacity
+   and which can be invoked as  :~battery  (i thought it makes sense to prefix
+   such commands with '~' as it is associated with $HOME (as a user stuff), and
+   mainly as a way to distinguish such commands from the core ones, as '~' is ascii
+   code 126, so these will be the last printed lines on tab completion or|and can be
+   narrowed; but there isn't the prefixed '~' a prerequisite, but in the future is
+   logical to use this as pattern to map it in a group that might behave with other
+   ways).
+ */
+
+/* History Completion Semantics (command line and search)
+   - the ARROW_UP key starts from the last entry set in history, and scrolls down
+     to the past entries
+
+   - the ARROW_DOWN key starts from the first entry, and scrolls up to most recent
  */
 
 /* Searching on files (a really quite basic emulation of quickfix vim's windows).
@@ -488,7 +515,7 @@ Search:
 
     :vgrep --pat=`pattern' file[s]
 
-   This should open a unique window intented only for searches and re-accessible
+   This should open a unique window intended only for searches and re-accessible
    with:
 
    :searches  (though it might be wise a `:copen' alias (to match vim's expectation))
@@ -607,10 +634,7 @@ Search:
       the functions acts on an instance of a type, or if not, simple their scope
       is narrow to a specific job that can not change state to the environment.
 
-      In this whole library, there is neither one global variable and just one static
-      that utilizes editor commands (even this can be avoided, by adding a property,
-      however this (besides the needless overhead) abstracts abstraction, while the
-      the route in code like this, should be the other way around)).
+      In this whole library, there is neither one out of function scope variable.
 
       In short, a compact, unified and controlled environment, under a root structure,
       with functions that act on an own and known type or|and expected and sanitized

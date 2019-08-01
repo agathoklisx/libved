@@ -40,3 +40,4 @@ Extend:
 
 Search:
   - re-search (new pattern) (after an accepted (with a way) result)
+  - switch machines

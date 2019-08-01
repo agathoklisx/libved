@@ -1,3 +1,4 @@
+
 #define MAXWORDLEN  256
 #define MAXCOMLEN   32
 #define MAXERRLEN   256
@@ -264,34 +265,6 @@ enum {
 #define TERM_SET_COLOR_FMT          "\033[%dm"
 #define TERM_SET_COLOR_FMT_LEN      5
 
-#ifndef PATH_MAX
-#define PATH_MAX 4096  /* bytes in a path name */
-#endif
-
-#ifndef NAME_MAX
-#define NAME_MAX 255  /* bytes in a file name */
-#endif
-
-#ifndef MAXLINE
-#define MAXLINE 4096
-#endif
-
-#ifndef MAXWORD
-#define MAXWORD 64
-#endif
-
-#define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
-#define PATH_SEP       ':'
-#define DIR_SEP        '/'
-#define IS_DIR_SEP(c)  (c == DIR_SEP)
-#define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
-#define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
-#define IS_CNTRL(c)     (c < 0x20 || c == 0x7f)
-#define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
-#define IS_ALPHA(c)     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
-#define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
-#define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
-
 #define SYS_ERRORS "\
 1:  EPERM     Operation not permitted,\
 2:  ENOENT    No such file or directory,\
@@ -410,20 +383,6 @@ NewType (term,
   Prop (term) *prop;
 );
 
-NewType (vstring,
-   string_t *data;
-  vstring_t *next;
-  vstring_t *prev;
-);
-
-NewType (vstr,
-  vstring_t *head;
-  vstring_t *tail;
-  vstring_t *current;
-        int  cur_idx;
-        int  num_items;
-);
-
 NewType (vchar,
   utf8 code;
   char buf[5];
@@ -440,12 +399,6 @@ NewType (line,
       int  cur_idx;
       int  num_items;
       int  len;
-);
-
-NewType (dirlist,
-  vstr_t *list;
-  char dir[PATH_MAX];
-  void (*free) (dirlist_t *);
 );
 
 NewType (tmpname,
@@ -524,6 +477,7 @@ NewType (rline,
   string_t *render;
 
   rlcom_t **commands;
+      int   commands_len;
 
   utf8 (*getch) (term_t *);
   int (*at_beg) (rline_t **);
@@ -700,7 +654,10 @@ NewType (hist,
   Class (cursor) *Cursor;        \
   Class (msg) *Msg;              \
   Class (error) *Error;          \
-  Class (file) *File
+  Class (file) *File;            \
+  Class (dir) *Dir;              \
+  Class (rline) *Rline;          \
+  Class (vstr) *Vstr
 
 NewType (dim,
   int
@@ -917,7 +874,8 @@ NewProp (ed,
     has_topline,
     max_wins,
     max_num_hist_entries,
-    max_num_undo_entries;
+    max_num_undo_entries,
+    num_rline_commands;
 
   int
     msg_row,
@@ -933,6 +891,8 @@ NewProp (ed,
   hist_t *history;
   rg_t regs[NUM_REGISTERS];
 
+  rlcom_t **commands;
+  
   char *lw_mode_actions, *cw_mode_actions, *bw_mode_actions;
   vstr_t *word_actions;
   utf8 *lw_mode_chars, *cw_mode_chars;
@@ -943,6 +903,8 @@ NewProp (ed,
   int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
   int (*cw_mode_cb) (buf_t *, string_t *, utf8);
   int (*word_actions_cb) (buf_t **, char *, utf8);
+
+  Rline_cb rline_cb;
 );
 
 #undef MY_CLASSES
@@ -1152,6 +1114,7 @@ do {                                                                \
 ({                                                                  \
   if ((list)->head == NULL) {                                       \
     (list)->head = (node);                                          \
+    (list)->tail = (node);                                          \
     (list)->head->next = NULL;                                      \
     (list)->head->prev = NULL;                                      \
   } else {                                                          \
