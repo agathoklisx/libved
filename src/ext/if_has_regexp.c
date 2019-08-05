@@ -27,9 +27,9 @@ int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
 }
 
 private int my_re_compile (regexp_t *re) {
-  ifnot (My(Cstring).cmp_n (re->pat->bytes, "(?i)", 4)) {
+  ifnot (Cstring.cmp_n (re->pat->bytes, "(?i)", 4)) {
     re->flags |= RE_IGNORE_CASE;
-    My(String).delete_numbytes_at (re->pat, 4, 0);
+    String.delete_numbytes_at (re->pat, 4, 0);
   }
 
   return OK;
@@ -51,15 +51,15 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
         cap, re->num_caps, re->flags);
 
     if (re->retval is RE_CAPS_ARRAY_TOO_SMALL_ERROR) {
-      My(Re).free_captures (re);
-      My(Re).allocate_captures (re, re->num_caps + (re->num_caps / 2));
+      Re.free_captures (re);
+      Re.allocate_captures (re, re->num_caps + (re->num_caps / 2));
       continue;
     }
 
     if (0 > re->retval) return re->retval;
 
-    re->match = My(String).new_with (re->match_ptr);
-    My(String).clear_at (re->match, re->match_len);
+    re->match = String.new_with (re->match_ptr);
+    String.clear_at (re->match, re->match_len);
 
     for (int i = 0; i < re->total_caps; i++) {
       re->cap[i] = AllocType (capture);
@@ -72,7 +72,7 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
 }
 
 private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
-  string_t *substr = My(String).new_with (NULL);
+  string_t *substr = String.new_with (NULL);
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
@@ -84,12 +84,12 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
 
         switch (*++sub_p) {
           case '&':
-            My(String).append_byte (substr, '&');
+            String.append_byte (substr, '&');
             sub_p++;
             continue;
 
           case '\\':
-            My(String).append_byte (substr, '\\');
+            String.append_byte (substr, '\\');
             sub_p++;
             continue;
 
@@ -106,7 +106,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
               char buf[re->cap[idx]->len + 1];
               memcpy (buf, re->cap[idx]->ptr, re->cap[idx]->len);
               buf[re->cap[idx]->len] = '\0';
-              My(String).append (substr, buf);
+              String.append (substr, buf);
             }
 
             continue;
@@ -117,11 +117,11 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
         }
 
       case '&':
-        My(String).append (substr, replace_buf);
+        String.append (substr, replace_buf);
         break;
 
       default:
-        My(String).append_byte (substr, *sub_p);
+        String.append_byte (substr, *sub_p);
      }
 
     sub_p++;
@@ -130,7 +130,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
   return substr;
 
 theerror:
-  My(String).free (substr);
+  String.free (substr);
   return NULL;
 }
 

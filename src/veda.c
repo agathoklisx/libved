@@ -16,13 +16,22 @@
 
 #include <libved.h>
 
-/* The only static variable, needs to be available on handler[s] */
 static ed_T *E = NULL;
 
-/* The ideal is to never need more than those two macros */
-#define Ed E->self
-#undef My
-#define My(__C__) E->__C__.self
+#define Ed      E->self
+#define Cstring E->Cstring.self
+#define Vstring E->Vstring.self
+#define String  E->String.self
+#define Rline   E->Rline.self
+#define Error   E->Error.self
+#define Term    E->Term.self
+#define Input   E->Input.self
+#define File    E->File.self
+#define Buf     E->Buf.self
+#define Win     E->Win.self
+#define Msg     E->Msg.self
+#define Dir     E->Dir.self
+#define Re      E->Re.self
 
 #define $myed E->current
 
@@ -58,29 +67,29 @@ int main (int argc, char **argv) {
 
   ++argv; --argc;
 
-/* initialize root structure, accessible from now on with: 
- * Ed.method[.submethod] ([[arg],...])
- * Ed.Class.self.method ([[arg],...]) // edsubclass class
- * My(Class).method ([[arg],...])     // for short
- */
   if (NULL is (E = __init_ved__ ()))
     return 1;
 
-/* overide */
+  ed_t *this = E->current;
+
 #ifdef HAS_REGEXP
-  My(Re).exec = my_re_exec;
-  My(Re).parse_substitute = my_re_parse_substitute;
-  My(Re).compile = my_re_compile;
+  Re.exec = my_re_exec;
+  Re.parse_substitute = my_re_parse_substitute;
+  Re.compile = my_re_compile;
 #endif
 
 #ifdef HAS_SHELL_COMMANDS
   Ed.sh.popen = my_ed_sh_popen;
 #endif
 
-  ed_t *this = E->current;
-
 #ifdef HAS_USER_EXTENSIONS
   __init_usr__ (this);
+#endif
+
+#ifdef HAS_HISTORY
+#ifdef VED_DATA_DIR
+  Ed.history.read (this, VED_DATA_DIR);
+#endif
 #endif
 
 /* at the begining at least a win_t type is allocated */
@@ -89,18 +98,18 @@ int main (int argc, char **argv) {
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = My(Win).buf_new (w, NULL, 0, 0);
-    My(Win).append_buf (w, buf);
+    buf_t *buf = Win.buf_new (w, NULL, 0, 0);
+    Win.append_buf (w, buf);
   } else
     /* else create a new buffer for every file in the argvlist
      * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
-      buf_t *buf = My(Win).buf_new (w, argv[i], 0, 0);
-      My(Win).append_buf (w, buf);
+      buf_t *buf = Win.buf_new (w, argv[i], 0, 0);
+      Win.append_buf (w, buf);
     }
 
   /* set the first indexed name in the argvlist, as current */
-  My(Win).set.current_buf (w, 0);
+  Win.set.current_buf (w, 0);
 
   int retval = 0;
   signal (SIGWINCH, sigwinch_handler);
@@ -114,25 +123,25 @@ int main (int argc, char **argv) {
     if (Ed.get.state (this) & ED_SUSPENDED) {
       if (E->num_items is 1) {
         /* as an example, we simply create another independed instance */
-        Ed.new (E, 1);
-        this = E->current;
+        this = Ed.new (E, 1);
         w = Ed.get.current_win (this);
-        buf = My(Win).buf_new (w, NULL, 0, 0);
-        My(Win).append_buf (w, buf);
-        My(Win).set.current_buf (w, 0);
-        /* hope i got them right! surely this needs an improvement */
+        buf = Win.buf_new (w, NULL, 0, 0);
+        Win.append_buf (w, buf);
+        Win.set.current_buf (w, 0);
       } else {
         /* else jump to the next or prev */
-        ed_t *ed = Ed.get.next (this);
-        if (NULL is ed) ed = Ed.get.prev (this);
-        this = ed;
+        this = Ed.get.prev (this);
       }
-    } else goto theend;
+    } else break;
   }
 
-theend:
-  __deinit_ved__ (E);
+#ifdef HAS_HISTORY
+#ifdef VED_DATA_DIR
+  Ed.history.write (this, VED_DATA_DIR);
+#endif
+#endif
 
+  __deinit_ved__ (E);
 
 /* the end */
   return retval;

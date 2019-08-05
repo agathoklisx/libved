@@ -65,16 +65,6 @@
 #define RL_TOK_ARG_OPTION (1 << 4)
 #define RL_TOK_ARG_FILENAME (1 << 5)
 
-#define RL_VED_ARG_FILENAME (1 << 0)
-#define RL_VED_ARG_RANGE (1 << 1)
-#define RL_VED_ARG_GLOBAL (1 << 2)
-#define RL_VED_ARG_PATTERN (1 << 3)
-#define RL_VED_ARG_SUB (1 << 4)
-#define RL_VED_ARG_INTERACTIVE (1 << 5)
-#define RL_VED_ARG_APPEND (1 << 6)
-#define RL_VED_ARG_BUFNAME (1 << 7)
-#define RL_VED_ARG_ANYTYPE (1 << 8)
-
 #define ACCEPT_TAB_WHEN_INSERT (1 << 0)
 
 #define FILE_IS_REGULAR  (1 << 0)
@@ -429,10 +419,8 @@ NewType (video,
 
 NewType (arg,
   int type;
-  int type_val;
-  string_t *option;
-  string_t *val;
-  string_t *data;
+  string_t *argname;
+  string_t *argval;
 
   arg_t *next;
   arg_t *prev;
@@ -479,10 +467,12 @@ NewType (rline,
   rlcom_t **commands;
       int   commands_len;
 
-  utf8 (*getch) (term_t *);
-  int (*at_beg) (rline_t **);
-  int (*at_end) (rline_t **);
-  int (*tab_completion) (rline_t *);
+  void *object;
+
+  InputGetch_cb getch;
+  RlineAtBeg_cb at_beg;
+  RlineAtEnd_cb at_end;
+  RlineTabCompletion_cb tab_completion;
 );
 
 NewType (menu,
@@ -499,6 +489,7 @@ NewType (menu,
     min_first_row,
     space_selects,
     return_if_one_item,
+    clear_and_continue_on_backspace,
     state,
     orig_first_row,
     orig_num_rows;
@@ -657,7 +648,7 @@ NewType (hist,
   Class (file) *File;            \
   Class (dir) *Dir;              \
   Class (rline) *Rline;          \
-  Class (vstr) *Vstr
+  Class (vstring) *Vstring
 
 NewType (dim,
   int
@@ -892,7 +883,7 @@ NewProp (ed,
   rg_t regs[NUM_REGISTERS];
 
   rlcom_t **commands;
-  
+
   char *lw_mode_actions, *cw_mode_actions, *bw_mode_actions;
   vstr_t *word_actions;
   utf8 *lw_mode_chars, *cw_mode_chars;

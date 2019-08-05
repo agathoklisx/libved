@@ -24,6 +24,7 @@ SYSDIR     := sys
 SYSLIBDIR  := $(SYSDIR)/lib
 SYSBINDIR  := $(SYSDIR)/bin
 SYSINCDIR  := $(SYSDIR)/include
+SYSDATADIR := $(SYSDIR)/data
 
 #----------------------------------------------------------#
 LIBNAME        := $(THIS_LIBNAME)-$(THIS_LIBVERS)
@@ -84,10 +85,26 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
   FLAGS += -DHAS_USER_EXTENSIONS
 endif
 
-WORD_LEXIKON_FILE :=
+HAS_HISTORY := 0
 
-ifdef WORD_LEXIKON_FILE
-  FLAGS += -DWORD_LEXIKON_FILE='"$(WORD_LEXIKON_FILE)"'
+ifneq ($(HAS_HISTORY), 0)
+  FLAGS += -DHAS_HISTORY
+endif
+
+VED_DATA_DIR :=
+
+ifdef VED_DATA_DIR
+  FLAGS += -DVED_DATA_DIR='"$(VED_DATA_DIR)"'
+endif
+
+WORD_LEXICON_FILE :=
+
+ifdef WORD_LEXICON_FILE
+  FLAGS += -DWORD_LEXICON_FILE='"$(WORD_LEXICON_FILE)"'
+endif
+
+ifeq (-$(SYSKERNEL), -Linux)
+  FLAGS += -DSYS_IS_LINUX
 endif
 
 FLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
@@ -183,15 +200,17 @@ GDB_ARGS = --quiet -ex "set logging file /tmp/gdb.txt" -ex "set logging on" -ex 
 
 Env: makeenv checkenv
 makeenv:
-	@$(TEST) -d $(SYSDIR) || $(MKDIR_P) $(SYSDIR)
-	@$(TEST) -d $(SYSLIBDIR) || $(MKDIR) $(SYSLIBDIR)
-	@$(TEST) -d $(SYSINCDIR) || $(MKDIR) $(SYSINCDIR)
-	@$(TEST) -d $(SYSBINDIR) || $(MKDIR) $(SYSBINDIR)
+	@$(TEST) -d $(SYSDIR)     || $(MKDIR_P) $(SYSDIR)
+	@$(TEST) -d $(SYSLIBDIR)  || $(MKDIR) $(SYSLIBDIR)
+	@$(TEST) -d $(SYSINCDIR)  || $(MKDIR) $(SYSINCDIR)
+	@$(TEST) -d $(SYSBINDIR)  || $(MKDIR) $(SYSBINDIR)
+	@$(TEST) -d $(SYSDATADIR) || $(MKDIR) $(SYSDATADIR)
 checkenv:
-	@$(TEST) -w $(SYSDIR) || exit 1
-	@$(TEST) -w $(SYSLIBDIR) || exit 1
-	@$(TEST) -w $(SYSINCDIR) || exit 1
-	@$(TEST) -w $(SYSBINDIR) || exit 1
+	@$(TEST) -w $(SYSDIR)     || exit 1
+	@$(TEST) -w $(SYSLIBDIR)  || exit 1
+	@$(TEST) -w $(SYSINCDIR)  || exit 1
+	@$(TEST) -w $(SYSBINDIR)  || exit 1
+	@$(TEST) -w $(SYSDATADIR) || exit 1
 
 #----------------------------------------------------------#
 FILE := libved.c libved.h

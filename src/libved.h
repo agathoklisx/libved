@@ -49,6 +49,8 @@
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
 
+#define RLINE_HISTORY  0
+#define SEARCH_HISTORY 1
 
 #define ED_INIT_ERROR   (1 << 0)
 
@@ -133,6 +135,17 @@ enum {
 #define RL_ARGUMENT_MISSING_ERROR            -23
 #define RL_UNTERMINATED_QUOTED_STRING_ERROR  -24
 #define RL_UNRECOGNIZED_OPTION               -25
+
+#define RL_ARG_FILENAME (1 << 0)
+#define RL_ARG_RANGE (1 << 1)
+#define RL_ARG_GLOBAL (1 << 2)
+#define RL_ARG_PATTERN (1 << 3)
+#define RL_ARG_SUB (1 << 4)
+#define RL_ARG_INTERACTIVE (1 << 5)
+#define RL_ARG_APPEND (1 << 6)
+#define RL_ARG_BUFNAME (1 << 7)
+#define RL_ARG_VERBOSE (1 << 8)
+#define RL_ARG_ANYTYPE (1 << 9)
 
 #define INDEX_ERROR                          -1000
 #define NULL_PTR_ERROR                       -1001
@@ -282,8 +295,16 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
+/* this might make things harder for the reader, because hides details, but if
+ * something is gonna change in future, if it's not just a signle change it is
+ * certainly (easier) searchable */
+
 typedef int (*Rline_cb) (buf_t **, rline_t *, utf8);
 typedef void (*StrChop_cb) (vstr_t *, char *, void *);
+typedef utf8 (*InputGetch_cb) (term_t *);
+typedef int (*RlineAtBeg_cb) (rline_t **);
+typedef int (*RlineAtEnd_cb) (rline_t **);
+typedef int (*RlineTabCompletion_cb) (rline_t *);
 
 NewType (string,
   size_t  num_bytes;
@@ -461,21 +482,29 @@ NewClass (string,
   Self (string) self;
 );
 
-NewSelf (vstr,
+NewSelf (vstring,
+  void (*free) (vstr_t *);
+  vstr_t *(*new) (void);
   string_t *(*join) (vstr_t *, char *sep);
 );
 
-NewClass (vstr,
-  Self (vstr) self;
+NewClass (vstring,
+  Self (vstring) self;
 );
 
 NewSubSelf (rline, get,
   string_t *(*line) (rline_t *);
   string_t *(*command) (rline_t *);
+  vstr_t   *(*arg_fnames) (rline_t *, int);
+);
+
+NewSubSelf (rline, has,
+  int (*arg) (rline_t *, char *);
 );
 
 NewSelf (rline,
   SubSelf (rline, get) get;
+  SubSelf (rline, has) has;
 );
 
 NewClass (rline,
@@ -526,6 +555,8 @@ NewSelf (file,
     (*is_executable) (const char *),
     (*is_reg) (const char *),
     (*is_elf) (const char *);
+
+  vstr_t *(*readlines) (char *, vstr_t *, StrChop_cb, void *);
 );
 
 NewClass (file,
@@ -730,6 +761,13 @@ NewSubSelf (ed, sh,
   int (*popen) (ed_t *, buf_t *, char *, int, int, int (*) (buf_t *, FILE *));
 );
 
+NewSubSelf (ed, history,
+  void
+     (*add) (ed_t *, vstr_t *, int),
+     (*read) (ed_t *, char *),
+     (*write) (ed_t *, char *);
+);
+
 NewSelf (ed,
   ed_t *(*new) (Class (ed) *, int);
 
@@ -747,6 +785,7 @@ NewSelf (ed,
   SubSelf (ed, buf) buf;
   SubSelf (ed, win) win;
   SubSelf (ed, sh) sh;
+  SubSelf (ed, history) history;
 
   int
     (*scratch) (ed_t *, buf_t **, int),
@@ -777,7 +816,7 @@ NewClass (ed,
   Class (file) File;
   Class (dir) Dir;
   Class (rline) Rline;
-  Class (vstr) Vstr;
+  Class (vstring) Vstring;
 
   ed_t *head;
   ed_t *tail;

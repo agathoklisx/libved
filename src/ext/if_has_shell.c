@@ -24,7 +24,7 @@ private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
     $my(read) = read_cb;
   else
     if (redir_stdout)
-      $my(read) = My(Buf).read.from_fp;
+      $my(read) = Buf.read.from_fp;
     else
       $my(read) = proc_output_to_stdout;
 
@@ -32,7 +32,7 @@ private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   term_t *term = Ed.get.term (ed);
 
   ifnot (redir_stdout)
-    My(Term).reset (term);
+    Term.reset (term);
 
   if (NOTOK is proc_open (this)) goto theend;
   retval = proc_read (this);
@@ -40,16 +40,16 @@ private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
 
 theend:
   ifnot (redir_stdout) {
-    My(Term).set_mode (term, 'r');
-    My(Input).get (term);
-    My(Term).set (term);
+    Term.set_mode (term, 'r');
+    Input.get (term);
+    Term.set (term);
   }
 
   proc_free (this);
   win_t *w = Ed.get.current_win (ed);
-  int idx = My(Win).get.current_buf_idx (w);
-  My(Win).set.current_buf (w, idx);
-  My(Win).draw (w);
+  int idx = Win.get.current_buf_idx (w);
+  Win.set.current_buf (w, idx);
+  Win.draw (w);
   return retval;
 }
 

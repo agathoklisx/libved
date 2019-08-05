@@ -55,6 +55,7 @@
    - there are no comments to the code, so it is probably hard to understand and hack happily
      (it is a rather idiomatic C, though i believe it makes the complicated code more 
      readable, as it is based on intentions; but still hard to understand without comments).
+     And usually most of the comments, are not code comments, they are just comments.
 
    - it is written and tested under a Linux environment, but also the code makes a lot of
      assumptions, as expects a POSIX environment.
@@ -176,14 +177,19 @@
 /* All the compilation options:
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
+   ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
    HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
-   ENABLE_WRITING=1|0     (en|dis)able writing (default 0)
+   HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
+   VED_DATA_DIR="dir"     this can be used for e.g., history (default unset)
 
-   /* this provides a way to extend the behavior and|or as an API documentation,
-    * but is intended for development (safely ignore much of it) */
+   /* the next option provides a way to extend the behavior and|or as an API
+    * documentation, but is intended for development (safely ignore much of it) */
+
    HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr_libved.c (default 0)
 
+   /* the above setting also introduces a prerequisite to SYS_NAME definition,
+    * which can be (and it is) handled and defined by the Makefile */
  */
 
 /* C
@@ -496,10 +502,10 @@ Search:
    and which can be invoked as  :~battery  (i thought it makes sense to prefix
    such commands with '~' as it is associated with $HOME (as a user stuff), and
    mainly as a way to distinguish such commands from the core ones, as '~' is ascii
-   code 126, so these will be the last printed lines on tab completion or|and can be
-   narrowed; but there isn't the prefixed '~' a prerequisite, but in the future is
-   logical to use this as pattern to map it in a group that might behave with other
-   ways).
+   code 126, so these will be the last printed lines on tab completion or|and they
+   can be fast narrowed; but there isn't the prefixed '~' a prerequisite, but in the
+   future is logical to use this as pattern to map it in a group that might behave
+   with special ways).
  */
 
 /* History Completion Semantics (command line and search)
