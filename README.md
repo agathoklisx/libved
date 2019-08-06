@@ -74,6 +74,14 @@
      was destined to do, as such the only you can do is to pray to got the whole
      things right
 
+   - in the early days i coded some state machines without even knowing that were
+     actually state machines ( a lot of functions with states and switch and goto
+     statements; very fragile code that seems to work properly though (minus the
+     edge cases :))), and it was a couple of days ago, i actually realized that
+     really this code was a state machine (but not properly implemented).
+
+   - and a lot of goto's
+
    It is published of course for recording reasons and a personal one.
 
    The original purpose was to record the development process so it could be useful as
@@ -172,6 +180,18 @@
 
    make clean
 
+Note: It is not guaranteed that these three compilers will produce the same
+results. I didn't see any difference with gcc and tcc, but there is at least
+an issue with clang on visual mode (i can not explain it, i didn't research
+it as i'm developing with gcc and tcc (i need this code to be compiled with
+tcc - tcc compiles this code (almost 12000++ lines) in less than a second,
+while gcc takes 18 and clang 24, in this 5? years old chromebook, that runs
+really low in power - because and of the nature of the application (fragile
+algorithms that might need just a single change, or because of a debug message,
+or just because of a tiny compilation error), the compilations like these can
+happen (and if it was possible) sometimes 10 times in a couple of minutes, so
+tcc makes this possible. Many Thanks guys on and for tcc development.)
+
 ```
 ```C
 /* All the compilation options:
@@ -190,7 +210,6 @@
 
    /* the above setting also introduces a prerequisite to SYS_NAME definition,
     * which can be (and it is) handled and defined by the Makefile */
- */
 
 /* C
   This compiles to C11 for two reasons:
@@ -261,7 +280,7 @@
 
    - An Editor instance can have unlimited in-depended windows.
 
-   - There can be unlimited independent editor instances that can be (de|rea)ttached¹.
+   - There can be unlimited independent editor instances that can be (de|rea)tached¹.
 
    Modes.
 
@@ -315,7 +334,6 @@ Normal mode:
  | CTRL-L            | redraw current window          |
  | V                 | visual linewise mode           |
  | v                 | visual characterize mode       |
- | W                 | word operations (menu selection)|
  | CTRL-V            | visual blockwise mode          |
  | /                 | search forward                 |
  | ?                 | search backward                |
@@ -332,14 +350,27 @@ Normal mode:
  |   n               | new window                     |
  |   h, ARROW_LEFT   | window to the left             |
  |   l, ARROW_RIGHT  | window to the right            |
- |   `               | previous focused window         |
+ |   `               | previous focused window        |
+ | :                 | command line mode              |
+ | q                 | quit (not delete) and when buffer type is pager|
+ |                                                    |
+ | Extensions or quite different behavior with vim    |
+¹| CTRL-j            | detach editor and gives control to the caller
+ |              can be reatached with the exact status|
+ | W                 | word operations (via a selection menu)|
+ | (implemented in the library)                       |
+ |   - send `word' on XCLIPBOARD                      |
+ |   - send `word' on XPRIMARY                        |
+ | (extended by the test application)                 |
+ |   - interpret `word' as a man page and display it to|
+ |     the scratch buffer (requires the man utility)  |
+ |   - translate `word' (a personal quite usable function)|
  | ,                 |                                |
  |   n               | like :bn (next buffer)         |
  |   m               | like :bp (previous buffer)     |
  |   ,               | like :b` (prev focused buffer) |
- | :                 | command line mode              |
-¹| CTRL-j            | detach editor [extension]      |
- | q                 | quit (not delete) and when buffer type is pager|
+ |   .               | like :w` (prev focused window) |
+ |   /               | like :wn[ext] (next window)    |
 
 Insert mode:
  |
@@ -498,6 +529,7 @@ Search:
    :q[!]                  (quit (if force, do not check for modified buffers))
 
    User defined (through an API mechanism):
+   /* Old Comment Stays as a Reference */
    The test application provides a sample battery command to print the status and capacity
    and which can be invoked as  :~battery  (i thought it makes sense to prefix
    such commands with '~' as it is associated with $HOME (as a user stuff), and
@@ -506,6 +538,26 @@ Search:
    can be fast narrowed; but there isn't the prefixed '~' a prerequisite, but in the
    future is logical to use this as pattern to map it in a group that might behave
    with special ways).
+
+   The test application (which simply called veda for: visual editor application),
+   can provide the following commands:
+
+   :`mkdir   dir       (create directory)
+   :`man     manpage   (display man page on the scratch buffer)
+   :~battery           (display battery status to the message line)
+
+   The `man command requires the man utility, which simply means probably also an
+   implementation of a roff system. The col utility is not required, as we filter
+   the output by ourselves.
+
+   The `mkdir cannot understand --parents and not --mode= for now. By default the
+   permissions are: S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH.
+
+   The ~battery command it should work only for Linux.
+
+   Note:
+   The `prefix means system command, got it from shell syntax.
+
  */
 
 /* History Completion Semantics (command line and search)

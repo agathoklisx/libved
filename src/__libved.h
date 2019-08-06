@@ -126,6 +126,7 @@
 
 #define NO_AT_EOF 0
 #define AT_EOF 1
+
 enum {
   ERROR = -2,
   NOTHING_TODO = -1,
@@ -833,7 +834,7 @@ NewProp (win,
    dim_t **frames_dim;
 );
 
-NewType (env,
+NewType (venv,
   pid_t pid;
   uid_t uid;
   gid_t gid;
@@ -856,7 +857,7 @@ NewProp (ed,
   buf_T *Buf;
   win_T *Win;
 
-  env_t *env;
+  venv_t *env;
   char *saved_cwd;
 
   int
@@ -905,6 +906,7 @@ private int ved_quit (ed_t *, int);
 private int ved_normal_goto_linenr (buf_t *, int);
 private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
+private int ved_normal_eol (buf_t *);
 private int ved_normal_eof (buf_t *, int);
 private int ved_insert (buf_t **, utf8);
 private int ved_write_buffer (buf_t *, int);
@@ -932,6 +934,8 @@ private void ed_suspend (ed_t *);
 private void ed_resume (ed_t *);
 private int ed_win_change (ed_t *, buf_t **, int, char *, int);
 private int fd_read (int, char *, size_t);
+private string_t *vsys_which (char *, char *);
+private void vundo_clear (buf_t *);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

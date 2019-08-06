@@ -10,6 +10,12 @@
 
 #include <sys/stat.h> /* for mkdir() */
 
+NewType (uenv,
+  string_t *man_exec;
+);
+
+static uenv_t *Uenv = NULL;
+
 /* user sample extension[s] (mostly personal) and basic system command[s],
 that since explore[s] the API, this unit is also a vehicle to understand
 the needs and establish this application layer */
@@ -70,6 +76,25 @@ private int ved_translate_word (buf_t **thisp, char *word) {
   return match;
 }
 
+private int sys_man (buf_t **bufp, char *word) {
+  if (NULL is Uenv->man_exec) return NOTOK;
+  if (NULL is word) return NOTOK;
+  string_t *com = String.new_with_fmt ("%s %s", Uenv->man_exec->bytes, word);
+
+  buf_t *this = Ed.get.scratch_buf ($myed);
+  *bufp = this;
+  Buf.clear (this);
+
+  int retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+  String.free (com);
+
+  Ed.scratch ($myed, bufp, 0);
+  Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
+      Buf.get.num_lines (this) - 1);
+  return retval;
+}
+
+
 /* the callback function that is called on 'W' in normal mode */
 private int __word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
   int retval = 0;
@@ -82,12 +107,21 @@ private int __word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
         Ed.scratch ($myed, thisp, 0);
       return 0;
 
+      case 'm':
+        return sys_man (thisp, word);
+
     default:
       (void) thisp;
       break;
    }
 
   return 0;
+}
+
+private void __add_word_actions__ (ed_t *this) {
+  utf8 chars[] = {'t', 'm'};
+  char actions[] = "translate word\nman page";
+  Ed.set.word_actions (this, chars, 2, actions, __word_actions_cb__);
 }
 
 /* this function extends standard defined commands with a `battery command
@@ -188,9 +222,9 @@ private int sys_mkdir (char *dir, mode_t mode, int verbose) {
 
 private void __add_rline_sys_commands__ (ed_t *this) {
 /* sys defined commands can begin with '`': associated with shell syntax */
-  char *commands[2] = {"`mkdir", NULL};
-  int num_args[] = {2, 0}; int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0};
-  Ed.append.rline_commands (this, commands, 1, num_args, flags);
+  char *commands[] = {"`mkdir", "`man", NULL};
+  int num_args[] = {2, 0, 0}; int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
+  Ed.append.rline_commands (this, commands, 2, num_args, flags);
 }
 
 /* this is the callback function that is called on the extended by
@@ -209,7 +243,13 @@ private int __rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     int is_verbose = Rline.has.arg (rl, "verbose");
     retval = sys_mkdir (dirs->tail->data->bytes, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH, is_verbose);
     Vstring.free (dirs);
+  } else if (Cstring.eq (com->bytes, "`man")) {
+    vstr_t *names = Rline.get.arg_fnames (rl, 1);
+    if (NULL is names) goto theend;
+    retval = sys_man (thisp, names->head->data->bytes);
+    Vstring.free (names);
   }
+
 
 theend:
   String.free (com);
@@ -222,15 +262,19 @@ private void __add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, __rline_cb__);
 }
 
-private void __add_word_actions__ (ed_t *this) {
-  utf8 chars[] = {'t'};
-  char actions[] = "translate word\n";
-  Ed.set.word_actions (this, chars, 1, actions, __word_actions_cb__);
-}
-
 private void __init_usr__ (ed_t *this) {
   /* as a first sample, extend the actions on current word, triggered by 'W' */
   __add_word_actions__ (this);
   /* extend commands */
   __add_rline_commands__ (this);
+
+  Uenv = AllocType (uenv);
+  string_t *path = Ed.venv.get (this, "path");
+  Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
+}
+
+private void __deinit_usr__ (ed_t *this) {
+  (void) this;
+  String.free (Uenv->man_exec);
+  free (Uenv);
 }

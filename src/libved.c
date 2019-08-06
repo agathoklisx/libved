@@ -551,7 +551,8 @@ public void __deinit_vstring__ (vstring_T *this) {
 private vstr_t *str_chop (char *buf, char tok, vstr_t *tokstr,
                                      StrChop_cb cb, void *obj) {
   vstr_t *ts = tokstr;
-  if (NULL is ts) ts = vstr_new ();
+  int ts_isnull = NULL is ts;
+  if (ts_isnull) ts = vstr_new ();
 
   char *sp = buf;
   char *p = sp;
@@ -576,8 +577,16 @@ tokenize:;
       memcpy (s, p, len);
       s[len] = '\0';
 
-      ifnot (NULL is cb)
-        cb (ts, s, obj);
+      ifnot (NULL is cb) {
+        int retval;
+        if (STRCHOP_NOTOK is (retval = cb (ts, s, obj))) {
+          if (ts_isnull) vstr_free (ts); /* this might bring issues (not */
+          return NULL;                   /* with current code though) */
+        }
+
+        if (retval is STRCHOP_RETURN)
+          return ts;
+      }
       else
         vstr_append_current_with (ts, s);
 
@@ -1218,7 +1227,7 @@ private void term_get_size (term_t *this, int *rows, int *cols) {
 
 private int term_sane_mode (term_t *this) {
   if ($my(mode) is 's') return OK;
-  // if (isnotatty ($my(in_fd))) return NOTOK;
+   if (isnotatty ($my(in_fd))) return NOTOK;
 
   struct termios mode;
   while (NOTOK is tcgetattr ($my(in_fd), &mode))
@@ -1242,7 +1251,7 @@ private int term_sane_mode (term_t *this) {
 
 private int term_raw_mode (term_t *this) {
    if ($my(mode) is 'r') return OK;
-   // if (isnotatty ($my(in_fd))) return NOTOK;
+   if (isnotatty ($my(in_fd))) return NOTOK;
 
   while (NOTOK is tcgetattr ($my(in_fd), &$my(orig_mode)))
     if (errno isnot EINTR) return NOTOK;
@@ -1266,7 +1275,7 @@ private int term_raw_mode (term_t *this) {
 
 private int term_orig_mode (term_t *this) {
   if ($my(mode) is 'o') return OK;
-  // if (isnotatty ($my(in_fd))) return;
+  if (isnotatty ($my(in_fd))) return NOTOK;
 
   while (NOTOK is tcsetattr ($my(in_fd), TCSAFLUSH, &$my(orig_mode)))
     ifnot (errno is EINTR) return NOTOK;
@@ -1293,6 +1302,7 @@ private int term_set (term_t *this) {
   term_get_ptr_pos (this,  &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
   term_get_size (this, &$my(lines), &$my(columns));
   term_screen_save (this);
+  term_screen_clear (this);
   return OK;
 }
 
@@ -2560,6 +2570,10 @@ private void buf_free_action (buf_t *this, action_t *action) {
 }
 
 private void buf_free_undo (buf_t *this) {
+  vundo_clear (this);
+  free ($my(undo));
+  free ($my(redo));
+  return;
   action_t *action = vundo_pop (this);
   while (action isnot NULL) {
     buf_free_action (this, action);
@@ -2578,9 +2592,8 @@ private void buf_free_undo (buf_t *this) {
   free ($my(redo));
 }
 
-private string_t *find_executable_in_path (char *, char *);
-private env_t *env_new () {
-  env_t *env = AllocType (env);
+private venv_t *env_new () {
+  venv_t *env = AllocType (venv);
   env->pid = getpid ();
   env->uid = getuid ();
   env->gid = getgid ();
@@ -2596,13 +2609,13 @@ private env_t *env_new () {
 
   env->tmp_dir = string_new_with (TMPDIR);
   char *path = getenv ("PATH");
-  env->diff_exec = find_executable_in_path ("diff", path);
-  env->xclip_exec = find_executable_in_path ("xclip", path);
+  env->diff_exec = vsys_which ("diff", path);
+  env->xclip_exec =vsys_which ("xclip", path);
   env->path = (path is NULL) ? NULL : string_new_with (path);
   return env;
 }
 
-private void env_free (env_t **env) {
+private void env_free (venv_t **env) {
   if (NULL is env) return;
   string_free ((*env)->home_dir);
   string_free ((*env)->tmp_dir);
@@ -2610,6 +2623,15 @@ private void env_free (env_t **env) {
   ifnot (NULL is (*env)->xclip_exec) string_free ((*env)->xclip_exec);
   ifnot (NULL is (*env)->path) string_free ((*env)->path);
   free (*env); *env = NULL;
+}
+
+private string_t *venv_get (ed_t *this, char *name) {
+  if (str_eq (name, "path")) return $my(env)->path;
+  if (str_eq (name, "home_dir")) return $my(env)->home_dir;
+  if (str_eq (name, "tmp_dir"))  return $my(env)->tmp_dir;
+  if (str_eq (name, "diff_exec")) return $my(env)->diff_exec;
+  if (str_eq (name, "xclip_exec")) return $my(env)->xclip_exec;
+  return NULL;
 }
 
 private void history_free (hist_t **hist) {
@@ -2791,6 +2813,10 @@ private row_t *buf_current_pop_next (buf_t *this) {
 
 private char *buf_get_fname (buf_t *this) {
   return $my(fname);
+}
+
+private size_t buf_get_num_lines (buf_t *this) {
+  return this->num_items;
 }
 
 private vchar_t *buf_get_line_nth (line_t *line, int idx) {
@@ -4421,17 +4447,49 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 #define vundo_restore(act)                               \
   state_restore(act)
 
+private action_t *vundo_pop (buf_t *this) {
+  return current_list_pop ($my(undo), action_t);
+}
+
+private action_t *redo_pop (buf_t *this) {
+  if ($my(redo)->head is NULL) return NULL;
+  return current_list_pop ($my(redo), action_t);
+}
+
 private void redo_clear (buf_t *this) {
   if ($my(redo)->head is NULL) return;
 
+  action_t *action = redo_pop (this);
+  while (action) {
+    buf_free_action (this, action);
+    action = redo_pop (this);
+  }
+    /*
   action_t *action = $my(redo)->head;
   while (action isnot NULL) {
     action_t *tmp = action->next;
     buf_free_action (this, action);
     action = tmp;
   }
+    */
   $my(redo)->num_items = 0; $my(redo)->cur_idx = 0;
   $my(redo)->head = $my(redo)->tail = $my(redo)->current = NULL;
+}
+
+private void undo_clear (buf_t *this) {
+  if ($my(undo)->head is NULL) return;
+  action_t *action = vundo_pop (this);
+  while (action isnot NULL) {
+    buf_free_action (this, action);
+    action = vundo_pop (this);
+  }
+  $my(undo)->num_items = 0; $my(undo)->cur_idx = 0;
+  $my(undo)->head = $my(undo)->tail = $my(undo)->current = NULL;
+}
+
+private void vundo_clear (buf_t *this) {
+  undo_clear (this);
+  redo_clear (this);
 }
 
 private void vundo_push (buf_t *this, action_t *action) {
@@ -4455,15 +4513,6 @@ private void redo_push (buf_t *this, action_t *action) {
   }
 
   current_list_prepend ($my(redo), action);
-}
-
-private action_t *vundo_pop (buf_t *this) {
-  return current_list_pop ($my(undo), action_t);
-}
-
-private action_t *redo_pop (buf_t *this) {
-  if ($my(redo)->head is NULL) return NULL;
-  return current_list_pop ($my(redo), action_t);
 }
 
 private int vundo_insert (buf_t *this, act_t *act, action_t *redoact) {
@@ -4582,9 +4631,10 @@ private int vundo (buf_t *this, utf8 com) {
   return DONE;
 }
 
-private int ved_substitute (buf_t *this, char *pat, char *sub, int global,
+private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 int interactive, int fidx, int lidx) {
   int retval = NOTHING_TODO;
+  ifnot (this->num_items) return retval;
   row_t *it = this->head;
 
   string_t *substr = NULL;
@@ -4600,6 +4650,7 @@ int interactive, int fidx, int lidx) {
 
   int idx = 0;
   while (idx < fidx) {idx++; it = it->next;}
+
   while (idx++ <= lidx) {
     int bidx = 0;
 
@@ -4629,7 +4680,7 @@ searchandsub:;
         "|substitution string|\n"
         "%s%s%s\n"
         "replace? yY[es]|nN[o] replace all?aA[ll], continue next line? cC[ontinue], quit? qQ[uit]\n",
-         idx, re->match_idx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), re->match->bytes,
+         idx, re->match_idx + bidx, prefix, TERM_MAKE_COLOR(COLOR_MENU_SEL), re->match->bytes,
          TERM_MAKE_COLOR(COLOR_MENU_BG), re->match_ptr + re->match_len,
          TERM_MAKE_COLOR(COLOR_MENU_SEL), substr->bytes, TERM_MAKE_COLOR(COLOR_MENU_BG));
 
@@ -4657,7 +4708,8 @@ searchandsub:;
 
 if_global:
     if (global) {
-      bidx += re->match_idx + (done_substitution ? re->match_len : 0) + 1;
+      bidx += re->match_idx + 1 - (done_substitution
+         ? (re->match_len + substr->num_bytes) : 0);
       if (bidx >= (int) it->data->num_bytes) goto thecontinue;
       goto searchandsub;
     }
@@ -4670,6 +4722,10 @@ theend:
   if (retval is DONE) {
     $my(flags) |= BUF_IS_MODIFIED;
     vundo_push (this, action);
+    debug_append("ccidx %d nb %zd\n",
+        $mycur(cur_col_idx),         $mycur(data)->num_bytes);
+    if ($mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes)
+      ved_normal_eol (this);
     self(draw);
   } else
     buf_free_action (this, action);
@@ -5165,6 +5221,8 @@ private int ved_normal_noblnk (buf_t *this) {
 }
 
 private int ved_normal_eol (buf_t *this) {
+  if ($mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes)
+    ved_normal_bol (this);
   return ved_normal_right (this, $mycur(data)->num_bytes * 4, 1);
 }
 
@@ -5228,7 +5286,12 @@ private int ved_normal_left (buf_t *this, int count) {
 }
 
 private int ved_normal_bol (buf_t *this) {
-  return ved_normal_left (this, $mycur(data)->num_bytes * 4);
+  ifnot ($mycur(cur_col_idx)) return NOTHING_TODO;
+  $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
+  $my(video)->col_pos = $my(cur_video_col) = 1;
+  buf_set_draw_statusline (this);
+  My(Cursor).set_pos ($my(term_ptr), $my(video)->row_pos, $my(video)->col_pos);
+  return DONE;
 }
 
 private int ved_normal_end_word (buf_t **thisp, int count, int run_insert_mode) {
@@ -6117,6 +6180,12 @@ private int ved_normal_handle_comma (buf_t **thisp) {
 
     case ',':
       return ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
+
+    case '.':
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+
+    case '/':
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
   }
 
   return NOTHING_TODO;
@@ -6876,12 +6945,13 @@ private int ed_lw_mode_cb (buf_t *this, vstr_t *vstr, utf8 c) {
   return 1;
 }
 
-private void ved_visual_token_cb (vstr_t *str, char *tok, void *menu_o) {
+private int ved_visual_token_cb (vstr_t *str, char *tok, void *menu_o) {
   menu_t *menu = (menu_t *) menu_o;
   if (menu->patlen)
-    if (str_cmp_n (tok, menu->pat, menu->patlen)) return;
+    if (str_cmp_n (tok, menu->pat, menu->patlen)) return OK;
 
   vstr_append_current_with (str, tok);
+  return OK;
 }
 
 private int ved_visual_complete_actions_cb (menu_t *menu) {
@@ -7792,7 +7862,7 @@ private int buf_write (buf_t *this, int force) {
   return DONE;
 }
 
-private int ved_buf_read_from_fp (buf_t *this, FILE *fp) {
+private int ved_buf_read_from_fp (buf_t *this, fp_t *fp) {
   mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
   row_t *row = this->current;
   action_t *action = AllocType (action);
@@ -7801,7 +7871,7 @@ private int ved_buf_read_from_fp (buf_t *this, FILE *fp) {
   size_t len = 0;
   size_t t_len = 0;
   ssize_t nread;
-  while (-1 isnot (nread = ed_readline_from_fp (&line, &len, fp))) {
+  while (-1 isnot (nread = ed_readline_from_fp (&line, &len, fp->fp))) {
     t_len += nread;
     act_t *act = AllocType (act);
     vundo_set (act, INSERT_LINE);
@@ -7828,18 +7898,18 @@ private int ved_buf_read_from_file (buf_t *this, char *fname) {
   if (0 isnot access (fname, R_OK|F_OK)) return NOTHING_TODO;
   ifnot (file_is_reg (fname)) return NOTHING_TODO;
 
-  FILE *fp = fopen (fname, "r");
-  if (NULL is fp) {
+  fp_t fp = (fp_t) {.fp = fopen (fname, "r")};
+  if (NULL is fp.fp) {
     MSG_ERRNO(errno);
     return NOTHING_TODO;
   }
 
-  int retval = self(read.from_fp, fp);
-  fclose (fp);
+  int retval = self(read.from_fp, &fp);
+  fclose (fp.fp);
   return retval;
 }
 
-private string_t *find_executable_in_path (char *ex, char *path) {
+private string_t *vsys_which (char *ex, char *path) {
   if (NULL is ex or NULL is path) return NULL;
   size_t
     ex_len = bytelen (ex),
@@ -7865,9 +7935,10 @@ private string_t *find_executable_in_path (char *ex, char *path) {
   return ex_path;
 }
 
-private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com, int read_stdout,
-                      int read_stderr, int (*read_cb) (buf_t *, FILE *)) {
-  (void) ed; (void) buf; (void) com; (void) read_stdout; (void) read_stderr;
+private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
+  int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
+
+  (void) ed; (void) buf; (void) com; (void) redir_stdout; (void) redir_stderr;
   (void) read_cb;
   return NOTHING_TODO;
 }
@@ -8000,6 +8071,7 @@ change:
 
 private void ved_buf_clear (buf_t *this) {
   self(free.rows);
+  vundo_clear (this);
   this->head = this->tail = this->current = NULL;
   this->cur_idx = -1; this->num_items = 0;
   buf_on_no_length (this);
@@ -9423,8 +9495,7 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
 
 arg_type:
       if (arg->argname isnot NULL) {
-        My(String).clear (arg->argname);
-        My(String).append (arg->argname, opt->bytes);
+        My(String).replace_with (arg->argname, opt->bytes);
       } else
         arg->argname = My(String).new_with (opt->bytes);
 
@@ -9865,11 +9936,22 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_GREP:
       {
         arg_t *pat = rline_get_arg (rl, RL_ARG_PATTERN);
+        if (NULL is pat) break;
 
         vstr_t *fnames = rline_get_arg_fnames (rl, -1);
-        if (NULL is fnames or NULL is pat) break;
+        dirlist_t *dlist = NULL;
+
+        if (NULL is fnames) {
+          dlist = dirlist (".", 0);
+          if (NULL is dlist) break;
+          fnames = dlist->list;
+        }
+
         retval = ved_grep (thisp, pat->argval->bytes, fnames);
-        vstr_free (fnames);
+        ifnot (NULL is dlist)
+          dlist->free (dlist);
+        else
+          vstr_free (fnames);
       }
       goto theend;
 
@@ -9922,7 +10004,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
           if (NOTOK is ved_rline_parse_range (this, rl, range))
             goto theend;
 
-        retval = ved_substitute (this, pat->argval->bytes, sub->argval->bytes,
+        retval = buf_substitute (this, pat->argval->bytes, sub->argval->bytes,
            global isnot NULL, interactive isnot NULL, rl->range[0], rl->range[1]);
        }
 
@@ -11255,6 +11337,7 @@ private ed_T *editor_new (char *name) {
       .get = SubSelfInit (ed, get,
         .bufname = ed_get_bufname,
         .current_buf = ed_get_current_buf,
+        .scratch_buf = ved_scratch_buf,
         .current_win = ed_get_current_win,
         .current_win_idx = ed_get_current_win_idx,
         .state = ed_get_state,
@@ -11290,6 +11373,12 @@ private ed_T *editor_new (char *name) {
       ),
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
+      ),
+      .vsys = SubSelfInit (ed, vsys,
+        .which = vsys_which
+      ),
+      .venv = SubSelfInit (ed, venv,
+        .get = venv_get
       ),
       .history = SubSelfInit (ed, history,
         .add = ved_history_add,
@@ -11328,7 +11417,8 @@ private ed_T *editor_new (char *name) {
           .rows =buf_free_rows
         ),
         .get = SubSelfInit (buf, get,
-          .fname = buf_get_fname
+          .fname = buf_get_fname,
+          .num_lines = buf_get_num_lines
         ),
         .set = SubSelfInit (buf, set,
           .fname = buf_set_fname,
@@ -11364,7 +11454,8 @@ private ed_T *editor_new (char *name) {
         .draw_cur_row = buf_draw_cur_row,
         .clear = ved_buf_clear,
         .append_with = buf_append_with,
-        .write = buf_write
+        .write = buf_write,
+        .substitute = buf_substitute
       ),
     ),
     .Msg = ClassInit (msg,
@@ -11425,12 +11516,13 @@ public void __deinit_ved__ (ed_T *Ed) {
   free (Ed);
 }
 
-private void fp_tok_cb (vstr_t *unused, char *bytes, void *fp_type) {
+private int fp_tok_cb (vstr_t *unused, char *bytes, void *fp_type) {
   (void) unused;
   fp_t *fpt = (fp_t *) fp_type;
   ssize_t num = fprintf (fpt->fp, "%s\n", bytes);
   if   (0 > num) fpt->error = errno;
   else fpt->num_bytes += num;
+  return STRCHOP_OK;
 }
 
 public mutable size_t tostderr (char *bytes) {

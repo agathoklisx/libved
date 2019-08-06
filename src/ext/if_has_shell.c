@@ -2,18 +2,19 @@
 
 #include "../modules/proc/proc.c"
 
-private int proc_output_to_stdout (buf_t *this, FILE *fp) {
+private int proc_output_to_stdout (buf_t *this, fp_t *fp) {
   (void) this;
   char *line = NULL;
   size_t len = 0;
-  while (-1 isnot getline (&line, &len, fp))
+  while (-1 isnot getline (&line, &len, fp->fp))
     fprintf (stdout, "%s\r", line);
   ifnot (NULL is line) free (line);
   return 0;
 }
 
 private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int redir_stdout, int redir_stderr, int (*read_cb) (buf_t *, FILE *fp)) {
+  int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
+
   int retval = NOTOK;
   proc_t *this = proc_new ();
   $my(read_stderr) =  redir_stderr;

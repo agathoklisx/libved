@@ -14,7 +14,7 @@ NewProp (proc,
    int   stderr_fds[2];
    int   stdin_fds[2];
    int   status;
-   int  (*read) (buf_t *, FILE *fp);
+   PopenRead_cb read;
    buf_t *buf;
 );
 
@@ -67,17 +67,17 @@ private int proc_read (proc_t *this) {
 
   if ($my(read_stdout)) {
     if ($my(read) isnot NULL and $my(buf) isnot NULL) {
-      FILE *fp = fdopen ($my(stdout_fds)[PIPE_READ_END], "r");
-      retval = $my(read) ($my(buf), fp);
-      fclose (fp);
+      fp_t fp = (fp_t) {.fp = fdopen ($my(stdout_fds)[PIPE_READ_END], "r")};
+      retval = $my(read) ($my(buf), &fp);
+      fclose (fp.fp);
     }
   }
 
   if ($my(read_stderr)) {
     if ($my(read) isnot NULL and $my(buf) isnot NULL) {
-      FILE *fp = fdopen ($my(stderr_fds)[PIPE_READ_END], "r");
-      retval = $my(read) ($my(buf), fp);
-      fclose (fp);
+      fp_t fp = (fp_t) {.fp = fdopen ($my(stderr_fds)[PIPE_READ_END], "r")};
+      retval = $my(read) ($my(buf), &fp);
+      fclose (fp.fp);
     }
   }
 

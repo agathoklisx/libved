@@ -82,14 +82,14 @@ int main (int argc, char **argv) {
   Ed.sh.popen = my_ed_sh_popen;
 #endif
 
-#ifdef HAS_USER_EXTENSIONS
-  __init_usr__ (this);
+#ifdef HAS_HISTORY
+  #ifdef VED_DATA_DIR
+    Ed.history.read (this, VED_DATA_DIR);
+  #endif
 #endif
 
-#ifdef HAS_HISTORY
-#ifdef VED_DATA_DIR
-  Ed.history.read (this, VED_DATA_DIR);
-#endif
+#ifdef HAS_USER_EXTENSIONS
+  __init_usr__ (this);
 #endif
 
 /* at the begining at least a win_t type is allocated */
@@ -136,9 +136,13 @@ int main (int argc, char **argv) {
   }
 
 #ifdef HAS_HISTORY
-#ifdef VED_DATA_DIR
-  Ed.history.write (this, VED_DATA_DIR);
+  #ifdef VED_DATA_DIR
+    Ed.history.write (this, VED_DATA_DIR);
+  #endif
 #endif
+
+#ifdef HAS_USER_EXTENSIONS
+  __deinit_usr__ (this);
 #endif
 
   __deinit_ved__ (E);

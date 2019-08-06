@@ -52,6 +52,10 @@
 #define RLINE_HISTORY  0
 #define SEARCH_HISTORY 1
 
+#define STRCHOP_NOTOK NOTOK
+#define STRCHOP_OK OK
+#define STRCHOP_RETURN (OK + 1)
+
 #define ED_INIT_ERROR   (1 << 0)
 
 #define ED_SUSPENDED    (1 << 0)
@@ -150,6 +154,12 @@ enum {
 #define INDEX_ERROR                          -1000
 #define NULL_PTR_ERROR                       -1001
 #define INTEGEROVERFLOW_ERROR                -1002
+
+#define NO_GLOBAL 0
+#define GLOBAL    1
+
+#define NO_INTERACTIVE 0
+#define INTERACTIVE    1
 
 #define NL "\n"
 
@@ -280,6 +290,7 @@ DeclareType (sch);
 DeclareType (row);
 DeclareType (dim);
 DeclareType (syn);
+DeclareType (fp);
 
 DeclareType (buf);
 DeclareProp (buf);
@@ -299,12 +310,13 @@ DeclareClass (string);
  * something is gonna change in future, if it's not just a signle change it is
  * certainly (easier) searchable */
 
-typedef int (*Rline_cb) (buf_t **, rline_t *, utf8);
-typedef void (*StrChop_cb) (vstr_t *, char *, void *);
 typedef utf8 (*InputGetch_cb) (term_t *);
-typedef int (*RlineAtBeg_cb) (rline_t **);
-typedef int (*RlineAtEnd_cb) (rline_t **);
-typedef int (*RlineTabCompletion_cb) (rline_t *);
+typedef int  (*Rline_cb) (buf_t **, rline_t *, utf8);
+typedef int  (*StrChop_cb) (vstr_t *, char *, void *);
+typedef int  (*RlineAtBeg_cb) (rline_t **);
+typedef int  (*RlineAtEnd_cb) (rline_t **);
+typedef int  (*RlineTabCompletion_cb) (rline_t *);
+typedef int  (*PopenRead_cb) (buf_t *, fp_t *);
 
 NewType (string,
   size_t  num_bytes;
@@ -335,7 +347,10 @@ NewType (dirlist,
 NewType (fp,
   FILE   *fp;
   size_t  num_bytes;
-  int     error;
+
+  int
+    fd,
+    error;
 );
 
 NewType (capture,
@@ -573,6 +588,7 @@ NewClass (dir,
 
 NewSubSelf (buf, get,
   char *(*fname) (buf_t *);
+  size_t (*num_lines) (buf_t *);
 );
 
 NewSubSelf (bufset, as,
@@ -621,7 +637,7 @@ NewSubSelf (buf, row,
 
 NewSubSelf (buf, read,
   ssize_t  (*fname) (buf_t *);
-  int (*from_fp) (buf_t *, FILE *);
+  int (*from_fp) (buf_t *, fp_t *);
 );
 
 NewSelf (buf,
@@ -639,7 +655,9 @@ NewSelf (buf,
     (*draw_cur_row) (buf_t *),
     (*clear) (buf_t *);
 
-  int (*write) (buf_t *, int);
+  int
+    (*write) (buf_t *, int),
+    (*substitute) (buf_t *, char *, char *, int, int, int, int);
 
   row_t *(*append_with) (buf_t *, char *);
 );
@@ -695,7 +713,8 @@ NewClass (win,
 NewSubSelf (ed, get,
   buf_t
     *(*bufname) (ed_t *, char *),
-    *(*current_buf) (ed_t *);
+    *(*current_buf) (ed_t *),
+    *(*scratch_buf) (ed_t *);
 
   int
     (*num_rline_commands) (ed_t *),
@@ -758,7 +777,15 @@ NewSubSelf (ed, win,
 );
 
 NewSubSelf (ed, sh,
-  int (*popen) (ed_t *, buf_t *, char *, int, int, int (*) (buf_t *, FILE *));
+  int (*popen) (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
+);
+
+NewSubSelf (ed, vsys,
+  string_t *(*which) (char *, char *);
+);
+
+NewSubSelf (ed, venv,
+  string_t *(*get) (ed_t *, char *);
 );
 
 NewSubSelf (ed, history,
@@ -785,6 +812,8 @@ NewSelf (ed,
   SubSelf (ed, buf) buf;
   SubSelf (ed, win) win;
   SubSelf (ed, sh) sh;
+  SubSelf (ed, vsys) vsys;
+  SubSelf (ed, venv) venv;
   SubSelf (ed, history) history;
 
   int
@@ -792,6 +821,7 @@ NewSelf (ed,
     (*quit) (ed_t *, int),
     (*loop) (ed_t *, buf_t *),
     (*main) (ed_t *, buf_t *);
+
 );
 
 NewClass (ed,
