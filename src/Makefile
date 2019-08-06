@@ -56,6 +56,12 @@ ifeq (-$(CC), -gcc)
 endif
 
 #----------------------------------------------------------#
+HAS_LOCAL_EXTENSIONS := 0
+
+ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
+  FLAGS += -DHAS_LOCAL_EXTENSIONS
+endif
+
 DEBUG := 0
 ENABLE_WRITING := 0
 

@@ -50,7 +50,11 @@ static ed_T *E = NULL;
 #include "handlers/alloc_err_handler.c"
 
 #ifdef HAS_USER_EXTENSIONS
-#include "usr/usr_libved.c"
+#include "usr/usr.c"
+#endif
+
+#ifdef HAS_LOCAL_EXTENSIONS
+#include "local/local.c"
 #endif
 
 int main (int argc, char **argv) {
@@ -90,6 +94,10 @@ int main (int argc, char **argv) {
 
 #ifdef HAS_USER_EXTENSIONS
   __init_usr__ (this);
+#endif
+
+#ifdef HAS_LOCAL_EXTENSIONS
+  __init_local__ (this);
 #endif
 
 /* at the begining at least a win_t type is allocated */
@@ -143,6 +151,10 @@ int main (int argc, char **argv) {
 
 #ifdef HAS_USER_EXTENSIONS
   __deinit_usr__ (this);
+#endif
+
+#ifdef HAS_LOCAL_EXTENSIONS
+  __deinit_local__ (this);
 #endif
 
   __deinit_ved__ (E);

@@ -190,7 +190,7 @@ really low in power - because and of the nature of the application (fragile
 algorithms that might need just a single change, or because of a debug message,
 or just because of a tiny compilation error), the compilations like these can
 happen (and if it was possible) sometimes 10 times in a couple of minutes, so
-tcc makes this possible. Many Thanks guys on and for tcc development.)
+tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
 
 ```
 ```C
@@ -206,10 +206,21 @@ tcc makes this possible. Many Thanks guys on and for tcc development.)
    /* the next option provides a way to extend the behavior and|or as an API
     * documentation, but is intended for development (safely ignore much of it) */
 
-   HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr_libved.c (default 0)
+   HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr.c (default 0)
 
    /* the above setting also introduces a prerequisite to SYS_NAME definition,
     * which can be (and it is) handled and defined by the Makefile */
+
+   HAS_LOCAL_EXTENSIONS=1|0 (#in|ex)clude src/local/local.c (default 0)
+
+   /* Likewise with HAS_USER_EXTENSIONS, this option provides a way to extend
+      the behavior, but this file is not visible in git and should be created
+      by the user.
+      As the last on the chain this can overide everything. This file should
+      provide: */
+
+      private void __init_local__ (ed_t *this);
+      private void __deinit_local__ (ed_t *this);
 
 /* C
   This compiles to C11 for two reasons:
