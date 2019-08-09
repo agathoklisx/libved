@@ -57,9 +57,13 @@ endif
 
 #----------------------------------------------------------#
 HAS_LOCAL_EXTENSIONS := 0
+LOCAL_EXTENSIONS_FLAGS :=
 
 ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
   FLAGS += -DHAS_LOCAL_EXTENSIONS
+  ifdef LOCAL_EXTENSIONS_FLAGS
+    FLAGS += $(LOCAL_EXTENSIONS_FLAGS)
+  endif
 endif
 
 DEBUG := 0
@@ -86,9 +90,13 @@ ifneq ($(HAS_SHELL_COMMANDS), 0)
 endif
 
 HAS_USER_EXTENSIONS := 0
+USER_EXTENSIONS_FLAGS :=
 
 ifneq ($(HAS_USER_EXTENSIONS), 0)
   FLAGS += -DHAS_USER_EXTENSIONS
+  ifdef USER_EXTENSIONS_FLAGS
+    FLAGS += $(USER_EXTENSIONS_FLAGS)
+  endif
 endif
 
 HAS_HISTORY := 0
@@ -162,7 +170,15 @@ SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
 SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
-APPFLAGS    := -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(LIBNAME) $(FLAGS)
+APPFLAGS    := -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(LIBNAME)
+
+VED_APPLICATION_FLAGS :=
+
+ifdef VED_APPLICATION_FLAGS
+  APPFLAGS += $(VED_APPLICATION_FLAGS)
+endif
+
+APPFLAGS += $(FLAGS)
 
 veda-all: veda-static veda-shared
 

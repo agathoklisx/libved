@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <sys/wait.h>
+#include <pty.h>
 
 NewProp (proc,
   pid_t  pid;

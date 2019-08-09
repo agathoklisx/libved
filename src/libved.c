@@ -1206,7 +1206,7 @@ private term_t *term_new (void) {
   return this;
 }
 
-private void term_get_size (term_t *this, int *rows, int *cols) {
+private void term_init_size (term_t *this, int *rows, int *cols) {
   struct winsize wsiz;
 
   do {
@@ -1284,6 +1284,12 @@ private int term_orig_mode (term_t *this) {
   return OK;
 }
 
+private int *term_get_dim (term_t *this, int *dim) {
+  dim[0] = $my(lines);
+  dim[1] = $my(columns);
+  return dim;
+}
+
 private void term_set_name (term_t *this) {
   $my(name) = NULL;
 }
@@ -1300,7 +1306,7 @@ private int term_set_mode (term_t *this, char mode) {
 private int term_set (term_t *this) {
   if (NOTOK is term_set_mode (this, 'r')) return NOTOK;
   term_get_ptr_pos (this,  &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
-  term_get_size (this, &$my(lines), &$my(columns));
+  term_init_size (this, &$my(lines), &$my(columns));
   term_screen_save (this);
   term_screen_clear (this);
   return OK;
@@ -2493,10 +2499,30 @@ private ftype_t *buf_ftype_init_default (buf_t *this, int FTYPE,
   return $my(ftype);
 }
 
+private char *ftype_on_open_fname_under_cursor_c (char *fname,
+      size_t len, size_t stack_size) {
+  if (len < 8 or
+      (*fname isnot '<' or fname[len-1] isnot '>'))
+    return fname;
+
+  char incl_dir[] = {"/usr/include"};
+  size_t tlen = len + bytelen (incl_dir) + 1 - 2; // + / - <>
+
+  if (tlen + 1 > stack_size) return fname;
+
+  char t[tlen + 1];
+  snprintf(t, tlen + 1, "%s/%s", incl_dir, fname + 1);
+  for (size_t i = 0; i < tlen; i++) fname[i] = t[i];
+  fname[tlen] = '\0';
+
+  return fname;
+}
+
 private ftype_t *buf_ftype_init_c (buf_t *this) {
   ftype_t *ft = buf_ftype_init_default (this, FTYPE_C, buf_autoindent_c);
   ft->shiftwidth = 2;
   ft->tab_indents = 1;
+  ft->on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c;
   return ft;
 }
 
@@ -2607,6 +2633,13 @@ private venv_t *env_new () {
       string_set_nullbyte_at (env->home_dir, env->home_dir->num_bytes - 1);
   }
 
+  char *term_name = getenv ("TERM");
+  if (NULL is term_name) {
+    fprintf (stderr, "TERM environment variable isn't set\n");
+    env->term_name = string_new_with ("");
+  } else
+    env->term_name = string_new_with (term_name);
+
   env->tmp_dir = string_new_with (TMPDIR);
   char *path = getenv ("PATH");
   env->diff_exec = vsys_which ("diff", path);
@@ -2622,10 +2655,12 @@ private void env_free (venv_t **env) {
   ifnot (NULL is (*env)->diff_exec) string_free ((*env)->diff_exec);
   ifnot (NULL is (*env)->xclip_exec) string_free ((*env)->xclip_exec);
   ifnot (NULL is (*env)->path) string_free ((*env)->path);
+  ifnot (NULL is (*env)->term_name) string_free ((*env)->term_name);
   free (*env); *env = NULL;
 }
 
 private string_t *venv_get (ed_t *this, char *name) {
+  if (str_eq (name, "term_name")) return $my(env)->term_name;
   if (str_eq (name, "path")) return $my(env)->path;
   if (str_eq (name, "home_dir")) return $my(env)->home_dir;
   if (str_eq (name, "tmp_dir"))  return $my(env)->tmp_dir;
@@ -3423,6 +3458,10 @@ private void win_draw (win_t *w) {
 
   this = w->head;
   My(Video).Draw.all ($my(video));
+}
+
+private void ved_draw_current_win (ed_t *this) {
+  win_draw (this->current);
 }
 
 private void win_free (win_t *this) {
@@ -4722,8 +4761,6 @@ theend:
   if (retval is DONE) {
     $my(flags) |= BUF_IS_MODIFIED;
     vundo_push (this, action);
-    debug_append("ccidx %d nb %zd\n",
-        $mycur(cur_col_idx),         $mycur(data)->num_bytes);
     if ($mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes)
       ved_normal_eol (this);
     self(draw);
@@ -7630,6 +7667,9 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
   if (NULL is get_current_word (this, fname, Notfname, Notfname_len, &fidx, &lidx))
     return NOTHING_TODO;
 
+  ifnot (NULL is $my(ftype)->on_open_fname_under_cursor)
+    $my(ftype)->on_open_fname_under_cursor (fname, lidx - fidx + 1, PATH_MAX);
+
   char *line = $mycur(data)->bytes + lidx + 1;
   int lnr = 0;
   if (*line is '|' or *line is ':') {
@@ -8460,7 +8500,7 @@ private int ved_insert_complete_filename (buf_t **thisp) {
       $mycur(data)->num_bytes > 1 and 0 is IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx) - 1])))
     ved_normal_left (this, 1);
 
-  get_current_word (this, word, "", 0, &fidx, &lidx);
+  get_current_word (this, word, Notfname, Notfname_len, &fidx, &lidx);
   size_t len = bytelen (word);
   size_t orig_len = len;
 
@@ -8727,17 +8767,6 @@ private string_t *ved_rline_get_command (rline_t *rl) {
   return str;
 }
 
-private int ved_rline_has_arg (rline_t *rl, char *argname) {
-  arg_t *it = rl->head;
-  while (it) {
-    if (str_eq (argname, it->argname->bytes))
-      return 1;
-    it = it->next;
-  }
-
-  return 0;
-}
-
 private int ved_rline_tab_completion (rline_t *rl) {
   ifnot (rl->line->num_items) return RL_OK;
   int retval = RL_OK;
@@ -8906,6 +8935,7 @@ private void ved_deinit_commands (ed_t *this) {
 
 private void ved_add_command_arg (rlcom_t *rlcom, int flags) {
 #define ADD_ARG(arg, len, idx) rlcom->args[idx] = str_dup (arg, len)
+
   int i = 0;
   if (flags & RL_ARG_INTERACTIVE)
     ADD_ARG ("--interactive", 13, i++);
@@ -8929,17 +8959,34 @@ private void ved_add_command_arg (rlcom_t *rlcom, int flags) {
   rlcom->args[i] = NULL;
 }
 
+private void ved_append_command_arg (ed_t *this, char *com, char *argname) {
+  int i = 0;
+  while (i < $my(num_commands)) {
+    if (str_eq ($my(commands)[i]->com, com)) {
+      int idx = 0;
+      while (idx < $my(commands)[i]->num_args) {
+        if (NULL is $my(commands)[i]->args[idx])
+          $my(commands)[i]->args[idx] = str_dup (argname, bytelen (argname));
+        idx++;
+      }
+
+      return;
+    }
+    i++;
+  }
+}
+
 private void ved_append_rline_commands (ed_t *this, char **commands,
                 int commands_len, int num_args[], int flags[]) {
-  int len = $my(num_rline_commands) + commands_len;
+  int len = $my(num_commands) + commands_len;
 
-  ifnot ($my(num_rline_commands))
+  ifnot ($my(num_commands))
     $my(commands) = Alloc (sizeof (rlcom_t) * (commands_len + 1));
   else
     $my(commands) = Realloc ($my(commands), sizeof (rlcom_t) * (len + 1));
 
   int j = 0;
-  int i = $my(num_rline_commands);
+  int i = $my(num_commands);
   for (; i < len; i++, j++) {
     $my(commands)[i] = AllocType (rlcom);
     $my(commands)[i]->com = Alloc (bytelen (commands[j]) + 1);
@@ -8951,15 +8998,16 @@ private void ved_append_rline_commands (ed_t *this, char **commands,
     }
 
     $my(commands)[i]->args = Alloc (sizeof (char *) * ((int) num_args[j] + 1));
+    $my(commands)[i]->num_args = num_args[j];
     ved_add_command_arg ($my(commands)[i], flags[j]);
   }
 
   $my(commands)[len] = NULL;
-  $my(num_rline_commands) = len;
+  $my(num_commands) = len;
 }
 
 private int ved_get_num_rline_commands (ed_t *this) {
-  return $my(num_rline_commands);
+  return $my(num_commands);
 }
 
 private void ved_init_commands (ed_t *this) {
@@ -9057,11 +9105,13 @@ private void ved_init_commands (ed_t *this) {
     }
 
     $my(commands)[i]->args = Alloc (sizeof (char *) * (num_args[i] + 1));
+    $my(commands)[i]->num_args = num_args[i];
+
     ved_add_command_arg ($my(commands)[i], flags[i]);
   }
 
   $my(commands)[i] = NULL;
-  $my(num_rline_commands) = VED_COM_END;
+  $my(num_commands) = VED_COM_END;
 }
 
 private void rline_write_and_break (rline_t *rl){
@@ -9145,7 +9195,7 @@ private rline_t *ved_rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   rline_t *rl = rline_new (ed, this, getch , prompt_row, first_col, num_cols, video) ;
   if ($from (ed, commands) is NULL) ved_init_commands (ed);
   rl->commands = $from(ed, commands);
-  rl->commands_len = $from(ed, num_rline_commands);
+  rl->commands_len = $from(ed, num_commands);
   rl->tab_completion = ved_rline_tab_completion;
   return rl;
 }
@@ -9511,9 +9561,9 @@ arg_type:
         else if (str_eq (opt->bytes, "fname"))
           arg->type |= RL_ARG_FILENAME;
         else {
+          arg->type |= RL_ARG_ANYTYPE;
           MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
           rl->com = RL_UNRECOGNIZED_OPTION;
-          goto theerror;
         }
 
         goto argtype_succeed;
@@ -9675,16 +9725,27 @@ private arg_t *rline_get_arg (rline_t *rl, int type) {
   return NULL;
 }
 
-private arg_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
+private string_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
   arg_t *arg = rl->tail;
   while (arg) {
     if (arg->type & RL_ARG_ANYTYPE) {
-      if (str_eq (arg->argname->bytes, argname)) return arg;
+      if (str_eq (arg->argname->bytes, argname))
+        return arg->argval;
     }
     arg = arg->prev;
   }
 
   return NULL;
+}
+
+private int rline_arg_exists (rline_t *rl, char *argname) {
+  arg_t *arg = rl->head;
+  while (arg) {
+    if (str_eq (arg->argname->bytes, argname)) return 1;
+    arg = arg->next;
+  }
+
+  return 0;
 }
 
 private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
@@ -9804,10 +9865,11 @@ public rline_T __init_rline__ (void) {
       .get = SubSelfInit (rline, get,
         .line = ved_rline_get_line,
         .command = ved_rline_get_command,
-        .arg_fnames = rline_get_arg_fnames
+        .arg_fnames = rline_get_arg_fnames,
+        .anytype_arg = rline_get_anytype_arg
       ),
-     .has = SubSelfInit (rline, has,
-       .arg = ved_rline_has_arg
+     .arg = SubSelfInit (rline, arg,
+       .exists = rline_arg_exists
      ),
    ),
  );
@@ -10857,7 +10919,7 @@ private win_t *ed_set_current_win (ed_t *this, int idx) {
 
 private void ed_set_screen_size (ed_t *this) {
   My(Term).reset ($my(term));
-  My(Term).get_size ($my(term), $from(&$my(term), lines), $from(&$my(term), columns));
+  My(Term).init_size ($my(term), $from(&$my(term), lines), $from(&$my(term), columns));
   My(Term).set ($my(term));
   ifnot (NULL is $my(dim)) {
     free ($my(dim));
@@ -11225,7 +11287,8 @@ public cstring_T __init_cstring__ (void) {
       .cmp_n = str_cmp_n,
       .dup = str_dup,
       .eq = str_eq,
-      .chop = str_chop
+      .chop = str_chop,
+      .itoa = itoa
     )
   );
 }
@@ -11266,7 +11329,10 @@ public term_T __init_term__ (void) {
       .new = term_new,
       .free  = term_free,
       .set_name = term_set_name,
-      .get_size = term_get_size,
+      .init_size = term_init_size,
+      .get = SubSelfInit (term, get,
+        .dim = term_get_dim
+      ),
       .Cursor = SubSelfInit (term, cursor,
         .get_pos = term_get_ptr_pos,
         .set_pos = term_set_ptr_pos,
@@ -11354,6 +11420,7 @@ private ed_T *editor_new (char *name) {
       .append = SubSelfInit (ed, append,
         .win = ved_append_win,
         .message = ved_append_message,
+        .command_arg = ved_append_command_arg,
         .rline_commands = ved_append_rline_commands
       ),
       .readjust = SubSelfInit (ed, readjust,
@@ -11384,6 +11451,9 @@ private ed_T *editor_new (char *name) {
         .add = ved_history_add,
         .read = ved_history_read,
         .write = ved_history_write
+      ),
+      .draw = SubSelfInit (ed, draw,
+        .current_win = ved_draw_current_win
       ),
     ),
     .Win = ClassInit (win,

@@ -188,13 +188,13 @@ tcc - tcc compiles this code (almost 12000++ lines) in less than a second,
 while gcc takes 18 and clang 24, in this 5? years old chromebook, that runs
 really low in power - because and of the nature of the application (fragile
 algorithms that might need just a single change, or because of a debug message,
-or just because of a tiny compilation error), the compilations like these can
+or just because of a tiny compilation error), compilations like these can
 happen (and if it was possible) sometimes 10 times in a couple of minutes, so
 tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
 
 ```
 ```C
-/* All the compilation options:
+/* All the compilation options: */
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
@@ -221,6 +221,10 @@ tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
 
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
+
+  /* Make options to extend the compiler flags (intended for -llib) */
+
+  USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
 
 /* C
   This compiles to C11 for two reasons:
@@ -334,8 +338,8 @@ Normal mode:
  | x|DELETE          | delete character               | yes
  | D                 | delete to end of line          |
  | X|BACKSPACE       | delete character to the left   | yes
- |   BACKSPACE and if set and when current idx is 0, deletes trailing spaces|
- |   BACKSPACE and if set is like insert mode         |
+ | - BACKSPACE and if set and when current idx is 0, deletes trailing spaces|
+ | - BACKSPACE and if set is like insert mode         |
  | r                 | replace character              |
  | C                 | delete to end of line (insert) |
  | J                 | join lines                     |
@@ -353,15 +357,19 @@ Normal mode:
  | n                 | search next                    |
  | N                 | search Next (opposite)         |
  | CTRL-w            |                                |
- |   CTRL-w          | frame forward                  |
- |   w|j|ARROW_DOWN  | likewise                       |
- |   k|ARROW_UP      | frame backward                 |
- |   o               | make current frame the only one|
- |   s               | split                          |
- |   n               | new window                     |
- |   h, ARROW_LEFT   | window to the left             |
- |   l, ARROW_RIGHT  | window to the right            |
- |   `               | previous focused window        |
+ | - CTRL-w          | frame forward                  |
+ | - w|j|ARROW_DOWN  | likewise                       |
+ | - k|ARROW_UP      | frame backward                 |
+ | - o               | make current frame the only one|
+ | - s               | split                          |
+ | - n               | new window                     |
+ | - h, ARROW_LEFT   | window to the left             |
+ | - l, ARROW_RIGHT  | window to the right            |
+ | - `               | previous focused window        |
+ | g                 |                                |
+ | - g               | home row                       |
+ | - f               | open filename under the cursor |
+ |     gf on C filetype, can open header <header.h>   |
  | :                 | command line mode              |
  | q                 | quit (not delete) and when buffer type is pager|
  |                                                    |
@@ -375,13 +383,13 @@ Normal mode:
  | (extended by the test application)                 |
  |   - interpret `word' as a man page and display it to|
  |     the scratch buffer (requires the man utility)  |
- |   - translate `word' (a personal quite usable function)|
+ |   - translate `word' (a personal function for demonstration)|
  | ,                 |                                |
- |   n               | like :bn (next buffer)         |
- |   m               | like :bp (previous buffer)     |
- |   ,               | like :b` (prev focused buffer) |
- |   .               | like :w` (prev focused window) |
- |   /               | like :wn[ext] (next window)    |
+ | - n               | like :bn (next buffer)         |
+ | - m               | like :bp (previous buffer)     |
+ | - ,               | like :b` (prev focused buffer) |
+ | - .               | like :w` (prev focused window) |
+ | - /               | like :wn[ext] (next window)    |
 
 Insert mode:
  |
@@ -391,8 +399,8 @@ Insert mode:
  | CTRL-e            | complete based on the next line|
  | CTRL-a            | last insert                    |
  | CTRL-x            | completion mode                |
- |   CTRL-l or l     | complete line                  |
- |   CTRL-f or f     | complete filename              |
+ | - CTRL-l or l     | complete line                  |
+ | - CTRL-f or f     | complete filename              |
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
@@ -559,10 +567,17 @@ Search:
 
    The `man command requires the man utility, which simply means probably also an
    implementation of a roff system. The col utility is not required, as we filter
-   the output by ourselves.
+   the output by ourselves. It would be best if we could handle the man page lookup,
+   through internal code, though it would be perfect if we could also parse roff,
+   through a library - from a small research found a parser in js but not in C.
+   The command takes --section=section_id (from 1-8) argument, to select a man
+   page from the specific section (default section is 2).
+   However (like in the case of memmove() for this system that displays bstring(3))
+   it's not always succeeds. In this case pointing to the specific man file to the
+   file system through tab completion, it should work.
 
    The `mkdir cannot understand --parents and not --mode= for now. By default the
-   permissions are: S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH.
+   permissions are: S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH (this command needs revision).
 
    The ~battery command it should work only for Linux.
 

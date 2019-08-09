@@ -430,6 +430,7 @@ NewType (arg,
 NewType (rlcom,
   char *com;
   char **args;
+  int  num_args;
 );
 
 NewType (rline,
@@ -751,6 +752,7 @@ NewType (ftype,
     read_from_shell;
 
   string_t *(*autoindent) (buf_t *, row_t *);
+      char *(*on_open_fname_under_cursor) (char *, size_t, size_t);
 );
 
 NewProp (buf,
@@ -840,6 +842,7 @@ NewType (venv,
   gid_t gid;
 
   string_t
+     *term_name,
      *home_dir,
      *tmp_dir,
      *diff_exec,
@@ -867,7 +870,7 @@ NewProp (ed,
     max_wins,
     max_num_hist_entries,
     max_num_undo_entries,
-    num_rline_commands;
+    num_commands;
 
   int
     msg_row,
@@ -961,8 +964,8 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
-#define Notfname "|\""
-#define Notfname_len 2
+#define Notfname "|][\""
+#define Notfname_len 4
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \

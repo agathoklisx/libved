@@ -428,6 +428,12 @@ NewSubSelf (term, input,
   utf8 (*get) (term_t *);
 );
 
+NewSubSelf (term, get,
+  int *(*dim) (term_t *, int *),
+    (*lines) (term_t *),
+    (*columns) (term_t *);
+);
+
 NewClass (input,
   SubSelf (term, input) self;
 );
@@ -436,6 +442,7 @@ NewSelf (term,
   SubSelf (term, screen) Screen;
   SubSelf (term, cursor) Cursor;
   SubSelf (term, input) Input;
+  SubSelf (term, get) get;
 
   term_t *(*new) (void);
 
@@ -443,7 +450,7 @@ NewSelf (term,
     (*free) (term_t *),
     (*restore) (term_t *),
     (*set_name) (term_t *),
-    (*get_size) (term_t *, int *, int *);
+    (*init_size) (term_t *, int *, int *);
 
   int
     (*set) (term_t *),
@@ -456,7 +463,9 @@ NewClass (term,
 );
 
 NewSelf (cstring,
-  char *(*dup) (const char *, size_t);
+  char
+     *(*itoa) (int, char *, int),
+     *(*dup) (const char *, size_t);
   int
     (*eq) (const char *, const char *),
     (*cmp_n) (const char *, const char *, size_t);
@@ -508,18 +517,21 @@ NewClass (vstring,
 );
 
 NewSubSelf (rline, get,
-  string_t *(*line) (rline_t *);
-  string_t *(*command) (rline_t *);
+  string_t
+     *(*line) (rline_t *),
+     *(*command) (rline_t *),
+     *(*anytype_arg) (rline_t *, char *);
+
   vstr_t   *(*arg_fnames) (rline_t *, int);
 );
 
-NewSubSelf (rline, has,
-  int (*arg) (rline_t *, char *);
+NewSubSelf (rline, arg,
+  int (*exists) (rline_t *, char *);
 );
 
 NewSelf (rline,
   SubSelf (rline, get) get;
-  SubSelf (rline, has) has;
+  SubSelf (rline, arg) arg;
 );
 
 NewClass (rline,
@@ -753,6 +765,7 @@ NewSubSelf (ed, append,
    int (*win) (ed_t *, win_t *);
   void
     (*message) (ed_t *, char *),
+    (*command_arg) (ed_t *, char *, char *),
     (*rline_commands) (ed_t *, char **, int, int[], int[]);
 
 );
@@ -795,6 +808,10 @@ NewSubSelf (ed, history,
      (*write) (ed_t *, char *);
 );
 
+NewSubSelf (ed, draw,
+  void (*current_win) (ed_t *);
+);
+
 NewSelf (ed,
   ed_t *(*new) (Class (ed) *, int);
 
@@ -815,6 +832,7 @@ NewSelf (ed,
   SubSelf (ed, vsys) vsys;
   SubSelf (ed, venv) venv;
   SubSelf (ed, history) history;
+  SubSelf (ed, draw) draw;
 
   int
     (*scratch) (ed_t *, buf_t **, int),

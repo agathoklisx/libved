@@ -36,8 +36,8 @@ private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
     Term.reset (term);
 
   if (NOTOK is proc_open (this)) goto theend;
-  retval = proc_read (this);
-  proc_wait (this);
+  proc_read (this);
+  retval = proc_wait (this);
 
 theend:
   ifnot (redir_stdout) {

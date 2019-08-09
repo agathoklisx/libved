@@ -23,7 +23,7 @@ the needs and establish this application layer */
 
           /* user defined commands and|or actions */
 
-/* this function that extends normal mode performs a simple search on a
+/* this function that extends normal mode, performs a simple search on a
  * lexicon defined file for 'word', and then prints the matched lines to
  * the scratch buffer (this buffer can be closed with 'q' (as in a pager)):
  * requires the WORD_LEXICON_FILE to be defined with a way; my way is to
@@ -76,16 +76,39 @@ private int ved_translate_word (buf_t **thisp, char *word) {
   return match;
 }
 
-private int sys_man (buf_t **bufp, char *word) {
+private int sys_man (buf_t **bufp, char *word, int section) {
   if (NULL is Uenv->man_exec) return NOTOK;
   if (NULL is word) return NOTOK;
-  string_t *com = String.new_with_fmt ("%s %s", Uenv->man_exec->bytes, word);
+
+  int retval = NOTOK;
+  int sections[9]; for (int i = 0; i < 9; i++) sections[i] = 0;
+  int def_sect = 2;
+
+  section = ((section <= 0 or section > 8) ? def_sect : section);
+  string_t *com = String.new_with_fmt ("%s -s %d %s", Uenv->man_exec->bytes,
+     section, word);
 
   buf_t *this = Ed.get.scratch_buf ($myed);
   *bufp = this;
   Buf.clear (this);
 
-  int retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+  int total_sections = 0;
+  for (int i = 1; i < 9; i++) {
+    sections[section] = 1;
+    total_sections++;
+    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+
+    ifnot (retval) break;
+
+    while (sections[section] and total_sections < 8) {
+      if (section is 8) section = 1;
+      else section++;
+    }
+
+    String.replace_with_fmt (com, "%s -s %d %s", Uenv->man_exec->bytes,
+        section, word);
+  }
+
   String.free (com);
 
   Ed.scratch ($myed, bufp, 0);
@@ -96,7 +119,7 @@ private int sys_man (buf_t **bufp, char *word) {
 
 
 /* the callback function that is called on 'W' in normal mode */
-private int __word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
+private int __u_word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
   int retval = 0;
 
   switch (c) {
@@ -108,7 +131,7 @@ private int __word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
       return 0;
 
       case 'm':
-        return sys_man (thisp, word);
+        return sys_man (thisp, word, -1);
 
     default:
       (void) thisp;
@@ -118,10 +141,10 @@ private int __word_actions_cb__ (buf_t **thisp, char *word, utf8 c) {
   return 0;
 }
 
-private void __add_word_actions__ (ed_t *this) {
+private void __u_add_word_actions__ (ed_t *this) {
   utf8 chars[] = {'t', 'm'};
   char actions[] = "translate word\nman page";
-  Ed.set.word_actions (this, chars, 2, actions, __word_actions_cb__);
+  Ed.set.word_actions (this, chars, 2, actions, __u_word_actions_cb__);
 }
 
 /* this function extends standard defined commands with a `battery command
@@ -201,7 +224,7 @@ theend:
   return retval;
 }
 
-private void __add_rline_user_commands__ (ed_t *this) {
+private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
   char *commands[2] = {"~battery", NULL};
   int num_args[] = {0, 0}; int flags[] = {0, 0};
@@ -220,17 +243,16 @@ private int sys_mkdir (char *dir, mode_t mode, int verbose) {
   return NOTOK;
 }
 
-private void __add_rline_sys_commands__ (ed_t *this) {
+private void __u_add_rline_sys_commands__ (ed_t *this) {
 /* sys defined commands can begin with '`': associated with shell syntax */
   char *commands[] = {"`mkdir", "`man", NULL};
-  int num_args[] = {2, 0, 0}; int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
+  int num_args[] = {2, 1, 0}; int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
   Ed.append.rline_commands (this, commands, 2, num_args, flags);
+  Ed.append.command_arg (this, "`man", "--section=");
 }
 
-/* this is the callback function that is called on the extended by
- * the user commands
- */
-private int __rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
+/* this is the callback function that is called on the extended commands */
+private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   (void) thisp; (void) c;
   int retval = NOTOK;
   string_t *com = Rline.get.command (rl);
@@ -240,33 +262,34 @@ private int __rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   else if (Cstring.eq (com->bytes, "`mkdir")) {
     vstr_t *dirs = Rline.get.arg_fnames (rl, 1);
     if (NULL is dirs) goto theend;
-    int is_verbose = Rline.has.arg (rl, "verbose");
+    int is_verbose = Rline.arg.exists (rl, "verbose");
     retval = sys_mkdir (dirs->tail->data->bytes, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH, is_verbose);
     Vstring.free (dirs);
   } else if (Cstring.eq (com->bytes, "`man")) {
     vstr_t *names = Rline.get.arg_fnames (rl, 1);
     if (NULL is names) goto theend;
-    retval = sys_man (thisp, names->head->data->bytes);
+    string_t *section = Rline.get.anytype_arg (rl, "section");
+    int sect_id = (NULL is section ? 0 : atoi (section->bytes));
+    retval = sys_man (thisp, names->head->data->bytes, sect_id);
     Vstring.free (names);
   }
-
 
 theend:
   String.free (com);
   return retval;
 }
 
-private void __add_rline_commands__ (ed_t *this) {
-  __add_rline_sys_commands__ (this);
-  __add_rline_user_commands__ (this);
-  Ed.set.rline_cb (this, __rline_cb__);
+private void __u_add_rline_commands__ (ed_t *this) {
+  __u_add_rline_sys_commands__ (this);
+  __u_add_rline_user_commands__ (this);
+  Ed.set.rline_cb (this, __u_rline_cb__);
 }
 
 private void __init_usr__ (ed_t *this) {
   /* as a first sample, extend the actions on current word, triggered by 'W' */
-  __add_word_actions__ (this);
+  __u_add_word_actions__ (this);
   /* extend commands */
-  __add_rline_commands__ (this);
+  __u_add_rline_commands__ (this);
 
   Uenv = AllocType (uenv);
   string_t *path = Ed.venv.get (this, "path");
