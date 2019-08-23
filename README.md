@@ -222,6 +222,12 @@ tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
 
+  HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
+  SPELL_DICTIONARY="path/to/spell_dictionary (default $(SYSDATADIR)/spell/spell.txt)
+  SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
+  /* The above options requires HAS_USER_EXTENSIONS=1,
+   * but see for details to the Spelling section below in this same document */
+
   /* Make options to extend the compiler flags (intended for -llib) */
 
   USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
@@ -384,6 +390,7 @@ Normal mode:
  |   - interpret `word' as a man page and display it to|
  |     the scratch buffer (requires the man utility)  |
  |   - translate `word' (a personal function for demonstration)|
+ |   - spell `word' (check if '`word' is mispelled)   |
  | ,                 |                                |
  | - n               | like :bn (next buffer)         |
  | - m               | like :bp (previous buffer)     |
@@ -564,6 +571,7 @@ Search:
    :`mkdir   dir       (create directory)
    :`man     manpage   (display man page on the scratch buffer)
    :~battery           (display battery status to the message line)
+   :~spell --range=`range' (without range default current line)
 
    The `man command requires the man utility, which simply means probably also an
    implementation of a roff system. The col utility is not required, as we filter
@@ -583,8 +591,58 @@ Search:
 
    Note:
    The `prefix means system command, got it from shell syntax.
-
  */
+
+ /* Spelling
+  The application can provide spelling capabilities, using very simple code, based
+  on an idea by Peter Norvig at:
+  http://norvig.com/spell-correct.html
+
+  The algorithms for transforming the `word', except the case handling are based
+  on the checkmate_spell project at: https://github.com/syb0rg/checkmate
+
+  Almost same code at: https://github.com/marcelotoledo/spelling_corrector
+
+  Copyright  (C)  2007  Marcelo Toledo <marcelo@marcelotoledo.com>
+
+  Version: 1.0
+  Keywords: spell corrector
+  Author: Marcelo Toledo <marcelo@marcelotoledo.com>
+  Maintainer: Marcelo Toledo <marcelo@marcelotoledo.com>
+  URL: http://marcelotoledo.com
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+
+  The word database i use is from:
+  https://github.com/first20hours/google-10000-english
+  Data files are derived from the Google Web Trillion Word Corpus, as described
+  by Thorsten Brants and Alex Franz
+  http://googleresearch.blogspot.com/2006/08/all-our-n-gram-are-belong-to-you.html
+  and distributed by the Linguistic Data Consortium:
+  http://www.ldc.upenn.edu/Catalog/CatalogEntry.jsp?catalogId=LDC2006T13.
+  Subsets of this corpus distributed by Peter Novig:
+  http://norvig.com/ngrams/
+  Corpus editing and cleanup by Josh Kaufman.
+
+  The above dictionary contains the 10000 most frequently used english words,
+  and can be extended through the application by pressing 'a' on the dialog.
+
+  This implementation offers three ways to check for mispelling words.
+  1. using the command line :~spell --range=`range'
+  2. on visual linewise mode, by pressing `S' or by using tab completion
+  3. on 'W' in normal mode
+
+  As it is a very simple approach with really few lines of code, it it is obvious
+  that there is not guarantee, that will find and correct all the mispelled words
+  in the document, though it can be taught with proper usage.
+
+  This is the initial implementation and some more work is needed to make it more
+  accurate, though for a start is serves its purpose quite satisfactory, plus there
+  is no requirement and already helped me to this document.
+  */
 
 /* History Completion Semantics (command line and search)
    - the ARROW_UP key starts from the last entry set in history, and scrolls down
@@ -634,7 +692,7 @@ Search:
 
    on 'y': write the buffer and continue
    on 'n': continue without writing
-   on 'c': cansel operation at this point (some buffers might be closed already)
+   on 'c': cancel operation at this point (some buffers might be closed already)
    on 'd': print to the stdout the unified diff and redo the question (note that
            when printing to the stdout, the previous terminal state is restored;
            any key can bring back the focus)
@@ -803,7 +861,7 @@ Search:
    type.
 
    Finally, a couple of macros that access the root editor type or the parent's
-   (win structure) type. Either of these three main structures have acces (with one
+   (win structure) type. Either of these three main structures have access (with one
    way or the other) to all the fields of the root structure, so My(Class) macro
    as well the others too, works everywhere the same, if there is a proper
    declared "this".

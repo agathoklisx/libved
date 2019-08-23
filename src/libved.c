@@ -64,36 +64,32 @@ private char *byte_in_str (const char *s, int c) {
   return (char *)sp;
 }
 
-private int char_byte_len (uchar c) {
+private char *str_trim_end (char *bytes, char c) {
+  char *sp = byte_in_str (bytes, 0);
+  sp--;
+
+  while (sp >= bytes) {
+    if (*sp isnot c) break;
+    *sp = '\0';
+    if (sp is bytes) break;
+  }
+  return bytes;
+}
+
+private char *str_substr (char *dest, size_t len, char *src, size_t src_len, size_t idx) {
+  if (src_len < idx + len) {
+    dest[0] = '\0';
+    return NULL;
+  }
+  for (size_t i = 0; i < len; i++) dest[i] = src[i+idx];
+  dest[len] = '\0';
+  return dest;
+}
+
+private int str_utf8_charlen (uchar c) {
   if (c < 0x80) return 1;
   if ((c & 0xe0) is 0xc0) return 2;
   return 3 + ((c & 0xf0) isnot 0xe0);
-}
-
-private char *char_from_code (utf8 c, char *buf) {
-  int len = 1;
-  if (c < 0x80) {
-    buf[0] = (char) c;
-  } else if (c < 0x800) {
-    buf[0] = (c >> 6) | 0xC0;
-    buf[1] = (c & 0x3F) | 0x80;
-    len++;
-  } else if (c < 0x10000) {
-    buf[0] = (c >> 12) | 0xE0;
-    buf[1] = ((c >> 6) & 0x3F) | 0x80;
-    buf[2] = (c & 0x3F) | 0x80;
-    len += 2;
-  } else if (c < 0x110000) {
-    buf[0] = (c >> 18) | 0xF0;
-    buf[1] = ((c >> 12) & 0x3F) | 0x80;
-    buf[2] = ((c >> 6) & 0x3F) | 0x80;
-    buf[3] = (c & 0x3F) | 0x80;
-    len += 3;
-  } else
-    return NULL;
-
-  buf[len] = '\0';
-  return buf;
 }
 
 private char *char_nth (char *bytes, int nth, int len) {
@@ -103,7 +99,7 @@ private char *char_nth (char *bytes, int nth, int len) {
 
   for (int i = 0; i < len and n < nth; i++) {
     sp += clen;
-    clen = (uchar) char_byte_len (*sp);
+    clen = (uchar) str_utf8_charlen (*sp);
     n++;
   }
 
@@ -119,7 +115,7 @@ private int char_num (char *bytes, int len) {
 
   for (int i = 0; i < len and *sp; i++) {
     sp += clen;
-    clen = char_byte_len ((uchar) *sp);
+    clen = str_utf8_charlen ((uchar) *sp);
     n++;
   }
 
@@ -144,7 +140,7 @@ private int char_is_nth_at (char *bytes, int idx, int len) {
   for (int i = 0; i < len and i <= idx; i++) {
     sp += clen;
     ifnot (*sp) return -1;
-    clen = char_byte_len ((uchar) *sp);
+    clen = str_utf8_charlen ((uchar) *sp);
     i += clen - 1;
     n++;
   }
@@ -170,7 +166,7 @@ private char *string_reverse_from_to (char *dest, char *src, int fidx, int lidx)
       continue;
     }
 
-    int clen = char_byte_len (c);
+    int clen = str_utf8_charlen (c);
     tlen += clen - 1;
 
     for (int ii = 0; ii < clen; ii++) {
@@ -184,6 +180,327 @@ private char *string_reverse_from_to (char *dest, char *src, int fidx, int lidx)
 
   dest[tlen] = '\0';
   return dest;
+}
+
+private void str_utf8_free_members (u8_t *u8) {
+  ifnot (u8->num_items) return;
+  u8char_t *it = u8->head;
+  while (it) {
+    u8char_t *tmp = it->next;
+    free (it);
+    it = tmp;
+  }
+  u8->num_items = 0;
+  u8->cur_idx = -1;
+  u8->head = u8->tail = u8->current = NULL;
+}
+
+private void str_utf8_free (u8_t *u8) {
+  if (NULL is u8) return;
+  str_utf8_free_members (u8);
+  free (u8);
+}
+
+private u8_t *str_utf8_new (void) {
+  return AllocType (u8);
+}
+
+private u8char_t *str_utf8_encode (u8_t *u8, char *bytes,
+            size_t len, int freeline, int tablen, int curidx) {
+  if (freeline) str_utf8_free_members (u8);
+  ifnot (len) {
+    u8->num_items = 0;
+    return NULL;
+  }
+
+  int curpos = 0;
+
+  char *sp = bytes;
+  u8->len = 0;
+
+  while (*sp) {
+    uchar c = (uchar) *sp;
+    u8char_t *chr = AllocType (u8char);
+    chr->code = c;
+    chr->width = chr->len = 1;
+    chr->buf[0] = *sp;
+
+    if (c < 0x80) {
+      if (chr->code is '\t')
+        chr->width += (tablen - 1);
+      chr->buf[1] = '\0';
+      goto push;
+    }
+
+    chr->buf[1] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+
+    if ((c & 0xe0) is 0xc0) {
+      chr->code -= offsetsFromUTF8[1];
+      chr->buf[2] = '\0';
+      goto push;
+    }
+
+    chr->buf[2] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+
+    if ((c & 0xf0) is 0xe0) {
+      chr->code -= offsetsFromUTF8[2];
+      chr->buf[3] = '\0';
+      goto push;
+    }
+
+    chr->buf[3] = *++sp;
+    chr->len++;
+    chr->code <<= 6; chr->code += (uchar) *sp;
+    chr->code -= offsetsFromUTF8[3];
+    chr->buf[4] = '\0';
+
+push:
+    current_list_append (u8, chr);
+    if (curidx is u8->len)
+      curpos = u8->cur_idx;
+
+    u8->len += chr->len;
+    sp++;
+  }
+
+  current_list_set (u8, curpos);
+  return u8->current;
+}
+
+private utf8 str_utf8_get_code_at (char *src, size_t src_len, int idx, int *len) {
+  if (idx >= (int) src_len) return -1;
+  char *sp = src + idx;
+  int code = 0;
+  int i = 0;
+  *len = 0;
+  do {
+    code <<= 6;
+    code += (uchar) sp[i++];
+    (*len)++;
+  } while (sp[i] and IS_UTF8 (sp[i]));
+
+  code -= offsetsFromUTF8[*len-1];
+  return code;
+}
+
+private char *str_utf8_character (utf8 c, char *buf, int *len) {
+  *len = 1;
+  if (c < 0x80) {
+    buf[0] = (char) c;
+  } else if (c < 0x800) {
+    buf[0] = (c >> 6) | 0xC0;
+    buf[1] = (c & 0x3F) | 0x80;
+    (*len)++;
+  } else if (c < 0x10000) {
+    buf[0] = (c >> 12) | 0xE0;
+    buf[1] = ((c >> 6) & 0x3F) | 0x80;
+    buf[2] = (c & 0x3F) | 0x80;
+    (*len) += 2;
+  } else if (c < 0x110000) {
+    buf[0] = (c >> 18) | 0xF0;
+    buf[1] = ((c >> 12) & 0x3F) | 0x80;
+    buf[2] = ((c >> 6) & 0x3F) | 0x80;
+    buf[3] = (c & 0x3F) | 0x80;
+    (*len) += 3;
+  } else
+    return 0;
+
+  buf[*len] = '\0';
+  return buf;
+}
+
+/* almost all of this following 'case' code is from the utf8.h project:
+ * https://github.com/sheredom/utf8.h.git 
+ * This is free and unencumbered software released into the public domain.
+ */
+
+private utf8 str_utf8_to_lower (utf8 cp) {
+  if (((0x0041 <= cp) && (0x005a >= cp)) ||
+      ((0x00c0 <= cp) && (0x00d6 >= cp)) ||
+      ((0x00d8 <= cp) && (0x00de >= cp)) ||
+      ((0x0391 <= cp) && (0x03a1 >= cp)) ||
+      ((0x03a3 <= cp) && (0x03ab >= cp))) {
+    cp += 32;
+  } else if (((0x0100 <= cp) && (0x012f >= cp)) ||
+             ((0x0132 <= cp) && (0x0137 >= cp)) ||
+             ((0x014a <= cp) && (0x0177 >= cp)) ||
+             ((0x0182 <= cp) && (0x0185 >= cp)) ||
+             ((0x01a0 <= cp) && (0x01a5 >= cp)) ||
+             ((0x01de <= cp) && (0x01ef >= cp)) ||
+             ((0x01f8 <= cp) && (0x021f >= cp)) ||
+             ((0x0222 <= cp) && (0x0233 >= cp)) ||
+             ((0x0246 <= cp) && (0x024f >= cp)) ||
+             ((0x03d8 <= cp) && (0x03ef >= cp))) {
+    cp |= 0x1;
+  } else if (((0x0139 <= cp) && (0x0148 >= cp)) ||
+             ((0x0179 <= cp) && (0x017e >= cp)) ||
+             ((0x01af <= cp) && (0x01b0 >= cp)) ||
+             ((0x01b3 <= cp) && (0x01b6 >= cp)) ||
+             ((0x01cd <= cp) && (0x01dc >= cp))) {
+    cp += 1;
+    cp &= ~0x1;
+  } else {
+    switch (cp) {
+    default: break;
+    case 0x0178: cp = 0x00ff; break;
+    case 0x0243: cp = 0x0180; break;
+    case 0x018e: cp = 0x01dd; break;
+    case 0x023d: cp = 0x019a; break;
+    case 0x0220: cp = 0x019e; break;
+    case 0x01b7: cp = 0x0292; break;
+    case 0x01c4: cp = 0x01c6; break;
+    case 0x01c7: cp = 0x01c9; break;
+    case 0x01ca: cp = 0x01cc; break;
+    case 0x01f1: cp = 0x01f3; break;
+    case 0x01f7: cp = 0x01bf; break;
+    case 0x0187: cp = 0x0188; break;
+    case 0x018b: cp = 0x018c; break;
+    case 0x0191: cp = 0x0192; break;
+    case 0x0198: cp = 0x0199; break;
+    case 0x01a7: cp = 0x01a8; break;
+    case 0x01ac: cp = 0x01ad; break;
+    case 0x01af: cp = 0x01b0; break;
+    case 0x01b8: cp = 0x01b9; break;
+    case 0x01bc: cp = 0x01bd; break;
+    case 0x01f4: cp = 0x01f5; break;
+    case 0x023b: cp = 0x023c; break;
+    case 0x0241: cp = 0x0242; break;
+    case 0x03fd: cp = 0x037b; break;
+    case 0x03fe: cp = 0x037c; break;
+    case 0x03ff: cp = 0x037d; break;
+    case 0x037f: cp = 0x03f3; break;
+    case 0x0386: cp = 0x03ac; break;
+    case 0x0388: cp = 0x03ad; break;
+    case 0x0389: cp = 0x03ae; break;
+    case 0x038a: cp = 0x03af; break;
+    case 0x038c: cp = 0x03cc; break;
+    case 0x038e: cp = 0x03cd; break;
+    case 0x038f: cp = 0x03ce; break;
+    case 0x0370: cp = 0x0371; break;
+    case 0x0372: cp = 0x0373; break;
+    case 0x0376: cp = 0x0377; break;
+    case 0x03f4: cp = 0x03d1; break;
+    case 0x03cf: cp = 0x03d7; break;
+    case 0x03f9: cp = 0x03f2; break;
+    case 0x03f7: cp = 0x03f8; break;
+    case 0x03fa: cp = 0x03fb; break;
+    };
+  }
+
+  return cp;
+}
+
+private utf8 str_utf8_to_upper (utf8 cp) {
+  if (((0x0061 <= cp) && (0x007a >= cp)) ||
+      ((0x00e0 <= cp) && (0x00f6 >= cp)) ||
+      ((0x00f8 <= cp) && (0x00fe >= cp)) ||
+      ((0x03b1 <= cp) && (0x03c1 >= cp)) ||
+      ((0x03c3 <= cp) && (0x03cb >= cp))) {
+    cp -= 32;
+  } else if (((0x0100 <= cp) && (0x012f >= cp)) ||
+             ((0x0132 <= cp) && (0x0137 >= cp)) ||
+             ((0x014a <= cp) && (0x0177 >= cp)) ||
+             ((0x0182 <= cp) && (0x0185 >= cp)) ||
+             ((0x01a0 <= cp) && (0x01a5 >= cp)) ||
+             ((0x01de <= cp) && (0x01ef >= cp)) ||
+             ((0x01f8 <= cp) && (0x021f >= cp)) ||
+             ((0x0222 <= cp) && (0x0233 >= cp)) ||
+             ((0x0246 <= cp) && (0x024f >= cp)) ||
+             ((0x03d8 <= cp) && (0x03ef >= cp))) {
+    cp &= ~0x1;
+  } else if (((0x0139 <= cp) && (0x0148 >= cp)) ||
+             ((0x0179 <= cp) && (0x017e >= cp)) ||
+             ((0x01af <= cp) && (0x01b0 >= cp)) ||
+             ((0x01b3 <= cp) && (0x01b6 >= cp)) ||
+             ((0x01cd <= cp) && (0x01dc >= cp))) {
+    cp -= 1;
+    cp |= 0x1;
+  } else {
+    switch (cp) {
+    default: break;
+    case 0x00ff: cp = 0x0178; break;
+    case 0x0180: cp = 0x0243; break;
+    case 0x01dd: cp = 0x018e; break;
+    case 0x019a: cp = 0x023d; break;
+    case 0x019e: cp = 0x0220; break;
+    case 0x0292: cp = 0x01b7; break;
+    case 0x01c6: cp = 0x01c4; break;
+    case 0x01c9: cp = 0x01c7; break;
+    case 0x01cc: cp = 0x01ca; break;
+    case 0x01f3: cp = 0x01f1; break;
+    case 0x01bf: cp = 0x01f7; break;
+    case 0x0188: cp = 0x0187; break;
+    case 0x018c: cp = 0x018b; break;
+    case 0x0192: cp = 0x0191; break;
+    case 0x0199: cp = 0x0198; break;
+    case 0x01a8: cp = 0x01a7; break;
+    case 0x01ad: cp = 0x01ac; break;
+    case 0x01b0: cp = 0x01af; break;
+    case 0x01b9: cp = 0x01b8; break;
+    case 0x01bd: cp = 0x01bc; break;
+    case 0x01f5: cp = 0x01f4; break;
+    case 0x023c: cp = 0x023b; break;
+    case 0x0242: cp = 0x0241; break;
+    case 0x037b: cp = 0x03fd; break;
+    case 0x037c: cp = 0x03fe; break;
+    case 0x037d: cp = 0x03ff; break;
+    case 0x03f3: cp = 0x037f; break;
+    case 0x03ac: cp = 0x0386; break;
+    case 0x03ad: cp = 0x0388; break;
+    case 0x03ae: cp = 0x0389; break;
+    case 0x03af: cp = 0x038a; break;
+    case 0x03cc: cp = 0x038c; break;
+    case 0x03cd: cp = 0x038e; break;
+    case 0x03ce: cp = 0x038f; break;
+    case 0x0371: cp = 0x0370; break;
+    case 0x0373: cp = 0x0372; break;
+    case 0x0377: cp = 0x0376; break;
+    case 0x03d1: cp = 0x03f4; break;
+    case 0x03d7: cp = 0x03cf; break;
+    case 0x03f2: cp = 0x03f9; break;
+    case 0x03f8: cp = 0x03f7; break;
+    case 0x03fb: cp = 0x03fa; break;
+    };
+  }
+
+  return cp;
+}
+
+private int str_utf8_is_lower (utf8 chr) {
+  return chr != str_utf8_to_upper (chr);
+}
+
+private int str_utf8_is_upper (utf8 chr) {
+  return chr != str_utf8_to_lower (chr);
+}
+
+private int str_utf8_change_case (char *dest, char *src, size_t src_len, int to_type) {
+  int idx = 0;
+  int changed = 0;
+  while (idx < (int) src_len) {
+    int len = 0;
+    utf8 c = str_utf8_get_code_at (src, src_len, idx, &len);
+    if ((to_type is TO_LOWER ? str_utf8_is_upper : str_utf8_is_lower) (c)) {
+        char buf[len];
+        str_utf8_character ((to_type is TO_LOWER
+           ? str_utf8_to_lower : str_utf8_to_upper) (c), buf, &len);
+        for (int i = 0; i < len; i++)
+           dest[idx] = buf[i];
+        changed = 1;
+    } else {
+      for (int i = 0; i < len; i++)
+        dest[idx] = src[idx];
+    }
+
+    idx += len;
+  }
+
+  dest[idx] = '\0';
+  return changed;
 }
 
 /* This is itoa version 0.4, written by Lukás Chmela and released under GPLv3,
@@ -403,9 +720,7 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
   return string_replace_with (this, bytes);
 }
 
-private void vstr_free (vstr_t *this) {
-  if (this is NULL) return;
-
+private void vstr_clear (vstr_t *this) {
   vstring_t *vs = this->head;
   while (vs) {
     vstring_t *tmp = vs->next;
@@ -413,7 +728,13 @@ private void vstr_free (vstr_t *this) {
     free (vs);
     vs = tmp;
   }
+  this->head = this->tail = this->current = NULL;
+  this->num_items = 0; this->cur_idx = -1;
+}
 
+private void vstr_free (vstr_t *this) {
+  if (this is NULL) return;
+  vstr_clear (this);
   free (this);
 }
 
@@ -441,6 +762,21 @@ private void vstr_append_current_with (vstr_t *this, char *bytes) {
   vstring_t *vstr = AllocType (vstring);
   vstr->data = string_new_with (bytes);
   current_list_append (this, vstr);
+}
+
+private void vstr_append_with (vstr_t *this, char *bytes) {
+  int cur_idx = this->cur_idx;
+  vstr_append_current_with (this, bytes);
+  current_list_set(this, cur_idx);
+}
+
+private void vstr_append_with_fmt (vstr_t *this, char *fmt, ...) {
+  char bytes[(VA_ARGS_FMT_SIZE) + 1];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  vstr_append_with (this, bytes);
 }
 
 private void vstr_prepend_current_with (vstr_t *this, char *bytes) {
@@ -473,11 +809,11 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
     goto theend;
   }
 
-  res = strcmp(bytes, this->head->data->bytes);
+  res = strcmp (bytes, this->head->data->bytes);
 
-  ifnot (res) {
-    goto theend;
-  } else if (0 > res) {
+  ifnot (res) goto theend;
+
+  if (0 > res) {
     this->head->prev = vs;
     vs->next = this->head;
     this->head = vs;
@@ -494,7 +830,7 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
     goto theend;
   }
 
-  res = strcmp(bytes, this->tail->data->bytes);
+  res = strcmp (bytes, this->tail->data->bytes);
 
   if (0 < res) {
     this->tail->next = vs;
@@ -509,8 +845,9 @@ private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
   vstring_t *it = this->head->next;
 
   while (it) {
-    res = strcmp(bytes, it->data->bytes);
+    res = strcmp (bytes, it->data->bytes);
     ifnot (res) goto theend;
+
     if (0 > res) {
       it->prev->next = vs;
       it->prev->next->next = it;
@@ -538,8 +875,16 @@ public vstring_T __init_vstring__ (void) {
   return ClassInit (vstring,
     .self = SelfInit (vstring,
       .free = vstr_free,
+      .clear = vstr_clear,
       .new = vstr_new,
-      .join = vstr_join
+      .join = vstr_join,
+      .append_with_fmt = vstr_append_with_fmt,
+      .cur = SubSelfInit (vstring, cur,
+        .append_with = vstr_append_current_with
+      ),
+      .add = SubSelfInit (vstring, add,
+        .sort_and_uniq = vstr_add_sort_and_uniq
+      )
     )
   );
 }
@@ -606,7 +951,7 @@ tokenize:;
  *     void (*cb) (vstr_t *, char *, void *), void *obj) {
  *   vstr_t *ts = tokstr;
  *   if (NULL is ts) ts = vstr_new ();
- * 
+ *
  *   char *src = str_dup (buf, bytelen (buf));
  *   char *sp = strtok (src, tok);
  *   while (sp) {
@@ -616,7 +961,7 @@ tokenize:;
  *       vstr_append_current_with (ts, sp);
  *     sp = strtok (NULL, tok);
  *   }
- * 
+ *
  *   free (src);
  *   return ts;
  * }
@@ -788,7 +1133,7 @@ theend:
 }
 
 private vstr_t *file_readlines (char *file, vstr_t *lines,
-                                 StrChop_cb cb, void *obj) {
+                                 FileReadLines_cb cb, void *obj) {
   vstr_t *llines = lines;
   if (NULL is llines) llines = vstr_new ();
   if (-1 is access (file, F_OK|R_OK)) goto theend;
@@ -1450,7 +1795,7 @@ private utf8 term_get_input (term_t *this) {
 
   default:
     if (c < 0) {
-      int len = char_byte_len ((uchar) c);
+      int len = str_utf8_charlen ((uchar) c);
       utf8 code = 0;
       code += (uchar) c;
 
@@ -1547,7 +1892,6 @@ private void video_draw_at (video_t *this, int at) {
   if (current_list_set(this, idx) is INDEX_ERROR) return;
 
   vstring_t *row = this->current;
-
   string_t *render = string_new_with_fmt (
       "%s" TERM_GOTO_PTR_POS_FMT "%s%s%s" TERM_GOTO_PTR_POS_FMT,
       TERM_CURSOR_HIDE, at, 0, TERM_LINE_CLR_EOL,
@@ -1633,13 +1977,13 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
     string_append_fmt (render, TERM_GOTO_PTR_POS_FMT, first_row + i++, first_col);
     int num = 0; int idx = 0;
     while (num++ < num_chars and idx < (int) it->data->num_bytes) {
-      int clen = char_byte_len ((uchar) it->data->bytes[idx]);
+      int clen = str_utf8_charlen ((uchar) it->data->bytes[idx]);
       for (int li = 0; li < clen; li++)
         string_append_byte (render, it->data->bytes[idx + li]);
       idx += clen;
     }
 
-    while (num++ < num_chars) string_append_byte (render, ' ');
+    while (num++ <= num_chars) string_append_byte (render, ' ');
 
     it = it->next;
   }
@@ -1667,7 +2011,7 @@ private void menu_free (menu_t *this) {
 }
 
 private menu_t *menu_new (ed_t *this, int first_row, int last_row, int first_col,
-int (*process_list) (menu_t *), char *pat, size_t patlen) {
+MenuProcessList_cb cb, char *pat, size_t patlen) {
   menu_t *menu = AllocType (menu);
   menu->fd = $my(video)->fd;
   menu->first_row = first_row;
@@ -1679,7 +2023,7 @@ int (*process_list) (menu_t *), char *pat, size_t patlen) {
   menu->first_col = first_col + 1;
   menu->num_cols = $my(dim)->num_cols;
   menu->cur_video = $my(video);
-  menu->process_list = process_list;
+  menu->process_list = cb;
   menu->state |= (MENU_INIT|RL_IS_VISIBLE);
   menu->space_selects = 1;
   menu->header = string_new_with ("");
@@ -2014,6 +2358,50 @@ theend:
   return match;
 }
 
+private void ved_menu_free (ed_t *ed, menu_t *this) {
+  (void) ed;
+  menu_free (this);
+}
+
+private menu_t *ved_menu_new (ed_t *this, buf_t *buf, MenuProcessList_cb cb) {
+  menu_t *menu = menu_new (this, $my(video)->row_pos, $my(prompt_row) - 2,
+    $my(video)->col_pos, cb, NULL, 0);
+  menu->this = buf;
+  menu->return_if_one_item = 1;
+  return menu;
+}
+
+private string_t *buf_input_box (buf_t *this, int row, int col,
+                            int abort_on_escape, char *buf) {
+  string_t *str = NULL;
+  rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, row,
+      col, $my(dim)->num_cols - col + 1, $my(video));
+  rl->opts &= ~RL_OPT_HAS_HISTORY_COMPLETION;
+  rl->opts &= ~RL_OPT_HAS_TAB_COMPLETION;
+  rl->prompt_char = 0;
+
+  ifnot (NULL is buf)
+    BYTES_TO_RLINE (rl, buf, (int) bytelen (buf));
+
+  utf8 c;
+  for (;;) {
+     c = rline_edit (rl)->c;
+     switch (c) {
+       case ESCAPE_KEY:
+          if (abort_on_escape) {
+            str = string_new_with ("");
+            goto theend;
+          }
+       case '\r': str = rline_get_string (rl); goto theend;
+     }
+  }
+
+theend:
+  My(String).clear_at (str, -1);
+  rline_free (rl);
+  return str;
+}
+
 private dim_t *dim_set (dim_t *dim, int f_row, int l_row, int f_col, int l_col) {
   dim->first_row = f_row;
   dim->last_row = l_row;
@@ -2262,7 +2650,7 @@ private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index, row_
   int has_mlcmnt = ({
     int found = 0;
     row_t *it = row->prev;
-    for (int i = 0; i < 7 and it; i++) {
+    for (int i = 0; i < 24 and it; i++) {
       if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
         break;
 
@@ -2546,6 +2934,10 @@ private ftype_t *buf_set_ftype (buf_t *this, int ftype) {
   return buf_default_ftype (this);
 }
 
+private void buf_set_modified (buf_t *this) {
+  $my(flags) |= BUF_IS_MODIFIED;
+}
+
 private row_t *buf_row_new_with (buf_t *this, const char *bytes) {
   row_t *row = AllocType (row);
   string_t *data = My(String).new_with (bytes);
@@ -2553,28 +2945,26 @@ private row_t *buf_row_new_with (buf_t *this, const char *bytes) {
   return row;
 }
 
+private row_t *buf_row_get_current (buf_t *this) {
+  return this->current;
+}
+
+private string_t *buf_row_get_current_bytes (buf_t *this) {
+  return $mycur(data);
+}
+
+private int buf_row_get_current_line_idx (buf_t *this) {
+  return $mycur(cur_col_idx);
+}
 private void buf_free_row (buf_t *this, row_t *row) {
   if (row is NULL) return;
   My(String).free (row->data);
   free (row);
 }
 
-private void buf_free_line_members (line_t *line) {
-  ifnot (line->num_items) return;
-  vchar_t *it = line->head;
-  while (it) {
-    vchar_t *tmp = it->next;
-    free (it);
-    it = tmp;
-  }
-  line->num_items = 0;
-  line->cur_idx = -1;
-  line->head = line->tail = line->current = NULL;
-}
-
 private void buf_free_line (buf_t *this) {
   if (this is NULL or $myprop is NULL or $my(line) is NULL) return;
-  buf_free_line_members ($my(line));
+  str_utf8_free_members ($my(line));
   free ($my(line));
 }
 
@@ -2593,6 +2983,38 @@ private void buf_free_action (buf_t *this, action_t *action) {
   }
 
   free (action);
+}
+
+private void buf_iter_free (buf_t *unused, bufiter_t *this) {
+  (void) unused;
+  if (NULL is this) return;
+  free (this);
+}
+
+private bufiter_t *buf_iter_new (buf_t *this, int start_idx) {
+  bufiter_t *it = AllocType (bufiter);
+  if (start_idx < 0) start_idx = this->cur_idx;
+
+  it->row = self(get.line_at, start_idx);
+  it->num_lines = this->num_items - start_idx;
+  if (it->row) {
+    it->line = it->row->data;
+    it->idx = start_idx;
+    it->col_idx = it->row->cur_col_idx;
+  } else { it->line = NULL; it->idx = -1;}
+  return it;
+}
+
+private bufiter_t *buf_iter_next (buf_t *unused, bufiter_t *this) {
+  (void) unused;
+  if (this->row) this->row = this->row->next;
+  if (this->row) {
+    this->line = this->row->data;
+    this->idx++;
+    this->num_lines--;
+    this->col_idx = this->row->cur_col_idx;
+  } else this->line = NULL;
+  return this;
 }
 
 private void buf_free_undo (buf_t *this) {
@@ -2850,8 +3272,20 @@ private char *buf_get_fname (buf_t *this) {
   return $my(fname);
 }
 
+private int buf_get_current_video_row (buf_t *this) {
+  return $my(cur_video_row);
+}
+
+private int buf_get_current_video_col (buf_t *this) {
+  return $my(cur_video_col);
+}
+
 private size_t buf_get_num_lines (buf_t *this) {
   return this->num_items;
+}
+
+private row_t *buf_get_line_at (buf_t *this, int idx) {
+  return list_get_at (this, row_t, idx);
 }
 
 private vchar_t *buf_get_line_nth (line_t *line, int idx) {
@@ -2883,72 +3317,6 @@ private char *buf_get_line_data (buf_t *this, line_t *line) {
     it = it->next;
   }
   return $my(shared_str)->bytes;
-}
-
-private vchar_t *buf_line_encode (line_t *line, char *bytes,
-            size_t len, int freeline, int tablen, int curidx) {
-  if (freeline) buf_free_line_members (line);
-  ifnot (len) {
-    line->num_items = 0;
-    return NULL;
-  }
-
-  int curpos = 0;
-
-  char *sp = bytes;
-  line->len = 0;
-
-  while (*sp) {
-    uchar c = (uchar) *sp;
-    vchar_t *chr = AllocType (vchar);
-    chr->code = c;
-    chr->width = chr->len = 1;
-    chr->buf[0] = *sp;
-
-    if (c < 0x80) {
-      if (chr->code is '\t')
-        chr->width += (tablen - 1);
-      chr->buf[1] = '\0';
-      goto push;
-    }
-
-    chr->buf[1] = *++sp;
-    chr->len++;
-    chr->code <<= 6; chr->code += (uchar) *sp;
-
-    if ((c & 0xe0) is 0xc0) {
-      chr->code -= offsetsFromUTF8[1];
-      chr->buf[2] = '\0';
-      goto push;
-    }
-
-    chr->buf[2] = *++sp;
-    chr->len++;
-    chr->code <<= 6; chr->code += (uchar) *sp;
-
-    if ((c & 0xf0) is 0xe0) {
-      chr->code -= offsetsFromUTF8[2];
-      chr->buf[3] = '\0';
-      goto push;
-    }
-
-    chr->buf[3] = *++sp;
-    chr->len++;
-    chr->code <<= 6; chr->code += (uchar) *sp;
-    chr->code -= offsetsFromUTF8[3];
-    chr->buf[4] = '\0';
-
-push:
-    current_list_append (line, chr);
-    if (curidx is line->len)
-      curpos = line->cur_idx;
-
-    line->len += chr->len;
-    sp++;
-  }
-
-  current_list_set (line, curpos);
-  return line->current;
 }
 
 private int buf_current_set (buf_t *this, int idx) {
@@ -2992,6 +3360,7 @@ private int buf_set_fname (buf_t *this, char *filename) {
   int retval = OK;
 
   char *fname = str_dup (filename, len);
+
   for (int i = len - 1; i > 0 /* at least a char */; i--) {
     ifnot (fname[i] is DIR_SEP) break;
     fname[i] = '\0';
@@ -3002,6 +3371,10 @@ private int buf_set_fname (buf_t *this, char *filename) {
     $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
     strncpy ($my(fname), fname, len + 1);
     self(set.as.non_existant);
+    /* this is for tcc that segfaults, when jumping to the label
+     * as the variable is considered uninitialized */
+    free (fname);
+    return retval;
     goto theend;
   }
 
@@ -3013,6 +3386,9 @@ private int buf_set_fname (buf_t *this, char *filename) {
       VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE, fname);
       buf_set_as_unamed (this);
       retval = NOTOK;
+      /* see above */
+      free (fname);
+      return retval;
       goto theend;
     }
 
@@ -3020,6 +3396,9 @@ private int buf_set_fname (buf_t *this, char *filename) {
       VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE, fname);
       buf_set_as_unamed (this);
       retval = NOTOK;
+      /* see above */
+      free (fname);
+      return retval;
       goto theend;
     }
 
@@ -3047,7 +3426,6 @@ concat_with_cwd:;
       free (cwd);
     }
   }
-
 
   buf_t *buf = My(Ed).get.bufname ($my(root), $my(fname));
   if (buf isnot NULL) {
@@ -3154,6 +3532,7 @@ private void win_adjust_buf_dim (win_t *w) {
 
 private void win_set_video_dividers (win_t *this) {
   ifnot ($my(has_dividers)) return;
+  if ($my(num_frames) - 1 < 1) return;
 
   int len = $my(dim)->num_cols + TERM_SET_COLOR_FMT_LEN + TERM_COLOR_RESET_LEN;
   char line[len + 1];
@@ -3166,7 +3545,7 @@ private void win_set_video_dividers (win_t *this) {
 
   line[len+1] = '\0';
    for (int i = 0; i < $my(num_frames) - 1; i++) {
-    My(Video).set_with ($my(video), $my(frames_dim)[i]->last_row,
+     My(Video).set_with ($my(video), $my(frames_dim)[i]->last_row,
        line);
   }
 }
@@ -3442,8 +3821,8 @@ private void win_draw (win_t *w) {
   for (int i = $from(w, dim->first_row) - 1; i < $from(w, dim->last_row); i++) {
     $from(w, Video->self).set_with ($from(w, video), i, line);
   }
-  buf_t *this = w->head;
 
+  buf_t *this = w->head;
   My(Win).set.video_dividers ($my(parent));
 
   while (this) {
@@ -3468,7 +3847,7 @@ private void win_free (win_t *this) {
   buf_t *buf = this->head;
   buf_t *next;
 
-  while (buf isnot NULL) {
+  while (buf) {
     next = buf->next;
     buf_free (buf);
     buf = next;
@@ -3498,7 +3877,7 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   if (NULL is name) {
     int num = ed->name_gen / 26;
     $my(name) = Alloc (num * sizeof (char *) + 1);
-    for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ ^ 26);
+    for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ % 26);
     $my(name)[num] = '\0';
   } else
     $my(name) = str_dup (name, bytelen (name));
@@ -3602,8 +3981,7 @@ private buf_t *ed_get_buf (ed_t *this, char *wname, char *bname) {
 }
 
 private int ed_change_buf (ed_t *this, buf_t **thisp, char *wname, char *bname) {
-  if (NOTHING_TODO is self(win.change, thisp, NO_COMMAND, wname, NO_OPTION))
-    return NOTHING_TODO;
+  self(win.change, thisp, NO_COMMAND, wname, NO_OPTION, NO_FORCE);
   return ved_buf_change_bufname (thisp, bname);
 }
 
@@ -3672,6 +4050,8 @@ private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
    (*bufp) = ved_scratch_buf (this);
 
   if (at_eof) ved_normal_eof (*bufp, DRAW);
+  else My(Buf).draw (*bufp);
+
   return DONE;
 }
 
@@ -3691,10 +4071,18 @@ public void toscratch (ed_t *this, char *msg, int clear_first) {
   vstr_free (lines);
 }
 
+private int ved_append_message_cb (vstr_t *str, char *tok, void *obj) {
+  (void) str;
+  buf_t *this = (buf_t *) obj;
+  self(append_with, tok);
+  return OK;
+}
+
 private void ved_append_message (ed_t *this, char *msg) {
-  buf_t *b = self(buf.get, VED_MSG_WIN, VED_MSG_BUF);
-  ifnot (b) return;
-  My(Buf).append_with (b, msg);
+  buf_t *buf = self(buf.get, VED_MSG_WIN, VED_MSG_BUF);
+  ifnot (buf) return;
+  vstr_t unused;
+  str_chop (msg, '\n', &unused, ved_append_message_cb, (void *) buf);
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
@@ -3723,10 +4111,12 @@ private void ed_msg_send (ed_t *this, int color, char *msg) {
   My(String).replace_with_fmt ($my(msgline), TERM_SET_COLOR_FMT, color);
   int numchars = 0; int clen;
   for (int idx = 0; numchars < $my(dim)->num_cols and msg[idx]; idx++) {
-    clen = char_byte_len ((uchar) msg[idx]);
+    clen = str_utf8_charlen ((uchar) msg[idx]);
     for (int i = 0; i < clen; i++) {
-      if ('\t' is msg[idx + 1])
+      if ('\t' is msg[idx + i])
         My(String).append_byte ($my(msgline), ' ');
+      else if ('\n' is msg[idx + i])
+        break;
       else
         My(String).append_byte ($my(msgline), msg[idx + i]);
     }
@@ -3829,7 +4219,7 @@ private void buf_set_draw_statusline (buf_t *this) {
 private int buf_adjust_col (buf_t *this, int previdx, int isatend) {
   if (this->current is NULL) return 1;
   if (0 is previdx or $mycur(data)->num_bytes is 0 or
-      (int) $mycur(data)->num_bytes is char_byte_len ((uchar) $mycur(data)->bytes[0])) {
+      (int) $mycur(data)->num_bytes is str_utf8_charlen ((uchar) $mycur(data)->bytes[0])) {
     $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
     $my(video)->col_pos = $my(cur_video_col) = 1;
     return $my(video)->col_pos;
@@ -3840,13 +4230,13 @@ private int buf_adjust_col (buf_t *this, int previdx, int isatend) {
     char s[$mycur(data)->num_bytes];
     string_reverse_from_to (s, $mycur(data)->bytes, 0, $mycur(data)->num_bytes - 1);
 
-    clen = char_byte_len ((uchar) *s);
+    clen = str_utf8_charlen ((uchar) *s);
     $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
   } else {
     int idx = 0;
     char *s = $mycur(data)->bytes;
     while (*s and (idx < (int) $mycur(data)->num_bytes and idx < previdx)) {
-      clen = char_byte_len ((uchar) *s);
+      clen = str_utf8_charlen ((uchar) *s);
       idx += clen; s += clen;
     }
 
@@ -3864,7 +4254,7 @@ private int buf_adjust_col (buf_t *this, int previdx, int isatend) {
   string_reverse_from_to (s, $mycur(data)->bytes, 0, $mycur(cur_col_idx) - 1);
 
   while (idx and (col_pos < $my(dim)->num_cols)) {
-    int len = char_byte_len ((uchar) s[i]);
+    int len = str_utf8_charlen ((uchar) s[i]);
     i += len;
     idx -= len;
     col_pos++;
@@ -4050,41 +4440,53 @@ theend:
   return nb;
 }
 
-private char *get_current_word (buf_t *this, char *word, char *Nwtype,
-                     int len, int *fidx, int *lidx) {
-  int idx = $mycur(cur_col_idx);
-
-  if (IS_SPACE ($mycur(data)->bytes[idx]) or
-      IS_CNTRL ($mycur(data)->bytes[idx]) or
-      NULL isnot memchr (Nwtype, $mycur(data)->bytes[idx], len))
+private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t wsize,
+   char *Nwtype, size_t Nwsize, int cur_idx, int *fidx, int *lidx) {
+  if (NULL is bytes or 0 is bsize or (int) bsize <= cur_idx) {
+    *lidx = cur_idx;
     return NULL;
+  }
 
-  while (idx > 0 and
-         IS_SPACE ($mycur(data)->bytes[idx]) is 0 and
-         IS_CNTRL ($mycur(data)->bytes[idx]) is 0 and
-         NULL is memchr (Nwtype, $mycur(data)->bytes[idx], len))
-    idx--;
+  if (IS_SPACE (bytes[cur_idx]) or
+      IS_CNTRL (bytes[cur_idx]) or
+      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)) {
+    *lidx = cur_idx;
+    return NULL;
+  }
 
-  if (idx isnot 0 or (
-      IS_SPACE ($mycur(data)->bytes[idx]) or
-      IS_CNTRL ($mycur(data)->bytes[idx]) or
-      NULL isnot memchr (Nwtype, $mycur(data)->bytes[idx], len)))
-    idx++;
+  while (cur_idx > 0 and
+      IS_SPACE (bytes[cur_idx]) is 0 and
+      IS_CNTRL (bytes[cur_idx]) is 0 and
+      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize))
+    cur_idx--;
 
-  *fidx = idx;
+  if (cur_idx isnot 0 or (
+      IS_SPACE (bytes[cur_idx]) or
+      IS_CNTRL (bytes[cur_idx]) or
+      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)))
+    cur_idx++;
+
+  *fidx = cur_idx;
 
   int widx = 0;
-  while (idx < (int) $mycur(data)->num_bytes and
-      IS_SPACE ($mycur(data)->bytes[idx]) is 0 and
-      IS_CNTRL ($mycur(data)->bytes[idx]) is 0 and
-      NULL is memchr (Nwtype, $mycur(data)->bytes[idx], len))
-    word[widx++] = $mycur(data)->bytes[idx++];
+  while (cur_idx < (int) bsize and
+      IS_SPACE (bytes[cur_idx]) is 0 and
+      IS_CNTRL (bytes[cur_idx]) is 0 and
+      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize) and
+      widx <= (int) wsize)
+    word[widx++] = bytes[cur_idx++];
 
-  *lidx = idx - 1;
+  *lidx = cur_idx - 1;
 
   word[widx] = '\0';
 
   return word;
+}
+
+private char *get_current_word (buf_t *this, char *word, char *Nwtype,
+                     int Nwtypelen, int *fidx, int *lidx) {
+  return str_extract_word_at ($mycur(data)->bytes, $mycur(data)->num_bytes,
+    word, MAXWORD, Nwtype, Nwtypelen, $mycur (cur_col_idx), fidx, lidx);
 }
 
 #define SEARCH_UPDATE_ROW(idx)                    \
@@ -4368,7 +4770,7 @@ private int ved_grep_on_normal (buf_t **thisp, utf8 com, int *range, int regidx)
 
   if (com isnot '\r' and com isnot 'q') return 0;
   if (com is 'q') {
-    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0))
+    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE))
       return EXIT;
     return -1;
   }
@@ -4460,11 +4862,13 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   (v__)->cur_idx = (a__)->cur_idx;                         \
   (v__)->idx = (a__)->idx
 
+//  (v__)->row_pos = $my(video)->row_pos;
+//  (v__)->col_pos = $my(video)->col_pos; 
 #define state_set(v__)                                   \
   (v__)->video_first_row = $my(video_first_row);         \
   (v__)->video_first_row_idx = $my(video_first_row_idx); \
-  (v__)->row_pos = $my(video)->row_pos;                  \
-  (v__)->col_pos = $my(video)->col_pos;                  \
+  (v__)->row_pos = $my(cur_video_row);                   \
+  (v__)->col_pos = $my(cur_video_col);                   \
   (v__)->cur_col_idx = $mycur(cur_col_idx);              \
   (v__)->first_col_idx = $mycur(first_col_idx);          \
   (v__)->cur_idx = this->cur_idx
@@ -4670,11 +5074,39 @@ private int vundo (buf_t *this, utf8 com) {
   return DONE;
 }
 
+private action_t *buf_action_new (buf_t *this) {
+  (void) this;
+  return AllocType (action);
+}
+
+private void buf_action_set_current (buf_t *this, action_t *action, int type) {
+  act_t *act = AllocType (act);
+  vundo_set (act, type);
+  act->idx = this->cur_idx;
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  stack_push (action, act);
+}
+
+private void buf_action_set_with (buf_t *this, action_t *action,
+                     int type, int idx, char *bytes, size_t len) {
+  act_t *act = AllocType (act);
+  vundo_set (act, type);
+  act->idx = ((idx < 0 or idx >= this->num_items) ? this->cur_idx : idx);
+  if (NULL is bytes)
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  else
+    act->bytes = str_dup (bytes, len);
+  stack_push (action, act);
+}
+
+private void buf_action_push (buf_t *this, action_t *action) {
+  vundo_push (this, action);
+}
+
 private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 int interactive, int fidx, int lidx) {
   int retval = NOTHING_TODO;
   ifnot (this->num_items) return retval;
-  row_t *it = this->head;
 
   string_t *substr = NULL;
   int flags = 0;
@@ -4687,6 +5119,7 @@ int interactive, int fidx, int lidx) {
   act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
+  row_t *it = this->head;
   int idx = 0;
   while (idx < fidx) {idx++; it = it->next;}
 
@@ -4738,7 +5171,6 @@ searchandsub:;
     act->idx = idx - 1;
     act->bytes = str_dup (it->data->bytes, it->data->num_bytes);
     stack_push (action, act);
-
     string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx + bidx,
       substr->bytes);
     done_substitution = 1;
@@ -4747,8 +5179,11 @@ searchandsub:;
 
 if_global:
     if (global) {
-      bidx += re->match_idx + 1 - (done_substitution
-         ? (re->match_len + substr->num_bytes) : 0);
+      int len = 0;
+      if (done_substitution)
+        len = (int) substr->num_bytes;
+
+      bidx += (re->match_idx + len);
       if (bidx >= (int) it->data->num_bytes) goto thecontinue;
       goto searchandsub;
     }
@@ -5040,13 +5475,17 @@ private utf8 quest (buf_t *this, char *qu, utf8 *chs, int len) {
   return c;
 }
 
+private utf8 ved_question (ed_t *this, char *qu, utf8 *chs, int len) {
+  return quest (this->current->current, qu, chs, len);
+}
+
 private char *buf_parse_line (buf_t *this, row_t *row, char *line, int idx) {
   int numchars = 0;
   int j = 0;
 
   int maxn = row->data->num_bytes - row->first_col_idx;
   for (int i = 0; numchars < $my(dim)->num_cols && i < maxn; i++) {
-    int len = char_byte_len ((uchar) *(row->data->bytes + row->first_col_idx + i));
+    int len = str_utf8_charlen ((uchar) *(row->data->bytes + row->first_col_idx + i));
 
     loop (len)
       line[j++] = row->data->bytes[row->first_col_idx + i++];
@@ -5208,13 +5647,13 @@ private void ved_on_blankline (buf_t *this) {
 private int ved_normal_right (buf_t *this, int count, int draw) {
   int is_ins_mode = IS_MODE (INSERT_MODE);
   if ($mycur(cur_col_idx) is ((int) $mycur(data)->num_bytes -
-      char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]) +
+      str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]) +
       is_ins_mode) or 0 is $mycur(data)->num_bytes or
       $mycur(data)->bytes[$mycur(cur_col_idx)] is 0 or
       $mycur(data)->bytes[$mycur(cur_col_idx)] is '\n')
     return NOTHING_TODO;
 
-  buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
+  str_utf8_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
   while (count-- and it) {
     if (it->code is '\n' or it is $my(line)->tail) break;
@@ -5266,7 +5705,7 @@ private int ved_normal_eol (buf_t *this) {
 private int ved_normal_left (buf_t *this, int count) {
   int is_ins_mode = IS_MODE (INSERT_MODE);
   if ($mycur(cur_col_idx) is 0) return NOTHING_TODO;
-  buf_line_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
+  str_utf8_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes, 1, 1, $mycur(cur_col_idx));
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
 
   if (it is NULL) {
@@ -5362,7 +5801,7 @@ private int ved_normal_up (buf_t *this, int count, int adjust_col, int draw) {
   if (count > currow_idx) count = currow_idx;
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   ved_on_blankline (this);
@@ -5409,12 +5848,13 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
     count = this->num_items - currow_idx - 1;
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   ved_on_blankline (this);
 
   currow_idx += count;
+
   self(cur.set, currow_idx);
 
   int col_pos = adjust_col ? buf_adjust_col (this, curcol_idx, isatend) : 1;
@@ -5449,7 +5889,7 @@ private int ved_normal_page_down (buf_t *this, int count) {
   mark_set (this, MARK_UNAMED);
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   int row = $my(video)->row_pos;
@@ -5484,7 +5924,7 @@ private int ved_normal_page_up (buf_t *this, int count) {
   mark_set (this, MARK_UNAMED);
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   int row = $my(video)->row_pos;
@@ -5520,7 +5960,7 @@ private int ved_normal_bof (buf_t *this) {
   mark_set (this, MARK_UNAMED);
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   ved_on_blankline (this);
@@ -5546,7 +5986,7 @@ private int ved_normal_eof (buf_t *this, int draw) {
   mark_set (this, MARK_UNAMED);
 
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   ved_on_blankline (this);
@@ -5598,9 +6038,9 @@ private int ved_normal_replace_char (buf_t *this) {
   vundo_push (this, action);
 
   utf8 c = My(Input).get ($my(term_ptr));
-  char buf[5];
-  char_from_code (c, buf);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+  char buf[5]; int len;
+  str_utf8_character (c, buf, &len);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
   My(String).replace_numbytes_at_with ($mycur(data), clen,
     $mycur(cur_col_idx), buf);
 
@@ -5610,7 +6050,7 @@ private int ved_normal_replace_char (buf_t *this) {
 }
 
 private int ved_normal_delete_eol (buf_t *this, int regidx) {
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
   if ($mycur(data)->num_bytes is 0)
     // or $mycur(cur_col_idx) is (int) $mycur(data)->num_bytes - clen)
     return NOTHING_TODO;
@@ -5744,7 +6184,7 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
     act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   }
 
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
   int len = 0;
 
   while (count--) {
@@ -5752,7 +6192,7 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
     if ($mycur(cur_col_idx) + clen is (int) $mycur(data)->num_bytes)
       break;
 
-    clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx) + len]);
+    clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx) + len]);
   }
 
   char buf[len + 1];
@@ -5796,8 +6236,8 @@ private int ved_inc_dec_char (buf_t *this, int count, utf8 com) {
   action = stack_push (action, act);
   vundo_push (this, action);
 
-  char ch[5]; char_from_code (c, ch);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+  char ch[5]; int len; str_utf8_character (c, ch, &len);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
   My(String).replace_numbytes_at_with ($mycur(data), clen, $mycur(cur_col_idx), ch);
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw_cur_row);
@@ -5968,7 +6408,7 @@ private int ved_complete_line_callback (menu_t *menu) {
     char *s = $mycur(data)->bytes;
 
     while (IS_SPACE (*s)) { s++; idx++; }
-    int clen = char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+    int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
 
     while (idx++ < $mycur(cur_col_idx) + (clen - 1))
       menu->pat[menu->patlen++] = *s++;
@@ -6065,7 +6505,23 @@ private int ved_win_only (buf_t *this) {
 
 private int ved_complete_word_actions_cb (menu_t *menu) {
   buf_t *this = menu->this;
-  menu->list = $myroots(word_actions);
+  if (menu->state & MENU_INIT) {
+    menu->state &= ~MENU_INIT;
+  } else
+    menu_free_list (menu);
+
+  ifnot (menu->patlen)
+    menu->list = vstr_dup ($myroots(word_actions));
+  else {
+    menu->list = vstr_new ();
+    vstring_t *it = $myroots(word_actions)->head;
+    while (it) {
+      ifnot (str_cmp_n (it->data->bytes, menu->pat, menu->patlen))
+        vstr_add_sort_and_uniq (menu->list, it->data->bytes);
+      it = it->next;
+    }
+  }
+
   menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
   return DONE;
 }
@@ -6081,8 +6537,8 @@ private utf8 ved_complete_word_actions (buf_t *this) {
   char *item = menu_create ($my(root), menu);
   if (item isnot NULL) c = *item;
 
-theend:                                   /* avoid list (de|re)allocation */
-  menu->state &= ~MENU_LIST_IS_ALLOCATED; /* list will be free'd at ed_free() */
+theend:                                     /* avoid list (de|re)allocation */
+  //menu->state &= ~MENU_LIST_IS_ALLOCATED; /* list will be free'd at ed_free() */
   menu_free (menu);
   return c;
 }
@@ -6106,7 +6562,9 @@ private int ved_normal_handle_W (buf_t **thisp) {
     default:
       for (int i = 0; i < $myroots(word_actions_chars_len); i++)
         if (c is $myroots(word_actions_chars)[i]) {
-          int retval = $myroots(word_actions_cb) (thisp, word, c);
+          bufiter_t *it = self(iter.new, this->cur_idx);
+          int retval = $myroots(word_actions_cb) (thisp, fidx, lidx, it, word, c);
+          self(iter.free, it);
           if (retval) return NOTHING_TODO;
         }
 
@@ -6160,14 +6618,14 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 
     case 'l':
     case ARROW_RIGHT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, NO_OPTION, NO_FORCE);
 
     case 'h':
     case ARROW_LEFT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV, NULL, NO_OPTION, NO_FORCE);
 
     case '`':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE);
 
     default:
       break;
@@ -6219,10 +6677,10 @@ private int ved_normal_handle_comma (buf_t **thisp) {
       return ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
 
     case '.':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE);
 
     case '/':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, 0);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, NO_OPTION, NO_FORCE);
   }
 
   return NOTHING_TODO;
@@ -6283,7 +6741,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
   int currow_idx = this->cur_idx;
   int curcol_idx = $mycur(cur_col_idx);
-  int clen = char_byte_len ((uchar) $mycur(data)->bytes[curcol_idx]);
+  int clen = str_utf8_charlen ((uchar) $mycur(data)->bytes[curcol_idx]);
   int isatend = (curcol_idx + clen) is (int) $mycur(data)->num_bytes;
 
   action_t *action = AllocType (action);
@@ -6335,172 +6793,9 @@ theend:
   return DONE;
 }
 
-/* code from the utf8.h project: https://github.com/sheredom/utf8.h.git
- */
-
-private utf8 lowercodepoint (utf8 cp) {
-  if (((0x0041 <= cp) && (0x005a >= cp)) ||
-      ((0x00c0 <= cp) && (0x00d6 >= cp)) ||
-      ((0x00d8 <= cp) && (0x00de >= cp)) ||
-      ((0x0391 <= cp) && (0x03a1 >= cp)) ||
-      ((0x03a3 <= cp) && (0x03ab >= cp))) {
-    cp += 32;
-  } else if (((0x0100 <= cp) && (0x012f >= cp)) ||
-             ((0x0132 <= cp) && (0x0137 >= cp)) ||
-             ((0x014a <= cp) && (0x0177 >= cp)) ||
-             ((0x0182 <= cp) && (0x0185 >= cp)) ||
-             ((0x01a0 <= cp) && (0x01a5 >= cp)) ||
-             ((0x01de <= cp) && (0x01ef >= cp)) ||
-             ((0x01f8 <= cp) && (0x021f >= cp)) ||
-             ((0x0222 <= cp) && (0x0233 >= cp)) ||
-             ((0x0246 <= cp) && (0x024f >= cp)) ||
-             ((0x03d8 <= cp) && (0x03ef >= cp))) {
-    cp |= 0x1;
-  } else if (((0x0139 <= cp) && (0x0148 >= cp)) ||
-             ((0x0179 <= cp) && (0x017e >= cp)) ||
-             ((0x01af <= cp) && (0x01b0 >= cp)) ||
-             ((0x01b3 <= cp) && (0x01b6 >= cp)) ||
-             ((0x01cd <= cp) && (0x01dc >= cp))) {
-    cp += 1;
-    cp &= ~0x1;
-  } else {
-    switch (cp) {
-    default: break;
-    case 0x0178: cp = 0x00ff; break;
-    case 0x0243: cp = 0x0180; break;
-    case 0x018e: cp = 0x01dd; break;
-    case 0x023d: cp = 0x019a; break;
-    case 0x0220: cp = 0x019e; break;
-    case 0x01b7: cp = 0x0292; break;
-    case 0x01c4: cp = 0x01c6; break;
-    case 0x01c7: cp = 0x01c9; break;
-    case 0x01ca: cp = 0x01cc; break;
-    case 0x01f1: cp = 0x01f3; break;
-    case 0x01f7: cp = 0x01bf; break;
-    case 0x0187: cp = 0x0188; break;
-    case 0x018b: cp = 0x018c; break;
-    case 0x0191: cp = 0x0192; break;
-    case 0x0198: cp = 0x0199; break;
-    case 0x01a7: cp = 0x01a8; break;
-    case 0x01ac: cp = 0x01ad; break;
-    case 0x01af: cp = 0x01b0; break;
-    case 0x01b8: cp = 0x01b9; break;
-    case 0x01bc: cp = 0x01bd; break;
-    case 0x01f4: cp = 0x01f5; break;
-    case 0x023b: cp = 0x023c; break;
-    case 0x0241: cp = 0x0242; break;
-    case 0x03fd: cp = 0x037b; break;
-    case 0x03fe: cp = 0x037c; break;
-    case 0x03ff: cp = 0x037d; break;
-    case 0x037f: cp = 0x03f3; break;
-    case 0x0386: cp = 0x03ac; break;
-    case 0x0388: cp = 0x03ad; break;
-    case 0x0389: cp = 0x03ae; break;
-    case 0x038a: cp = 0x03af; break;
-    case 0x038c: cp = 0x03cc; break;
-    case 0x038e: cp = 0x03cd; break;
-    case 0x038f: cp = 0x03ce; break;
-    case 0x0370: cp = 0x0371; break;
-    case 0x0372: cp = 0x0373; break;
-    case 0x0376: cp = 0x0377; break;
-    case 0x03f4: cp = 0x03d1; break;
-    case 0x03cf: cp = 0x03d7; break;
-    case 0x03f9: cp = 0x03f2; break;
-    case 0x03f7: cp = 0x03f8; break;
-    case 0x03fa: cp = 0x03fb; break;
-    };
-  }
-
-  return cp;
-}
-
-private utf8 uppercodepoint(utf8 cp) {
-  if (((0x0061 <= cp) && (0x007a >= cp)) ||
-      ((0x00e0 <= cp) && (0x00f6 >= cp)) ||
-      ((0x00f8 <= cp) && (0x00fe >= cp)) ||
-      ((0x03b1 <= cp) && (0x03c1 >= cp)) ||
-      ((0x03c3 <= cp) && (0x03cb >= cp))) {
-    cp -= 32;
-  } else if (((0x0100 <= cp) && (0x012f >= cp)) ||
-             ((0x0132 <= cp) && (0x0137 >= cp)) ||
-             ((0x014a <= cp) && (0x0177 >= cp)) ||
-             ((0x0182 <= cp) && (0x0185 >= cp)) ||
-             ((0x01a0 <= cp) && (0x01a5 >= cp)) ||
-             ((0x01de <= cp) && (0x01ef >= cp)) ||
-             ((0x01f8 <= cp) && (0x021f >= cp)) ||
-             ((0x0222 <= cp) && (0x0233 >= cp)) ||
-             ((0x0246 <= cp) && (0x024f >= cp)) ||
-             ((0x03d8 <= cp) && (0x03ef >= cp))) {
-    cp &= ~0x1;
-  } else if (((0x0139 <= cp) && (0x0148 >= cp)) ||
-             ((0x0179 <= cp) && (0x017e >= cp)) ||
-             ((0x01af <= cp) && (0x01b0 >= cp)) ||
-             ((0x01b3 <= cp) && (0x01b6 >= cp)) ||
-             ((0x01cd <= cp) && (0x01dc >= cp))) {
-    cp -= 1;
-    cp |= 0x1;
-  } else {
-    switch (cp) {
-    default: break;
-    case 0x00ff: cp = 0x0178; break;
-    case 0x0180: cp = 0x0243; break;
-    case 0x01dd: cp = 0x018e; break;
-    case 0x019a: cp = 0x023d; break;
-    case 0x019e: cp = 0x0220; break;
-    case 0x0292: cp = 0x01b7; break;
-    case 0x01c6: cp = 0x01c4; break;
-    case 0x01c9: cp = 0x01c7; break;
-    case 0x01cc: cp = 0x01ca; break;
-    case 0x01f3: cp = 0x01f1; break;
-    case 0x01bf: cp = 0x01f7; break;
-    case 0x0188: cp = 0x0187; break;
-    case 0x018c: cp = 0x018b; break;
-    case 0x0192: cp = 0x0191; break;
-    case 0x0199: cp = 0x0198; break;
-    case 0x01a8: cp = 0x01a7; break;
-    case 0x01ad: cp = 0x01ac; break;
-    case 0x01b0: cp = 0x01af; break;
-    case 0x01b9: cp = 0x01b8; break;
-    case 0x01bd: cp = 0x01bc; break;
-    case 0x01f5: cp = 0x01f4; break;
-    case 0x023c: cp = 0x023b; break;
-    case 0x0242: cp = 0x0241; break;
-    case 0x037b: cp = 0x03fd; break;
-    case 0x037c: cp = 0x03fe; break;
-    case 0x037d: cp = 0x03ff; break;
-    case 0x03f3: cp = 0x037f; break;
-    case 0x03ac: cp = 0x0386; break;
-    case 0x03ad: cp = 0x0388; break;
-    case 0x03ae: cp = 0x0389; break;
-    case 0x03af: cp = 0x038a; break;
-    case 0x03cc: cp = 0x038c; break;
-    case 0x03cd: cp = 0x038e; break;
-    case 0x03ce: cp = 0x038f; break;
-    case 0x0371: cp = 0x0370; break;
-    case 0x0373: cp = 0x0372; break;
-    case 0x0377: cp = 0x0376; break;
-    case 0x03d1: cp = 0x03f4; break;
-    case 0x03d7: cp = 0x03cf; break;
-    case 0x03f2: cp = 0x03f9; break;
-    case 0x03f8: cp = 0x03f7; break;
-    case 0x03fb: cp = 0x03fa; break;
-    };
-  }
-
-  return cp;
-}
-
-private int utf8islower (utf8 chr) {
-  return chr != uppercodepoint (chr);
-}
-
-private int utf8isupper (utf8 chr) {
-  return chr != lowercodepoint (chr);
-}
-
 private int ved_normal_change_case (buf_t *this) {
   utf8 c = CUR_UTF8_CODE;
-  char buf[5];
+  char buf[5]; int len;
   action_t *action;
   act_t *act;
 
@@ -6513,13 +6808,13 @@ private int ved_normal_change_case (buf_t *this) {
     if (NULL is p) {
       if (c > 0x80) {
         utf8 new;
-        if (utf8islower (c))
-          new = uppercodepoint (c);
+        if (str_utf8_is_lower (c))
+          new = str_utf8_to_upper (c);
         else
-          new = lowercodepoint (c);
+          new = str_utf8_to_lower (c);
 
         if (new is c) goto theend;
-        char_from_code (new, buf);
+        str_utf8_character (new, buf, &len);
         goto setaction;
       } else
         goto theend;
@@ -6639,7 +6934,7 @@ private int ved_normal_yank (buf_t *this, int count, int regidx) {
 
   int bufidx = 0;
   for (int i = 0; i < count and *bytes; i++) {
-    int clen = char_byte_len ((uchar) *bytes);
+    int clen = str_utf8_charlen ((uchar) *bytes);
     loop (clen) buf[bufidx + $i] = bytes[$i];
     bufidx += clen;
     bytes += clen;
@@ -6701,7 +6996,7 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
       act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
       My(String).insert_at ($mycur(data), reg->data->bytes, $mycur(cur_col_idx) +
         (('P' is com or 0 is $mycur(data)->num_bytes) ? 0 :
-          char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)])));
+          str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)])));
     }
 
     stack_push (action, act);
@@ -6977,8 +7272,8 @@ private char *ved_syn_parse_visual_lw (buf_t *this, char *line, int len, int idx
   return $my(vis)[0].orig_syn_parser (this, line, len, idx, row);
 }
 
-private int ed_lw_mode_cb (buf_t *this, vstr_t *vstr, utf8 c) {
-  (void) this; (void) vstr; (void) c;
+private int ed_lw_mode_cb (buf_t **thisp, int frow, int lrow, vstr_t *vstr, utf8 c) {
+  (void) thisp; (void) vstr; (void) c; (void) frow; (void) lrow;
   return 1;
 }
 
@@ -7034,7 +7329,8 @@ theend:
   return c;
 }
 
-private int ved_normal_visual_lw (buf_t *this) {
+private int ved_normal_visual_lw (buf_t **thisp) {
+  buf_t *this = *thisp;
   VISUAL_INIT_FUN (VISUAL_MODE_LW, ved_syn_parse_visual_lw);
   $my(vis)[0] = $my(vis)[1];
 
@@ -7211,10 +7507,9 @@ handle_char:
               row = row->next;
             }
 
-            int retval = $myroots(lw_mode_cb) (this, rows, c);
+            $myroots(lw_mode_cb) (&this, $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
             vstr_free (rows);
-            if (retval) goto theend;
-            break;
+            goto theend;
           }
 
         continue;
@@ -7246,7 +7541,7 @@ private char *ved_syn_parse_visual_line (buf_t *this, char *line, int len, row_t
   if (fidx > lidx)
     {int t = fidx; fidx = lidx; lidx = t;}
 
-  int cclen = char_byte_len ((uchar) line[lidx]);
+  int cclen = str_utf8_charlen ((uchar) line[lidx]);
   int fpart_len = fidx,
       context_len = (lidx - (currow->first_col_idx ? 2 : fidx)) + cclen,
       lpart_len = len - fpart_len - context_len;
@@ -7272,8 +7567,8 @@ private char *ved_syn_parse_visual_cw (buf_t *this, char *line, int len, int idx
   return ved_syn_parse_visual_line (this, line, len, row);
 }
 
-private int ed_cw_mode_cb (buf_t *this, string_t *str, utf8 c) {
-  (void) this; (void) str; (void) c;
+private int ed_cw_mode_cb (buf_t **thisp, int fcol, int lcol, string_t *str, utf8 c) {
+  (void) thisp; (void) str; (void) c; (void) fcol; (void) lcol;
   return 1;
 }
 
@@ -7327,7 +7622,7 @@ handle_char:
           strncpy (fname, $mycur(data)->bytes + $my(vis)[0].fidx, len);
           fname[len] = '\0';
           ifnot (file_exists (fname)) goto theend;
-          ved_edit_fname (thisp, fname, $myparents(cur_frame), 0, 0, 0);
+          ved_edit_fname ($my(parent), thisp, fname, $myparents(cur_frame), 0, 0, 0);
         }
 
         goto theend;
@@ -7382,7 +7677,8 @@ handle_char:
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
               string_append_byte (str, $mycur(data)->bytes[ii]);
 
-            int retval = $myroots(cw_mode_cb) (this, str, c);
+            int retval = $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx,
+                $my(vis)[0].lidx, str, c);
             string_free (str);
             if (retval) goto theend;
             break;
@@ -7484,8 +7780,8 @@ handle_char:
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         VISUAL_ADJUST_IDXS($my(vis)[1]);
         {
-          string_t *str = input_box (this, $my(vis)[1].fidx + 1, $my(vis)[0].fidx + 1, 
-              DONOT_ABORT_ON_ESCAPE);
+          string_t *str = self(input_box, $my(vis)[1].fidx + 1, $my(vis)[0].fidx + 1,
+              DONOT_ABORT_ON_ESCAPE, NULL);
 
           action_t *action = AllocType (action);
           action_t *baction =AllocType (action);
@@ -7584,29 +7880,30 @@ theend:
   return DONE;
 }
 
-private int ved_edit_fname (buf_t **thisp, char *fname, int frame, int reload, int draw, int reopen) {
+private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
+                                             int reload, int draw, int reopen) {
   buf_t *this = *thisp;
   if (fname is NULL and 0 is reload) return NOTHING_TODO;
 
   if (fname isnot NULL) {
     ifnot (reopen) {
       int idx;
-      buf_t *bn = My(Win).get.buf_by_name ($my(parent), fname, &idx);
+      buf_t *bn = My(Win).get.buf_by_name (win, fname, &idx);
       ifnot (NULL is bn) {
-        *thisp = My(Win).set.current_buf ($my(parent), idx);
+        *thisp = My(Win).set.current_buf (win, idx);
         return DONE;
       }
     }
 
     if ($my(at_frame) is frame) $my(is_visible) = 0;
 
-    buf_t *that = My(Win).buf_new ($my(parent), fname, frame, 0);
+    buf_t *that = My(Win).buf_new (win, fname, frame, 0);
     current_list_set (that, 0);
 
-    int cur_idx = $my(parent)->cur_idx;
-    int idx = My(Win).append_buf ($my(parent), that);
-    current_list_set ($my(parent), cur_idx);
-    My(Win).set.current_buf ($my(parent), idx);
+    int cur_idx = win->cur_idx;
+    int idx = My(Win).append_buf (win, that);
+    current_list_set (win, cur_idx);
+    My(Win).set.current_buf (win, idx);
 
     *thisp = that;
     this = that;
@@ -7703,7 +8000,7 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
     } while (0);
 
   if (frame is AT_CURRENT_FRAME) frame = $myparents(cur_frame);
-  if (NOTHING_TODO is ved_edit_fname (thisp, fname, frame, 0, 0, 1))
+  if (NOTHING_TODO is ved_edit_fname ($my(parent), thisp, fname, frame, 0, 0, 1))
     return NOTHING_TODO;
 
   return ved_normal_goto_linenr (*thisp, lnr);
@@ -7711,13 +8008,16 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
 
 private int ved_split (buf_t **thisp, char *fname) {
   buf_t *this = *thisp;
+  buf_t *that = this;
 
   if (win_add_frame ($my(parent)) is NOTHING_TODO)
     return NOTHING_TODO;
 
-  ved_edit_fname (thisp, fname, $myparents(num_frames) - 1, 1, 0, 1);
+  ved_edit_fname ($my(parent), thisp, fname, $myparents(num_frames) - 1, 1, 0, 1);
 
   $myparents(cur_frame) = $myparents(num_frames) - 1;
+
+  $from(that, is_visible) = 1;
 
   My(Win).draw ($my(parent));
   return DONE;
@@ -7728,38 +8028,39 @@ private int ved_enew_fname (buf_t **thisp, char *fname) {
   win_t *w = My(Ed).win.new ($my(root), NULL, 1);
   $my(root)->prev_idx = $my(root)->cur_idx;
   My(Ed).append.win ($my(root), w);
-  $my(parent) = $my(root)->current;
-  ved_edit_fname (thisp, fname, 0, 1, 1, 1);
+  ved_edit_fname (w, thisp, fname, 0, 1, 1, 1);
   return DONE;
 }
 
-private int ed_win_change (ed_t *root, buf_t **thisp, int com, char *name, int accept_rdonly) {
-  (void) root;
-  buf_t *this = *thisp;
+private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
+                                            int accept_rdonly, int force) {
+  if (this->num_items is 1)
+    ifnot (force) return NOTHING_TODO;
 
-  if ($my(root)->num_items is 1) return NOTHING_TODO;
-
-  int idx = $my(root)->cur_idx;
+  int idx = this->cur_idx;
   int cidx = idx;
 
   ifnot (NULL is name) {
-    win_t *w = My(Ed).get.win_by_name ($my(root), name, &idx);
+    if (str_eq ($from($from((*bufp), parent), name), name))
+      return NOTHING_TODO;
+    win_t *w = self(get.win_by_name, name, &idx);
     if (NULL is w) return NOTHING_TODO;
   } else {
 change_idx:
     switch (com) {
       case VED_COM_WIN_CHANGE_PREV:
-        if (--idx is -1) { idx = $my(root)->num_items - 1; } break;
+        if (--idx is -1) { idx = this->num_items - 1; } break;
       case VED_COM_WIN_CHANGE_NEXT:
-        if (++idx is $my(root)->num_items) { idx = 0; } break;
+        if (++idx is this->num_items) { idx = 0; } break;
       case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-        idx = $my(root)->prev_idx;
+        idx = this->prev_idx;
     }
 
-    if (idx is cidx) return NOTHING_TODO;
+    if (idx is cidx)
+      ifnot (force) return NOTHING_TODO;
 
     ifnot (accept_rdonly) {
-      win_t *w = My(Ed).get.win_by_idx ($my(root), idx);
+      win_t *w = self(get.win_by_idx, idx);
       if (NULL is w) return NOTHING_TODO;
       if ($from(w, type) is VED_WIN_SPECIAL_TYPE) {
         if (com is VED_COM_WIN_CHANGE_PREV_FOCUSED)
@@ -7770,23 +8071,28 @@ change_idx:
     }
   }
 
-  My(Ed).set.current_win ($my(root), idx);
-  this = $my(root)->current->current;
-  $my(parent) = $my(root)->current;
-  *thisp = My(Win).set.current_buf ($my(parent), $my(parent)->cur_idx);
-  My(Win).set.video_dividers ($my(parent));
-  My(Win).draw ($my(parent));
+  self(set.current_win, idx);
+  win_t *parent = this->current;
+  *bufp = parent->current;
+
+  $from((*bufp), parent) = parent;
+  *bufp = My(Win).set.current_buf (parent, parent->cur_idx);
+  My(Win).set.video_dividers (parent);
+  My(Win).draw (parent);
   return DONE;
 }
 
 private int ved_win_delete (ed_t *this, buf_t **thisp, int count_special) {
-  if (1 is self(get.num_win, count_special)) return EXIT;
+  if (1 is self(get.num_win, count_special))
+    return EXIT;
+
   win_t *parent = current_list_pop (this, win_t);
   win_free (parent);
 
   parent = this->current;
 
   *thisp = My(Win).set.current_buf (parent, parent->cur_idx);
+
   My(Win).set.video_dividers (parent);
   My(Win).draw (parent);
   return DONE;
@@ -8113,11 +8419,13 @@ private void ved_buf_clear (buf_t *this) {
   self(free.rows);
   vundo_clear (this);
   this->head = this->tail = this->current = NULL;
-  this->cur_idx = -1; this->num_items = 0;
+  this->cur_idx = 0; this->num_items = 0;
   buf_on_no_length (this);
 
-  $my(video_first_row_idx) = -1;
-  self(set.video_first_row, 0);
+  $my(video_first_row) = this->head;
+  $my(video_first_row_idx) = 0;
+//  $my(video_first_row_idx) = -1;
+//  self(set.video_first_row, 0);
 
   self(cur.set, 0);
   $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
@@ -8141,8 +8449,10 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
       }
     }
 
+    int num = parent->num_items;
     My(Win).pop.current_buf (parent);
-    ifnot (parent->num_items) return WIN_EXIT;
+    ifnot (num - 1) return WIN_EXIT;
+    this = parent->current;
   } else {
     current_list_set (parent, idx);
     this = parent->current;
@@ -8541,6 +8851,29 @@ theend:
   return retval;
 }
 
+private void rline_clear (rline_t *rl) {
+  rl->state &= ~RL_CLEAR;
+  int row = rl->first_row;
+  while (row < rl->prompt_row)
+    video_draw_at (rl->cur_video, row++);
+
+  if (rl->prompt_row is $from(rl->ed, prompt_row))
+    video_set_row_with (rl->cur_video, rl->prompt_row - 1, " ");
+  video_draw_at (rl->cur_video, rl->prompt_row);
+
+  if (rl->state & RL_CLEAR_FREE_LINE) {
+    vstr_free (rl->line);
+    rl->num_items = 0;
+    rl->cur_idx = 0;
+    rl->line = vstr_new ();
+    vstring_t *vstr = AllocType (vstring);
+    vstr->data = __string_new_with (" ", 1);
+    current_list_append (rl->line, vstr);
+  }
+
+  rl->state &= ~RL_CLEAR_FREE_LINE;
+}
+
 private void rline_free_members (rline_t *rl) {
   vstr_free (rl->line);
   arg_t *it = rl->head;
@@ -8559,6 +8892,11 @@ private void rline_free (rline_t *rl) {
   rline_free_members (rl);
   string_free (rl->render);
   free (rl);
+}
+
+private void rline_free_api (rline_t *rl) {
+  rline_clear (rl);
+  rline_free (rl);
 }
 
 private int rline_history_at_beg (rline_t **rl) {
@@ -8679,6 +9017,7 @@ thesuccess:
 
 theend:
   rline_clear (lrl);
+  video_draw_at (rl->cur_video, rl->first_row); // is minus one
   rline_free (lrl);
   rl->at_beg = at_beg;
   rl->at_end = at_end;
@@ -8698,26 +9037,10 @@ private void ved_rline_history_push (rline_t *rl) {
   current_list_prepend ($my(history)->rline, hrl);
 }
 
-private void rline_clear (rline_t *rl) {
-  rl->state &= ~RL_CLEAR;
-  int row = rl->first_row;
-  while (row < rl->prompt_row)
-    video_draw_at (rl->cur_video, row++);
-
-  video_set_row_with (rl->cur_video, rl->prompt_row - 1, " ");
-  video_draw_at (rl->cur_video, rl->prompt_row);
-
-  if (rl->state & RL_CLEAR_FREE_LINE) {
-    vstr_free (rl->line);
-    rl->num_items = 0;
-    rl->cur_idx = 0;
-    rl->line = vstr_new ();
-    vstring_t *vstr = AllocType (vstring);
-    vstr->data = __string_new_with (" ", 1);
-    current_list_append (rl->line, vstr);
-  }
-
+private void ved_rline_history_push_api (rline_t *rl) {
+  rline_clear (rl);
   rl->state &= ~RL_CLEAR_FREE_LINE;
+  ved_rline_history_push (rl);
 }
 
 private vstring_t *ved_rline_parse_command (rline_t *rl) {
@@ -8749,6 +9072,11 @@ get_command:
   }
 
   return it;
+}
+
+private void ved_rline_set_line (rline_t *rl, char *bytes, size_t len) {
+  BYTES_TO_RLINE (rl, bytes, (int) len);
+  rline_write_and_break (rl);
 }
 
 private string_t *ved_rline_get_line (rline_t *rl) {
@@ -9128,33 +9456,6 @@ private string_t *rline_get_string (rline_t *rl) {
   return vstr_join (rl->line, "");
 }
 
-private string_t *input_box (buf_t *this, int row, int col, int abort_on_escape) {
-  string_t *str = NULL;
-  rline_t *rl = rline_new ($my(root), $my(term_ptr), My(Input).get, row,
-      col, $my(dim)->num_cols - col + 1, $my(video));
-  rl->opts &= ~RL_OPT_HAS_HISTORY_COMPLETION;
-  rl->opts &= ~RL_OPT_HAS_TAB_COMPLETION;
-  rl->prompt_char = 0;
-
-  utf8 c;
-  for (;;) {
-     c = rline_edit (rl)->c;
-     switch (c) {
-       case ESCAPE_KEY:
-          if (abort_on_escape) {
-            str = string_new_with ("");
-            goto theend;
-          }
-       case '\r': str = rline_get_string (rl); goto theend;
-     }
-  }
-
-theend:
-  My(String).clear_at (str, -1);
-  rline_free (rl);
-  return str;
-}
-
 private int rline_calc_columns (rline_t *rl, int num_cols) {
   int cols = rl->first_col + num_cols;
   while (cols > $from(rl->ed, dim)->num_cols) cols--;
@@ -9198,6 +9499,11 @@ private rline_t *ved_rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   rl->commands_len = $from(ed, num_commands);
   rl->tab_completion = ved_rline_tab_completion;
   return rl;
+}
+
+private rline_t *ved_rline_new_api (ed_t *this) {
+   return ved_rline_new (this, $my(term), My(Input).get, $my(prompt_row), 1,
+     $my(dim)->num_cols, $my(video));
 }
 
 private void rline_render (rline_t *rl) {
@@ -9427,8 +9733,8 @@ insert_char:
           ch->data = string_new_with_fmt ("%c", rl->c);
         } else {
           ch = AllocType (vstring);
-          char buf[5];
-          ch->data = string_new_with (char_from_code (rl->c, buf));
+          char buf[5]; int len;
+          ch->data = string_new_with (str_utf8_character (rl->c, buf, &len));
         }
 
         if (rl->line->cur_idx is rl->line->num_items - 1 and ' ' is rl->line->current->data->bytes[0]) {
@@ -9842,15 +10148,28 @@ private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
   return OK;
 }
 
+private int rline_get_range (rline_t  *rl, buf_t *this, int *range) {
+  arg_t *arg = rline_get_arg (rl, RL_ARG_RANGE);
+  if (NULL is arg or (NOTOK is ved_rline_parse_range (this, rl, arg))) {
+    range[0] = -1; range[1] = -1;
+    return NOTOK;
+  }
+
+  range[0] = rl->range[0];
+  range[1] = rl->range[1];
+
+  return OK;
+}
+
 private int ved_test_key (buf_t *this) {
   utf8 c;
   MSG("press any key to test, press escape to end the test");
-  char str[128]; char bin[32]; char chr[8];
+  char str[128]; char bin[32]; char chr[8]; int len;
   for (;;) {
     My(Cursor).hide ($my(term_ptr));
     c = My(Input).get ($my(term_ptr));
     snprintf (str, 128, "dec: %d hex: 0x%x octal: 0%o bin: %s char: %s",
-        c, c, c, itoa (c, bin, 2), char_from_code (c, chr));
+        c, c, c, itoa (c, bin, 2), str_utf8_character (c, chr, &len));
     MSG(str);
     if (c is ESCAPE_KEY) break;
   }
@@ -9866,13 +10185,25 @@ public rline_T __init_rline__ (void) {
         .line = ved_rline_get_line,
         .command = ved_rline_get_command,
         .arg_fnames = rline_get_arg_fnames,
-        .anytype_arg = rline_get_anytype_arg
+        .anytype_arg = rline_get_anytype_arg,
+        .arg = rline_get_arg,
+        .range = rline_get_range
       ),
-     .arg = SubSelfInit (rline, arg,
+      .set = SubSelfInit (rline, set,
+        .line = ved_rline_set_line
+      ),
+      .arg = SubSelfInit (rline, arg,
        .exists = rline_arg_exists
-     ),
-   ),
- );
+      ),
+      .history = SubSelfInit (rline, history,
+        .push = ved_rline_history_push
+      ),
+      .new = ved_rline_new_api,
+      .free = rline_free_api,
+      .exec = ved_rline,
+      .parse = ved_rline_parse
+    )
+  );
 }
 
 public void __deinit_rline__ (rline_T *this) {
@@ -9924,7 +10255,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         }
       }
 #else
-  My(Msg).error ($my(root), "writing is disabled, to enable use DEBUG=1 during compilation");
+  My(Msg).error ($my(root), "writing is disabled, to enable use ENABLE_WRITING=1 during compilation");
 #endif
       goto theend;
 
@@ -9936,13 +10267,13 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       if (is_special_win) goto theend;
       {
         arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
-        retval = ved_edit_fname (thisp, (NULL is fname ? NULL: fname->argval->bytes),
+        retval = ved_edit_fname ($my(parent), thisp, (NULL is fname ? NULL: fname->argval->bytes),
            $myparents(cur_frame), VED_COM_EDIT_FORCE is rl->com, 1, 1);
       }
       goto theend;
 
     case VED_COM_ETAIL:
-      retval = ved_edit_fname (thisp, NULL, $myparents(cur_frame), 1, 0, 1);
+      retval = ved_edit_fname ($my(parent), thisp, NULL, $myparents(cur_frame), 1, 0, 1);
       ved_normal_eof (*thisp, DONOT_DRAW);
       goto theend;
 
@@ -10107,19 +10438,19 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_WIN_CHANGE_NEXT_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_WIN_CHANGE_NEXT:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_FOCUSED_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0);
+      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_BUF_DELETE_FORCE_ALIAS:
@@ -10239,7 +10570,7 @@ private int ved_insert_reg (buf_t **thisp, string_t *cur_insert) {
   while (reg isnot NULL) {
     char *sp = reg->data->bytes;
     while (*sp) {
-      int clen = char_byte_len ((uchar) *sp);
+      int clen = str_utf8_charlen ((uchar) *sp);
       c = utf8_code (sp);
       sp += clen;
       this = ved_insert_char_rout (this, c, cur_insert);
@@ -10277,7 +10608,7 @@ private int ved_insert (buf_t **thisp, utf8 com) {
   action = stack_push (action, act);
 
   if (com is 'A' or ((com is 'a' or com is 'C') and $mycur(cur_col_idx) is (int)
-      $mycur(data)->num_bytes - char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))) {
+      $mycur(data)->num_bytes - str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))) {
     ADD_TRAILING_NEW_LINE;
 
     ved_normal_eol (this);
@@ -10355,7 +10686,7 @@ handle_char:
             $mycur(data)->bytes[$mycur(cur_col_idx)] is 0 or
             $mycur(data)->bytes[$mycur(cur_col_idx)] is '\n') {
           if (HAS_THIS_LINE_A_TRAILING_NEW_LINE) {
-            if ($mycur(cur_col_idx) + char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]) 
+            if ($mycur(cur_col_idx) + str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)])
                 is (int) $mycur(data)->num_bytes)
               ved_normal_left (this, 1);
             RM_TRAILING_NEW_LINE;
@@ -10370,7 +10701,7 @@ handle_char:
           }
 
           if ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes -
-              char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))
+              str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))
             ADD_TRAILING_NEW_LINE;
 
           if ($mycur(cur_col_idx) isnot 0)
@@ -10393,7 +10724,7 @@ handle_char:
 
       case ARROW_RIGHT_KEY:
         if($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes -
-            char_byte_len ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))
+            str_utf8_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]))
           ADD_TRAILING_NEW_LINE;
         ved_normal_right (this, 1, 1);
         goto get_char;
@@ -10633,7 +10964,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       retval = ved_normal_visual_bw (this); break;
 
     case 'V':
-      retval = ved_normal_visual_lw (this); break;
+      retval = ved_normal_visual_lw (thisp); break;
 
     case 'v':
       retval = ved_normal_visual_cw (thisp); break;
@@ -10781,7 +11112,7 @@ exec_block:
         if (cmd_retv is BUF_QUIT) {
           retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
           if (retval is NOTHING_TODO) {
-            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0);
+            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0, NO_FORCE);
             if (retval is NOTHING_TODO)
               cmd_retv = EXIT;
             else
@@ -10793,6 +11124,7 @@ exec_block:
         if (cmd_retv is EXIT) {retval = OK; goto theend;}
 
         if (cmd_retv is WIN_EXIT) {
+                       /* at this point this (probably) is a null reference */
           retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
           if (retval is DONE) goto new_state;
           if (retval is EXIT) {retval = OK; goto theend;}
@@ -10911,7 +11243,7 @@ private buf_t *ed_get_bufname (ed_t *this, char *fname) {
 }
 
 private win_t *ed_set_current_win (ed_t *this, int idx) {
-  int cur_idx =this->cur_idx;
+  int cur_idx = this->cur_idx;
   if (INDEX_ERROR isnot current_list_set (this, idx))
     this->prev_idx = cur_idx;
   return this->current;
@@ -10941,13 +11273,14 @@ private int ved_append_win (ed_t *this, win_t *w) {
 }
 
 private void ved_history_add (ed_t *this, vstr_t *hist, int what) {
-  (void) hist;
   if (what is RLINE_HISTORY) {
     vstring_t *it = hist->head;
     while (it) {
       rline_t *rl = ved_rline_new (this, $my(term), My(Input).get,
            $my(prompt_row), 1, $my(dim)->num_cols, $my(video));
-      BYTES_TO_RLINE (rl, it->data->bytes, (int) it->data->num_bytes);
+      char *sp = str_trim_end (it->data->bytes, '\n');
+      sp = str_trim_end (sp, ' ');
+      BYTES_TO_RLINE (rl, it->data->bytes, (int) bytelen (sp));
       ved_rline_history_push (rl);
       it = it->next;
     }
@@ -10972,10 +11305,10 @@ private void ved_history_write (ed_t *this, char *dir) {
    snprintf (fname, dirlen + 16, "%s/.ved_h_search", dir);
    FILE *fp = fopen (fname, "w");
    if (NULL is fp) return;
-   histitem_t *it = $my(history)->search->head;
+   histitem_t *it = $my(history)->search->tail;
    while (it) {
      fprintf (fp, "%s\n", it->data->bytes);
-     it = it->next;
+     it = it->prev;
    }
    fclose (fp);
 
@@ -10983,12 +11316,12 @@ private void ved_history_write (ed_t *this, char *dir) {
    fp = fopen (fname, "w");
    if (NULL is fp) return;
 
-   h_rlineitem_t *hrl = $my(history)->rline->head;
+   h_rlineitem_t *hrl = $my(history)->rline->tail;
    while (hrl) {
      string_t *line = vstr_join (hrl->data->line, "");
      fprintf (fp, "%s\n", line->bytes);
      string_free (line);
-     hrl = hrl->next;
+     hrl = hrl->prev;
    }
    fclose (fp);
 }
@@ -11025,12 +11358,12 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
-private void ed_set_word_actions_cb (ed_t *this, int (*fn) (buf_t **, char *, utf8)) {
-  ifnot (NULL is fn) $my(word_actions_cb) = fn;
+private void ed_set_word_actions_cb (ed_t *this, WordActions_cb cb) {
+  ifnot (NULL is cb) $my(word_actions_cb) = cb;
 }
 
-private void ed_set_word_actions (ed_t *this, utf8 *chars, int len, char *actions,
-                                   int (*cb) (buf_t **, char *, utf8)) {
+private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
+                                  char *actions, WordActions_cb cb) {
   ifnot (len) return;
   int tlen = $my(word_actions_chars_len) + len;
 
@@ -11046,8 +11379,9 @@ private void ed_set_word_actions (ed_t *this, utf8 *chars, int len, char *action
   self(set.word_actions_cb, cb);
 }
 
-private int ed_word_actions_cb (buf_t **thisp, char *word, utf8 c) {
-  (void) thisp; (void) word; (void) c;
+private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
+                                bufiter_t *it, char *word, utf8 c) {
+  (void) thisp; (void) word; (void) c; (void) fidx; (void) lidx; (void) it;
   return 1;
 }
 
@@ -11064,13 +11398,30 @@ private void ed_set_word_actions_default (ed_t *this) {
 }
 
 private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,
-                 char *actions, int (*cb) (buf_t *, string_t *, utf8)) {
-  $my(cw_mode_chars) = Alloc (sizeof (int *) * len);
-  for (int i = 0; i < len; i++)
-    $my(cw_mode_chars)[i] = chars[i];
-  $my(cw_mode_chars_len) = len;
-  $my(cw_mode_actions) = str_dup (actions, bytelen (actions));
-  $my(cw_mode_cb) = cb;
+                 char *actions, VisualCwMode_cb cb) {
+  ifnot (len) return;
+  int tlen = $my(cw_mode_chars_len) + len;
+
+  ifnot ($my(cw_mode_chars_len)) {
+    $my(cw_mode_chars) = Alloc (sizeof (int *) * len);
+    $my(cw_mode_actions) = str_dup (actions, bytelen (actions));
+  } else {
+    $my(cw_mode_chars) = Realloc ($my(cw_mode_chars), sizeof (int *) * tlen);
+    size_t alen = bytelen (actions);
+    size_t plen = bytelen ($my(cw_mode_actions));
+    $my(cw_mode_actions) = Realloc ($my(cw_mode_actions), alen + plen + 2);
+    $my(cw_mode_actions)[plen] = '\n';
+    for (size_t i = plen + 1, j = 0; i < alen + plen + 2; i++, j++) {
+      $my(cw_mode_actions)[i] = actions[j];
+    }
+
+    $my(cw_mode_actions)[alen + plen + 1] = '\0';
+  }
+
+  for (int i = $my(cw_mode_chars_len), j = 0; i < tlen; i++, j++)
+    $my(cw_mode_chars)[i] = chars[j];
+  $my(cw_mode_chars_len) = tlen;
+  ifnot (NULL is cb) $my(cw_mode_cb) = cb;
 }
 
 private void ed_set_cw_mode_actions_default (ed_t *this) {
@@ -11086,14 +11437,31 @@ private void ed_set_cw_mode_actions_default (ed_t *this) {
  self(set.cw_mode_actions, chars, ARRLEN(chars), actions, ed_cw_mode_cb);
 }
 
-private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len, char *actions,
-                                   int (*cb) (buf_t *, vstr_t *, utf8)) {
-  $my(lw_mode_chars) = Alloc (sizeof (int *) * len);
-  for (int i = 0; i < len; i++)
-    $my(lw_mode_chars)[i] = chars[i];
-  $my(lw_mode_chars_len) = len;
-  $my(lw_mode_actions) = str_dup (actions, bytelen (actions));
-  $my(lw_mode_cb) = cb;
+private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
+                                   char *actions, VisualLwMode_cb cb) {
+  ifnot (len) return;
+  int tlen = $my(lw_mode_chars_len) + len;
+
+  ifnot ($my(lw_mode_chars_len)) {
+    $my(lw_mode_chars) = Alloc (sizeof (int *) * len);
+    $my(lw_mode_actions) = str_dup (actions, bytelen (actions));
+  } else {
+    $my(lw_mode_chars) = Realloc ($my(lw_mode_chars), sizeof (int *) * tlen);
+    size_t alen = bytelen (actions);
+    size_t plen = bytelen ($my(lw_mode_actions));
+    $my(lw_mode_actions) = Realloc ($my(lw_mode_actions), alen + plen + 2);
+    $my(lw_mode_actions)[plen] = '\n';
+    for (size_t i = plen + 1, j = 0; i < alen + plen + 2; i++, j++) {
+      $my(lw_mode_actions)[i] = actions[j];
+    }
+
+    $my(lw_mode_actions)[alen + plen + 1] = '\0';
+  }
+
+  for (int i = $my(lw_mode_chars_len), j = 0; i < tlen; i++, j++)
+    $my(lw_mode_chars)[i] = chars[j];
+  $my(lw_mode_chars_len) = tlen;
+  ifnot (NULL is cb) $my(lw_mode_cb) = cb;
 }
 
 private void ed_set_lw_mode_actions_default (ed_t *this) {
@@ -11109,8 +11477,8 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     "+send selected lines to XA_CLIPBOARD\n"
     "*send selected lines to XA_PRIMARY";
 
- self(set.lw_mode_actions, chars, ARRLEN(chars), actions, ed_lw_mode_cb);
- }
+  self(set.lw_mode_actions, chars, ARRLEN(chars), actions, ed_lw_mode_cb);
+}
 
 private void ed_free (ed_t *this) {
   if (this is NULL) return;
@@ -11199,6 +11567,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(history)->rline->history_idx = 0;
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
+  this->name_gen = 26;
 
   $my(last_insert) = My(String).new_with ("");
   $my(shared_str) = My(String).new_with ("");
@@ -11288,7 +11657,27 @@ public cstring_T __init_cstring__ (void) {
       .dup = str_dup,
       .eq = str_eq,
       .chop = str_chop,
-      .itoa = itoa
+      .itoa = itoa,
+      .extract_word_at = str_extract_word_at,
+      .substr = str_substr,
+      .trim = SubSelfInit (cstring, trim,
+        .end = str_trim_end,
+      ),
+      .utf8 = SubSelfInit (cstring, utf8,
+        .get = SubSelfInit (cstringutf8, get,
+          .code_at = str_utf8_get_code_at
+        ),
+        .new = str_utf8_new,
+        .free = str_utf8_free_members,
+        .encode = str_utf8_encode,
+        .to_lower = str_utf8_to_lower,
+        .to_upper = str_utf8_to_upper,
+        .is_lower = str_utf8_is_lower,
+        .is_upper = str_utf8_is_upper,
+        .character = str_utf8_character,
+        .change_case = str_utf8_change_case,
+        .charlen = str_utf8_charlen
+      )
     )
   );
 }
@@ -11389,6 +11778,7 @@ private ed_T *editor_new (char *name) {
       .scratch = ved_scratch,
       .resume = ed_resume,
       .suspend = ed_suspend,
+      .question = ved_question,
       .set = SubSelfInit (ed, set,
         .dim = ed_set_dim,
         .screen_size = ed_set_screen_size,
@@ -11437,6 +11827,11 @@ private ed_T *editor_new (char *name) {
         .new = ed_win_new,
         .new_special = ed_win_new_special,
         .change = ed_win_change
+      ),
+      .menu = SubSelfInit (ed, menu,
+        .new = ved_menu_new,
+        .free = ved_menu_free,
+        .create = menu_create
       ),
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
@@ -11488,13 +11883,17 @@ private ed_T *editor_new (char *name) {
         ),
         .get = SubSelfInit (buf, get,
           .fname = buf_get_fname,
-          .num_lines = buf_get_num_lines
+          .num_lines = buf_get_num_lines,
+          .line_at = buf_get_line_at,
+          .current_video_row = buf_get_current_video_row,
+          .current_video_col = buf_get_current_video_col
         ),
         .set = SubSelfInit (buf, set,
           .fname = buf_set_fname,
           .video_first_row = buf_set_video_first_row,
           .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .modified = buf_set_modified,
           .as = SubSelfInit (bufset, as,
             .unamed = buf_set_as_unamed,
             .non_existant = buf_set_as_non_existant
@@ -11510,14 +11909,33 @@ private ed_T *editor_new (char *name) {
           .append_with = buf_current_append_with,
           .prepend_with = buf_current_prepend_with,
           .delete = buf_current_delete,
-          .pop = buf_current_pop
+          .pop = buf_current_pop,
          ),
         .row =  SubSelfInit (buf, row,
-          .new_with = buf_row_new_with
+          .new_with = buf_row_new_with,
+          .get_current = buf_row_get_current,
+          .get_current_bytes = buf_row_get_current_bytes,
+          .get_current_line_idx = buf_row_get_current_line_idx
         ),
         .read = SubSelfInit (buf, read,
           .fname = buf_read_fname,
           .from_fp = ved_buf_read_from_fp
+        ),
+        .iter = SubSelfInit (buf, iter,
+          .free = buf_iter_free,
+          .new = buf_iter_new,
+          .next = buf_iter_next
+        ),
+        .action = SubSelfInit (buf, action,
+          .new = buf_action_new,
+          .free = buf_free_action,
+          .set_with = buf_action_set_with,
+          .set_current = buf_action_set_current,
+          .push = buf_action_push
+        ),
+        .normal = SubSelfInit (buf, normal,
+          .bof = ved_normal_bof,
+          .eof = ved_normal_eof
         ),
         .draw = buf_draw,
         .flush = buf_flush,
@@ -11525,7 +11943,8 @@ private ed_T *editor_new (char *name) {
         .clear = ved_buf_clear,
         .append_with = buf_append_with,
         .write = buf_write,
-        .substitute = buf_substitute
+        .substitute = buf_substitute,
+        .input_box = buf_input_box
       ),
     ),
     .Msg = ClassInit (msg,

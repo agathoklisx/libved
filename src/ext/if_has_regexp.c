@@ -42,22 +42,20 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
       re->pat->bytes[0] is '$' or
       re->pat->bytes[0] is '|'))
     return re->retval;
-
   do {
     struct slre_cap cap[re->num_caps];
     for (int i = 0; i < re->num_caps; i++) cap[i].len = 0;
-
     re->retval = re_match (re, re->pat->bytes, buf, buf_len,
         cap, re->num_caps, re->flags);
 
     if (re->retval is RE_CAPS_ARRAY_TOO_SMALL_ERROR) {
       Re.free_captures (re);
       Re.allocate_captures (re, re->num_caps + (re->num_caps / 2));
+
       continue;
     }
 
-    if (0 > re->retval) return re->retval;
-
+    if (0 > re->retval) goto theend;
     re->match = String.new_with (re->match_ptr);
     String.clear_at (re->match, re->match_len);
 
@@ -68,6 +66,7 @@ private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
     }
   } while (0);
 
+theend:
   return re->retval;
 }
 

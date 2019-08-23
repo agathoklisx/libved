@@ -59,8 +59,12 @@ private proc_t *proc_new (void) {
 
 private int proc_wait (proc_t *this) {
   if (-1 is $my(pid)) return NOTOK;
-  waitpid ($my(pid), &$my(status), WNOHANG|WUNTRACED);
-  return $my(status);
+  $my(status) = 0;
+  waitpid ($my(pid), &$my(status), 0);
+ // waitpid ($my(pid), &$my(status), WNOHANG|WUNTRACED);
+  if (WIFEXITED ($my(status)))
+    return WEXITSTATUS ($my(status));
+  return -1;
 }
 
 private int proc_read (proc_t *this) {

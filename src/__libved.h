@@ -2,12 +2,17 @@
 #define MAXWORDLEN  256
 #define MAXCOMLEN   32
 #define MAXERRLEN   256
-#define MAXPATLEN PATH_MAX
 #define MAX_SCREEN_ROWS  256
 #define MAX_COUNT_DIGITS 8
 
 #define VED_WIN_NORMAL_TYPE  0
 #define VED_WIN_SPECIAL_TYPE 1
+
+#define NORMAL_MODE     "normal"
+#define INSERT_MODE     "insert"
+#define VISUAL_MODE_LW  "visual lw"
+#define VISUAL_MODE_CW  "visual cw"
+#define VISUAL_MODE_BW  "visual bw"
 
 #define VED_SCRATCH_WIN "scratch"
 #define VED_SCRATCH_BUF "[scratch]"
@@ -18,20 +23,9 @@
 #define VED_DIFF_WIN    "diff"
 #define VED_DIFF_BUF    "[diff]"
 #define UNAMED          "[No Name]"
-#define NORMAL_MODE     "normal"
-#define INSERT_MODE     "insert"
-#define VISUAL_MODE_LW  "visual lw"
-#define VISUAL_MODE_CW  "visual cw"
-#define VISUAL_MODE_BW  "visual bw"
 
 #define CASE_A ",[]()+-:;}{<>_"
 #define CASE_B ".][)(-+;:{}><-"
-
-#define LINEWISE 1
-#define CHARWISE 2
-#define DELETE_LINE  1
-#define REPLACE_LINE 2
-#define INSERT_LINE  3
 
 #define MENU_INIT (1 << 0)
 #define MENU_QUIT (1 << 1)
@@ -105,9 +99,6 @@
 
 #define NO_APPEND 0
 #define APPEND 1
-
-#define NO_FORCE 0
-#define FORCE 1
 
 #define NO_COUNT_SPECIAL 0
 #define COUNT_SPECIAL 1
@@ -478,7 +469,7 @@ NewType (rline,
 );
 
 NewType (menu,
-  int  fd;
+  int fd;
   int
     num_cols,
     num_rows,
@@ -895,10 +886,9 @@ NewProp (ed,
   int   lw_mode_chars_len, cw_mode_chars_len;
   int   word_actions_chars_len;
 
-  int (*lw_mode_cb) (buf_t *, vstr_t *, utf8);
-  int (*cw_mode_cb) (buf_t *, string_t *, utf8);
-  int (*word_actions_cb) (buf_t **, char *, utf8);
-
+  VisualLwMode_cb lw_mode_cb;
+  VisualCwMode_cb cw_mode_cb;
+  WordActions_cb word_actions_cb;
   Rline_cb rline_cb;
 );
 
@@ -915,7 +905,7 @@ private int ved_insert (buf_t **, utf8);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_enew_fname (buf_t **, char *);
-private int ved_edit_fname (buf_t **, char *, int, int, int, int);
+private int ved_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
 private int ved_write_to_fname (buf_t *, char *, int, int, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
@@ -930,12 +920,12 @@ private void rline_write_and_break (rline_t *);
 private void rline_free (rline_t *);
 private void rline_clear (rline_t *);
 private int  rline_break (rline_t **);
-private string_t *input_box (buf_t *, int, int, int);
+private string_t *rline_get_string (rline_t *);
 private utf8 quest (buf_t *, char *, utf8 *, int);
 private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);
 private void ed_resume (ed_t *);
-private int ed_win_change (ed_t *, buf_t **, int, char *, int);
+private int ed_win_change (ed_t *, buf_t **, int, char *, int, int);
 private int fd_read (int, char *, size_t);
 private string_t *vsys_which (char *, char *);
 private void vundo_clear (buf_t *);
@@ -959,13 +949,6 @@ static const utf8 offsetsFromUTF8[6] = {
 #define IsSeparator(c)                          \
   ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
    byte_in_str(",.()+-/=*~%<>[]:;", (c)) isnot NULL)
-
-#define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
-#define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
-#define Notword ".,?/+*-=~%<>[](){}\\'\";"
-#define Notword_len 22
-#define Notfname "|][\""
-#define Notfname_len 4
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \
@@ -1053,7 +1036,7 @@ static const utf8 offsetsFromUTF8[6] = {
 do {                                                                      \
   char *sp_ = (bytes);                                                    \
   for (int i__ = 0; i__ < (len); i__++) {                                 \
-    int clen = char_byte_len ((bytes)[i__]);                              \
+    int clen = str_utf8_charlen ((bytes)[i__]);                           \
     (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);                            \
     (rl_)->c = utf8_code (sp_);                                           \
     rline_edit ((rl_));                                                   \
@@ -1246,6 +1229,29 @@ do {                                                                \
         (list)->current = (list)->current->prev;                    \
   } while (0);                                                      \
   idx_;                                                             \
+})
+
+#define list_get_at(list, type, idx)                                \
+({                                                                  \
+  type *node = NULL;                                                \
+  int idx_ = idx;                                                   \
+  do {                                                              \
+    if (0 > idx_) idx_ += (list)->num_items;                        \
+    if (idx_ < 0 or idx_ >= (list)->num_items) {                    \
+      idx_ = INDEX_ERROR;                                           \
+      break;                                                        \
+    }                                                               \
+    if ((list)->num_items / 2 < idx_) {                             \
+      node = (list)->head;                                          \
+      while (idx_--)                                                \
+        node = node->next;                                          \
+    } else {                                                        \
+      node =  (list)->tail;                                         \
+      while (idx++ < (list)->num_items - 1)                         \
+        node = node->prev;                                          \
+    }                                                               \
+  } while (0);                                                      \
+  node;                                                             \
 })
 
 /* from man printf(3) Linux Programmer's Manual */
