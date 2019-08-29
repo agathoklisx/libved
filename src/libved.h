@@ -13,13 +13,37 @@
 /* this is not configurable as the code will not count the change in the calculations */
 #define TABLENGTH 1
 
+#ifndef CLEAR_BLANKLINES
+#define CLEAR_BLANKLINES 1
+#endif
+
+#ifndef TAB_ON_INSERT_MODE_INDENTS
 #define TAB_ON_INSERT_MODE_INDENTS 0
+#endif
+
+#ifndef CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE
 #define CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE 1
+#endif
+
+#ifndef SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE
 #define SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
+#endif
+
+#ifndef SMALL_E_ON_NORMAL_GOES_INSERT_MODE
 #define SMALL_E_ON_NORMAL_GOES_INSERT_MODE 1
+#endif
+
+#ifndef BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES
 #define BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES 1
+#endif
+
+#ifndef BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE
 #define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
+#endif
+
+#ifndef READ_FROM_SHELL
 #define READ_FROM_SHELL 1
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096  /* bytes in a path name */
@@ -37,9 +61,6 @@
 #define MAXWORD 64
 #endif
 
-#define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
-#define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
-
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
 #define Notfname "|][\""
@@ -56,6 +77,9 @@
 #define IS_ALPHA(c)     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
+
+#define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
+#define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 
 #define NO_GLOBAL 0
 #define GLOBAL    1
@@ -82,6 +106,12 @@
 #define DELETE_LINE  1
 #define REPLACE_LINE 2
 #define INSERT_LINE  3
+
+#define VERBOSE_OFF 0
+#define VERBOSE_ON 1
+
+#define DONOT_DRAW 0
+#define DRAW 1
 
 #define ED_INIT_ERROR   (1 << 0)
 
@@ -564,6 +594,7 @@ NewSelf (string,
   string_t
     *(*new) (void),
     *(*new_with) (const char *),
+    *(*new_with_len) (const char *, size_t),
     *(*new_with_fmt) (const char *, ...),
     *(*append_byte) (string_t *, char),
     *(*prepend_byte) (string_t *, char),
@@ -702,8 +733,22 @@ NewClass (file,
   Self (file) self;
 );
 
+NewSelf (path,
+  char
+    *(*basename) (char *),
+    *(*extname) (char *),
+    *(*dirname) (char *);
+
+  int (*is_absolute) (char *);
+);
+
+NewClass (path,
+  Self (path) self;
+);
+
 NewSelf (dir,
   dirlist_t *(*list) (char *, int);
+  char *(*current) (void);
 );
 
 NewClass (dir,
@@ -794,7 +839,7 @@ NewSubSelf (buf, action,
 
 NewSubSelf (buf, normal,
   int
-    (*bof) (buf_t *),
+    (*bof) (buf_t *, int),
     (*eof) (buf_t *, int);
 );
 
@@ -833,7 +878,7 @@ NewSubSelf (win, adjust,
 );
 
 NewSubSelf (win, set,
-  buf_t *(*current_buf) (win_t*, int);
+  buf_t *(*current_buf) (win_t*, int, int);
    void  (*video_dividers) (win_t *);
 );
 
@@ -1020,6 +1065,7 @@ NewClass (ed,
   Class (msg) Msg;
   Class (error) Error;
   Class (file) File;
+  Class (path) Path;
   Class (dir) Dir;
   Class (rline) Rline;
   Class (vstring) Vstring;

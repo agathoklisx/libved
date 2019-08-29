@@ -27,6 +27,7 @@ static ed_T *E = NULL;
 #define Term    E->Term.self
 #define Input   E->Input.self
 #define File    E->File.self
+#define Path    E->Path.self
 #define Buf     E->Buf.self
 #define Win     E->Win.self
 #define Msg     E->Msg.self
@@ -117,7 +118,7 @@ int main (int argc, char **argv) {
     }
 
   /* set the first indexed name in the argvlist, as current */
-  Win.set.current_buf (w, 0);
+  Win.set.current_buf (w, 0, DRAW);
 
   int retval = 0;
   signal (SIGWINCH, sigwinch_handler);
@@ -135,7 +136,7 @@ int main (int argc, char **argv) {
         w = Ed.get.current_win (this);
         buf = Win.buf_new (w, NULL, 0, 0);
         Win.append_buf (w, buf);
-        Win.set.current_buf (w, 0);
+        Win.set.current_buf (w, 0, DRAW);
       } else {
         /* else jump to the next or prev */
         this = Ed.get.prev (this);

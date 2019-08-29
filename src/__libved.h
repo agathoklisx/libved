@@ -88,12 +88,6 @@
 
 #define NO_CB_FN NULL
 
-#define VERBOSE_OFF 0
-#define VERBOSE_ON 1
-
-#define DONOT_DRAW 0
-#define DRAW 1
-
 #define NO_COMMAND 0
 #define NO_OPTION 0
 
@@ -344,8 +338,9 @@ enum {
 
 NewProp (term,
   term_T *Me;
-  struct termios orig_mode;
-  struct termios raw_mode;
+  struct termios
+    orig_mode,
+    raw_mode;
 
   char
      mode,
@@ -353,12 +348,11 @@ NewProp (term,
 
   int
     in_fd,
-    out_fd;
-
-  int orig_curs_row_pos;
-  int orig_curs_col_pos;
-  int lines;
-  int columns;
+    out_fd,
+    orig_curs_row_pos,
+    orig_curs_col_pos,
+    lines,
+    columns;
 );
 
 NewType (term,
@@ -368,10 +362,13 @@ NewType (term,
 NewType (vchar,
   utf8 code;
   char buf[5];
-  int  len;
-  int  width;
-  vchar_t *next;
-  vchar_t *prev;
+  int
+    len,
+    width;
+
+  vchar_t
+    *next,
+    *prev;
 );
 
 NewType (line,
@@ -395,24 +392,28 @@ NewType (video,
         int  cur_idx;
         int  num_items;
 
-  string_t *render;
+  string_t
+    *render,
+    *tmp_render;
 
-  int  fd;
-      int  num_cols;
-      int  num_rows;
-      int  first_row;
-      int  first_col;
-      int  last_row;
-      int  row_pos;
-      int  col_pos;
+  int
+    fd,
+    num_cols,
+    num_rows,
+    first_row,
+    first_col,
+    last_row,
+    row_pos,
+    col_pos;
 
-      int rows[MAX_SCREEN_ROWS];
+  int rows[MAX_SCREEN_ROWS];
 );
 
 NewType (arg,
   int type;
-  string_t *argname;
-  string_t *argval;
+  string_t
+    *argname,
+    *argval;
 
   arg_t *next;
   arg_t *prev;
@@ -485,7 +486,8 @@ NewType (menu,
     clear_and_continue_on_backspace,
     state,
     orig_first_row,
-    orig_num_rows;
+    orig_num_rows,
+    retval;
 
   utf8 c;
   vstr_t  *list;
@@ -495,7 +497,6 @@ NewType (menu,
   string_t *header;
   video_t *cur_video;
   int (*process_list) (menu_t *);
-  int retval;
   buf_t *this;
 );
 
@@ -516,12 +517,14 @@ NewType (rg,
 
 NewType (mark,
   char mark;
-  int  cur_idx;
-  int  cur_col_idx;
-  int  first_col_idx;
-  int  row_pos;
-  int  col_pos;
-  int  video_first_row_idx;
+  int
+    cur_idx,
+    cur_col_idx,
+    first_col_idx,
+    row_pos,
+    col_pos,
+    video_first_row_idx;
+
   row_t *video_first_row;
 );
 
@@ -529,19 +532,23 @@ NewType (act,
   act_t *next;
   act_t *prev;
 
-  int  idx;
-  int  cur_idx;
-  int  cur_col_idx;
-  int  first_col_idx;
-  int  row_pos;
-  int  col_pos;
-  int  video_first_row_idx;
+  int
+    num_bytes,
+    idx,
+    cur_idx,
+    cur_col_idx,
+    first_col_idx,
+    row_pos,
+    col_pos,
+    video_first_row_idx;
+
   row_t *video_first_row;
 
-  char type;
-  char *bytes;
+  char
+    type,
+    *bytes;
+
   string_t *__bytes;
-  int  num_bytes;
 );
 
 NewType (action,
@@ -578,14 +585,17 @@ NewType (search,
 
   string_t *pat;
   row_t *row;
-  int  idx;
-  int  cur_idx;
-  int  col;
-  int  found;
-  int  dir;
-  char *prefix;
-  char *match;
-  char *end;
+  int
+    idx,
+    cur_idx,
+    col,
+    found,
+    dir;
+
+  char
+    *prefix,
+    *match,
+    *end;
 );
 
 NewType (histitem,
@@ -639,6 +649,7 @@ NewType (hist,
   Class (msg) *Msg;              \
   Class (error) *Error;          \
   Class (file) *File;            \
+  Class (path) *Path;            \
   Class (dir) *Dir;              \
   Class (rline) *Rline;          \
   Class (vstring) *Vstring
@@ -711,30 +722,36 @@ NewType (row,
    row_t *prev;
 );
 
+/* do not change order */
 NewType (syn,
-  char  *file_type;
-  char **file_match;
-  char **keywords;
-  char  *operators;
-  char  *singleline_comment_start;
-  char  *multiline_comment_start;
-  char  *multiline_comment_end;
-  int    hl_strings;
-  int    hl_numbers;
+  char
+    *file_type,
+    **file_match,
+    **keywords,
+    *operators,
+    *singleline_comment_start,
+    *multiline_comment_start,
+    *multiline_comment_end;
+
+  int
+    hl_strings,
+    hl_numbers;
+
   char  *(*parse) (buf_t *, char *, int, int, row_t *);
   ftype_t *(*init) (buf_t *);
   int state;
 );
 
 NewType (ftype,
-  char name[8];
-  char on_emptyline[2];
-
-  int shiftwidth;
-  int autochdir;
+  char
+    name[8],
+    on_emptyline[2];
 
   int
+    shiftwidth,
+    autochdir,
     tab_indents,
+    clear_blanklines,
     cr_on_normal_is_like_insert_mode,
     backspace_on_normal_is_like_insert_mode,
     backspace_on_first_idx_remove_trailing_spaces,
@@ -758,13 +775,14 @@ NewProp (buf,
   row_t *video_first_row;
   syn_t *syn;
   ftype_t *ftype;
-  undo_t *undo;
-  undo_t *redo;
   rg_t *regs;
   mark_t marks[NUM_MARKS];
   hist_t *history;
   vis_t vis[2];
-  string_t *last_insert;
+
+  undo_t
+    *undo,
+    *redo;
 
   char
     *fname,
@@ -778,7 +796,7 @@ NewProp (buf,
     state,
     at_frame,
     video_first_row_idx,
-    is_visible,
+    is_sticked,
     flags,
     cur_lnr,
     cur_col,
@@ -792,8 +810,11 @@ NewProp (buf,
 
   line_t *line;
   size_t num_bytes;
-  string_t *statusline;
-  string_t *promptline;
+
+  string_t
+    *last_insert,
+    *statusline,
+    *promptline;
 
   struct stat st;
 
@@ -803,8 +824,11 @@ NewProp (buf,
 
 NewProp (win,
   char *name;
-  int flags;
-  int type;
+
+  int
+    flags,
+    state,
+    type;
 
   MY_PROPERTIES;
   MY_CLASSES (win);
@@ -814,17 +838,16 @@ NewProp (win,
   int
     has_promptline,
     has_msgline,
-    has_topline;
-
-  int
+    has_topline,
     min_rows,
     has_dividers,
+    min_frames,
     max_frames,
     num_frames,
     cur_frame;
 
-   ed_t  *parent;
-   dim_t **frames_dim;
+  ed_t  *parent;
+  dim_t **frames_dim;
 );
 
 NewType (venv,
@@ -833,18 +856,19 @@ NewType (venv,
   gid_t gid;
 
   string_t
-     *term_name,
-     *home_dir,
-     *tmp_dir,
-     *diff_exec,
-     *xclip_exec,
-     *path,
-     *display;
+    *term_name,
+    *home_dir,
+    *tmp_dir,
+    *diff_exec,
+    *xclip_exec,
+    *path,
+    *display;
 );
 
 NewProp (ed,
-  char name[8];
-  int  state;
+  char
+     name[8],
+    *saved_cwd;
 
   MY_PROPERTIES;
   MY_CLASSES (ed);
@@ -852,39 +876,46 @@ NewProp (ed,
   win_T *Win;
 
   venv_t *env;
-  char *saved_cwd;
 
   int
+    state,
     has_promptline,
     has_msgline,
     has_topline,
     max_wins,
     max_num_hist_entries,
     max_num_undo_entries,
-    num_commands;
-
-  int
+    num_commands,
     msg_row,
     prompt_row,
     msg_send;
 
-  term_t *term;
+  string_t
+    *last_insert,
+    *msgline,
+    *topline,
+    *shared_str;
 
-  string_t *last_insert;
-  string_t *msgline;
-  string_t *topline;
-  string_t *shared_str;
+  term_t *term;
   hist_t *history;
   rg_t regs[NUM_REGISTERS];
-
   rlcom_t **commands;
 
-  char *lw_mode_actions, *cw_mode_actions, *bw_mode_actions;
+  char
+    *lw_mode_actions,
+    *cw_mode_actions,
+    *bw_mode_actions;
+  utf8
+    *lw_mode_chars,
+    *cw_mode_chars,
+    *word_actions_chars;
+
+  int
+    lw_mode_chars_len,
+    cw_mode_chars_len,
+    word_actions_chars_len;
+
   vstr_t *word_actions;
-  utf8 *lw_mode_chars, *cw_mode_chars;
-  utf8 *word_actions_chars;
-  int   lw_mode_chars_len, cw_mode_chars_len;
-  int   word_actions_chars_len;
 
   VisualLwMode_cb lw_mode_cb;
   VisualCwMode_cb cw_mode_cb;
@@ -896,7 +927,7 @@ NewProp (ed,
 #undef MY_PROPERTIES
 
 private int ved_quit (ed_t *, int);
-private int ved_normal_goto_linenr (buf_t *, int);
+private int ved_normal_goto_linenr (buf_t *, int, int);
 private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
 private int ved_normal_eol (buf_t *);

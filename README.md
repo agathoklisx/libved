@@ -5,7 +5,7 @@
    days, and supposedly is built on conscience, as it implements a vi(m) like interface,
    though at the beginning coexisted happily with an ed interface.
 
-   It was written (and this isnot almost a joke) somehow at a state in time, a little 
+   It was written (and this isnot almost a joke) somehow at a state in time, a little
    bit after the vt100 introduction and Billy Joy's first "vi", cheating of course a bit
    by knowing the future, from where i stole stable code, ideas, a C11 compiler, but
    basically the knowledge, that a character can be represented with more than one byte
@@ -14,7 +14,7 @@
 
    It is written in the form of a library and theoretically, might be useful to some, as an
    independent text visual editor C library that can be embedded in an application, either
-   by just "#include" it as a single file unit, or by linking to it as a shared or as a 
+   by just "#include" it as a single file unit, or by linking to it as a shared or as a
    static library, without any other prerequisite other than libc; and with a tendency to
    minimize this dependency (whenever the chance) by providing either an own implementation of some
    standard C functions or pulling from the pool of the enormous open source C ecosystem;
@@ -53,7 +53,7 @@
      and as an excuse, the waterfall model).
 
    - there are no comments to the code, so it is probably hard to understand and hack happily
-     (it is a rather idiomatic C, though i believe it makes the complicated code more 
+     (it is a rather idiomatic C, though i believe it makes the complicated code more
      readable, as it is based on intentions; but still hard to understand without comments).
      And usually most of the comments, are not code comments, they are just comments.
 
@@ -78,7 +78,7 @@
      actually state machines ( a lot of functions with states and switch and goto
      statements; very fragile code that seems to work properly though (minus the
      edge cases :))), and it was a couple of days ago, i actually realized that
-     really this code was a state machine (but not properly implemented).
+     really this code was a state machine (but not properly implemented)
 
    - and a lot of goto's
 
@@ -88,7 +88,7 @@
    a (document) reference for an editor implementation, but the git commits (during this
    initiation) ended as huge incremental commits and there were unusable to describe this
    "step by step" guide. So it was better to reset git and start fresh.
-   Today, the git log messages are serving as a general reference document, where they 
+   Today, the git log messages are serving as a general reference document, where they
    describe intentions or semantics (both important, as the first helps the code to develop
    and the latter sets an expectation). Note that the commits were and probably will (if
    there is a will) rather big for the usual conventions. Hopefully the stabilization
@@ -179,22 +179,22 @@
    # to clean up and start over
 
    make clean
-
-Note: It is not guaranteed that these three compilers will produce the same
-results. I didn't see any difference with gcc and tcc, but there is at least
-an issue with clang on visual mode (i can not explain it, i didn't research
-it as i'm developing with gcc and tcc (i need this code to be compiled with
-tcc - tcc compiles this code (almost 12000++ lines) in less than a second,
-while gcc takes 18 and clang 24, in this 5? years old chromebook, that runs
-really low in power - because and of the nature of the application (fragile
-algorithms that might need just a single change, or because of a debug message,
-or just because of a tiny compilation error), compilations like these can
-happen (and if it was possible) sometimes 10 times in a couple of minutes, so
-tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
-
 ```
 ```C
-/* All the compilation options: */
+/* Note: It is not guaranteed that these three compilers will produce the same
+   results. I didn't see any difference with gcc and tcc, but there is at least
+   an issue with clang on visual mode (i can not explain it, i didn't research
+   it as i'm developing with gcc and tcc (i need this code to be compiled with
+   tcc - tcc compiles this code (almost 12000++ lines) in less than a second,
+   while gcc takes 18 and clang 24, in this 5? years old chromebook, that runs
+   really low in power - because and of the nature of the application (fragile
+   algorithms that might need just a single change, or because of a debug message,
+   or just because of a tiny compilation error), compilations like these can
+   happen (and if it was possible) sometimes 10 times in a couple of minutes, so
+   tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
+  */
+
+/* All the compilation options:
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
@@ -202,6 +202,7 @@ tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
    VED_DATA_DIR="dir"     this can be used for e.g., history (default unset)
+  */
 
    /* the next option provides a way to extend the behavior and|or as an API
     * documentation, but is intended for development (safely ignore much of it) */
@@ -222,15 +223,35 @@ tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
 
-  HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
-  SPELL_DICTIONARY="path/to/spell_dictionary (default $(SYSDATADIR)/spell/spell.txt)
-  SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
-  /* The above options requires HAS_USER_EXTENSIONS=1,
-   * but see for details to the Spelling section below in this same document */
+   HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
+   SPELL_DICTIONARY="path/to/spell_dictionary (default $(SYSDATADIR)/spell/spell.txt)
+   SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
+   /* The above options requires HAS_USER_EXTENSIONS=1,
+    * but see for details to the Spelling section below in this same document */
 
-  /* Make options to extend the compiler flags (intended for -llib) */
+   /* Make options to extend the compiler flags (intended for -llib) */
 
-  USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
+   USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
+
+   /* The following options can change/control the behavior
+
+   CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
+                          is on those lines (default 1)
+   TAB_ON_INSERT_MODE_INDENTS (1|0) tab in insert mode indents (default 0)
+   CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) on normal mode a carriage
+                          return acts as it was insert mode (default 1)
+   SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
+   BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
+   BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES (1|0) when the cursor is on the
+                          first column, backspace removes trailing ws (default 1)
+   SMALL_E_ON_NORMAL_GOES_INSERT_MODE (1|0) 'e' in normal mode after operation
+                          enters insert mode (default 1)
+   READ_FROM_SHELL (1|0)  this option enables reading from the standard output
+                          of a shell command (default 1) note that this option
+                          activates HAS_SHELL_COMMANDS
+
+   (those set the defaults during filetype initiation)
+ */
 
 /* C
   This compiles to C11 for two reasons:
@@ -392,11 +413,11 @@ Normal mode:
  |   - translate `word' (a personal function for demonstration)|
  |   - spell `word' (check if '`word' is mispelled)   |
  | ,                 |                                |
- | - n               | like :bn (next buffer)         |
- | - m               | like :bp (previous buffer)     |
- | - ,               | like :b` (prev focused buffer) |
- | - .               | like :w` (prev focused window) |
- | - /               | like :wn[ext] (next window)    |
+ |   - n             | like :bn (next buffer)         |  see Command mode
+ |   - m             | like :bp (previous buffer)     |      -||-
+ |   - ,             | like :b` (prev focused buffer) |      -||-
+ |   - .             | like :w` (prev focused window) |      -||-
+ |   - /             | like :wn[ext] (next window)    |      -||-
 
 Insert mode:
  |
@@ -406,21 +427,21 @@ Insert mode:
  | CTRL-e            | complete based on the next line|
  | CTRL-a            | last insert                    |
  | CTRL-x            | completion mode                |
- | - CTRL-l or l     | complete line                  |
- | - CTRL-f or f     | complete filename              |
+ |   - CTRL-l or l   | complete line                  |
+ |   - CTRL-f or f   | complete filename              |
  | CTRL-n            | complete word                  |
  | CTRL-v            | insert character (utf8 code)   |
  | CTRL-k            | insert digraph                 |
  | CTRL-r            | insert register contents (charwise only) |
  | motion normal mode commands with some differences explained bellow|
- | HOME              | goes to the beginning of line   |
+ | HOME              | goes to the beginning of line  |
  | END               | goes to the end of line        |
  | escape            | aborts                         |
 
 Visual mode:
  |   key[s]          |  Semantics                     | count
  |___________________|________________________________|_______
- | >, <              | indent [in|out]                | yes
+ | >,<               | indent [in|out]                | yes
  | d                 | delete selected                |
  | y                 | yank selected                  |
  | s                 | search selected [linewise]     |
@@ -460,7 +481,7 @@ Search:
  | carriage return   | accepts                        |
  | escape            | aborts                         |
 
-/* In this implementation while performing a search, the focus do not change
+   In this implementation while performing a search, the focus do not change
    until user accepts the match. The results and the dialog, are shown at the
    bottom lines (the message line as the last line on screen).
    Also by default, pattern is just string literal and the code is using strstr()
@@ -555,7 +576,9 @@ Search:
    :q[!]                  (quit (if force, do not check for modified buffers))
 
    User defined (through an API mechanism):
-   /* Old Comment Stays as a Reference */
+   */
+
+   /* Old Comment Stays as a Reference
    The test application provides a sample battery command to print the status and capacity
    and which can be invoked as  :~battery  (i thought it makes sense to prefix
    such commands with '~' as it is associated with $HOME (as a user stuff), and
@@ -563,9 +586,10 @@ Search:
    code 126, so these will be the last printed lines on tab completion or|and they
    can be fast narrowed; but there isn't the prefixed '~' a prerequisite, but in the
    future is logical to use this as pattern to map it in a group that might behave
-   with special ways).
+   with special ways).  */
 
-   The test application (which simply called veda for: visual editor application),
+
+/* The test application (which simply called veda for: visual editor application),
    can provide the following commands:
 
    :`mkdir   dir       (create directory)
@@ -696,6 +720,7 @@ Search:
    on 'd': print to the stdout the unified diff and redo the question (note that
            when printing to the stdout, the previous terminal state is restored;
            any key can bring back the focus)
+ */
 
 /* Glob Support
    (for now)
@@ -764,8 +789,8 @@ Search:
   */
 
 /* Application Interface.
-    The library exposes a root struct, two de|init public functions that
-    de|initialize the structure and quite a lot of opaque pointers.
+    The library exposes an enormous root struct, two de|init public functions
+    that de|initialize the structure and quite a lot of opaque pointers.
 
     The code uses an object oriented style, though it is just for practical
     reasons as permits mostly code organization, simplicity, abstraction,
@@ -809,9 +834,10 @@ Search:
    - editor type
    - win type
    - buf type
-   and
+   and the most significant
    - string type
    - terminal type
+   - and quite a lot of many others (equally important though)
 
    Many of the algorithms are based on a (usually) double linked list with
    a head and a tail and in many cases a current pointer, that can act (at
@@ -868,11 +894,13 @@ Search:
 
    In the sample executable that uses the library, the "My" macro, has the same
    semantics, but for the others macros should be no need (though it is too early
-   maybe even talk about an API), as they should be covered with the following way:
+   maybe even talk about an API), as they should be covered with the following ways:
 
     Ed.[subclass or method] ([args, ...])
+      or
+   Class.method ([args, ...])
 
-   this code has access to the root structure, and should use the get/set
+   this code has access to the root structure, but it should use the get/set
    specific to types methods to access the underlying properties.
  */
 
@@ -897,6 +925,9 @@ Search:
    the standard output of a shell command. Interactive applications might have
    unexpected behavior in this implementation. To disable these features (as they
    are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
+
+   But see the src/usr/usr.c for more up to date commands or extensions, as this
+   unit is meant as testing field.
  */
 
 /* Memory Interface
@@ -931,6 +962,21 @@ Search:
    I wish there was a road to an unlicense, together with a certain certainity, that
    we (humans) full of the gained conscience, can guard it and keep it safe, as it
    is also (besides ideology) the road to paradise.
+
+   Any way.
+   Since it seems there is no other way, other than to specify a license to avoid
+   stupid, stupid troubles, is licensed under GPL2, but my mind still refuces and
+   with a huge right, to accept this word (at least in this domain and at this time
+   of time (2019)). There is no virginity here and actually (almost) never was, so
+   the code even if it is ours, has a lot of influences of others, as we are just
+   another link in the chain, and this is wonderfull. Also we!!! are oweing to the
+   environment - our mother, our grandpa, our friends and enemies, our heroes, our
+   neighbors, the people we met and we never really met them, the butterflies, the
+   frogs, a nice song or a terrible sound, an admirable work, or a chain of words,
+   and especially the randomness - so who actually owe the copyrights? Now.
+   The work that someone put in a project, should be respected and should be mentioned
+   without any second thought and with pleasure, as it is the marrow of the world,
+   and it is so nice to be part of a continuation, both as receiver or as a producer.
  */
 
 /* NOTE:
@@ -959,9 +1005,11 @@ Search:
 
    But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
    the tabwidth stuff, which is something i do not have the slightest will to do,
-   because i hate tabs in code (nothing is perfect in this life).
-   I'd rather give my time (with low priority though) to split those two different
-   concepts.
+   because i hate tabs in code (nothing is perfect in this life)- a tab in my humble
+   opinion it should be used in the cases where is significant, like a delimiter in
+   csv files, or in the Makefile's; the way it is being used by the coders is an abuse.
+   So, i'd rather give my time (with low priority though) to split those two different
+   concepts (though I should fix this thing!!!)
 
   The first level or better the zero level, the actual editor code:
 
@@ -975,14 +1023,15 @@ Search:
 
    - /undo/redo
 
-   - basically the ed interface, which at the beginning coexisted happily with
+   - basically the ed interface; which at the beginning coexisted happily with
      the visual one (at some point too much code were written at once and which
-     it should adjust to work in both interfaces, but the abstraction level wasn't
-     enough abstracted for this, so i had to move on); but it is a much much simpler
-     editor to implement, since there is absolutely no need to handle the output
-     or|and to set the pointer to the right line pointed to the right cell at the
-     correct byte[s] (it is very natural such an interface to over complicate the
-     code and such code to have bugs).
+     it should have been adjusted to both interfaces; but the abstraction level
+     wasn't enough abstracted for this, so i had to move on).
+     But it is a much much simpler editor to implement, since there is absolutely
+     no need to handle the output or|and to set the pointer to the right line at
+     the current column, pointing to the right byte index of the edited byte[s]
+     (it is very natural such an interface to over complicate the code and such
+     code to have bugs).
      From my humble experience, the worst bug that can happen is to have a false
      interpretation of the position, so you actually edit something else than what
      you thing you edit.
@@ -1063,9 +1112,9 @@ Search:
     term_get_input (term_t *this)
    (which is going to be published as a separate project, if time permits).
 
-   It will also has to deal with the terminal escape sequences and returns reliably
-   the code for all the keyboard keys for all the known terminals.
-   This is easy because is one time job and boring testing, or simply usage from
+   It should return reliably the code for all the keyboard keys for all the known
+   terminals.
+   But this is easy, because is one time job and boring testing, or simply usage from
    different users on different terminals.
    The above mentioned function, it looks that it deals well with xterm/linux/urxvt
    and st from suckless terminals, in 110 lines of code reserved for this.
@@ -1095,5 +1144,20 @@ Search:
   But why?
 
   Well, i might die! And this is a proof of logic.
+
+  Seriously,
+
+  This aims at some point in time to be used as an educational tool to
+  describe the procedure to write an editor in a UNIX like environment,
+  to anser some "why's". To this matter this code qualifies and explains
+  quite a lots of "why's". To do this best, the code should adjust to a
+  more humanish way. And one day, if all go well, i will flood this code
+  with human expressions. And guess this is for free in C.
+
+  As this is for humans that have the desire, but they do need sources.
+  As this is for humans that live in strictly environments without tools,
+  though they have the desire. As this is for humans that understand that
+  the desire is by itself enough to walk the path of learning and creating.
+  And with a little bit help of our friends.
  */
 ```

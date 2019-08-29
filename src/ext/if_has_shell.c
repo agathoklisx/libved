@@ -48,7 +48,7 @@ theend:
   proc_free (this);
   win_t *w = Ed.get.current_win (ed);
   int idx = Win.get.current_buf_idx (w);
-  Win.set.current_buf (w, idx);
+  Win.set.current_buf (w, idx, DONOT_DRAW);
   Win.draw (w);
   return retval;
 }

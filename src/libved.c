@@ -563,7 +563,7 @@ private string_t *string_reallocate (string_t *this, size_t len) {
   return this;
 }
 
-private string_t *__string_new_with (const char *bytes, size_t len) {
+private string_t *string_new_with_len (const char *bytes, size_t len) {
   string_t *new = AllocType (string);
   size_t sz = string_align (len + 1);
   char *buf = Alloc (sz);
@@ -577,7 +577,7 @@ private string_t *__string_new_with (const char *bytes, size_t len) {
 
 private string_t *string_new_with (const char *bytes) {
   size_t len = (NULL is bytes ? 0 : bytelen (bytes));
-  return __string_new_with (bytes, len); /* this succeeds even if bytes is NULL */
+  return string_new_with_len (bytes, len); /* this succeeds even if bytes is NULL */
 }
 
 private string_t *string_new_with_fmt (const char *fmt, ...) {
@@ -586,7 +586,7 @@ private string_t *string_new_with_fmt (const char *fmt, ...) {
   va_start(ap, fmt);
   size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  return __string_new_with (bytes, len);
+  return string_new_with_len (bytes, len);
 }
 
 private string_t *string_insert_at (string_t *this, const char *bytes, int idx) {
@@ -1176,7 +1176,7 @@ private int is_directory (char *dname) {
 }
 #define isnot_directory(dname) (0 is is_directory (dname))
 
-private char *dir_get_current (void) {
+private char *dir_current (void) {
   size_t size = 64;
   char *buf = Alloc (size);
   char *dir = NULL;
@@ -1191,7 +1191,7 @@ private char *dir_get_current (void) {
 }
 
 private char *buf_get_current_dir (buf_t *this, int new_allocation) {
-  char *cwd = dir_get_current ();
+  char *cwd = dir_current ();
   if (NULL is cwd) {
     MSG_ERRNO (MSG_CAN_NOT_DETERMINATE_CURRENT_DIR);
     free (cwd);
@@ -1256,7 +1256,8 @@ private dirlist_t *dirlist (char *dir, int flags) {
 public dir_T __init_dir__ (void) {
   return ClassInit (dir,
     .self = SelfInit (dir,
-      .list = dirlist
+      .list = dirlist,
+      .current = dir_current
     )
   );
 }
@@ -1408,6 +1409,21 @@ private char *path_dirname (char *name) {
   len = sep - name + 1;
   dname = Alloc (len + 1); memcpy (dname, name, len); dname[len] = '\0';
   return dname;
+}
+
+private int path_is_absolute (char *path) {
+  return IS_PATH_ABS (path);
+}
+
+public path_T __init_path__ (void) {
+  return ClassInit (path,
+    .self = SelfInit (path,
+      .basename = path_basename,
+      .extname = path_extname,
+      .dirname = path_dirname,
+      .is_absolute = path_is_absolute
+    )
+  );
 }
 
 #define CONTINUE_ON_EXPECTED_ERRNO(fd__)  \
@@ -1849,6 +1865,7 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
   this->row_pos = this->first_row;
   this->col_pos = 1;
   this->render = string_new_with ("");
+  this->tmp_render = string_new_with ("");
   return this;
 }
 
@@ -1865,7 +1882,7 @@ private void video_free (video_t *this) {
   }
 
   string_free (this->render);
-
+  string_free (this->tmp_render);
   free (this);
 }
 
@@ -1880,7 +1897,7 @@ private void video_render_set_from_to (video_t *this, int frow, int lrow) {
   while (fidx <= lidx) {
     current_list_set (this, fidx++);
     string_append_fmt (this->render, TERM_GOTO_PTR_POS_FMT "%s%s%s",
-                                                        this->cur_idx + 1, 0, TERM_LINE_CLR_EOL, this->current->data->bytes, TERM_BOL);
+        this->cur_idx + 1, 0, TERM_LINE_CLR_EOL, this->current->data->bytes, TERM_BOL);
   }
 
   string_append (this->render, TERM_CURSOR_SHOW);
@@ -1892,33 +1909,33 @@ private void video_draw_at (video_t *this, int at) {
   if (current_list_set(this, idx) is INDEX_ERROR) return;
 
   vstring_t *row = this->current;
-  string_t *render = string_new_with_fmt (
+  string_clear (this->tmp_render);
+  string_append_fmt (this->tmp_render,
       "%s" TERM_GOTO_PTR_POS_FMT "%s%s%s" TERM_GOTO_PTR_POS_FMT,
       TERM_CURSOR_HIDE, at, 0, TERM_LINE_CLR_EOL,
       row->data->bytes, TERM_CURSOR_SHOW, this->row_pos, this->col_pos);
 
-  video_flush (this, render);
-  string_free (render);
+  video_flush (this, this->tmp_render);
 }
 
 private void video_draw_all (video_t *this) {
-  string_t *render = string_new_with_fmt ("%s%s", TERM_CURSOR_HIDE, TERM_FIRST_LEFT_CORNER);
-  string_append_fmt (render, TERM_SCROLL_REGION_FMT, 0, this->num_rows);
-  string_append     (render, "\033[0m\033[1m");
+  string_clear (this->tmp_render);
+  string_append_fmt (this->tmp_render,
+      "%s%s" TERM_SCROLL_REGION_FMT "\033[0m\033[1m",
+   TERM_CURSOR_HIDE, TERM_FIRST_LEFT_CORNER, 0, this->num_rows);
 
   int num_times = this->last_row;
   vstring_t *row = this->head;
 
   loop (num_times - 1) {
-    string_append_fmt (render, "%s%s%s", TERM_LINE_CLR_EOL, row->data->bytes, TERM_BOL);
+    string_append_fmt (this->tmp_render, "%s%s%s", TERM_LINE_CLR_EOL, row->data->bytes, TERM_BOL);
     row = row->next;
   }
 
-  string_append_fmt (render, "%s" TERM_GOTO_PTR_POS_FMT,
+  string_append_fmt (this->tmp_render, "%s" TERM_GOTO_PTR_POS_FMT,
      TERM_CURSOR_SHOW, this->row_pos, this->col_pos);
 
-  video_flush (this, render);
-  string_free (render);
+  video_flush (this, this->tmp_render);
 }
 
 private void video_set_row_with (video_t *this, int idx, char *bytes) {
@@ -1969,30 +1986,30 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
   num_rows = i + 1;
   int num_chars = last_col - first_col + 1;
 
-  string_t *render = string_new_with_fmt ("%s" TERM_SET_COLOR_FMT, TERM_CURSOR_HIDE, COLOR_BOX);
+  string_clear (this->tmp_render);
+  string_append_fmt (this->tmp_render, "%s" TERM_SET_COLOR_FMT, TERM_CURSOR_HIDE, COLOR_BOX);
   vstring_t *it = vsa->head;
   i = 0;
   while (i < num_rows) {
     this->rows[i] = (i + first_row);
-    string_append_fmt (render, TERM_GOTO_PTR_POS_FMT, first_row + i++, first_col);
+    string_append_fmt (this->tmp_render, TERM_GOTO_PTR_POS_FMT, first_row + i++, first_col);
     int num = 0; int idx = 0;
     while (num++ < num_chars and idx < (int) it->data->num_bytes) {
       int clen = str_utf8_charlen ((uchar) it->data->bytes[idx]);
       for (int li = 0; li < clen; li++)
-        string_append_byte (render, it->data->bytes[idx + li]);
+        string_append_byte (this->tmp_render, it->data->bytes[idx + li]);
       idx += clen;
     }
 
-    while (num++ <= num_chars) string_append_byte (render, ' ');
+    while (num++ <= num_chars) string_append_byte (this->tmp_render, ' ');
 
     it = it->next;
   }
 
   this->rows[num_rows] = 0;
 
-  string_append_fmt (render, "%s%s", TERM_COLOR_RESET, TERM_CURSOR_SHOW);
-  video_flush (this, render);
-  string_free (render);
+  string_append_fmt (this->tmp_render, "%s%s", TERM_COLOR_RESET, TERM_CURSOR_SHOW);
+  video_flush (this, this->tmp_render);
   vstr_free (vsa);
   return this;
 }
@@ -2459,7 +2476,7 @@ char *default_extensions[] = {".txt", NULL};
 char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot", "forever",
-    "private|", "public|", "self|", "this|", "$my|", "$myprop|", "My|", "$mycur|",
+    "private|", "public|", "self|", "this|", "thisp|", "$my|", "$myprop|", "My|", "$mycur|",
     "$from|", "theend|", "theerror|", "OK|", "NOTOK|", "mutable|", "uchar|",
     "uint|", "utf8|", "$myroots|", "$myparents|",
     "switch", "if", "while", "for", "break", "continue", "else", "do", "default", "goto",
@@ -2874,6 +2891,7 @@ private ftype_t *buf_ftype_init_default (buf_t *this, int FTYPE,
   $my(ftype)->autochdir = 1;
   $my(ftype)->shiftwidth = 0;
 
+  $my(ftype)->clear_blanklines = CLEAR_BLANKLINES;
   $my(ftype)->tab_indents = TAB_ON_INSERT_MODE_INDENTS;
   $my(ftype)->cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE;
   $my(ftype)->backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE;
@@ -3417,7 +3435,7 @@ private int buf_set_fname (buf_t *this, char *filename) {
       strncpy ($my(fname), fname, len + 1);
     } else {
 concat_with_cwd:;
-      char *cwd = dir_get_current ();
+      char *cwd = dir_current ();
       len += bytelen (cwd) + 1;
       char tmp[len + 1]; snprintf (tmp, len + 1, "%s/%s", cwd, fname);
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
@@ -3567,6 +3585,7 @@ private int win_add_frame (win_t *this) {
 
 private int win_delete_frame (win_t *this, int idx) {
   if ($my(num_frames) is 1) return NOTHING_TODO;
+  if ($my(num_frames) is $my(min_frames)) return NOTHING_TODO;
 
   for (int i = 0; i < $my(num_frames); i++) free ($my(frames_dim)[i]);
   free ($my(frames_dim));
@@ -3594,13 +3613,13 @@ private int win_delete_frame (win_t *this, int idx) {
    return DONE;
 }
 
-private buf_t *win_change_frame (win_t* w, int frame) {
+private buf_t *win_change_frame (win_t* w, int frame, int draw) {
   if (frame < 0 or frame > $from(w, num_frames) - 1) return NULL;
   int idx = 0;
   buf_t *this = w->head;
-  while (this isnot NULL) {
-    if ($my(at_frame) is frame and $my(is_visible)) {
-      My(Win).set.current_buf ($my(parent), idx);
+  while (this) {
+    if ($my(at_frame) is frame and $my(flags) & BUF_IS_VISIBLE) {
+      My(Win).set.current_buf ($my(parent), idx, draw);
       $from(w, cur_frame) = frame;
       return w->current;
     }
@@ -3643,6 +3662,7 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   $my(Cursor) = $myparents(Cursor);
   $my(Screen)= $myparents(Screen);
   $my(File) = $myparents(File);
+  $my(Path) = $myparents(Path);
   $my(Dir) = $myparents(Dir);
   $my(Vstring) = $myparents(Vstring);
   $my(Rline) = $myparents(Rline);
@@ -3671,9 +3691,9 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
 
   $my(shared_str) = My(String).new_with ("");
 
-  $my(is_visible) = 0;
   $my(flags) = flags;
   $my(flags) &= ~BUF_IS_MODIFIED;
+  $my(flags) &= ~BUF_IS_VISIBLE;
 
   self(set.mode, NORMAL_MODE);
 
@@ -3700,21 +3720,23 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
   $my(video)->col_pos = $my(cur_video_col) = 1;
 
-  $my(cwd) = str_eq ($my(fname), UNAMED) ? dir_get_current () : path_dirname ($my(fname));
+  $my(cwd) = str_eq ($my(fname), UNAMED) ? dir_current () : path_dirname ($my(fname));
   this->free = buf_free_handler;
   this->on_normal_beg = ved_buf_on_normal_beg;
   this->on_normal_end = ved_buf_on_normal_end;
   return this;
 }
 
-private buf_t *win_set_current_buf (win_t *w, int idx) {
-  buf_t *this = w->current;
+private buf_t *win_set_current_buf (win_t *w, int idx, int draw) {
+  buf_t *that = w->current;
   int cur_idx = w->cur_idx;
   int cur_frame = $from(w, cur_frame);
+  buf_t *this = NULL;
 
-  if (idx is cur_idx) goto change;
-
-  int *is_visible = &$my(is_visible);
+  if (idx is cur_idx) {
+    this = that;
+    goto change;
+  }
 
   int lidx = current_list_set (w, idx);
 
@@ -3725,12 +3747,12 @@ private buf_t *win_set_current_buf (win_t *w, int idx) {
   this = w->current;
 
   if (cur_frame is $my(at_frame))
-    *is_visible = 0;
+    $from(that, flags) &= ~BUF_IS_VISIBLE;
   else
     $from(w, cur_frame) = $my(at_frame);
 
 change:
-  $my(is_visible) = 1;
+  $my(flags) |= BUF_IS_VISIBLE;
   $my(video)->row_pos = $my(cur_video_row);
   $my(video)->col_pos = $my(cur_video_col);
 
@@ -3748,7 +3770,7 @@ change:
     }
   }
 
-  self(draw);
+  if (draw) self(draw);
 
   return this;
 }
@@ -3826,7 +3848,7 @@ private void win_draw (win_t *w) {
   My(Win).set.video_dividers ($my(parent));
 
   while (this) {
-    if ($my(is_visible)) {
+    if ($my(flags) & BUF_IS_VISIBLE) {
       if (this is w->current)
         My(Ed).set.topline (this);
 
@@ -3898,6 +3920,7 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   $my(Cursor) = $myparents(Cursor);
   $my(Screen)= $myparents(Screen);
   $my(File) = $myparents(File);
+  $my(Path) = $myparents(Path);
   $my(Dir) = $myparents(Dir);
   $my(Vstring) = $myparents(Vstring);
   $my(Rline) = $myparents(Rline);
@@ -3918,6 +3941,7 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   self(set.video_dividers);
 
   $my(cur_frame) = 0;
+  $my(min_frames) = 1;
   $my(num_frames) = num_frames;
   $my(max_frames) = MAX_FRAMES;
 
@@ -4022,8 +4046,9 @@ private buf_t *ved_diff_buf (ed_t *this) {
 private buf_t *ved_search_buf (ed_t *root) {
   buf_t *this = ved_special_buf (root, VED_SEARCH_WIN, VED_SEARCH_BUF, 2, 1);
   this->on_normal_beg = ved_grep_on_normal;
+  $my(is_sticked) = 1;
   $myparents(cur_frame) = 1;
-  My(Win).set.current_buf ($my(parent), 0);
+  My(Win).set.current_buf ($my(parent), 0, DRAW);
   return this;
 }
 
@@ -4202,9 +4227,10 @@ private void buf_set_statusline (buf_t *this) {
   }
 
   My(String).replace_with_fmt ($my(statusline),
-    TERM_SET_COLOR_FMT "%s (line: %d/%d idx: %d len: %d chr: %d)",
+    TERM_SET_COLOR_FMT "%s (line: %d/%d idx: %d len: %d chr: %d) (%d | %d |fridx %d)",
     COLOR_STATUSLINE, $my(basename), this->cur_idx + 1, this->num_items,
-    $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code);
+    $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code, $my(video)->row_pos,
+    $my(cur_video_row), $my(video_first_row_idx));
 
   My(String).clear_at ($my(statusline), $my(dim)->num_cols + TERM_SET_COLOR_FMT_LEN);
   My(String).append_fmt ($my(statusline), "%s", TERM_COLOR_RESET);
@@ -4595,7 +4621,7 @@ private void ved_search_history_push (ed_t *this, char *bytes, size_t len) {
   }
 
   histitem_t *h = AllocType (histitem);
-  h->data = __string_new_with (bytes, len);
+  h->data = string_new_with_len (bytes, len);
   list_push ($my(history)->search, h);
 }
 
@@ -4752,7 +4778,7 @@ search:
 theend:
   if (sch->found) {
     ved_search_history_push ($my(root), sch->pat->bytes, sch->pat->num_bytes);
-    ved_normal_goto_linenr (this, sch->idx + 1);
+    ved_normal_goto_linenr (this, sch->idx + 1, DRAW);
   }
 
   MSG(" ");
@@ -4836,7 +4862,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   ifnot (NULL is dname) {
     free ($my(cwd));
     if (*dname is '.' or *dname isnot DIR_SEP)
-      $my(cwd) = dir_get_current ();
+      $my(cwd) = dir_current ();
     else
       $my(cwd) = path_dirname (dname);
   }
@@ -4847,7 +4873,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 
   self(set.video_first_row, 0);
   self(cur.set, 0);
-  ved_normal_down (this, 1, 0, 0);
+  ved_normal_down (this, 1, 0, DONOT_DRAW);
   ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
   return DONE;
 }
@@ -5628,6 +5654,8 @@ theend:
 }
 
 private void ved_on_blankline (buf_t *this) {
+  ifnot ($my(ftype)->clear_blanklines) return;
+
   int lineisblank = 1;
   for (int i = 0; i < (int) $mycur(data)->num_bytes; i++) {
     if ($mycur(data)->bytes[i] isnot ' ') {
@@ -5954,7 +5982,7 @@ private int ved_normal_page_up (buf_t *this, int count) {
   return DONE;
 }
 
-private int ved_normal_bof (buf_t *this) {
+private int ved_normal_bof (buf_t *this, int draw) {
   if (this->cur_idx is 0) return NOTHING_TODO;
 
   mark_set (this, MARK_UNAMED);
@@ -5971,7 +5999,7 @@ private int ved_normal_bof (buf_t *this) {
   $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
   $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, curcol_idx, isatend);
 
-  self(draw);
+  if (draw) self(draw);
   return DONE;
 }
 
@@ -6012,7 +6040,7 @@ draw:
   return DONE;
 }
 
-private int ved_normal_goto_linenr (buf_t *this, int lnr) {
+private int ved_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   int currow_idx = this->cur_idx;
 
   if (lnr <= 0 or lnr is currow_idx + 1 or lnr > this->num_items)
@@ -6021,9 +6049,9 @@ private int ved_normal_goto_linenr (buf_t *this, int lnr) {
   mark_set (this, MARK_UNAMED);
 
   if (lnr < currow_idx + 1)
-    return ved_normal_up (this, currow_idx - lnr + 1, 1, 1);
+    return ved_normal_up (this, currow_idx - lnr + 1, 1, draw);
 
-  return ved_normal_down (this, lnr - currow_idx - 1, 1, 1);
+  return ved_normal_down (this, lnr - currow_idx - 1, 1, draw);
 }
 
 private int ved_normal_replace_char (buf_t *this) {
@@ -6106,7 +6134,7 @@ private int ved_insert_new_line (buf_t **thisp, utf8 com) {
     act->idx = this->cur_idx;
     this->current = this->current->prev;
     this->cur_idx--;
-    ved_normal_down (this, 1, 0, 1);
+    ved_normal_down (this, 1, 0, DONOT_DRAW);
   } else {
     self(cur.prepend_with, " ");
     My(String).clear ($mycur(data));
@@ -6122,7 +6150,7 @@ private int ved_insert_new_line (buf_t **thisp, utf8 com) {
     if ($my(video)->row_pos isnot $my(dim)->first_row)
       $my(video)->row_pos = $my(cur_video_row) = $my(video)->row_pos + 1;
 
-    ved_normal_up (this, 1, 1, 1);
+    ved_normal_up (this, 1, 1, DONOT_DRAW);
   }
 
   stack_push (action, act);
@@ -6158,6 +6186,11 @@ private int ved_join (buf_t *this) {
 
   if (row->data->num_bytes isnot 0) {
     RM_TRAILING_NEW_LINE;
+    char *sp = row->data->bytes;
+    if (*sp is ' ') { /* MAYBE string_trim_beg() */
+      while (*++sp and *sp is ' '); /* at least a space */
+      My(String).delete_numbytes_at (row->data, (sp - row->data->bytes) - 1, 1);
+    }
     My(String).append ($mycur(data), row->data->bytes);
   }
 
@@ -6490,7 +6523,7 @@ private int ved_win_only (buf_t *this) {
   int idx = 0;
   while (it isnot NULL) {
     if (idx++ isnot $my(parent)->cur_idx)
-      $from(it, is_visible) = 0;
+      $from(it, flags) &= ~BUF_IS_VISIBLE;
     else {
       $my(video)->row_pos = $my(cur_video_row);
       $my(video)->col_pos = $my(cur_video_col);
@@ -6586,7 +6619,7 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
        {
          int frame = $myparents(cur_frame) + 1;
          if (frame is $myparents(num_frames)) frame = 0;
-         this = win_change_frame ($my(parent), frame);
+         this = win_change_frame ($my(parent), frame, DRAW);
          if (NULL isnot this) {
            *thisp = this;
            return DONE;
@@ -6599,7 +6632,7 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
        {
          int frame = $myparents(cur_frame) - 1;
          if (frame is -1) frame = $myparents(num_frames) - 1;
-         this = win_change_frame ($my(parent), frame);
+         this = win_change_frame ($my(parent), frame, DRAW);
          if (NULL isnot this) {
            *thisp = this;
            return DONE;
@@ -6638,12 +6671,12 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 private int ved_normal_handle_g (buf_t **thisp, int count) {
   buf_t *this = *thisp;
 
-  if (1 isnot count)  return ved_normal_goto_linenr (this, count);
+  if (1 isnot count) return ved_normal_goto_linenr (this, count, DRAW);
 
   utf8 c = My(Input).get ($my(term_ptr));
   switch (c) {
     case 'g':
-      return ved_normal_bof (this);
+      return ved_normal_bof (this, DRAW);
 
     case 'f':
       return ved_open_fname_under_cursor (thisp, str_eq ($my(fname), VED_MSG_BUF)
@@ -6653,12 +6686,12 @@ private int ved_normal_handle_g (buf_t **thisp, int count) {
       return NOTHING_TODO;
   }
 
-  return ved_normal_goto_linenr (this, count);
+  return ved_normal_goto_linenr (this, count, DRAW);
 }
 
 private int ved_normal_handle_G (buf_t *this, int count) {
   if (1 isnot count)
-    return ved_normal_goto_linenr (this, count);
+    return ved_normal_goto_linenr (this, count, DRAW);
 
   return ved_normal_eof (this, DONOT_DRAW);
 }
@@ -7052,7 +7085,7 @@ private int ved_normal_handle_d (buf_t *this, int count, int reg) {
     case 'g':
     case HOME_KEY:
       count = this->cur_idx + 1;
-      ved_normal_bof (this);
+      ved_normal_bof (this, DRAW);
   }
 
   switch (c) {
@@ -7074,8 +7107,8 @@ private int ved_normal_handle_d (buf_t *this, int count, int reg) {
 private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
   if ($mycur(data)->num_bytes) RM_TRAILING_NEW_LINE;
 
-  if (c is ARROW_UP_KEY) ved_normal_up (this, 1, 1, 1);
-  else if (c is ARROW_DOWN_KEY) ved_normal_down (this, 1, 1, 1);
+  if (c is ARROW_UP_KEY) ved_normal_up (this, 1, 1, DRAW);
+  else if (c is ARROW_DOWN_KEY) ved_normal_down (this, 1, 1, DRAW);
   else if (c is PAGE_UP_KEY) ved_normal_page_up (this, 1);
   else if (c is PAGE_DOWN_KEY) ved_normal_page_down (this, 1);
   else {
@@ -7103,7 +7136,7 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
     $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
     ved_normal_down (this, 1, 0, 0);
     if ($mycur(data)->num_bytes) ADD_TRAILING_NEW_LINE;
-    ved_normal_right (this, $my(shared_int) + isatend, 0);
+    ved_normal_right (this, $my(shared_int) + isatend, DONOT_DRAW);
 
     act->idx = this->cur_idx;
     stack_push (*action, act);
@@ -7262,6 +7295,9 @@ private char *ved_syn_parse_visual_lw (buf_t *this, char *line, int len, int idx
        idx >= $my(vis)[0].lidx) or
       (idx > $my(vis)[0].lidx and $my(vis)[0].lidx < $my(vis)[0].fidx and
        idx < $my(vis)[0].fidx)) {
+    for (int i = 0; i < len; i++)
+      if (line[i] is '\t') line[i] = ' ';
+
     char *s = str_fmt ("%s%s%s", TERM_MAKE_COLOR(HL_VISUAL), line,
        TERM_COLOR_RESET);
     line[0] = '\0';
@@ -7350,11 +7386,11 @@ handle_char:
       VIS_HNDL_CASE_INT(count);
 
       case ARROW_DOWN_KEY:
-        ved_normal_down (this, 1, 0, 1);
+        ved_normal_down (this, 1, 0, DONOT_DRAW);
         continue;
 
       case ARROW_UP_KEY:
-        ved_normal_up (this, 1, 1, 1);
+        ved_normal_up (this, 1, 1, DONOT_DRAW);
         continue;
 
       case PAGE_DOWN_KEY:
@@ -7370,7 +7406,7 @@ handle_char:
         goto theend;
 
       case HOME_KEY:
-        ved_normal_bof (this);
+        ved_normal_bof (this, DONOT_DRAW);
         continue;
 
       case 'G':
@@ -7558,6 +7594,9 @@ private char *ved_syn_parse_visual_line (buf_t *this, char *line, int len, row_t
   char *s = str_fmt ("%s%s%s%s%s", fpart, TERM_MAKE_COLOR(HL_VISUAL), context,
      TERM_COLOR_RESET, lpart);
   line[0] = '\0';
+  for (int i = 0; i < len; i++)
+    if (s[i] is '\t') s[i] = ' ';
+
   strncpy (line, s, len + TERM_SET_COLOR_FMT_LEN + TERM_COLOR_RESET_LEN + 1);
   return line;
 }
@@ -7677,13 +7716,10 @@ handle_char:
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
               string_append_byte (str, $mycur(data)->bytes[ii]);
 
-            int retval = $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx,
-                $my(vis)[0].lidx, str, c);
+            $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, str, c);
             string_free (str);
-            if (retval) goto theend;
-            break;
+            goto theend;
           }
-
 
         continue;
 
@@ -7758,7 +7794,7 @@ handle_char:
         goto theend;
 
       case HOME_KEY:
-        ved_normal_bof (this);
+        ved_normal_bof (this, DONOT_DRAW);
         continue;
 
       case 'G':
@@ -7890,12 +7926,12 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
       int idx;
       buf_t *bn = My(Win).get.buf_by_name (win, fname, &idx);
       ifnot (NULL is bn) {
-        *thisp = My(Win).set.current_buf (win, idx);
+        *thisp = My(Win).set.current_buf (win, idx, DRAW);
         return DONE;
       }
     }
 
-    if ($my(at_frame) is frame) $my(is_visible) = 0;
+    if ($my(at_frame) is frame) $my(flags) &= ~BUF_IS_VISIBLE;
 
     buf_t *that = My(Win).buf_new (win, fname, frame, 0);
     current_list_set (that, 0);
@@ -7903,7 +7939,7 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
     int cur_idx = win->cur_idx;
     int idx = My(Win).append_buf (win, that);
     current_list_set (win, cur_idx);
-    My(Win).set.current_buf (win, idx);
+    My(Win).set.current_buf (win, idx, (draw ? DRAW : DONOT_DRAW));
 
     *thisp = that;
     this = that;
@@ -7913,11 +7949,11 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
   }
 
   int cur_idx = this->cur_idx;
-  ved_normal_bof (this);
+  ved_normal_bof (this, DONOT_DRAW);
   ved_delete_line (this, this->num_items, REG_BLACKHOLE);
   self(read.fname);
 
-  ved_normal_bof (this);
+  ved_normal_bof (this, DONOT_DRAW);
   action_t *action = vundo_pop (this);
 
   for (;;) {
@@ -7948,7 +7984,7 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
   $my(video_first_row_idx) = this->cur_idx;
 
   if (cur_idx >= this->num_items) cur_idx = this->num_items - 1;
-  ved_normal_goto_linenr (this, cur_idx + 1);
+  ved_normal_goto_linenr (this, cur_idx + 1, draw);
 
   if (draw) self(draw);
   MSG("reloaded");
@@ -7994,8 +8030,9 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
         bn = My(Win).get.buf_by_name ($my(parent), fname, &idx);
 
       if (NULL is bn) break;
-      *thisp = My(Win).set.current_buf ($my(parent), idx);
-      ved_normal_goto_linenr (*thisp, lnr);
+      *thisp = My(Win).set.current_buf ($my(parent), idx, DONOT_DRAW);
+      if (NOTHING_TODO is ved_normal_goto_linenr (*thisp, lnr, DRAW))
+        self(draw);
       return DONE;
     } while (0);
 
@@ -8003,7 +8040,10 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
   if (NOTHING_TODO is ved_edit_fname ($my(parent), thisp, fname, frame, 0, 0, 1))
     return NOTHING_TODO;
 
-  return ved_normal_goto_linenr (*thisp, lnr);
+  if (NOTHING_TODO is ved_normal_goto_linenr (*thisp, lnr, DRAW))
+    self(draw);
+
+  return DONE;
 }
 
 private int ved_split (buf_t **thisp, char *fname) {
@@ -8017,7 +8057,7 @@ private int ved_split (buf_t **thisp, char *fname) {
 
   $myparents(cur_frame) = $myparents(num_frames) - 1;
 
-  $from(that, is_visible) = 1;
+  $from(that, flags) |= BUF_IS_VISIBLE;
 
   My(Win).draw ($my(parent));
   return DONE;
@@ -8076,7 +8116,7 @@ change_idx:
   *bufp = parent->current;
 
   $from((*bufp), parent) = parent;
-  *bufp = My(Win).set.current_buf (parent, parent->cur_idx);
+  *bufp = My(Win).set.current_buf (parent, parent->cur_idx, DONOT_DRAW);
   My(Win).set.video_dividers (parent);
   My(Win).draw (parent);
   return DONE;
@@ -8091,7 +8131,7 @@ private int ved_win_delete (ed_t *this, buf_t **thisp, int count_special) {
 
   parent = this->current;
 
-  *thisp = My(Win).set.current_buf (parent, parent->cur_idx);
+  *thisp = My(Win).set.current_buf (parent, parent->cur_idx, DONOT_DRAW);
 
   My(Win).set.video_dividers (parent);
   My(Win).draw (parent);
@@ -8283,7 +8323,6 @@ private string_t *vsys_which (char *ex, char *path) {
 
 private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
-
   (void) ed; (void) buf; (void) com; (void) redir_stdout; (void) redir_stderr;
   (void) read_cb;
   return NOTHING_TODO;
@@ -8301,13 +8340,46 @@ private int ved_buf_change_bufname (buf_t **thisp, char *bufname) {
   buf_t *buf = My(Win).get.buf_by_name ($my(parent), bufname, &idx);
   if (NULL is buf) return NOTHING_TODO;
 
-  *thisp = My(Win).set.current_buf ($my(parent), idx);
+  int cur_frame = $myparents(cur_frame);
+
+  /* a little bit before the last bit of the zero cycle  */
+
+  /* This code block reflects perfectly the development philosophy,
+   * as if you analyze it, it catches two conditions, with the first
+   * to be a quite common scenario, while the second it never happens
+   * at least in (my) usual workflow. Now. I know there are quite few
+   * more to catch, but unless someone generiously offers the code i'm
+   * not going to spend the time and the energy to write it.
+   */
+
+  if (cur_frame isnot $from(buf, at_frame) and
+      ($from(buf, flags) & BUF_IS_VISIBLE) is 0) {
+    $from(buf, at_frame) = cur_frame;
+    int row = $from(buf, cur_video_row) - $from(buf, dim)->first_row;
+    int old_rows = $from(buf, dim)->last_row - $from(buf, dim)->first_row;
+    $from(buf, dim) = $myparents(frames_dim)[$my(at_frame)];
+    $from(buf, statusline_row) = $from(buf, dim)->last_row;
+    $from(buf, cur_video_row) = $from(buf, dim)->first_row + row;
+    int cur_rows = $from(buf, dim)->last_row - $from(buf, dim)->first_row;
+    if (cur_rows < old_rows and
+        $from(buf, cur_video_row) isnot $from(buf, dim)->first_row) {
+      int diff = old_rows - cur_rows;
+      buf_set_video_first_row (buf,  $from(buf, video_first_row_idx) + diff);
+      $from(buf, cur_video_row) -= diff;
+    }
+  }
+
+  *thisp = My(Win).set.current_buf ($my(parent), idx, DONOT_DRAW);
+  this = *thisp;
+  $my(video)->row_pos = $my(cur_video_row);
+  My(Win).draw ($my(parent));
   return DONE;
 }
 
 private int ved_buf_change (buf_t **thisp, int com) {
   buf_t *this = *thisp;
 
+  if ($my(is_sticked)) return NOTHING_TODO;
   if (1 is $my(parent)->num_items) return NOTHING_TODO;
 
   int cur_frame = $myparents(cur_frame);
@@ -8411,7 +8483,7 @@ private int ved_buf_change (buf_t **thisp, int com) {
   }
 
 change:
-  *thisp = My(Win).set.current_buf ($my(parent), idx);
+  *thisp = My(Win).set.current_buf ($my(parent), idx, DRAW);
   return DONE;
 }
 
@@ -8475,10 +8547,10 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
 
   int found = 0;
   this = parent->head;
-  while (this isnot NULL) {
+  while (this) {
     if ($my(at_frame) is at_frame) {
       found = 1;
-      $my(is_visible) = 1;
+      $my(flags) |= BUF_IS_VISIBLE;
       break;
     }
 
@@ -8489,7 +8561,7 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
 
   this = parent->current;
 
- *thisp = My(Win).set.current_buf (parent, parent->cur_idx);
+  *thisp = My(Win).set.current_buf (parent, parent->cur_idx, DONOT_DRAW);
 
   if (cur_idx is idx) {
     if (found is 1 or $from(parent, num_frames) is 1) {
@@ -8497,7 +8569,7 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
     } else {
       int frame = $from(parent, cur_frame) + 1;
       if (frame is $from(parent, num_frames)) frame = 0;
-      *thisp = win_change_frame ($my(parent), frame);
+      *thisp = win_change_frame ($my(parent), frame, DONOT_DRAW);
     }
   }
 
@@ -8680,7 +8752,7 @@ private int ved_complete_filename (menu_t *menu) {
   char *end = sp;
 
   if (NULL is sp) {
-    char *cwd = dir_get_current ();
+    char *cwd = dir_current ();
     strcpy (dir, cwd);
     free (cwd);
     end = NULL;
@@ -8715,7 +8787,7 @@ private int ved_complete_filename (menu_t *menu) {
       joinpath = 1;
       end = NULL;
     } else {
-      char *cwd = dir_get_current ();
+      char *cwd = dir_current ();
       strcpy (dir, cwd);
       free (cwd);
       end = sp;
@@ -8735,7 +8807,7 @@ private int ved_complete_filename (menu_t *menu) {
   while (sp > menu->pat and *(sp - 1) isnot DIR_SEP) sp--;
   if (sp is menu->pat) {
     end = sp;
-    char *cwd = dir_get_current ();
+    char *cwd = dir_current ();
     strcpy (dir, cwd);
     free (cwd);
     goto getlist;
@@ -8867,7 +8939,7 @@ private void rline_clear (rline_t *rl) {
     rl->cur_idx = 0;
     rl->line = vstr_new ();
     vstring_t *vstr = AllocType (vstring);
-    vstr->data = __string_new_with (" ", 1);
+    vstr->data = string_new_with_len (" ", 1);
     current_list_append (rl->line, vstr);
   }
 
@@ -9483,7 +9555,7 @@ private rline_t *rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   rl->render = string_new_with ("");
   rl->line = vstr_new ();
   vstring_t *s = AllocType (vstring);
-  s->data = __string_new_with (" ", 1);
+  s->data = string_new_with_len (" ", 1);
   current_list_append (rl->line, s);
 
   rl->state |= (RL_OK|RL_IS_VISIBLE);
@@ -10265,6 +10337,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_EDIT:
     case VED_COM_EDIT_ALIAS:
       if (is_special_win) goto theend;
+      if ($my(is_sticked)) goto theend;
       {
         arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
         retval = ved_edit_fname ($my(parent), thisp, (NULL is fname ? NULL: fname->argval->bytes),
@@ -10407,6 +10480,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       rl->com = VED_COM_BUF_CHANGE_PREV; //__fallthrough__;
     case VED_COM_BUF_CHANGE_PREV:
       if ($my(flags) & BUF_IS_SPECIAL) goto theend;
+      if ($my(is_sticked)) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
@@ -10414,6 +10488,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       rl->com = VED_COM_BUF_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_BUF_CHANGE_NEXT:
       if ($my(flags) & BUF_IS_SPECIAL) goto theend;
+      if ($my(is_sticked)) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
@@ -10421,6 +10496,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       rl->com = VED_COM_BUF_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_BUF_CHANGE_PREV_FOCUSED:
       if (is_special_win) goto theend;
+      if ($my(is_sticked)) goto theend;
       retval = ved_buf_change (thisp, rl->com);
       goto theend;
 
@@ -10428,6 +10504,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       rl->com = VED_COM_BUF_CHANGE; //__fallthrough__;
     case VED_COM_BUF_CHANGE:
       if ($my(flags) & BUF_IS_SPECIAL) goto theend;
+      if ($my(is_sticked)) goto theend;
       {
         arg_t *bufname = rline_get_arg (rl, RL_ARG_BUFNAME);
         if (NULL is bufname) goto theend;
@@ -10932,7 +11009,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case ARROW_RIGHT_KEY:
     case 'l':
-      retval = ved_normal_right (this, count, 1); break;
+      retval = ved_normal_right (this, count, DRAW); break;
 
     case ARROW_LEFT_KEY:
     case 'h':
@@ -10940,11 +11017,11 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case ARROW_UP_KEY:
     case 'k':
-      retval = ved_normal_up (this, count, 1, 1); break;
+      retval = ved_normal_up (this, count, 1, DRAW); break;
 
     case ARROW_DOWN_KEY:
     case 'j':
-      retval = ved_normal_down (this, count, 1, 1); break;
+      retval = ved_normal_down (this, count, 1, DRAW); break;
 
     case PAGE_DOWN_KEY:
     case CTRL('f'):
@@ -10955,7 +11032,7 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
       retval = ved_normal_page_up (this, count); break;
 
     case HOME_KEY:
-      retval = ved_normal_bof (this); break;
+      retval = ved_normal_bof (this, DRAW); break;
 
     case END_KEY:
       retval = ved_normal_eof (this, DONOT_DRAW); break;
@@ -11354,7 +11431,7 @@ private void ed_resume (ed_t *this) {
   $my(state) &= ~ED_SUSPENDED;
   My(Term).set ($my(term));
   // My(Term).raw ($my(term));
-  My(Win).set.current_buf (this->current, this->current->cur_idx);
+  My(Win).set.current_buf (this->current, this->current->cur_idx, DONOT_DRAW);
   My(Win).draw (this->current);
 }
 
@@ -11542,6 +11619,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(Msg) = &E->Msg;
   $my(Error) = &E->Error;
   $my(File) = &E->File;
+  $my(Path) = &E->Path;
   $my(Dir) =  &E->Dir;
   $my(Vstring) = &E->Vstring;
   $my(Rline) = &E->Rline;
@@ -11572,7 +11650,7 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(last_insert) = My(String).new_with ("");
   $my(shared_str) = My(String).new_with ("");
 
-  $my(saved_cwd) = dir_get_current ();
+  $my(saved_cwd) = dir_current ();
 
   ved_init_commands (this);
 
@@ -11618,6 +11696,7 @@ private ed_T *__allocate_prop__ (ed_T *this) {
   $my(Msg) = &this->Msg;
   $my(Error) = &this->Error;
   $my(File) = &this->File;
+  $my(Path) = &this->Path;
   $my(Dir) = &this->Dir;
   $my(Vstring) = &this->Vstring;
   $my(Rline) = &this->Rline;
@@ -11688,6 +11767,7 @@ public string_T __init_string__ (void) {
       .free = string_free,
  //     .new = string_new,
       .new_with = string_new_with,
+      .new_with_len = string_new_with_len,
       .new_with_fmt = string_new_with_fmt,
       .insert_at  = string_insert_at,
       .append = string_append,
@@ -11967,6 +12047,7 @@ private ed_T *editor_new (char *name) {
     .Cstring = __init_cstring__ (),
     .Re = __init_re__ (),
     .File = __init_file__ (),
+    .Path = __init_path__ (),
     .Dir = __init_dir__ (),
     .Vstring = __init_vstring__ (),
     .Rline = __init_rline__ ()

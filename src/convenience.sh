@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# This is a sample that can be used to compile the source code
+# and should provide a shared library and an executable.
+# If the number of args is > 0 then builds only the executable
+
+# You may need first to `chmod' this unit to make it executable.
+
+# This sample enables almost everything, except local additions and the dict
+# file, which anyway is here for demonstration and might not have any interest
+# except the author.
+
+if [ 0 = $# ]; then
+  make clean_shared
+fi
+
+make clean_veda_shared
+if [ -z $CC ]; then
+  CC=gcc
+fi
+
+make                                                \
+    CC=$CC                                          \
+    DEBUG=1                                         \
+    HAS_REGEXP=1                                    \
+    HAS_SHELL_COMMANDS=1                            \
+    HAS_USER_EXTENSIONS=1                           \
+    HAS_SPELL=1                                     \
+    HAS_LOCAL_EXTENSIONS=0                          \
+    HAS_HISTORY=1                                   \
+    VED_DATA_DIR="$PWD/sys/data"                    \
+    CLEAR_BLANKLINES=1                              \
+    TAB_ON_INSERT_MODE_INDENTS=0                    \
+    CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=1 \
+    SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1           \
+    SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \
+    BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
+    BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
+    READ_FROM_SHELL=1                               \
+    veda-shared
+
+#   WORD_LEXICON_FILE="/path/to/some/dict.txt"      \
+#   VED_APPLICATION_FLAGS=-lutil                    \

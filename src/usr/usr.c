@@ -40,12 +40,6 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
   Cstring.substr (prefix, fidx, iter->line->bytes, iter->line->num_bytes, 0);
   Cstring.substr (lpart, iter->line->num_bytes - lidx - 1, iter->line->bytes,
      iter->line->num_bytes, lidx + 1);
-/*
-  string_t *quest = String.new_with_fmt (
-  "Spelling [%s] at line %d\n%s" COLOR_FMT "%s" COLOR_RESET "%s\n"
-  "Suggestions: (enter number to accept one as correct)\n",
-  spell->word, iter->idx + 1, prefix, COLOR_RED, spell->word, lpart);
-*/
 
   string_t *quest = String.new_with_fmt (
     "Spelling [%s] at line %d and %d index\n%s%s%s\n"
@@ -261,6 +255,25 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   char actions[] = "Spell line[s]";
   Ed.set.lw_mode_actions (this, chars, 1, actions, __u_lw_mode_cb__);
 }
+
+private int __u_word_actions_cb__ (buf_t **, int, int, bufiter_t *, char *, utf8);
+
+private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c) {
+  int retval = NOTOK;
+  switch (c) {
+    case 'S': {
+      bufiter_t *iter = Buf.iter.new (*thisp, -1);
+      return __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c);
+    }
+  }
+  return retval;
+}
+
+private void __u_add_cw_mode_actions__ (ed_t *this) {
+  utf8 chars[] = {'S'};
+  char actions[] = "Spell selected";
+  Ed.set.cw_mode_actions (this, chars, 1, actions, __u_cw_mode_cb__);
+}
 #endif
 
           /* user defined commands and|or actions */
@@ -272,7 +285,7 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
  * compile the distribution through a shell script, that invokes `make`
  * with my specific definitions
  */
-private int ved_translate_word (buf_t **thisp, char *word) {
+private int __translate_word__ (buf_t **thisp, char *word) {
   (void) thisp;
   char *lex = NULL;
 
@@ -324,15 +337,30 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   if (NULL is word) return NOTOK;
 
   int retval = NOTOK;
+  string_t *com;
+
+  buf_t *this = Ed.get.scratch_buf ($myed);
+  Buf.clear (this);
+
+  if (File.exists (word)) {
+    if (Path.is_absolute (word))
+      com = String.new_with_fmt ("%s %s", Uenv->man_exec->bytes, word);
+    else {
+      char *cwdir = Dir.current ();
+      com = String.new_with_fmt ("%s %s/%s", Uenv->man_exec->bytes, cwdir, word);
+      free (cwdir);
+    }
+
+    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+    goto theend;
+  }
+
   int sections[9]; for (int i = 0; i < 9; i++) sections[i] = 0;
   int def_sect = 2;
 
   section = ((section <= 0 or section > 8) ? def_sect : section);
-  string_t *com = String.new_with_fmt ("%s -s %d %s", Uenv->man_exec->bytes,
+  com = String.new_with_fmt ("%s -s %d %s", Uenv->man_exec->bytes,
      section, word);
-
-  buf_t *this = Ed.get.scratch_buf ($myed);
-  Buf.clear (this);
 
   int total_sections = 0;
   for (int i = 1; i < 9; i++) {
@@ -350,12 +378,13 @@ private int sys_man (buf_t **bufp, char *word, int section) {
         section, word);
   }
 
+theend:
   String.free (com);
 
   Ed.scratch ($myed, bufp, 0);
   Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
       Buf.get.num_lines (this) - 1);
-  Buf.normal.bof (this);
+  Buf.normal.bof (this, DRAW);
   return retval;
 }
 
@@ -367,11 +396,12 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
   int retval = 0;
   switch (c) {
     case 't':
-      ifnot (retval = ved_translate_word (thisp, word))
+      retval = __translate_word__ (thisp, word);
+      if (0 is retval)
         Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]", word);
-      else if (OK is retval)
+      else if (0 < retval)
         Ed.scratch ($myed, thisp, 0);
-      return retval;
+      return (retval > 0 ? OK : NOTOK);
 
       case 'm':
         return sys_man (thisp, word, -1);
@@ -479,14 +509,14 @@ theend:
 
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
-  int num_commands = 1;
+  int num_commands = 2;
 #if HAS_SPELL
   num_commands++;
-  char *commands[3] = {"~battery", "~spell", NULL};
-  int num_args[] = {0, 1, 0}; int flags[] = {0, RL_ARG_RANGE, 0};
+  char *commands[4] = {"~battery", "~spell", "~translate", NULL};
+  int num_args[] = {0, 1, 0, 0}; int flags[] = {0, RL_ARG_RANGE, 0, 0};
 #else
-  char *commands[2] = {"~battery", NULL};
-  int num_args[] = {0, 0}; int flags[] = {0, 0};
+  char *commands[3] = {"~battery", "~translate", NULL};
+  int num_args[] = {0, 0, 0}; int flags[] = {0, 0, 0};
 #endif
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
@@ -534,6 +564,17 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     int sect_id = (NULL is section ? 0 : atoi (section->bytes));
     retval = sys_man (thisp, names->head->data->bytes, sect_id);
     Vstring.free (names);
+  } else if (Cstring.eq (com->bytes, "~translate")) {
+    vstr_t *words = Rline.get.arg_fnames (rl, 1);
+    if (NULL is words) goto theend;
+    retval = __translate_word__ (thisp, words->head->data->bytes);
+    if (0 is retval)
+       Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]",
+           words->head->data->bytes);
+      else if (0 < retval)
+        Ed.scratch ($myed, thisp, 0);
+    Vstring.free (words);
+    retval = (retval > 0 ? OK : NOTOK);
 #if HAS_SPELL
   } else if (Cstring.eq (com->bytes, "~spell")) {
     retval = __buf_spell__ (thisp, rl);
@@ -556,18 +597,17 @@ private void __init_usr__ (ed_t *this) {
   __u_add_word_actions__ (this);
   /* extend commands */
   __u_add_rline_commands__ (this);
-  /* extend visual lw mode */
+  /* extend visual [lc]wise mode */
 #if HAS_SPELL
   __u_add_lw_mode_actions__ (this);
+  __u_add_cw_mode_actions__ (this);
+  Intmap = __init_int_map__ ();
+  SpellClass = __init_spell__ ();
 #endif
 
   Uenv = AllocType (uenv);
   string_t *path = Ed.venv.get (this, "path");
   Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
-#if HAS_SPELL
-  Intmap = __init_int_map__ ();
-  SpellClass = __init_spell__ ();
-#endif
 }
 
 private void __deinit_usr__ (ed_t *this) {
