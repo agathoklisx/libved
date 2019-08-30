@@ -78,40 +78,6 @@
 
 #define VUNDO_RESET (1 << 0)
 
-#define X_PRIMARY     0
-#define X_CLIPBOARD   1
-
-#define DEFAULT_ORDER  0
-#define REVERSE_ORDER -1
-
-#define AT_CURRENT_FRAME -1
-
-#define NO_CB_FN NULL
-
-#define NO_COMMAND 0
-#define NO_OPTION 0
-
-#define NO_APPEND 0
-#define APPEND 1
-
-#define NO_COUNT_SPECIAL 0
-#define COUNT_SPECIAL 1
-
-#define DONOT_OPEN_FILE_IFNOT_EXISTS 0
-#define OPEN_FILE_IFNOT_EXISTS 1
-
-#define DONOT_REOPEN_FILE_IF_LOADED 0
-#define REOPEN_FILE_IF_LOADED 1
-
-#define SHARED_ALLOCATION 0
-#define NEW_ALLOCATION 1
-
-#define DONOT_ABORT_ON_ESCAPE 0
-#define ABORT_ON_ESCAPE 1
-
-#define NO_AT_EOF 0
-#define AT_EOF 1
-
 enum {
   ERROR = -2,
   NOTHING_TODO = -1,

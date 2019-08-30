@@ -85,10 +85,53 @@
 #define GLOBAL    1
 
 #define NO_FORCE 0
-#define FORCE 1
+#define FORCE    1
 
 #define NO_INTERACTIVE 0
 #define INTERACTIVE    1
+
+#define NOT_AT_EOF     0
+#define AT_EOF         1
+
+#define NO_APPEND 0
+#define APPEND    1
+
+#define NO_COUNT_SPECIAL 0
+#define COUNT_SPECIAL    1
+
+#define DONOT_OPEN_FILE_IFNOT_EXISTS 0
+#define OPEN_FILE_IFNOT_EXISTS       1
+
+#define DONOT_REOPEN_FILE_IF_LOADED 0
+#define REOPEN_FILE_IF_LOADED       1
+
+#define SHARED_ALLOCATION 0
+#define NEW_ALLOCATION    1
+
+#define DONOT_ABORT_ON_ESCAPE 0
+#define ABORT_ON_ESCAPE       1
+
+#define VERBOSE_OFF 0
+#define VERBOSE_ON  1
+
+#define DONOT_DRAW 0
+#define DRAW       1
+
+#define DONOT_CLEAR 0
+#define CLEAR       1
+
+#define X_PRIMARY     0
+#define X_CLIPBOARD   1
+
+#define DEFAULT_ORDER  0
+#define REVERSE_ORDER -1
+
+#define AT_CURRENT_FRAME -1
+
+#define NO_CB_FN NULL
+
+#define NO_COMMAND 0
+#define NO_OPTION 0
 
 #define RLINE_HISTORY  0
 #define SEARCH_HISTORY 1
@@ -106,12 +149,6 @@
 #define DELETE_LINE  1
 #define REPLACE_LINE 2
 #define INSERT_LINE  3
-
-#define VERBOSE_OFF 0
-#define VERBOSE_ON 1
-
-#define DONOT_DRAW 0
-#define DRAW 1
 
 #define ED_INIT_ERROR   (1 << 0)
 
@@ -370,7 +407,7 @@ typedef line_t u8_t;
 typedef utf8 (*InputGetch_cb) (term_t *);
 typedef int  (*Rline_cb) (buf_t **, rline_t *, utf8);
 typedef int  (*StrChop_cb) (vstr_t *, char *, void *);
-typedef StrChop_cb FileReadLines_cb;
+typedef int  (*FileReadLines_cb) (vstr_t *, char *, size_t, int, void *);
 typedef int  (*RlineAtBeg_cb) (rline_t **);
 typedef int  (*RlineAtEnd_cb) (rline_t **);
 typedef int  (*RlineTabCompletion_cb) (rline_t *);
@@ -722,11 +759,12 @@ NewClass (error,
 NewSelf (file,
   int
     (*exists) (const char *),
+    (*is_readable) (const char *),
     (*is_executable) (const char *),
     (*is_reg) (const char *),
     (*is_elf) (const char *);
 
-  vstr_t *(*readlines) (char *, vstr_t *, StrChop_cb, void *);
+  vstr_t *(*readlines) (char *, vstr_t *, FileReadLines_cb, void *);
 );
 
 NewClass (file,
@@ -957,9 +995,13 @@ NewSubSelf (ed, set,
 );
 
 NewSubSelf (ed, append,
-   int (*win) (ed_t *, win_t *);
+  int (*win) (ed_t *, win_t *);
+
   void
+    (*message_fmt) (ed_t *, char *, ...),
     (*message) (ed_t *, char *),
+    (*toscratch_fmt) (ed_t *, int, char *, ...),
+    (*toscratch) (ed_t *, int, char *),
     (*command_arg) (ed_t *, char *, char *),
     (*rline_commands) (ed_t *, char **, int, int[], int[]);
 
@@ -1038,6 +1080,7 @@ NewSelf (ed,
 
   int
     (*scratch) (ed_t *, buf_t **, int),
+    (*messages) (ed_t *, buf_t **, int),
     (*quit) (ed_t *, int),
     (*loop) (ed_t *, buf_t *),
     (*main) (ed_t *, buf_t *);
@@ -1082,6 +1125,5 @@ public void __deinit_ved__ (ed_T *);
 
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);
-public void toscratch (ed_t *, char *, int);
 
 #endif /* LIBVED_H */

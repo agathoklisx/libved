@@ -1,8 +1,8 @@
 #define MAP_DEFAULT_LENGTH 32
-#define MAP_HASH_KEY(__map__, __key__) ({  \
-  ssize_t hs = 0; int i = 0;              \
-  while (key[i]) hs = 33 * hs + key[i++]; \
-  hs % __map__->num_slots;                \
+#define MAP_HASH_KEY(__map__, __key__) ({           \
+  ssize_t hs = 5381; int i = 0;                     \
+  while (key[i]) hs = ((hs << 5) + hs) + key[i++];  \
+  hs % __map__->num_slots;                          \
 })
 
 DeclareType (mint);

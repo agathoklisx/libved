@@ -28,6 +28,10 @@
    - it doesn't do any validation of the incoming data (the data it produces
      is rather controllable, but it cannot handle (for instance) data which
      it might be malformed (UTF-8) byte sequences, or escape sequences).
+     [update - end of August-2019] While still there is no check for invalid
+     UTF-8 byte sequences when initially reading into the buffer structure, now
+     it's possible to do it at any point, by using either a command or in visual
+     linewise mode (see UTF-8 Validation section).
 
    - some motions shouldn't behave properly when a character it occupies more than
      one cell width, or behave properly if this character is a tab but (for now)
@@ -191,10 +195,10 @@
    algorithms that might need just a single change, or because of a debug message,
    or just because of a tiny compilation error), compilations like these can
    happen (and if it was possible) sometimes 10 times in a couple of minutes, so
-   tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.)
+   tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.))
   */
 
-/* All the compilation options:
+/* All the compilation options: */
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
@@ -202,7 +206,6 @@
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
    VED_DATA_DIR="dir"     this can be used for e.g., history (default unset)
-  */
 
    /* the next option provides a way to extend the behavior and|or as an API
     * documentation, but is intended for development (safely ignore much of it) */
@@ -224,7 +227,7 @@
       private void __deinit_local__ (ed_t *this);
 
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
-   SPELL_DICTIONARY="path/to/spell_dictionary (default $(SYSDATADIR)/spell/spell.txt)
+   SPELL_DICTIONARY="path/to/spell_dictionary" (default $(SYSDATADIR)/spell/spell.txt)
    SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
    /* The above options requires HAS_USER_EXTENSIONS=1,
     * but see for details to the Spelling section below in this same document */
@@ -233,7 +236,7 @@
 
    USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
 
-   /* The following options can change/control the behavior
+   /* The following options can change/control the behavior */
 
    CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                           is on those lines (default 1)
@@ -250,8 +253,7 @@
                           of a shell command (default 1) note that this option
                           activates HAS_SHELL_COMMANDS
 
-   (those set the defaults during filetype initiation)
- */
+ /* (those set the defaults during filetype initiation) */
 
 /* C
   This compiles to C11 for two reasons:
@@ -384,18 +386,18 @@ Normal mode:
  | n                 | search next                    |
  | N                 | search Next (opposite)         |
  | CTRL-w            |                                |
- | - CTRL-w          | frame forward                  |
- | - w|j|ARROW_DOWN  | likewise                       |
- | - k|ARROW_UP      | frame backward                 |
- | - o               | make current frame the only one|
- | - s               | split                          |
- | - n               | new window                     |
- | - h, ARROW_LEFT   | window to the left             |
- | - l, ARROW_RIGHT  | window to the right            |
- | - `               | previous focused window        |
+ |   - CTRL-w        | frame forward                  |
+ |   - w|j|ARROW_DOWN| likewise                       |
+ |   - k|ARROW_UP    | frame backward                 |
+ |   - o             | make current frame the only one|
+ |   - s             | split                          |
+ |   - n             | new window                     |
+ |   - h|ARROW_LEFT  | window to the left             |
+ |   - l|ARROW_RIGHT | window to the right            |
+ |   - `             | previous focused window        |
  | g                 |                                |
- | - g               | home row                       |
- | - f               | open filename under the cursor |
+ |   - g             | home row                       |
+ |   - f             | open filename under the cursor |
  |     gf on C filetype, can open header <header.h>   |
  | :                 | command line mode              |
  | q                 | quit (not delete) and when buffer type is pager|
@@ -453,6 +455,10 @@ Visual mode:
  | +                 | send selected to XA_CLIPBOARD (char|line)wise|
  | *                 | send selected to XA_PRIMARY   (char|line)wise|
  | e                 | edit as filename [charwise]    |
+ | v                 | check line[s] for invalid UTF-8 byte sequences [linewise]
+ |             note: this requires HAS_USER_EXTENSIONS|
+ | S                 | Spell line[s] (char|line)wise
+ |             note: this requires HAS_SPELL          |
  | TAB               | triggers a completion menu with the correspondent to the
  |                     specific mode above actions    |
  | escape            | aborts                         |
@@ -470,7 +476,7 @@ Command line mode:
  | CTRL-e|END        | cursor to the end              |
  | DELETE|BACKSPACE  | delete next|previous char      |
  | CTRL-r            | insert register contents (charwise only)|
- | CTRL-l            | redraw line                    |
+ | CTRL-l            | clear line                     |
  | TAB               | trigger completion[s]          |
 
 Search:
@@ -549,7 +555,7 @@ Search:
    Commands:
    ! as the last character indicates force, unless is a shell command
 
-   :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] --global
+   :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] [--global]
    :w[rite][!] [filename  [--range] [--append]]
    :wq[!]                 (write and quit (if force, do not check for modified buffers))
    :e[!] [filename]       (when e!, reread from current buffer filename)
@@ -596,6 +602,7 @@ Search:
    :`man     manpage   (display man page on the scratch buffer)
    :~battery           (display battery status to the message line)
    :~spell --range=`range' (without range default current line)
+   :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
 
    The `man command requires the man utility, which simply means probably also an
    implementation of a roff system. The col utility is not required, as we filter
@@ -614,7 +621,14 @@ Search:
    The ~battery command it should work only for Linux.
 
    Note:
-   The `prefix means system command, got it from shell syntax.
+   The `prefix is associated with shell syntax and is going to be used for internal
+   implementations of system commands.
+
+   The ~prefix is associated with ~ ($HOME) and is intented for personal commands.
+
+   Also the @prefix can not be associated with anything known, but is intented to
+   group functions, that either can manage/control the application behavior, or for
+   low level functions that have relation with the data/bytes.
  */
 
  /* Spelling
@@ -667,6 +681,26 @@ Search:
   accurate, though for a start is serves its purpose quite satisfactory, plus there
   is no requirement and already helped me to this document.
   */
+
+/* UTF-8 Validation
+   There are two ways to check for invalid UTF-8 byte sequences.
+   1. using the command :@validate_utf8 filename
+   2. in visual linewise mode, by pressing v or through tab completion
+
+   In both cases any error is redirected to the scratch buffer. It doesn't
+   and (probably) never is going to do any magic, so the function is mostly
+   only informational (at least for now).
+   Usually any such invalid byte sequence is visually inspected as it messes
+   up the screen.
+
+   The code for this functionality is from the is_utf8 project at:
+   https://github.com/JulienPalard/is_utf8
+   specifically the is_utf8.c unit and the is_utf8() function
+   Many Thanks.
+
+   Copyright (c) 2013 Palard Julien. All rights reserved.
+   but see src/lib/utf8/is_utf8.c for details.
+/*
 
 /* History Completion Semantics (command line and search)
    - the ARROW_UP key starts from the last entry set in history, and scrolls down
@@ -798,7 +832,7 @@ Search:
     or overridde functionality.
     A generic comment:
       But the main advantage of this approach is that there is no global state;
-      the functions acts on an instance of a type, or if not, simple their scope
+      the functions act on an instance of a type, or if not, simple their scope
       is narrow to a specific job that can not change state to the environment.
 
       In this whole library, there is neither one out of function scope variable.
@@ -842,8 +876,8 @@ Search:
    Many of the algorithms are based on a (usually) double linked list with
    a head and a tail and in many cases a current pointer, that can act (at
    the minimum) as an iterator;  but there is no specific list type (just
-   abstracted macros that act on structures. Those structs, and based on
-   the context (specific type), can contain (some or all) of those (everybody
+   abstracted macros that act on structures. Those structs, and based on the
+   context (specific type), can contain (some or all) of those (everybody's
    C favorites) pointers.
 
    A couple of notes regarding the inner code.
@@ -869,7 +903,7 @@ Search:
 
    To access a nested structure there is also a very compact and easy to use way:
 
-   My(Class).method (...)
+   My(Class).method ([...])
 
    This is just another syntactic sugar, to access quickly and with certainity that
    you got the pointers right, nested structures. As "My" doesn't pass any argument,
@@ -882,9 +916,8 @@ Search:
    In that spirit, also available are macros, that their sole role is to abstract
    the details over type creation/declaration/allocation, that assists to quick
    development.
-   The significant ones: AllocType, NewType, DeclareType. Those are getting an
-   argument with the type name but without the _t extension, which is the actual
-   type.
+   The significant ones: AllocType, NewType, DeclareType. The first argument on those
+   macros is the type name but without the _t extension, which is the actual type.
 
    Finally, a couple of macros that access the root editor type or the parent's
    (win structure) type. Either of these three main structures have access (with one
@@ -977,6 +1010,21 @@ Search:
    The work that someone put in a project, should be respected and should be mentioned
    without any second thought and with pleasure, as it is the marrow of the world,
    and it is so nice to be part of a continuation, both as receiver or as a producer.
+ */
+
+/* Coding style.
+   Easy.
+     - every little everything is separated with a space, except in some cases on
+       array indexing
+
+     - two spaces for indentation
+
+     - the opening brace is on the same line with the (usually) conditional expression
+
+     - the closed brace is on the same byte index of the first letter of the block
+
+     - the code tries to avoid (if compiler permits) to not use braces on conditional
+       branches and when there is one statement
  */
 
 /* NOTE:

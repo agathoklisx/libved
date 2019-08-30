@@ -10,6 +10,8 @@
 
 #include <sys/stat.h> /* for mkdir() */
 
+#include "../lib/utf8/is_utf8.c"
+
 NewType (uenv,
   string_t *man_exec;
 );
@@ -228,55 +230,10 @@ theend:
   return retval;
 }
 
-private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c) {
-  (void) vstr;
-  int retval = NOTOK;
-  switch (c) {
-    case 'S': {
-      rline_t *rl = Rline.new ($myed);
-      string_t *str = String.new_with_fmt ("~spell --range=%d,%d",
-         fidx + 1, lidx + 1);
-      Rline.set.line (rl, str->bytes, str->num_bytes);
-      String.free (str);
-      Rline.parse (*thisp, rl);
-      if (SPELL_OK is (retval = __buf_spell__ (thisp, rl)))
-        Rline.history.push (rl);
-      else
-        Rline.free (rl);
-    }
-    break;
-
-  }
-  return retval;
-}
-
-private void __u_add_lw_mode_actions__ (ed_t *this) {
-  utf8 chars[] = {'S'};
-  char actions[] = "Spell line[s]";
-  Ed.set.lw_mode_actions (this, chars, 1, actions, __u_lw_mode_cb__);
-}
-
 private int __u_word_actions_cb__ (buf_t **, int, int, bufiter_t *, char *, utf8);
 
-private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c) {
-  int retval = NOTOK;
-  switch (c) {
-    case 'S': {
-      bufiter_t *iter = Buf.iter.new (*thisp, -1);
-      return __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c);
-    }
-  }
-  return retval;
-}
-
-private void __u_add_cw_mode_actions__ (ed_t *this) {
-  utf8 chars[] = {'S'};
-  char actions[] = "Spell selected";
-  Ed.set.cw_mode_actions (this, chars, 1, actions, __u_cw_mode_cb__);
-}
 #endif
 
-          /* user defined commands and|or actions */
 
 /* this function that extends normal mode, performs a simple search on a
  * lexicon defined file for 'word', and then prints the matched lines to
@@ -315,13 +272,13 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   int nread;
   int match = 0;
 
-  toscratch ($myed, word, 1);
-  toscratch ($myed, "=================", 0);
+  Ed.append.toscratch ($myed, CLEAR, word);
+  Ed.append.toscratch ($myed, DONOT_CLEAR, "=================");
 
   while (-1 isnot (nread = getline (&line, &len, fp)))
     if (0 <= Re.exec (re, line, nread)) {
       match++;
-      toscratch ($myed, line, 0);
+      Ed.append.toscratch ($myed, DONOT_CLEAR, line);
       Re.reset_captures (re);
     }
 
@@ -400,7 +357,7 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
       if (0 is retval)
         Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]", word);
       else if (0 < retval)
-        Ed.scratch ($myed, thisp, 0);
+        Ed.scratch ($myed, thisp, NOT_AT_EOF);
       return (retval > 0 ? OK : NOTOK);
 
       case 'm':
@@ -507,16 +464,173 @@ theend:
   return retval;
 }
 
+private int __validate_utf8_cb__ (vstr_t *unused, char *line, size_t len,
+                                                      int lnr, void *obj) {
+  (void) unused;
+  int *retval = (int *) obj;
+  char *message;
+  int num_faultbytes;
+  int cur_idx = 0;
+  char *bytes = line;
+  size_t orig_len = len;
+  size_t index;
+
+check_utf8:
+  index = is_utf8 ((unsigned char *) bytes, len, &message, &num_faultbytes);
+
+  ifnot (index) return OK;
+
+  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR,
+      "--== Invalid UTF8 sequence ==-\n"
+      "message: %s\n"
+      "%s\nat line number %d, at index %zd, num invalid bytes %d\n",
+      message, line, lnr, index + cur_idx, num_faultbytes);
+
+  *retval = NOTOK;
+  cur_idx += index + num_faultbytes;
+  len = orig_len - cur_idx;
+  bytes = line + cur_idx;
+  num_faultbytes = 0;
+  message = NULL;
+  goto check_utf8;
+
+  return *retval;
+}
+
+private int __file_validate_utf8__ (buf_t **thisp, char *fname) {
+  (void) thisp;
+  int retval = NOTOK;
+  ifnot (File.exists (fname)) {
+    Msg.send_fmt ($myed, COLOR_RED, "%s doesn't exists", fname);
+    return retval;
+  }
+
+  ifnot (File.is_readable (fname)) {
+    Msg.send_fmt ($myed, COLOR_RED, "%s is not readable", fname);
+    return retval;
+  }
+
+  buf_t *this = Ed.get.scratch_buf ($myed);
+  Buf.clear (this);
+
+  vstr_t unused;
+  retval = OK;
+  File.readlines (fname, &unused, __validate_utf8_cb__, &retval);
+
+  if (retval is NOTOK) Ed.scratch ($myed, thisp, NOT_AT_EOF);
+
+  return OK;
+}
+
+private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
+  int range[2];
+  int retval = Rline.get.range (rl, *thisp, range);
+  if (NOTOK is retval) {
+    range[0] = Buf.row.get_current_line_idx (*thisp);
+    range[1] = range[0];
+  }
+
+  int count = range[1] - range[0] + 1;
+
+  buf_t *this = Ed.get.scratch_buf ($myed);
+  Buf.clear (this);
+
+  vstr_t unused;
+  bufiter_t *iter = Buf.iter.new (*thisp, range[0]);
+  int i = 0;
+
+  retval = OK;
+
+  while (iter and i++ < count) {
+    __validate_utf8_cb__ (&unused, iter->line->bytes, iter->line->num_bytes,
+         iter->idx + 1, &retval);
+    iter = Buf.iter.next (*thisp, iter);
+  }
+
+  Buf.iter.free (*thisp, iter);
+  if (retval is NOTOK) Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  return retval;
+}
+
+private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c) {
+  (void) vstr;
+  int retval = NOTOK;
+  switch (c) {
+#if HAS_SPELL
+    case 'S': {
+      rline_t *rl = Rline.new ($myed);
+      string_t *str = String.new_with_fmt ("~spell --range=%d,%d",
+         fidx + 1, lidx + 1);
+      Rline.set.line (rl, str->bytes, str->num_bytes);
+      String.free (str);
+      Rline.parse (*thisp, rl);
+      if (SPELL_OK is (retval = __buf_spell__ (thisp, rl)))
+        Rline.history.push (rl);
+      else
+        Rline.free (rl);
+    }
+#endif
+
+    case 'v': {
+      rline_t *rl = Rline.new ($myed);
+      string_t *str = String.new_with_fmt ("ignore --range=%d,%d",
+         fidx + 1, lidx + 1);
+      Rline.set.line (rl, str->bytes, str->num_bytes);
+      String.free (str);
+      Rline.parse (*thisp, rl);
+      __validate_utf8__ (thisp, rl);
+      Rline.free (rl);
+    }
+    break;
+  }
+
+  return retval;
+}
+
+private void __u_add_lw_mode_actions__ (ed_t *this) {
+  int num_actions = 1;
+#if HAS_SPELL
+  num_actions++;
+  utf8 chars[] = {'S', 'v'};
+  char actions[] = "Spell line[s]\nvalidate utf8";
+#else
+  utf8 chars[] = {'v'};
+  char actions[] = "validate utf8";
+#endif
+
+  Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
+}
+
+private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c) {
+  int retval = NOTOK;
+  switch (c) {
+#if HAS_SPELL
+    case 'S': {
+      bufiter_t *iter = Buf.iter.new (*thisp, -1);
+      return __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c);
+    }
+#endif
+
+  }
+  return retval;
+}
+
+private void __u_add_cw_mode_actions__ (ed_t *this) {
+  utf8 chars[] = {'S'};
+  char actions[] = "Spell selected";
+  Ed.set.cw_mode_actions (this, chars, 1, actions, __u_cw_mode_cb__);
+}
+          /* user defined commands and|or actions */
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
-  int num_commands = 2;
+  int num_commands = 3;
 #if HAS_SPELL
   num_commands++;
-  char *commands[4] = {"~battery", "~spell", "~translate", NULL};
-  int num_args[] = {0, 1, 0, 0}; int flags[] = {0, RL_ARG_RANGE, 0, 0};
+  char *commands[5] = {"~battery", "~spell", "~translate", "@validate_utf8", NULL};
+  int num_args[] = {0, 1, 0, 0, 0}; int flags[] = {0, RL_ARG_RANGE, 0, 0, 0};
 #else
-  char *commands[3] = {"~battery", "~translate", NULL};
-  int num_args[] = {0, 0, 0}; int flags[] = {0, 0, 0};
+  char *commands[4] = {"~battery", "~translate", "@validate_utf8", NULL};
+  int num_args[] = {0, 0, 0, 0}; int flags[] = {0, 0, 0, 0};
 #endif
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
@@ -564,6 +678,11 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     int sect_id = (NULL is section ? 0 : atoi (section->bytes));
     retval = sys_man (thisp, names->head->data->bytes, sect_id);
     Vstring.free (names);
+  } else if (Cstring.eq (com->bytes, "@validate_utf8")) {
+    vstr_t *words = Rline.get.arg_fnames (rl, 1);
+    if (NULL is words) goto theend;
+    retval = __file_validate_utf8__ (thisp, words->head->data->bytes);
+    Vstring.free (words);
   } else if (Cstring.eq (com->bytes, "~translate")) {
     vstr_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
@@ -572,7 +691,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
        Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]",
            words->head->data->bytes);
       else if (0 < retval)
-        Ed.scratch ($myed, thisp, 0);
+        Ed.scratch ($myed, thisp, NOT_AT_EOF);
     Vstring.free (words);
     retval = (retval > 0 ? OK : NOTOK);
 #if HAS_SPELL
@@ -598,9 +717,10 @@ private void __init_usr__ (ed_t *this) {
   /* extend commands */
   __u_add_rline_commands__ (this);
   /* extend visual [lc]wise mode */
-#if HAS_SPELL
   __u_add_lw_mode_actions__ (this);
   __u_add_cw_mode_actions__ (this);
+
+#if HAS_SPELL
   Intmap = __init_int_map__ ();
   SpellClass = __init_spell__ ();
 #endif

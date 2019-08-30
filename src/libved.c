@@ -1118,6 +1118,10 @@ private int file_is_executable (const char *fname) {
   return (0 is access (fname, F_OK|X_OK));
 }
 
+private int file_is_readable (const char *fname) {
+  return (0 is access (fname, R_OK));
+}
+
 private int file_is_elf (const char *file) {
   int fd = open (file, O_RDONLY);
   if (-1 is fd) return 0;
@@ -1141,10 +1145,14 @@ private vstr_t *file_readlines (char *file, vstr_t *lines,
   char *buf = NULL;
   size_t len;
   ssize_t nread;
-  while (-1 isnot (nread = getline (&buf, &len, fp))) {
-    if (cb isnot NULL)
-      cb (llines, buf, obj);
-    else {
+
+  if (cb isnot NULL) {
+    int num = 0;
+    while (-1 isnot (nread = getline (&buf, &len, fp))) {
+      cb (llines, buf, nread, ++num, obj);
+    }
+  } else {
+    while (-1 isnot (nread = getline (&buf, &len, fp))) {
       buf[nread - 1] = '\0';
       vstr_append_current_with (llines, buf);
     }
@@ -1161,6 +1169,7 @@ public file_T __init_file__ (void) {
   return ClassInit (file,
     .self = SelfInit (file,
       .exists = file_exists,
+      .is_readable = file_is_readable,
       .is_executable = file_is_executable,
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
@@ -4009,14 +4018,6 @@ private int ed_change_buf (ed_t *this, buf_t **thisp, char *wname, char *bname) 
   return ved_buf_change_bufname (thisp, bname);
 }
 
-private int ved_messages (ed_t *this, buf_t **bufp) {
-  self(buf.change, bufp, VED_MSG_WIN, VED_MSG_BUF);
-  ifnot (str_eq ($from((*bufp), fname), VED_MSG_BUF))
-    return NOTHING_TODO;
-  ved_normal_eof (*bufp, DRAW);
-  return DONE;
-}
-
 private buf_t *ved_special_buf (ed_t *this, char *wname, char *bname,
     int num_frames, int at_frame) {
   int idx;
@@ -4080,20 +4081,40 @@ private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
   return DONE;
 }
 
-public void toscratch (ed_t *this, char *msg, int clear_first) {
+private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
   buf_t *buf = self(buf.get, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   if (NULL is buf)
     buf = ved_scratch_buf (this);
 
   if (clear_first) My(Buf).clear (buf);
 
-  vstr_t *lines = str_chop (msg, '\n', NULL, NO_CB_FN, NULL);
+  vstr_t *lines = str_chop (bytes, '\n', NULL, NO_CB_FN, NULL);
   vstring_t *it = lines->head;
   while (it) {
     My(Buf).append_with (buf, it->data->bytes);
     it = it->next;
   }
   vstr_free (lines);
+}
+
+private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, ...) {
+  char bytes[MAXLINE];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  ved_append_toscratch (this, clear_first, bytes);
+}
+
+private int ved_messages (ed_t *this, buf_t **bufp, int at_eof) {
+  self(buf.change, bufp, VED_MSG_WIN, VED_MSG_BUF);
+  ifnot (str_eq ($from((*bufp), fname), VED_MSG_BUF))
+    return NOTHING_TODO;
+
+  if (at_eof) ved_normal_eof (*bufp, DRAW);
+  else My(Buf).draw (*bufp);
+
+  return DONE;
 }
 
 private int ved_append_message_cb (vstr_t *str, char *tok, void *obj) {
@@ -4108,6 +4129,15 @@ private void ved_append_message (ed_t *this, char *msg) {
   ifnot (buf) return;
   vstr_t unused;
   str_chop (msg, '\n', &unused, ved_append_message_cb, (void *) buf);
+}
+
+private void ved_append_message_fmt (ed_t *this, char *fmt, ...) {
+  char bytes[MAXLINE];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  ved_append_message (this, bytes);
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
@@ -7370,11 +7400,14 @@ private int ved_normal_visual_lw (buf_t **thisp) {
   VISUAL_INIT_FUN (VISUAL_MODE_LW, ved_syn_parse_visual_lw);
   $my(vis)[0] = $my(vis)[1];
 
+  int goto_cb = 0;
+  utf8 c;
+
   for (;;) {
     $my(vis)[0].lidx = this->cur_idx;
     dbuf (this);
 
-    utf8 c = My(Input).get ($my(term_ptr));
+    c = My(Input).get ($my(term_ptr));
 
 handle_char:
     switch (c) {
@@ -7536,6 +7569,11 @@ handle_char:
               this->cur_idx = $my(vis)[0].fidx;
             }
 
+            goto_cb = 1;
+            goto theend;
+
+            callback:;
+
             row_t *row = this->current;
             vstr_t *rows = vstr_new ();
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++) {
@@ -7543,9 +7581,9 @@ handle_char:
               row = row->next;
             }
 
-            $myroots(lw_mode_cb) (&this, $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
+            $myroots(lw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
             vstr_free (rows);
-            goto theend;
+            goto thereturn;
           }
 
         continue;
@@ -7557,9 +7595,11 @@ theend:
   $self(draw) = dbuf;
   $self(draw_cur_row) = drow;
   self(set.mode, prev_mode);
-
   self(draw);
 
+  if (goto_cb) goto callback;
+
+thereturn:
   return DONE;
 }
 
@@ -7619,6 +7659,8 @@ private int ved_normal_visual_cw (buf_t **thisp) {
   $my(vis)[1] = $my(vis)[0];
   $my(vis)[0] = (vis_t) {.fidx = $mycur(cur_col_idx), .lidx = $mycur(cur_col_idx),
      .orig_syn_parser = $my(vis)[1].orig_syn_parser};
+
+  int goto_cb = 0;
 
   for (;;) {
     $my(vis)[0].lidx = $mycur(cur_col_idx);
@@ -7712,13 +7754,17 @@ handle_char:
               VISUAL_RESTORE_STATE ($my(vis)[0], mark);
             }
 
+            goto_cb = 1;
+            goto theend;
+            callback:;
+
             string_t *str = string_new_with ("");
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
               string_append_byte (str, $mycur(data)->bytes[ii]);
 
             $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, str, c);
             string_free (str);
-            goto theend;
+            goto thereturn;
           }
 
         continue;
@@ -7731,9 +7777,12 @@ theend:
   $self(draw) = dbuf;
   $self(draw_cur_row) = drow;
   self(set.mode, prev_mode);
-
   this = *thisp;
   self(draw);
+
+  if (goto_cb) goto callback;
+
+thereturn:
   return DONE;
 }
 
@@ -8349,7 +8398,8 @@ private int ved_buf_change_bufname (buf_t **thisp, char *bufname) {
    * to be a quite common scenario, while the second it never happens
    * at least in (my) usual workflow. Now. I know there are quite few
    * more to catch, but unless someone generiously offers the code i'm
-   * not going to spend the time and the energy to write it.
+   * not going to spend the energy on them and can be safely considered
+   * as undefined or unpredictable behavior.
    */
 
   if (cur_frame isnot $from(buf, at_frame) and
@@ -8546,6 +8596,8 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
   }
 
   int found = 0;
+  int should_draw = 0;
+
   this = parent->head;
   while (this) {
     if ($my(at_frame) is at_frame) {
@@ -8565,15 +8617,16 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
 
   if (cur_idx is idx) {
     if (found is 1 or $from(parent, num_frames) is 1) {
-      ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
+      if (NOTHING_TODO is ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED))
+        should_draw = 1;
     } else {
       int frame = $from(parent, cur_frame) + 1;
       if (frame is $from(parent, num_frames)) frame = 0;
       *thisp = win_change_frame ($my(parent), frame, DONOT_DRAW);
     }
-  }
+  } else should_draw = 1;
 
- ifnot (found) My(Win).draw (parent);
+ if (0 is found or should_draw) My(Win).draw (parent);
 
  return DONE;
 }
@@ -10380,7 +10433,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        goto theend;
 
     case VED_COM_MESSAGES:
-      retval = ved_messages ($my(root), thisp);
+      retval = ved_messages ($my(root), thisp, AT_EOF);
       goto theend;
 
     case VED_COM_SCRATCH:
@@ -11856,6 +11909,7 @@ private ed_T *editor_new (char *name) {
       .loop = ved_loop,
       .main = ved_main,
       .scratch = ved_scratch,
+      .messages = ved_messages,
       .resume = ed_resume,
       .suspend = ed_suspend,
       .question = ved_question,
@@ -11890,6 +11944,9 @@ private ed_T *editor_new (char *name) {
       .append = SubSelfInit (ed, append,
         .win = ved_append_win,
         .message = ved_append_message,
+        .message_fmt = ved_append_message_fmt,
+        .toscratch = ved_append_toscratch,
+        .toscratch_fmt = ved_append_toscratch_fmt,
         .command_arg = ved_append_command_arg,
         .rline_commands = ved_append_rline_commands
       ),

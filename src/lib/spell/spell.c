@@ -230,8 +230,9 @@ private void spell_add_word_to_dictionary (spell_t *spell, char *word) {
   fclose (fp);
 }
 
-private int spell_file_readlines_cb (vstr_t *unused, char *line, void *obj) {
-  (void) unused;
+private int spell_file_readlines_cb (vstr_t *unused, char *line, size_t len,
+                                                         int lnr, void *obj) {
+  (void) unused; (void) lnr; (void) len;
   spell_t *spell = (spell_t *) obj;
   Imap.set_with_keylen (spell->dic, Cstring.trim.end (line, '\n'));
                     // this untill an inner getline()
