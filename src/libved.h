@@ -4,14 +4,24 @@
 #define OUTPUT_FD STDOUT_FILENO
 
 #define MAX_FRAMES 3
-#define RLINE_HISTORY_NUM_ENTRIES 20
-#define UNDO_NUM_ENTRIES 20
 #define DEFAULT_SHIFTWIDTH 2
 #define DEFAULT_PROMPT_CHAR ':'
-#define TMPDIR "/tmp"
 
-/* this is not configurable as the code will not count the change in the calculations */
-#define TABLENGTH 1
+#ifndef TMPDIR
+#define TMPDIR "/tmp"
+#endif
+
+#ifndef RLINE_HISTORY_NUM_ENTRIES
+#define RLINE_HISTORY_NUM_ENTRIES 20
+#endif
+
+#ifndef UNDO_NUM_ENTRIES
+#define UNDO_NUM_ENTRIES 40
+#endif
+
+#ifndef TABWIDTH
+#define TABWIDTH 8
+#endif
 
 #ifndef CLEAR_BLANKLINES
 #define CLEAR_BLANKLINES 1
@@ -125,6 +135,9 @@
 
 #define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
+
+#define DONOT_ADJUST_COL 0
+#define ADJUST_COL 1
 
 #define AT_CURRENT_FRAME -1
 

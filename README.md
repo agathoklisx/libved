@@ -38,6 +38,11 @@
      a tab it takes one single cell, much like a space. To implement some of this
      functionality an expensive wcwidth() should be included and algorithms should
      adjust.
+     [update - first days of September-2019] Both cases should be handled properly
+     now, though the adjusted algorithms, complex as they are by nature, were quite
+     invasive, and there is no certainity that cover all the conditions that can be
+     met in a visual editor, because the width of the character dictates the cursor
+     position (but see Tabwidth and Charwidth section for the semantics and details).
 
    - the code is young and fragile in places and some crude algorithms that had
      been used during this initiation, need revision and functions needs to catch
@@ -205,7 +210,8 @@
    HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
-   VED_DATA_DIR="dir"     this can be used for e.g., history (default unset)
+   VED_DATA_DIR="dir"     this can be used for e.g., history (default $(SYSDIR)/data)
+   TMPDIR="dir"           this sets the temp directory (default $(SYSDIR)/tmp)
 
    /* the next option provides a way to extend the behavior and|or as an API
     * documentation, but is intended for development (safely ignore much of it) */
@@ -241,6 +247,9 @@
    CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                           is on those lines (default 1)
    TAB_ON_INSERT_MODE_INDENTS (1|0) tab in insert mode indents (default 0)
+   TABWIDTH (width)       this set the default tabwidth (default 8)
+   UNDO_NUM_ENTRIES (num) this set the undo entries (default 40)
+   RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (defualt 20)
    CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) on normal mode a carriage
                           return acts as it was insert mode (default 1)
    SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
@@ -682,7 +691,7 @@ Search:
   is no requirement and already helped me to this document.
   */
 
-/* UTF-8 Validation
+  /* UTF-8 Validation
    There are two ways to check for invalid UTF-8 byte sequences.
    1. using the command :@validate_utf8 filename
    2. in visual linewise mode, by pressing v or through tab completion
@@ -700,16 +709,51 @@ Search:
 
    Copyright (c) 2013 Palard Julien. All rights reserved.
    but see src/lib/utf8/is_utf8.c for details.
-/*
+   */
 
-/* History Completion Semantics (command line and search)
+ /* Tabwidth and Charwidth
+    The library uses the wcwidth() implementation (with minor adjustments for the
+    environment) from the termux project:
+    https://github.com/termux/wcwidth
+    The MIT License (MIT)
+    Copyright (c) 2016 Fredrik Fornwall <fredrik@fornwall.net>
+
+    This license applies to parts originating from the
+    https://github.com/jquast/wcwidth repository:
+    The MIT License (MIT)
+    Copyright (c) 2014 Jeff Quast <contact@jeffquast.com>
+
+    Many Thanks.
+
+    The implementation is similar to Markus kuhn's, though looks more updated.
+    The code tries hard to avoid needless expensive calls to that function, as
+    in almost any movement, the code should account for the width of the character.
+    Same exactly goes for the tabwidth, the algorithm doesn't differ, though a tab
+    is handled usually earlier.
+    The thing is that the calculations are complex and quite possible there are
+    conditions that are not covered.
+
+    The semantics.
+    In normal mode operations, the cursor should be placed at the end of the width
+    (one cell before the next character), while on insert mode to the beginning of
+    the width (one cell after the previous character).
+    The next or previous line (character) completions (CTRL('e') and CTRL('y') in
+    normal mode) are based on the byte index and not on the character position, and
+    this might seems that is not (visually) right and probably isn't, and could be
+    change in the future).
+
+    The tabwidth as and all the (compilation) options, can be set individually on
+    the specific filetype.
+  */
+
+  /* History Completion Semantics (command line and search)
    - the ARROW_UP key starts from the last entry set in history, and scrolls down
      to the past entries
 
    - the ARROW_DOWN key starts from the first entry, and scrolls up to most recent
- */
+   */
 
-/* Searching on files (a really quite basic emulation of quickfix vim's windows).
+  /* Searching on files (a really quite basic emulation of quickfix vim's windows).
 
    The command :vgrep it takes a pattern and at least a filename as argument[s]:
 
@@ -730,7 +774,7 @@ Search:
    to the previous state (as it acts like a pager).
   */
 
-/* Unified Diff
+ /* Unified Diff
   This feature requires (for now) the `diff' utility.
 
   The :diff command open a dedicated "diff" buffer, with the results (if any) of
@@ -1023,8 +1067,8 @@ Search:
 
      - the closed brace is on the same byte index of the first letter of the block
 
-     - the code tries to avoid (if compiler permits) to not use braces on conditional
-       branches and when there is one statement
+     - the code (and if the compiler permits) do not use braces on conditional branches
+       when there is single statement on the block
  */
 
 /* NOTE:
@@ -1054,18 +1098,20 @@ Search:
    But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
    the tabwidth stuff, which is something i do not have the slightest will to do,
    because i hate tabs in code (nothing is perfect in this life)- a tab in my humble
-   opinion it should be used in the cases where is significant, like a delimiter in
-   csv files, or in the Makefile's; the way it is being used by the coders is an abuse.
+   opinion it should be used in the cases where is significant, as a delimiter, or
+   in the Makefile's; the way it is being used by the coders is an abuse (imho).
    So, i'd rather give my time (with low priority though) to split those two different
-   concepts (though I should fix this thing!!!)
+   concepts (though I should fix this thing!!! [update: and should be fixed, as from
+   the first (hard physical and mentally) days of September of 2019).
 
-  The first level or better the zero level, the actual editor code:
+   The first level or better the zero level, the actual editor code:
 
    - inserting/deleting lines (this should meet or extend ed specifications)
 
    - line operations where line as:
-     An array of characters that provide information or methods about the
-     actual num bytes used to consist each character and the utf8 representation.
+     An array of characters that provide information or methods about the actual num
+     bytes used to consist each character, the utf8 representation and the width of
+     that character.
 
      Line operations: inserting/deleting/replacing..., based on that type.
 

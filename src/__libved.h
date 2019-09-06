@@ -715,6 +715,7 @@ NewType (ftype,
 
   int
     shiftwidth,
+    tabwidth,
     autochdir,
     tab_indents,
     clear_blanklines,

@@ -2,7 +2,10 @@
 
 # This is a sample that can be used to compile the source code
 # and should provide a shared library and an executable.
-# If the number of args is > 0 then builds only the executable
+
+# Adjust for the static targets accordingly.
+
+# If the number of args is > 0 then it builds only the executable.
 
 # You may need first to `chmod' this unit to make it executable.
 
@@ -29,8 +32,10 @@ make                                                \
     HAS_LOCAL_EXTENSIONS=0                          \
     HAS_HISTORY=1                                   \
     VED_DATA_DIR="$PWD/sys/data"                    \
+    TMPDIR="$PWD/sys/tmp"                           \
     CLEAR_BLANKLINES=1                              \
     TAB_ON_INSERT_MODE_INDENTS=0                    \
+    TABWIDTH=8                                      \
     CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=1 \
     SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1           \
     SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \

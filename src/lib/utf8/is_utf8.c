@@ -1,7 +1,7 @@
 /* This function is from the is_utf8 project at:
    https://github.com/JulienPalard/is_utf8
-   specifically the is_utf8.c unit and the code hasn't been touched
-   at all, neither for coding style conformance.
+   specifically the is_utf8.c unit. 
+   The code hasn't been touched at all, neither for coding style conformance.
    Many Thanks
  */
 
