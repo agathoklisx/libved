@@ -711,6 +711,51 @@ private void __u_add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, __u_rline_cb__);
 }
 
+char *make_filenames[] = {"Makefile", NULL};
+char *make_extensions[] = {".Makefile", NULL};
+char *make_keywords[] = {"ifeq", "ifneq", "endif", "else", "ifdef", NULL};
+
+char  sh_operators[] = "+:-%*><=|&()[]{}!$/`";
+char *sh_filenames[] = {NULL};
+char  sh_singleline_comment[] = "#";
+char *sh_extensions[] = {".sh", ".bash", NULL};
+char *sh_keywords[] = {"if", "else", "then", "fi", "while", "for", "break", "done", NULL};
+
+private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
+  return Buf.syn.parser (this, line, len, idx, row);
+}
+
+private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
+  return Buf.ftype.autoindent (this, row);
+}
+
+private ftype_t *__u_make_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "make"), __u_ftype_autoindent);
+  ft->tabwidth = 4;
+  ft->tab_indents = 0;
+  return ft;
+}
+
+private ftype_t *__u_sh_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "sh"), __u_ftype_autoindent);
+  ft->tabwidth = 4;
+  ft->tab_indents = 0;
+  return ft;
+}
+
+syn_t u_syn[] = {
+  {
+    "make", make_filenames, make_extensions, make_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_make_syn_init, 0
+  },
+  {
+    "sh", sh_filenames, sh_extensions, sh_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_sh_syn_init, 0
+  },
+};
+
 private void __init_usr__ (ed_t *this) {
   /* as a first sample, extend the actions on current word, triggered by 'W' */
   __u_add_word_actions__ (this);
@@ -728,6 +773,8 @@ private void __init_usr__ (ed_t *this) {
   Uenv = AllocType (uenv);
   string_t *path = Ed.venv.get (this, "path");
   Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
+  Ed.syn.append (this, u_syn[0]);
+  Ed.syn.append (this, u_syn[1]);
 }
 
 private void __deinit_usr__ (ed_t *this) {

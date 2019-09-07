@@ -31,6 +31,10 @@
 #define TAB_ON_INSERT_MODE_INDENTS 0
 #endif
 
+#ifndef C_TAB_ON_INSERT_MODE_INDENTS
+#define C_TAB_ON_INSERT_MODE_INDENTS 1
+#endif
+
 #ifndef CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE
 #define CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #endif
@@ -53,6 +57,10 @@
 
 #ifndef READ_FROM_SHELL
 #define READ_FROM_SHELL 1
+#endif
+
+#ifndef NUM_SYNTAXES
+#define NUM_SYNTAXES 32
 #endif
 
 #ifndef PATH_MAX
@@ -163,9 +171,17 @@
 #define REPLACE_LINE 2
 #define INSERT_LINE  3
 
+#define HL_STRINGS_NO 0
+#define HL_STRINGS 1
+
+#define HL_NUMBERS_NO 0
+#define HL_NUMBERS 1
+
 #define ED_INIT_ERROR   (1 << 0)
 
 #define ED_SUSPENDED    (1 << 0)
+
+char c_operators[] = "+:-%*^><=|&~.()[]{}!";
 
 enum {
   FTYPE_DEFAULT,
@@ -429,6 +445,7 @@ typedef int  (*MenuProcessList_cb) (menu_t *);
 typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8);
 typedef int  (*WordActions_cb) (buf_t **, int, int, bufiter_t *, char *, utf8);
+typedef string_t *(Indent_cb) (buf_t *, row_t *);
 
 NewType (string,
   size_t  num_bytes;
@@ -448,6 +465,49 @@ NewType (vstr,
   vstring_t *current;
         int  cur_idx;
         int  num_items;
+);
+
+/* do not change order */
+NewType (syn,
+  char
+    *file_type,
+    **file_match,
+    **file_extensions,
+    **keywords,
+    *operators,
+    *singleline_comment_start,
+    *multiline_comment_start,
+    *multiline_comment_end;
+
+  int
+    hl_strings,
+    hl_numbers;
+
+  char  *(*parse) (buf_t *, char *, int, int, row_t *);
+  ftype_t *(*init) (buf_t *);
+  int state;
+);
+
+NewType (ftype,
+  char
+    name[8],
+    on_emptyline[2];
+
+  int
+    shiftwidth,
+    tabwidth,
+    autochdir,
+    tab_indents,
+    clear_blanklines,
+    cr_on_normal_is_like_insert_mode,
+    backspace_on_normal_is_like_insert_mode,
+    backspace_on_first_idx_remove_trailing_spaces,
+    space_on_normal_is_like_insert_mode,
+    small_e_on_normal_goes_insert_mode,
+    read_from_shell;
+
+  string_t *(*autoindent) (buf_t *, row_t *);
+      char *(*on_open_fname_under_cursor) (char *, size_t, size_t);
 );
 
 NewType (dirlist,
@@ -842,6 +902,16 @@ NewSubSelf (buf, set,
   ftype_t *(*ftype) (buf_t *, int);
 );
 
+NewSubSelf (buf, syn,
+  ftype_t *(*init) (buf_t *);
+     char *(*parser) (buf_t *, char *, int, int, row_t *);
+);
+
+NewSubSelf (buf, ftype,
+  ftype_t *(*init) (buf_t *, int, Indent_cb);
+  string_t *(*autoindent) (buf_t *, row_t *);
+);
+
 NewSubSelf (buf, to,
   void (*video) (buf_t *);
 );
@@ -898,6 +968,8 @@ NewSelf (buf,
   SubSelf (buf, cur) cur;
   SubSelf (buf, set) set;
   SubSelf (buf, get) get;
+  SubSelf (buf, syn) syn;
+  SubSelf (buf, ftype) ftype;
   SubSelf (buf, to) to;
   SubSelf (buf, free) free;
   SubSelf (buf, row) row;
@@ -1007,6 +1079,11 @@ NewSubSelf (ed, set,
   dim_t *(*dim) (ed_t *, int, int, int, int);
 );
 
+NewSubSelf (ed, syn,
+  void (*append) (ed_t *, syn_t);
+  int  (*get_ftype_idx) (ed_t *, char *);
+);
+
 NewSubSelf (ed, append,
   int (*win) (ed_t *, win_t *);
 
@@ -1079,6 +1156,7 @@ NewSelf (ed,
 
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
+  SubSelf (ed, syn) syn;
   SubSelf (ed, append) append;
   SubSelf (ed, exec) exec;
   SubSelf (ed, readjust) readjust;

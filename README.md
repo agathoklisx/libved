@@ -40,7 +40,7 @@
      adjust.
      [update - first days of September-2019] Both cases should be handled properly
      now, though the adjusted algorithms, complex as they are by nature, were quite
-     invasive, and there is no certainity that cover all the conditions that can be
+     invasive, and there is no certainity that handle all the conditions that can be
      met in a visual editor, because the width of the character dictates the cursor
      position (but see Tabwidth and Charwidth section for the semantics and details).
 
@@ -203,7 +203,7 @@
    tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.))
   */
 
-/* All the compilation options: */
+  /* All the compilation options: */
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
@@ -247,9 +247,10 @@
    CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                           is on those lines (default 1)
    TAB_ON_INSERT_MODE_INDENTS (1|0) tab in insert mode indents (default 0)
+C_TAB_ON_INSERT_MODE_INDENTS (1|0) the wrong indentation here is by purpose (default 1)
    TABWIDTH (width)       this set the default tabwidth (default 8)
    UNDO_NUM_ENTRIES (num) this set the undo entries (default 40)
-   RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (defualt 20)
+   RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (default 20)
    CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) on normal mode a carriage
                           return acts as it was insert mode (default 1)
    SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
@@ -731,7 +732,9 @@ Search:
     Same exactly goes for the tabwidth, the algorithm doesn't differ, though a tab
     is handled usually earlier.
     The thing is that the calculations are complex and quite possible there are
-    conditions that are not covered.
+    conditions that are not handled or improperly handled and because i do not
+    work with files (except Makefiles) that have no tabs or chars which occupy
+    more than one cell, do not help to catch them.
 
     The semantics.
     In normal mode operations, the cursor should be placed at the end of the width
@@ -741,10 +744,29 @@ Search:
     normal mode) are based on the byte index and not on the character position, and
     this might seems that is not (visually) right and probably isn't, and could be
     change in the future).
+    Speaking for tabs, by default when editing C file types, a tab can be inserted
+    only through CTRL('v') or (through CTRL('e') or CTRL('y')) in normal mode, or by
+    setting it to the filetype, or by simply setting C_TAB_ON_INSERT_MODE_INDENTS=0,
+    but itsnotgonnabebyme.
 
-    The tabwidth as and all the (compilation) options, can be set individually on
-    the specific filetype.
+    As for the tabwidth, as and all the (compilation) options, can be set individually
+    on the specific filetype, by editing it (nothing should matter for the code, as it
+    __should__ work in any way, otherwise is a bug in the code).
   */
+
+   /* Work has been started on the Syntax and Filetypes, with the latter can be play
+      a very interesting role, with regards to personalization, but also can be quite
+      powerful of a tool, for all kind of things. As it had been said already it is an
+      ongoing work, so this section is quite empty for the moment.
+
+     So.
+     As it concerns the main visible code, only 3 filetypes (C, sh, make) and probably
+     a few more. But as far it conserns the highlighted stuff (which is yes important,
+     because it helps visually quite a lot, but performance shouldn't penaltized, so
+     the code should remain at least in this level (probably one day will find the
+     desire to check a bit, if we could enhance but with less than today complexity,
+     because the code is complex, but is fast and the rules are simple (maybe)).
+   */
 
   /* History Completion Semantics (command line and search)
    - the ARROW_UP key starts from the last entry set in history, and scrolls down

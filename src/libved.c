@@ -2957,16 +2957,19 @@ int num_rows, int num_frames, int min_rows, int has_dividers) {
 }
 
 /* a highlight theme derived from tte editor, fork of kilo editor,
- * adjusted for the environment.
- * written by itself (the very first lines)
+ * adjusted and enhanced for the environment
+ * written by itself (the very first lines) (iirc somehow after the middle days
+ * of February) 
  */
 
 private char *ved_syn_parse_c (buf_t *, char *, int, int, row_t *);
-private char *ved_syn_parse_default (buf_t *, char *, int, int, row_t *);
-private ftype_t *buf_default_ftype (buf_t *);
-private ftype_t *buf_ftype_init_c (buf_t *);
+private char *buf_syn_parser (buf_t *, char *, int, int, row_t *);
+private ftype_t *buf_syn_init (buf_t *);
+private ftype_t *buf_syn_init_c (buf_t *);
 
 char *default_extensions[] = {".txt", NULL};
+char *default_filenames[] = {NULL};
+
 char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
     "is", "isnot", "or", "and", "loop", "ifnot", "forever",
@@ -2983,36 +2986,23 @@ char *C_keywords[] = {
     NULL
 };
 
+char c_singleline_comment[] = "//";
+char c_multiline_comment_start[] = "/*";
+char c_multiline_comment_end[] = "*/";
+
 syn_t HL_DB[] = {
-  [FTYPE_DEFAULT] = {
-    "txt",
-    default_extensions,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    0,
-    0,
-    ved_syn_parse_default,
-    buf_default_ftype,
-    0,
+   {
+     "txt",
+     default_filenames, default_extensions,
+     NULL, NULL, NULL, NULL, NULL,
+     HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init, 0,
   },
-  [FTYPE_C] =
-    {
-    "c",
-    C_extensions,
-    C_keywords,
-    "+:-%*^><=|&~.()[]{}!",
-    "//",
-    "/*",
-    "*/",
-    1,
-    1,
-    ved_syn_parse_c,
-    buf_ftype_init_c,
-    0,
-    }
+  {
+    "c", default_filenames, C_extensions, C_keywords, c_operators,
+    c_singleline_comment, c_multiline_comment_start, c_multiline_comment_end,
+    HL_STRINGS, HL_NUMBERS,
+    ved_syn_parse_c, buf_syn_init_c, 0,
+  }
 };
 
 #define IGNORE(c) ((c) > 0x80 || (c) <= ' ')
@@ -3028,12 +3018,20 @@ syn_t HL_DB[] = {
 #define SYN_HAS_MULTILINE_COMMENT  (1 << 2)
 
 /* Sorry but the highlight system is ridicolous simple (line by line), but is fast and works for me in C */
-private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index, row_t *row) {
+private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t *row) {
   (void) index; (void) row;
   ifnot (len) return line;
 
   string_t *s = My(String).new_with ("");
   char ccbuf[16];
+
+
+  char *s_cmnt_p = NULL;
+  int s_cmnt_idx = -1;
+  ifnot (NULL is $my(syn)->singleline_comment_start) {
+    s_cmnt_p = strstr (line, $my(syn)->singleline_comment_start);
+    s_cmnt_idx = (NULL is s_cmnt_p ? len : s_cmnt_p - line);
+  }
 
   uchar c;
   int idx = 0;
@@ -3042,6 +3040,26 @@ private char *ved_syn_parse_default (buf_t *this, char *line, int len, int index
     c = line[idx];
 
 parse_char:;
+open_comment:;
+    if ($my(syn)->state & SYN_HAS_OPEN_COMMENT) {
+      $my(syn)->state &= ~SYN_HAS_OPEN_COMMENT;
+      int diff = len;
+      My(String).append_fmt (s, "%s%s", TERM_MAKE_COLOR (HL_COMMENT), TERM_ITALIC);
+
+      while (idx < diff) My(String).append_byte (s, line[idx++]);
+      My(String).append (s, TERM_COLOR_RESET);
+
+      if (idx is len) goto theend;
+      c = line[idx];
+    }
+
+    if (idx is s_cmnt_idx) {
+      if (idx is 0 or line[idx-1] is ' ') {
+        $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
+        goto open_comment;
+      }
+    }
+
     while (IGNORE (c)) {
       if (c is ' ') {
         if (idx + 1 is len) {
@@ -3220,8 +3238,10 @@ open_comment:;
     }
 
     if (idx is s_cmnt_idx) {
-      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
-      goto open_comment;
+      if (idx is 0 or line[idx-1] is ' ') {
+        $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
+        goto open_comment;
+      }
     }
 
     while (IGNORE (c)) {
@@ -3337,7 +3357,7 @@ theend:
   return line;
 }
 
-private string_t *buf_autoindent_default (buf_t *this, row_t *row) {
+private string_t *buf_ftype_autoindent (buf_t *this, row_t *row) {
   (void) row;
   $my(shared_int) = 0; // needed by the caller
   char s[$my(shared_int) + 1];
@@ -3378,11 +3398,13 @@ private string_t *buf_autoindent_c (buf_t *this, row_t *row) {
   return $my(shared_str);
 }
 
-private ftype_t *buf_ftype_init_default (buf_t *this, int FTYPE,
-                     string_t *(*indent_fun) (buf_t *, row_t *)) {
+private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
   $my(ftype) = AllocType (ftype);
-  if (FTYPE >= (int) ARRLEN (HL_DB) or FTYPE < 0) FTYPE = FTYPE_DEFAULT;
-  $my(syn) = &HL_DB[FTYPE];
+
+debug_append ("ft %d, num_syn %d\n", ftype, $myroots(num_syntaxes));
+  if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
+
+  $my(syn) = &$myroots(syntaxes)[ftype];
   strcpy ($my(ftype)->name, $my(syn)->file_type);
   $my(ftype)->autochdir = 1;
   $my(ftype)->shiftwidth = 0;
@@ -3397,15 +3419,14 @@ private ftype_t *buf_ftype_init_default (buf_t *this, int FTYPE,
   $my(ftype)->space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE;
   $my(ftype)->read_from_shell = READ_FROM_SHELL;
 
-  $my(ftype)->autoindent = indent_fun;
+  $my(ftype)->autoindent = (NULL is indent_cb ? buf_ftype_autoindent : indent_cb);
   strcpy ($my(ftype)->on_emptyline, "~");
   return $my(ftype);
 }
 
 private char *ftype_on_open_fname_under_cursor_c (char *fname,
       size_t len, size_t stack_size) {
-  if (len < 8 or
-      (*fname isnot '<' or fname[len-1] isnot '>'))
+  if (len < 32 or (*fname isnot '<' or fname[len-1] isnot '>'))
     return fname;
 
   char incl_dir[] = {"/usr/include"};
@@ -3421,32 +3442,49 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
   return fname;
 }
 
-private ftype_t *buf_ftype_init_c (buf_t *this) {
-  ftype_t *ft = buf_ftype_init_default (this, FTYPE_C, buf_autoindent_c);
+private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
+  for (int i = 0; i < $my(num_syntaxes); i++) {
+    debug_append ("%s\n",
+                $my(syntaxes)[i].file_type);
+    if (str_eq ($my(syntaxes)[i].file_type, name))
+      return i;
+  }
+
+  return 0;
+}
+
+private ftype_t *buf_syn_init_c (buf_t *this) {
+  int idx = ed_syn_get_ftype_idx ($my(root), "c");
+  ftype_t *ft = buf_ftype_init (this, idx, buf_autoindent_c);
   ft->shiftwidth = 2;
-  ft->tab_indents = 1;
+  ft->tab_indents = C_TAB_ON_INSERT_MODE_INDENTS;
   ft->on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c;
   return ft;
 }
 
-private ftype_t *buf_default_ftype (buf_t *this) {
-  return buf_ftype_init_default (this, FTYPE_DEFAULT, buf_autoindent_default);
+private ftype_t *buf_syn_init (buf_t *this) {
+  return buf_ftype_init (this, FTYPE_DEFAULT, buf_ftype_autoindent);
 }
 
 private ftype_t *buf_set_ftype (buf_t *this, int ftype) {
-  if (FTYPE_DEFAULT < ftype and ftype < FTYPE_END)
-    return HL_DB[ftype].init (this);
+  if (0 < ftype and ftype < $myroots(num_syntaxes))
+    return $myroots(syntaxes)[ftype].init (this);
 
-  if (NULL is $my(extname)) return buf_default_ftype (this);
-
-  for (int i = 0; i < (int) ARRLEN(HL_DB); i++) {
+  for (int i = 0; i < $myroots(num_syntaxes); i++) {
     int j = 0;
-    while (HL_DB[i].file_match[j])
-      if (str_eq (HL_DB[i].file_match[j++], $my(extname)))
-        return HL_DB[i].init (this);
+    while ($myroots(syntaxes)[i].file_match[j])
+      if (str_eq ($myroots(syntaxes)[i].file_match[j++], $my(basename)))
+        return $myroots(syntaxes)[i].init (this);
+
+    if (NULL is $my(extname)) continue;
+
+    j = 0;
+    while ($myroots(syntaxes)[i].file_extensions[j])
+      if (str_eq ($myroots(syntaxes)[i].file_extensions[j++], $my(extname)))
+        return $myroots(syntaxes)[i].init (this);
   }
 
-  return buf_default_ftype (this);
+  return buf_syn_init (this);
 }
 
 private void buf_set_modified (buf_t *this) {
@@ -4749,10 +4787,9 @@ private void buf_set_statusline (buf_t *this) {
   }
 
   My(String).replace_with_fmt ($my(statusline),
-    TERM_SET_COLOR_FMT "%s (line: %d/%d idx: %d len: %d chr: %d)" "(fcidx %d ccidx %d vcol %d)",
+    TERM_SET_COLOR_FMT "%s (line: %d/%d idx: %d len: %d chr: %d)",
     COLOR_STATUSLINE, $my(basename), this->cur_idx + 1, this->num_items,
-    $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code,
-    $mycur(first_col_idx), $mycur(cur_col_idx), $my(cur_video_col));
+    $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code);
 
   My(String).clear_at ($my(statusline), $my(dim)->num_cols + TERM_SET_COLOR_FMT_LEN);
   My(String).append_fmt ($my(statusline), "%s", TERM_COLOR_RESET);
@@ -12327,6 +12364,16 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, ed_lw_mode_cb);
 }
 
+private void ed_syn_append (ed_t *this, syn_t syn) {
+  $my(syntaxes)[$my(num_syntaxes)++] = syn;
+  debug_append("%d, %s\n", $my(num_syntaxes), syn.file_type);
+}
+
+private void ed_init_syntaxes (ed_t *this) {
+  ed_syn_append (this, HL_DB[0]);
+  ed_syn_append (this, HL_DB[1]);
+}
+
 private void ed_free (ed_t *this) {
   if (this is NULL) return;
 
@@ -12406,6 +12453,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(prompt_row) = $my(msg_row) - 1;
 
   ed_register_init_all (this);
+
+  ed_init_syntaxes (this);
 
   $my(env) = env_new ();
 
@@ -12658,6 +12707,10 @@ private ed_T *editor_new (char *name) {
         .prev = ed_get_prev,
         .num_rline_commands = ved_get_num_rline_commands
       ),
+      .syn = SubSelfInit (ed, syn,
+        .append = ed_syn_append,
+        .get_ftype_idx = ed_syn_get_ftype_idx
+      ),
       .append = SubSelfInit (ed, append,
         .win = ved_append_win,
         .message = ved_append_message,
@@ -12752,6 +12805,14 @@ private ed_T *editor_new (char *name) {
             .unamed = buf_set_as_unamed,
             .non_existant = buf_set_as_non_existant
            ),
+        ),
+        .syn = SubSelfInit (buf, syn,
+          .init = buf_syn_init,
+          .parser = buf_syn_parser
+        ),
+        .ftype = SubSelfInit (buf, ftype,
+          .init = buf_ftype_init,
+          .autoindent = buf_ftype_autoindent
         ),
         .to = SubSelfInit (buf, to,
           .video = buf_to_video

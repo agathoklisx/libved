@@ -688,48 +688,6 @@ NewType (row,
    row_t *prev;
 );
 
-/* do not change order */
-NewType (syn,
-  char
-    *file_type,
-    **file_match,
-    **keywords,
-    *operators,
-    *singleline_comment_start,
-    *multiline_comment_start,
-    *multiline_comment_end;
-
-  int
-    hl_strings,
-    hl_numbers;
-
-  char  *(*parse) (buf_t *, char *, int, int, row_t *);
-  ftype_t *(*init) (buf_t *);
-  int state;
-);
-
-NewType (ftype,
-  char
-    name[8],
-    on_emptyline[2];
-
-  int
-    shiftwidth,
-    tabwidth,
-    autochdir,
-    tab_indents,
-    clear_blanklines,
-    cr_on_normal_is_like_insert_mode,
-    backspace_on_normal_is_like_insert_mode,
-    backspace_on_first_idx_remove_trailing_spaces,
-    space_on_normal_is_like_insert_mode,
-    small_e_on_normal_goes_insert_mode,
-    read_from_shell;
-
-  string_t *(*autoindent) (buf_t *, row_t *);
-      char *(*on_open_fname_under_cursor) (char *, size_t, size_t);
-);
-
 NewProp (buf,
   MY_PROPERTIES;
   MY_CLASSES (buf);
@@ -872,6 +830,7 @@ NewProp (ed,
     *lw_mode_actions,
     *cw_mode_actions,
     *bw_mode_actions;
+
   utf8
     *lw_mode_chars,
     *cw_mode_chars,
@@ -881,6 +840,9 @@ NewProp (ed,
     lw_mode_chars_len,
     cw_mode_chars_len,
     word_actions_chars_len;
+
+  syn_t syntaxes[NUM_SYNTAXES];
+  int num_syntaxes;
 
   vstr_t *word_actions;
 
