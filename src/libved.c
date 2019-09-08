@@ -150,40 +150,40 @@ private int char_is_nth_at (char *bytes, int idx, int len) {
 
 /* Unused and commented out, but stays as a reference as it looks that works correctrly
  * even for non-ascii compesed strings.
-
-private char *string_reverse_from_to (char *dest, char *src, int fidx, int lidx) {
-  int len = lidx - fidx + 1;
-
-  for (int i = 0; i < len; i++) dest[i] = ' ';
-
-  int curidx = 0;
-  int tlen = 0;
-
-  uchar c;
-  for (int i = fidx; i < len + fidx; i++) {
-    c = src[i];
-    tlen++;
-
-    if (c < 0x80) {
-      dest[len - 1 - curidx++] = c;
-      continue;
-    }
-
-    int clen = str_utf8_charlen (c);
-    tlen += clen - 1;
-
-    for (int ii = 0; ii < clen; ii++) {
-      uchar cc = src[i + ii];
-      dest[(len - 1 - curidx) - (clen - ii) + 1] = cc;
-    }
-
-    curidx += clen;
-    i += clen - 1;
-  }
-
-  dest[tlen] = '\0';
-  return dest;
-}
+ * 
+ * private char *string_reverse_from_to (char *dest, char *src, int fidx, int lidx) {
+ *   int len = lidx - fidx + 1;
+ * 
+ *   for (int i = 0; i < len; i++) dest[i] = ' ';
+ * 
+ *   int curidx = 0;
+ *   int tlen = 0;
+ * 
+ *   uchar c;
+ *   for (int i = fidx; i < len + fidx; i++) {
+ *     c = src[i];
+ *     tlen++;
+ * 
+ *     if (c < 0x80) {
+ *       dest[len - 1 - curidx++] = c;
+ *       continue;
+ *     }
+ * 
+ *     int clen = str_utf8_charlen (c);
+ *     tlen += clen - 1;
+ * 
+ *     for (int ii = 0; ii < clen; ii++) {
+ *       uchar cc = src[i + ii];
+ *       dest[(len - 1 - curidx) - (clen - ii) + 1] = cc;
+ *     }
+ * 
+ *     curidx += clen;
+ *     i += clen - 1;
+ *   }
+ * 
+ *   dest[tlen] = '\0';
+ *   return dest;
+ * }
 */
 
 /* A wcwidth() adjusted for this environment */
@@ -2962,13 +2962,11 @@ int num_rows, int num_frames, int min_rows, int has_dividers) {
  * of February) 
  */
 
-private char *ved_syn_parse_c (buf_t *, char *, int, int, row_t *);
 private char *buf_syn_parser (buf_t *, char *, int, int, row_t *);
 private ftype_t *buf_syn_init (buf_t *);
 private ftype_t *buf_syn_init_c (buf_t *);
 
 char *default_extensions[] = {".txt", NULL};
-char *default_filenames[] = {NULL};
 
 char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *C_keywords[] = {
@@ -2987,31 +2985,36 @@ char *C_keywords[] = {
 };
 
 char c_singleline_comment[] = "//";
-char c_multiline_comment_start[] = "/*";
 char c_multiline_comment_end[] = "*/";
+char c_multiline_comment_continuation[] = " * ";
+char c_multiline_comment_start[] = "/*";
+char c_operators[] = "+:-%*^><=|&~.()[]{}!";
+char *NULL_ARRAY[] = {NULL};
 
 syn_t HL_DB[] = {
    {
-     "txt",
-     default_filenames, default_extensions,
-     NULL, NULL, NULL, NULL, NULL,
+     "txt", NULL_ARRAY, default_extensions, NULL_ARRAY,
+     NULL, NULL,
+     NULL, NULL, NULL, NULL,
      HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init, 0,
   },
   {
-    "c", default_filenames, C_extensions, C_keywords, c_operators,
+    "c", NULL_ARRAY, C_extensions, NULL_ARRAY,
+    C_keywords, c_operators,
     c_singleline_comment, c_multiline_comment_start, c_multiline_comment_end,
+    c_multiline_comment_continuation,
     HL_STRINGS, HL_NUMBERS,
-    ved_syn_parse_c, buf_syn_init_c, 0,
+    buf_syn_parser, buf_syn_init_c, 0,
   }
 };
 
-#define IGNORE(c) ((c) > 0x80 || (c) <= ' ')
-#define ADD_COLORED_CHAR(c, clr) snprintf (ccbuf, 16,     \
-  TERM_SET_COLOR_FMT "%c" TERM_COLOR_RESET, (clr), (c));  \
-  My(String).append (s, ccbuf)
-#define ADD_INVERTED_CHAR(c, clr) snprintf (ccbuf, 16,                   \
-  TERM_INVERTED "%s%c" TERM_COLOR_RESET, TERM_MAKE_COLOR ((clr)), (c));  \
-  My(String).append (s, ccbuf)
+#define IGNORE(c) ((c) > '~' || (c) <= ' ')
+
+#define ADD_COLORED_CHAR(_c, _clr) My(String).append_fmt ($my(shared_str), \
+  TERM_SET_COLOR_FMT "%c" TERM_COLOR_RESET,(_clr), (_c))
+
+#define ADD_INVERTED_CHAR(_c, _clr) My(String).append_fmt ($my(shared_str), \
+  TERM_INVERTED "%s%c" TERM_COLOR_RESET, TERM_MAKE_COLOR ((_clr)), (_c))
 
 #define SYN_HAS_OPEN_COMMENT       (1 << 0)
 #define SYN_HAS_SINGLELINE_COMMENT (1 << 1)
@@ -3019,18 +3022,63 @@ syn_t HL_DB[] = {
 
 /* Sorry but the highlight system is ridicolous simple (line by line), but is fast and works for me in C */
 private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t *row) {
-  (void) index; (void) row;
+  (void) index;
+
   ifnot (len) return line;
 
-  string_t *s = My(String).new_with ("");
-  char ccbuf[16];
+  My(String).clear ($my(shared_str));
+  string_t *s = $my(shared_str);
 
+  char *m_cmnt_p = NULL;
+  int m_cmnt_idx = -1;
+  int has_mlcmnt  = 0;
+
+  ifnot (NULL is $my(syn)->multiline_comment_start) {
+    m_cmnt_p = strstr (line, $my(syn)->multiline_comment_start);
+    m_cmnt_idx = (NULL is m_cmnt_p ? -1 : m_cmnt_p - line);
+
+    if (m_cmnt_idx > 0) {
+      if (line[m_cmnt_idx - 1] isnot ' ') {
+        m_cmnt_idx = -1;
+        m_cmnt_p = NULL;
+      }
+    }
+
+    has_mlcmnt = ({
+      int found = 0;
+      row_t *it = row->prev;
+      for (int i = 0; i < MAX_BACKTRACK_LINES_FOR_ML_COMMENTS and it; i++) {
+        if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
+          break;
+
+        char *sp = strstr (it->data->bytes, $my(syn)->multiline_comment_start);
+        if (NULL isnot sp) {
+          if (sp is it->data->bytes or *sp-1 is ' ') {
+            found = 1;
+            break;
+          }
+        }
+
+        ifnot (NULL is $my(syn)->multiline_comment_continuation) {
+          if (0 is str_cmp_n (it->data->bytes, $my(syn)->multiline_comment_continuation, bytelen ($my(syn)->multiline_comment_continuation))) {
+            found = 1;
+            break;
+          }
+        }
+
+        it = it->prev;
+      }
+
+      found;
+    });
+  }
 
   char *s_cmnt_p = NULL;
   int s_cmnt_idx = -1;
-  ifnot (NULL is $my(syn)->singleline_comment_start) {
-    s_cmnt_p = strstr (line, $my(syn)->singleline_comment_start);
-    s_cmnt_idx = (NULL is s_cmnt_p ? len : s_cmnt_p - line);
+
+  ifnot (NULL is $my(syn)->singleline_comment) {
+    s_cmnt_p = strstr (line, $my(syn)->singleline_comment);
+    s_cmnt_idx = (NULL is s_cmnt_p ? -1 : s_cmnt_p - line);
   }
 
   uchar c;
@@ -3046,6 +3094,22 @@ open_comment:;
       int diff = len;
       My(String).append_fmt (s, "%s%s", TERM_MAKE_COLOR (HL_COMMENT), TERM_ITALIC);
 
+      if ($my(syn)->state & SYN_HAS_MULTILINE_COMMENT) {
+        $my(syn)->state &= ~SYN_HAS_MULTILINE_COMMENT;
+        char *sp = strstr (line + idx, $my(syn)->multiline_comment_end);
+        if (sp is NULL) {
+          while (idx < len)
+            My(String).append_byte (s, line[idx++]);
+
+          My(String).append (s, TERM_COLOR_RESET);
+          goto theend;
+        }
+
+        diff = idx + (sp - (line + idx)) + (int) bytelen ($my(syn)->multiline_comment_end);
+
+      } else
+        $my(syn)->state &= ~SYN_HAS_SINGLELINE_COMMENT;
+
       while (idx < diff) My(String).append_byte (s, line[idx++]);
       My(String).append (s, TERM_COLOR_RESET);
 
@@ -3053,8 +3117,14 @@ open_comment:;
       c = line[idx];
     }
 
+    if (has_mlcmnt or idx is m_cmnt_idx) {
+      has_mlcmnt = 0;
+      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_MULTILINE_COMMENT);
+      goto open_comment;
+    }
+
     if (idx is s_cmnt_idx) {
-      if (idx is 0 or line[idx-1] is ' ') {
+      if (s_cmnt_idx is 0 or line[s_cmnt_idx-1] is ' ') {
         $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
         goto open_comment;
       }
@@ -3083,6 +3153,7 @@ open_comment:;
 
       if (++idx is len) goto theend;
       c = line[idx];
+      goto parse_char;
     }
 
     ifnot (NULL is $my(syn->operators)) {
@@ -3137,7 +3208,7 @@ open_comment:;
 
         if (kw_2) kw_len--;
 
-        if (0 == str_cmp_n (&line[idx], $my(syn)->keywords[j], kw_len) and
+        if (0 is str_cmp_n (&line[idx], $my(syn)->keywords[j], kw_len) and
             IsSeparator (line[idx + kw_len])) {
 
           char kw[kw_len]; memcpy (kw, &line[idx], kw_len); kw[kw_len] = '\0';
@@ -3149,191 +3220,6 @@ open_comment:;
           goto thecontinue;
         }
       }
-    }
-
-    My(String).append_byte (s,  c);
-
-thecontinue: {}
-  }
-
-theend:
-  strncpy (line, s->bytes, s->num_bytes);
-  line[s->num_bytes] = '\0';
-  My(String).free (s);
-
-  return line;
-}
-
-private char *ved_syn_parse_c (buf_t *this, char *line, int len, int index, row_t *row) {
- (void) index;
-  ifnot (len) return line;
-
-  string_t *s = My(String).new_with ("");
-  char ccbuf[16];
-
-  char *m_cmnt_p = strstr (line, $my(syn)->multiline_comment_start);
-  int m_cmnt_idx = (NULL is m_cmnt_p ? len : m_cmnt_p - line);
-
-  char *s_cmnt_p = strstr (line, $my(syn)->singleline_comment_start);
-  int s_cmnt_idx = (NULL is s_cmnt_p ? len : s_cmnt_p - line);
-
-  int has_mlcmnt = ({
-    int found = 0;
-    row_t *it = row->prev;
-    for (int i = 0; i < 24 and it; i++) {
-      if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
-        break;
-
-      if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_start) or
-          0 is str_cmp_n (it->data->bytes, " * ", 3)) {
-        found = 1;
-        break;
-      }
-
-      it = it->prev;
-    }
-
-    found;
-  });
-
-  uchar c;
-  int idx = 0;
-  for (idx = 0; idx < len; idx++) {
-
-   c = line[idx];
-
-parse_char:;
-open_comment:;
-    if ($my(syn)->state & SYN_HAS_OPEN_COMMENT) {
-      $my(syn)->state &= ~SYN_HAS_OPEN_COMMENT;
-      int diff = len;
-      My(String).append_fmt (s, "%s%s", TERM_MAKE_COLOR (HL_COMMENT), TERM_ITALIC);
-      if ($my(syn)->state & SYN_HAS_MULTILINE_COMMENT) {
-        $my(syn)->state &= ~SYN_HAS_MULTILINE_COMMENT;
-        char *sp = strstr (line + idx, $my(syn)->multiline_comment_end);
-        if (sp is NULL) {
-          while (idx < len)
-            My(String).append_byte (s, line[idx++]);
-
-          My(String).append (s, TERM_COLOR_RESET);
-          goto theend;
-        }
-
-        diff = idx + (sp - (line + idx)) + (int) bytelen ($my(syn)->multiline_comment_end);
-
-      } else
-        $my(syn)->state &= ~SYN_HAS_SINGLELINE_COMMENT;
-
-      while (idx < diff) My(String).append_byte (s, line[idx++]);
-      My(String).append (s, TERM_COLOR_RESET);
-
-      if (idx is len) goto theend;
-      c = line[idx];
-    }
-
-    if (has_mlcmnt or idx is m_cmnt_idx) {
-      has_mlcmnt = 0;
-      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_MULTILINE_COMMENT);
-      goto open_comment;
-    }
-
-    if (idx is s_cmnt_idx) {
-      if (idx is 0 or line[idx-1] is ' ') {
-        $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
-        goto open_comment;
-      }
-    }
-
-    while (IGNORE (c)) {
-      if (c is ' ') {
-        if (idx + 1 is len) {
-          ADD_INVERTED_CHAR (' ', HL_TRAILING_WS);
-        }
-        else
-          My(String).append_byte (s,  c);
-      }
-      else
-        if (c is '\t') {
-          for (int i = 0; i < $my(ftype)->tabwidth; i++)
-            My(String).append_byte (s, ' ');
-        }
-        else
-          if ((c < ' ' and (c isnot 0 and c isnot 0x0a)) or c is 0x7f) {
-            ADD_INVERTED_CHAR ('?', HL_ERROR);
-          }
-          else {
-            My(String).append_byte (s,  c);
-          }
-
-      if (++idx is len) goto theend;
-      c = line[idx];
-    }
-
-    if (byte_in_str ($my(syn)->operators, c) isnot NULL) {
-      ADD_COLORED_CHAR (c, HL_OPERATOR);
-      if (++idx is len) goto theend;
-      c = line[idx];
-      if (byte_in_str ($my(syn)->operators, c) isnot NULL) { /* most likely one or two */
-          ADD_COLORED_CHAR (c, HL_OPERATOR);
-          goto thecontinue;
-      }
-      goto parse_char;
-    }
-
-    if (c is '"' or c is '\'') {
-      ADD_COLORED_CHAR (c, HL_STR_DELIM);
-      while (++idx < len) {
-        c = line[idx];
-        if (c is '"' or c is '\'') { /* handle case '"' "'" '\'' "\"" */
-          ADD_COLORED_CHAR (c, HL_STR_DELIM);
-          goto thecontinue;
-        }
-
-        My(String).append_byte (s,  c);
-      }
-
-      goto theend;
-    }
-
-    if (IS_DIGIT (c)) {
-      ADD_COLORED_CHAR (c, HL_NUMBER);
-      while (++idx < len) {
-        c = line[idx];
-        if (0 is IS_DIGIT (c) and 0 is IsAlsoANumber (c))
-          goto parse_char; // most likely next loop is useless
-
-        ADD_COLORED_CHAR (c, HL_NUMBER);
-      }
-
-      goto theend;
-    }
-
-    for (int j = 0; $my(syn)->keywords[j] isnot NULL; j++) {
-      int kw_len = bytelen($my(syn)->keywords[j]);
-      int kw_2 = $my(syn)->keywords[j][kw_len - 1] is '|';
-
-      if (kw_2) kw_len--;
-
-      if (0 == str_cmp_n (&line[idx], $my(syn)->keywords[j], kw_len) and
-          IsSeparator (line[idx + kw_len])) {
-
-        char kw[kw_len]; memcpy (kw, &line[idx], kw_len); kw[kw_len] = '\0';
-
-        My(String).append_fmt (s, "%s%s%s",
-          TERM_MAKE_COLOR (kw_2 ? HL_IDENTIFIER : HL_KEYWORD), kw, TERM_COLOR_RESET);
-
-        idx += kw_len - 1;
-        goto thecontinue;
-      }
-    }
-
-    if (idx is m_cmnt_idx) {
-      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_MULTILINE_COMMENT);
-      goto open_comment;
-    }
-    if (idx is s_cmnt_idx) {
-      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
-      goto open_comment;
     }
 
     My(String).append_byte (s,  c);
@@ -3352,8 +3238,6 @@ thecontinue: {}
 theend:
   strncpy (line, s->bytes, s->num_bytes);
   line[s->num_bytes] = '\0';
-  My(String).free (s);
-
   return line;
 }
 
@@ -3401,11 +3285,10 @@ private string_t *buf_autoindent_c (buf_t *this, row_t *row) {
 private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
   $my(ftype) = AllocType (ftype);
 
-debug_append ("ft %d, num_syn %d\n", ftype, $myroots(num_syntaxes));
   if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
 
   $my(syn) = &$myroots(syntaxes)[ftype];
-  strcpy ($my(ftype)->name, $my(syn)->file_type);
+  strcpy ($my(ftype)->name, $my(syn)->filetype);
   $my(ftype)->autochdir = 1;
   $my(ftype)->shiftwidth = 0;
   $my(ftype)->tabwidth = TABWIDTH;
@@ -3444,9 +3327,7 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
 
 private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
   for (int i = 0; i < $my(num_syntaxes); i++) {
-    debug_append ("%s\n",
-                $my(syntaxes)[i].file_type);
-    if (str_eq ($my(syntaxes)[i].file_type, name))
+    if (str_eq ($my(syntaxes)[i].filetype, name))
       return i;
   }
 
@@ -3467,21 +3348,33 @@ private ftype_t *buf_syn_init (buf_t *this) {
 }
 
 private ftype_t *buf_set_ftype (buf_t *this, int ftype) {
-  if (0 < ftype and ftype < $myroots(num_syntaxes))
+  if (FTYPE_DEFAULT < ftype and ftype < $myroots(num_syntaxes))
     return $myroots(syntaxes)[ftype].init (this);
 
   for (int i = 0; i < $myroots(num_syntaxes); i++) {
     int j = 0;
-    while ($myroots(syntaxes)[i].file_match[j])
-      if (str_eq ($myroots(syntaxes)[i].file_match[j++], $my(basename)))
+    while ($myroots(syntaxes)[i].filenames[j])
+      if (str_eq ($myroots(syntaxes)[i].filenames[j++], $my(basename)))
         return $myroots(syntaxes)[i].init (this);
 
     if (NULL is $my(extname)) continue;
 
     j = 0;
-    while ($myroots(syntaxes)[i].file_extensions[j])
-      if (str_eq ($myroots(syntaxes)[i].file_extensions[j++], $my(extname)))
+    while ($myroots(syntaxes)[i].extensions[j])
+      if (str_eq ($myroots(syntaxes)[i].extensions[j++], $my(extname)))
         return $myroots(syntaxes)[i].init (this);
+
+    if (this->head->data->num_bytes < 2) continue;
+
+    j = 0;
+    while ($myroots(syntaxes)[i].shebangs[j]) {
+      ifnot (str_cmp_n ($myroots(syntaxes)[i].shebangs[j], this->head->data->bytes,
+          bytelen ($myroots(syntaxes)[i].shebangs[j])))
+        return $myroots(syntaxes)[i].init (this);
+
+      j++; /* gcc complains (and probably for a right) if j++ at the end of the
+            * conditional expression (even if it is right) */
+     }
   }
 
   return buf_syn_init (this);
@@ -12366,7 +12259,6 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
 
 private void ed_syn_append (ed_t *this, syn_t syn) {
   $my(syntaxes)[$my(num_syntaxes)++] = syn;
-  debug_append("%d, %s\n", $my(num_syntaxes), syn.file_type);
 }
 
 private void ed_init_syntaxes (ed_t *this) {

@@ -766,6 +766,63 @@ Search:
      the code should remain at least in this level (probably one day will find the
      desire to check a bit, if we could enhance but with less than today complexity,
      because the code is complex, but is fast and the rules are simple (maybe)).
+
+     The highlighted system and specifically the multiline comments has some rules,
+     stemming from sane practicing to simplify parsing, as the code searching for
+     comments in previous lines, and if current line has no comment tokens of course
+     (by default 24, and the relative setting is, MAX_BACKTRACK_LINES_FOR_ML_COMMENTS).
+
+     For instance in C files, backtracking is done with the following way:
+     If ("/*" is on index zero, or "/*" has a space before) and there is no "*/",
+     then it considered as line with a comment and the search it stops. It even
+     stops if " * " is encountered on the beginning of the line (note the spaces
+     surrounding "*").
+     Note: the relative syntax variable is: multiline_comment_continuation as char[]
+
+     So this simple means that if someone do not want to penaltize performance then
+     is is wise to use " * " in the beginning of the line to force the code, as soon
+     as possible to search on previous lines (as this is expensive).
+
+     The other relative self explained settings:
+         singleline_comment        as char[]
+         multiline_comment_start   likewise
+         multiline_comment_end     likewise
+
+     The code can set filetypes with the following ways and order.
+
+     1. The caller knows the filetype index and set it directly if the index is
+     between the bounds of the syntax array (note that the 0 index is the default
+     filetype (txt)).
+
+     2. Then is looking to the file extension (.c, .h, ...), and the relative variable:
+          extensions   as *char[]
+
+     3. Then is looking to the file name (Makefile, ...) and the relative variable:
+          filenames    as *char[]
+
+     4. Finally is looking for shebang (first bytes of the file), and the relative variable:
+          shebangs     as *char[] e.g., #!/bin/sh or #!/bin/bash and so on
+
+     The rules and variables:
+
+     1. Keywords as *char[] (e.g., if, else, struct|, ....) (note that the latter is
+        highlighted with a different color)
+
+     2. Operators as char[] e.g., +|*()[] ...
+
+     It can also highlight strings enclosed with double quotes and the relative variable:
+       hl_strings  as int (zero means do not highlight)
+       hl_numbers  likewise
+
+     The default parsing function is buf_syn_parser(), and can be set on the syntax
+     structure and has the following signature:
+
+          char  *(*parse) (buf_t *, char *, int, int, row_t *);
+
+     The default init function is buf_syn_init () and can be set on the syntax structure
+     with the following signature:
+
+          ftype_t *(*init) (buf_t *);
    */
 
   /* History Completion Semantics (command line and search)

@@ -715,11 +715,13 @@ char *make_filenames[] = {"Makefile", NULL};
 char *make_extensions[] = {".Makefile", NULL};
 char *make_keywords[] = {"ifeq", "ifneq", "endif", "else", "ifdef", NULL};
 
-char  sh_operators[] = "+:-%*><=|&()[]{}!$/`";
-char *sh_filenames[] = {NULL};
-char  sh_singleline_comment[] = "#";
 char *sh_extensions[] = {".sh", ".bash", NULL};
-char *sh_keywords[] = {"if", "else", "then", "fi", "while", "for", "break", "done", NULL};
+char *sh_shebangs[] = {"#!/bin/sh", "#!/bin/bash", NULL};
+char  sh_operators[] = "+:-%*><=|&()[]{}!$/`?";
+char *sh_keywords[] = {"if", "else", "then", "fi", "while", "for", "break", "done",
+    "do", "case", "esac", "in", "EOF", NULL};
+char  sh_singleline_comment[] = "#";
+char *_u_NULL_ARRAY[] = {NULL};
 
 private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
   return Buf.syn.parser (this, line, len, idx, row);
@@ -745,13 +747,17 @@ private ftype_t *__u_sh_syn_init (buf_t *this) {
 
 syn_t u_syn[] = {
   {
-    "make", make_filenames, make_extensions, make_keywords, sh_operators,
-    sh_singleline_comment, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    "make", make_filenames, make_extensions, _u_NULL_ARRAY,
+    make_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, NULL,
+    HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_make_syn_init, 0
   },
   {
-    "sh", sh_filenames, sh_extensions, sh_keywords, sh_operators,
-    sh_singleline_comment, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    "sh", _u_NULL_ARRAY, sh_extensions, sh_shebangs,
+    sh_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, NULL,
+    HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_sh_syn_init, 0
   },
 };

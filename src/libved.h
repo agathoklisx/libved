@@ -181,13 +181,8 @@
 
 #define ED_SUSPENDED    (1 << 0)
 
-char c_operators[] = "+:-%*^><=|&~.()[]{}!";
-
-enum {
-  FTYPE_DEFAULT,
-  FTYPE_C,
-  FTYPE_END
- };
+#define  FTYPE_DEFAULT 0
+#define  MAX_BACKTRACK_LINES_FOR_ML_COMMENTS 24
 
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
@@ -470,14 +465,16 @@ NewType (vstr,
 /* do not change order */
 NewType (syn,
   char
-    *file_type,
-    **file_match,
-    **file_extensions,
+    *filetype,
+    **filenames,
+    **extensions,
+    **shebangs,
     **keywords,
     *operators,
-    *singleline_comment_start,
+    *singleline_comment,
     *multiline_comment_start,
-    *multiline_comment_end;
+    *multiline_comment_end,
+    *multiline_comment_continuation;
 
   int
     hl_strings,
