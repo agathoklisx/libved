@@ -22,7 +22,6 @@
 #define VED_SEARCH_BUF  "[search]"
 #define VED_DIFF_WIN    "diff"
 #define VED_DIFF_BUF    "[diff]"
-#define UNAMED          "[No Name]"
 
 #define CASE_A ",[]()+-:;}{<>_"
 #define CASE_B ".][)(-+;:{}><-"
@@ -73,21 +72,14 @@
 #define BUF_IS_SPECIAL   (1 << 9)
 #define BUF_FORCE_REOPEN (1 << 10)
 
+#define WIN_NUM_FRAMES(w_) w_->prop->num_frames
+#define WIN_LAST_FRAME(w_) WIN_NUM_FRAMES(w_) - 1
+#define WIN_CUR_FRAME(w_) w_->prop->cur_frame
+
 /* buf is already open 
   instances {...} */
 
 #define VUNDO_RESET (1 << 0)
-
-enum {
-  ERROR = -2,
-  NOTHING_TODO = -1,
-  DONE = 0,
-  NEWCHAR,
-  EXIT,
-  WIN_EXIT,
-  BUF_EXIT,
-  BUF_QUIT,
-};
 
 enum {
   VED_COM_BUF_CHANGE_NEXT = 0,
@@ -166,46 +158,6 @@ enum {
   REG_BLACKHOLE,
   REG_RDONLY
 };
-
-#define TERM_LAST_RIGHT_CORNER      "\033[999C\033[999B"
-#define TERM_LAST_RIGHT_CORNER_LEN  12
-#define TERM_FIRST_LEFT_CORNER      "\033[H"
-#define TERM_FIRST_LEFT_CORNER_LEN  3
-#define TERM_BOL                    "\033[E"
-#define TERM_GET_PTR_POS            "\033[6n"
-#define TERM_GET_PTR_POS_LEN        4
-#define TERM_SCREEN_SAVE            "\033[?47h"
-#define TERM_SCREEN_SAVE_LEN        6
-#define TERM_SCREEN_RESTORE        "\033[?47l"
-#define TERM_SCREEN_RESTORE_LEN     6
-#define TERM_SCREEN_CLEAR           "\033[2J"
-#define TERM_SCREEN_CLEAR_LEN       4
-#define TERM_CURSOR_HIDE            "\033[?25l"
-#define TERM_CURSOR_HIDE_LEN        6
-#define TERM_CURSOR_SHOW            "\033[?25h"
-#define TERM_CURSOR_SHOW_LEN        6
-#define TERM_CURSOR_RESTORE         "\033[?25h"
-#define TERM_CURSOR_RESTORE_LEN     6
-#define TERM_LINE_CLR_EOL           "\033[2K"
-#define TERM_LINE_CLR_EOL_LEN       4
-#define TERM_BOLD                   "\033[1m"
-#define TERM_BOLD_LEN               4
-#define TERM_ITALIC                 "\033[3m"
-#define TERM_ITALIC_LEN             4
-#define TERM_UNDERLINE              "\033[4m"
-#define TERM_UNDERLINE_LEN          4
-#define TERM_INVERTED               "\033[7m"
-#define TERM_INVERTED_LEN           4
-#define TERM_REVERSE_SCREEN         "\033[?5h"
-#define TERM_REVERSE_SCREEN_LEN     5
-#define TERM_SCREEN_NORMAL          "\033[?5l"
-#define TERM_SCREEN_NORMAL_LEN      5
-#define TERM_SCROLL_REGION_FMT      "\033[%d;%dr"
-#define TERM_COLOR_RESET            "\033[m"
-#define TERM_COLOR_RESET_LEN        3
-#define TERM_GOTO_PTR_POS_FMT       "\033[%d;%dH"
-#define TERM_SET_COLOR_FMT          "\033[%dm"
-#define TERM_SET_COLOR_FMT_LEN      5
 
 #define SYS_ERRORS "\
 1:  EPERM     Operation not permitted,\
@@ -323,27 +275,6 @@ NewProp (term,
 
 NewType (term,
   Prop (term) *prop;
-);
-
-NewType (vchar,
-  utf8 code;
-  char buf[5];
-  int
-    len,
-    width;
-
-  vchar_t
-    *next,
-    *prev;
-);
-
-NewType (line,
-  vchar_t *head;
-  vchar_t *tail;
-  vchar_t *current;
-      int  cur_idx;
-      int  num_items;
-      int  len;
 );
 
 NewType (tmpname,
@@ -639,9 +570,8 @@ NewType (buf,
 
   Prop (buf) *prop;
 
-  void (*free) (buf_t *);
-  int (*on_normal_beg) (buf_t **, utf8, int *, int);
-  int (*on_normal_end) (buf_t **, utf8, int *, int);
+  BufNormalBeg_cb on_normal_beg;
+  BufNormalEnd_cb on_normal_end;
 
   buf_t  *next;
   buf_t  *prev;
@@ -656,6 +586,8 @@ NewType (win,
     int  cur_idx;
     int  prev_idx;
     int  num_items;
+
+  WinDimCalc_cb dim_calc;
 
   win_t *next;
   win_t *prev;
@@ -727,7 +659,8 @@ NewProp (buf,
     cur_col,
     cur_video_row,
     cur_video_col,
-    statusline_row;
+    statusline_row,
+    show_statusline;
 
   int
     *msg_row_ptr,
@@ -819,7 +752,7 @@ NewProp (ed,
     *last_insert,
     *msgline,
     *topline,
-    *shared_str;
+    *ed_str;
 
   term_t *term;
   hist_t *history;
@@ -906,9 +839,6 @@ static const utf8 offsetsFromUTF8[6] = {
 #define isnotutf8(c) IS_UTF8 (c) == 0
 #define isnotatty(fd__) (0 == isatty ((fd__)))
 #define IsNotDirSep(c) (c != '/')
-#define IsSeparator(c)                          \
-  ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
-   byte_in_str(",.()+-/=*~%<>[]:;", (c)) isnot NULL)
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \

@@ -90,7 +90,7 @@
 #define IS_DIR_SEP(c)  (c == DIR_SEP)
 #define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
-#define IS_CNTRL(c)     (c < 0x20 || c == 0x7f)
+#define IS_CNTRL(c)     ((c < 0x20 and c >= 0) || c == 0x7f)
 #define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
 #define IS_ALPHA(c)     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
@@ -184,6 +184,14 @@
 #define  FTYPE_DEFAULT 0
 #define  MAX_BACKTRACK_LINES_FOR_ML_COMMENTS 24
 
+#define UNAMED          "[No Name]"
+
+#define FIRST_FRAME 0
+#define SECOND_FRAME 1
+#define THIRD_FRAME 2
+
+#define MAXPATLEN PATH_MAX
+
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
 #define ARROW_DOWN_KEY  0402
@@ -225,18 +233,79 @@
 #define COLOR_FMT       "\033[%dm"
 #define COLOR_RESET     "\033[m"
 
+#define HL_NORMAL       COLOR_NORMAL
 #define HL_VISUAL       COLOR_CYAN
 #define HL_IDENTIFIER   COLOR_BLUE
-#define HL_NUMBER       COLOR_MAGENTA
 #define HL_KEYWORD      COLOR_MAGENTA
 #define HL_OPERATOR     COLOR_MAGENTA
-#define HL_STR_DELIM    COLOR_YELLOW
+#define HL_FUNCTION     COLOR_MAGENTA
+#define HL_VARIABLE     COLOR_BLUE
+#define HL_TYPE         COLOR_BLUE
+#define HL_DEFINITION   COLOR_BLUE
 #define HL_COMMENT      COLOR_YELLOW
+#define HL_NUMBER       COLOR_MAGENTA
+#define HL_STRING_DELIM COLOR_GREEN
+#define HL_STRING       COLOR_YELLOW
 #define HL_TRAILING_WS  COLOR_RED
 #define HL_TAB          COLOR_CYAN
 #define HL_ERROR        COLOR_RED
+#define HL_QUOTE        COLOR_YELLOW
+#define HL_QUOTE_1      COLOR_BLUE
+#define HL_QUOTE_2      COLOR_CYAN
 
-#define MAXPATLEN PATH_MAX
+#define COLOR_CHARS  "IKCONSDFVTMEQ><"
+// I: identifier, K: keyword, C: comment, O: operator, N: number, S: string
+// D:_delimiter F: function   V: variable, T: type,  M: macro,
+// E: error, Q: quote, >: qoute1, <: quote_2  
+
+#define TERM_LAST_RIGHT_CORNER      "\033[999C\033[999B"
+#define TERM_LAST_RIGHT_CORNER_LEN  12
+#define TERM_FIRST_LEFT_CORNER      "\033[H"
+#define TERM_FIRST_LEFT_CORNER_LEN  3
+#define TERM_BOL                    "\033[E"
+#define TERM_GET_PTR_POS            "\033[6n"
+#define TERM_GET_PTR_POS_LEN        4
+#define TERM_SCREEN_SAVE            "\033[?47h"
+#define TERM_SCREEN_SAVE_LEN        6
+#define TERM_SCREEN_RESTORE        "\033[?47l"
+#define TERM_SCREEN_RESTORE_LEN     6
+#define TERM_SCREEN_CLEAR           "\033[2J"
+#define TERM_SCREEN_CLEAR_LEN       4
+#define TERM_CURSOR_HIDE            "\033[?25l"
+#define TERM_CURSOR_HIDE_LEN        6
+#define TERM_CURSOR_SHOW            "\033[?25h"
+#define TERM_CURSOR_SHOW_LEN        6
+#define TERM_CURSOR_RESTORE         "\033[?25h"
+#define TERM_CURSOR_RESTORE_LEN     6
+#define TERM_LINE_CLR_EOL           "\033[2K"
+#define TERM_LINE_CLR_EOL_LEN       4
+#define TERM_BOLD                   "\033[1m"
+#define TERM_BOLD_LEN               4
+#define TERM_ITALIC                 "\033[3m"
+#define TERM_ITALIC_LEN             4
+#define TERM_UNDERLINE              "\033[4m"
+#define TERM_UNDERLINE_LEN          4
+#define TERM_INVERTED               "\033[7m"
+#define TERM_INVERTED_LEN           4
+#define TERM_REVERSE_SCREEN         "\033[?5h"
+#define TERM_REVERSE_SCREEN_LEN     5
+#define TERM_SCREEN_NORMAL          "\033[?5l"
+#define TERM_SCREEN_NORMAL_LEN      5
+#define TERM_SCROLL_REGION_FMT      "\033[%d;%dr"
+#define TERM_COLOR_RESET            "\033[m"
+#define TERM_COLOR_RESET_LEN        3
+#define TERM_GOTO_PTR_POS_FMT       "\033[%d;%dH"
+#define TERM_SET_COLOR_FMT          "\033[%dm"
+#define TERM_SET_COLOR_FMT_LEN      5
+#define TERM_MAKE_COLOR(clr) \
+({char b__[8];snprintf (b__, 8, TERM_SET_COLOR_FMT, (clr));b__;})
+
+#define UNSET      0
+#define SET        1
+#define NO_OFFSET  0
+
+#define ZERO_FLAGS 0
+
 #define RE_IGNORE_CASE (1 << 0)
 #define RE_ENCLOSE_PAT_IN_PAREN (1 << 1)
 #define RE_PATTERN_IS_STRING_LITERAL (1 << 2)
@@ -441,6 +510,9 @@ typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8);
 typedef int  (*WordActions_cb) (buf_t **, int, int, bufiter_t *, char *, utf8);
 typedef string_t *(Indent_cb) (buf_t *, row_t *);
+typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
+typedef int (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
+typedef int (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
 
 NewType (string,
   size_t  num_bytes;
@@ -483,11 +555,13 @@ NewType (syn,
   char  *(*parse) (buf_t *, char *, int, int, row_t *);
   ftype_t *(*init) (buf_t *);
   int state;
+  size_t *keywords_len;
+  size_t *keywords_colors;
 );
 
 NewType (ftype,
   char
-    name[8],
+    name[16],
     on_emptyline[2];
 
   int
@@ -551,6 +625,27 @@ NewType (bufiter,
   size_t num_lines;
   row_t *row;
   string_t *line;
+);
+
+NewType (vchar,
+  utf8 code;
+  char buf[5];
+  int
+    len,
+    width;
+
+  vchar_t
+    *next,
+    *prev;
+);
+
+NewType (line,
+  vchar_t *head;
+  vchar_t *tail;
+  vchar_t *current;
+      int  cur_idx;
+      int  num_items;
+      int  len;
 );
 
 NewSubSelf (video, draw,
@@ -705,12 +800,15 @@ NewSelf (string,
     *(*new_with_fmt) (const char *, ...),
     *(*append_byte) (string_t *, char),
     *(*prepend_byte) (string_t *, char),
-    *(*append)    (string_t *, const char *),
-    *(*prepend)   (string_t *, const char *),
+    *(*append) (string_t *, const char *),
+    *(*append_with_len) (string_t *, const char *, size_t),
+    *(*prepend) (string_t *, const char *),
     *(*append_fmt) (string_t *, const char *, ...),
     *(*prepend_fmt) (string_t *, const char *, ...),
     *(*insert_at) (string_t *, const char *, int),
+    *(*insert_at_with_len) (string_t *, const char *, int, size_t),
     *(*replace_with) (string_t *, char *),
+    *(*replace_with_len) (string_t *, const char *, size_t),
     *(*replace_with_fmt) (string_t *, const char *, ...),
     *(*replace_numbytes_at_with) (string_t *, int, int, const char *);
 
@@ -871,7 +969,25 @@ NewSubSelf (buf, iter,
     *(*next) (buf_t *, bufiter_t *);
 );
 
+NewSubSelf (bufget, row,
+  row_t
+    *(*current) (buf_t *),
+    *(*at) (buf_t *, int idx);
+
+  string_t *(*current_bytes) (buf_t *);
+
+  int
+    (*col_idx) (buf_t *, row_t *);
+);
+
+NewSubSelf (bufget, prop,
+  int (*tabwidth) (buf_t *);
+);
+
 NewSubSelf (buf, get,
+  SubSelf (bufget, row) row;
+  SubSelf (bufget, prop) prop;
+
   char *(*fname) (buf_t *);
   size_t (*num_lines) (buf_t *);
   row_t *(*line_at) (buf_t *, int);
@@ -887,16 +1003,38 @@ NewSubSelf (bufset, as,
     (*non_existant) (buf_t *);
 );
 
+NewSubSelf (bufset, row,
+  int (*idx) (buf_t *, int, int, int);
+);
+
+NewSubSelf (bufset, normal,
+  void (*at_beg_cb) (buf_t *, BufNormalBeg_cb);
+);
+
+enum {
+  ERROR = -2,
+  NOTHING_TODO = -1,
+  DONE = 0,
+  NEWCHAR,
+  EXIT,
+  WIN_EXIT,
+  BUF_EXIT,
+  BUF_QUIT,
+};
+
 NewSubSelf (buf, set,
-  int  (*fname) (buf_t *, char *);
+  SubSelf (bufset, as) as;
+  SubSelf (bufset, row) row;
+  SubSelf (bufset, normal) normal;
+
+  int (*fname) (buf_t *, char *);
+
   void
     (*modified) (buf_t *),
     (*video_first_row) (buf_t *, int),
-    (*mode) (buf_t *, char *);
-
-  SubSelf (bufset, as) as;
-
-  ftype_t *(*ftype) (buf_t *, int);
+    (*mode) (buf_t *, char *),
+    (*show_statusline) (buf_t *, int),
+    (*ftype) (buf_t *, int);
 );
 
 NewSubSelf (buf, syn,
@@ -923,7 +1061,9 @@ NewSubSelf (buf, cur,
     *(*prepend) (buf_t *, row_t *),
     *(*append) (buf_t *, row_t *),
     *(*append_with) (buf_t *, char *),
-    *(*prepend_with) (buf_t *, char *);
+    *(*append_with_len) (buf_t *, char *, size_t),
+    *(*prepend_with) (buf_t *, char *),
+    *(*replace_with) (buf_t *, char *);
 );
 
 NewSubSelf (buf, free,
@@ -935,9 +1075,9 @@ NewSubSelf (buf, free,
 NewSubSelf (buf, row,
   row_t
     *(*new_with) (buf_t *, const char *),
+    *(*new_with_len) (buf_t *, const char *, size_t),
     *(*get_current) (buf_t *);
 
-  string_t *(*get_current_bytes) (buf_t *);
   int (*get_current_line_idx) (buf_t *);
 );
 
@@ -957,8 +1097,11 @@ NewSubSelf (buf, action,
 
 NewSubSelf (buf, normal,
   int
+    (*up) (buf_t *, int, int, int),
+    (*down) (buf_t *, int, int, int),
     (*bof) (buf_t *, int),
-    (*eof) (buf_t *, int);
+    (*eof) (buf_t *, int),
+    (*page_down) (buf_t *, int);
 );
 
 NewSelf (buf,
@@ -985,6 +1128,8 @@ NewSelf (buf,
     (*write) (buf_t *, int),
     (*substitute) (buf_t *, char *, char *, int, int, int, int);
 
+  ssize_t (*init_fname) (buf_t *, char *);
+
   row_t *(*append_with) (buf_t *, char *);
   string_t *(*input_box) (buf_t *, int, int, int, char *);
 );
@@ -998,8 +1143,14 @@ NewSubSelf (win, adjust,
 );
 
 NewSubSelf (win, set,
+  void
+    (*dim) (win_t *, dim_t *, int, int, int, int),
+    (*num_frames) (win_t *, int),
+    (*min_rows) (win_t *, int),
+    (*has_dividers) (win_t *, int),
+    (*video_dividers) (win_t *);
+
   buf_t *(*current_buf) (win_t*, int, int);
-   void  (*video_dividers) (win_t *);
 );
 
 NewSubSelf (win, get,
@@ -1009,6 +1160,8 @@ NewSubSelf (win, get,
     *(*buf_by_name) (win_t *, const char *, int *);
 
   int
+    (*num_cols) (win_t *),
+    (*num_rows) (win_t *),
     (*num_buf) (win_t *),
     (*current_buf_idx) (win_t *);
 );
@@ -1017,20 +1170,34 @@ NewSubSelf (win, pop,
   int (*current_buf) (win_t *);
 );
 
+NewSubSelf (win, buf,
+  buf_t
+    *(*init) (win_t *, int, int),
+    *(*new) (win_t *, char *, int, int);
+);
+
+NewSubSelf (win, frame,
+  buf_t
+    *(*change) (win_t *, int, int);
+);
+
 NewSelf (win,
   SubSelf (win, set) set;
   SubSelf (win, get) get;
   SubSelf (win, pop) pop;
   SubSelf (win, adjust) adjust;
+  SubSelf (win, buf) buf;
+  SubSelf (win, frame) frame;
 
   void (*draw) (win_t *);
-
-  buf_t *(*buf_new) (win_t *, char *, int, int);
 
   int
     (*append_buf)    (win_t *, buf_t *),
     (*prepend_buf)   (win_t *, buf_t *),
     (*insert_buf_at) (win_t *, buf_t *, int);
+
+  dim_t
+     **(*dim_calc) (win_t *);
 );
 
 NewClass (win,
@@ -1073,7 +1240,7 @@ NewSubSelf (ed, set,
      (*word_actions)    (ed_t *, utf8 *, int, char *, WordActions_cb);
 
   win_t *(*current_win) (ed_t *, int);
-  dim_t *(*dim) (ed_t *, int, int, int, int);
+  dim_t *(*dim) (ed_t *, dim_t *, int, int, int, int);
 );
 
 NewSubSelf (ed, syn,
@@ -1108,8 +1275,10 @@ NewSubSelf (ed, buf,
 );
 
 NewSubSelf (ed, win,
-  win_t *(*new) (ed_t *, char *, int);
-  win_t *(*new_special) (ed_t *, char *, int);
+  win_t
+    *(*new) (ed_t *, char *, int),
+    *(*init) (ed_t *, char *, WinDimCalc_cb),
+    *(*new_special) (ed_t *, char *, int);
   int (*change) (ed_t *, buf_t **, int, char *, int, int);
 );
 
@@ -1143,13 +1312,9 @@ NewSubSelf (ed, draw,
 );
 
 NewSelf (ed,
-  ed_t *(*new) (Class (ed) *, int);
-
-  void
-    (*free) (ed_t *),
-    (*free_reg) (ed_t *, rg_t *),
-    (*suspend) (ed_t *),
-    (*resume) (ed_t *);
+  ed_t
+    *(*init) (Class (ed) *),
+    *(*new) (Class (ed) *, int);
 
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
@@ -1166,6 +1331,12 @@ NewSelf (ed,
   SubSelf (ed, history) history;
   SubSelf (ed, draw) draw;
 
+  void
+    (*free) (ed_t *),
+    (*free_reg) (ed_t *, rg_t *),
+    (*suspend) (ed_t *),
+    (*resume) (ed_t *);
+
   int
     (*scratch) (ed_t *, buf_t **, int),
     (*messages) (ed_t *, buf_t **, int),
@@ -1174,6 +1345,10 @@ NewSelf (ed,
     (*main) (ed_t *, buf_t *);
 
   utf8 (*question) (ed_t *, char *, utf8 *, int);
+
+  dim_t
+     **(*dim_calc) (ed_t *, int, int, int, int),
+     **(*dims_init) (ed_t *, int);
 );
 
 NewClass (ed,
@@ -1208,8 +1383,8 @@ NewClass (ed,
    int  num_items;
 );
 
-public ed_T *__init_ved__ (void);
-public void __deinit_ved__ (ed_T *);
+public ed_T *__init_ed__ (void);
+public void __deinit_ed__ (ed_T *);
 
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);

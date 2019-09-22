@@ -1027,6 +1027,20 @@ private void string_free (string_t *this) {
   free (this);
 }
 
+private void string_clear (string_t *this) {
+  ifnot (this->num_bytes) return;
+  this->bytes[0] = '\0';
+  this->num_bytes = 0;
+}
+
+private void string_clear_at (string_t *this, int idx) {
+  if (0 > idx) idx += this->num_bytes;
+  if (idx < 0) return;
+  if (idx > (int) this->num_bytes) idx = this->num_bytes;
+  this->bytes[idx] = '\0';
+  this->num_bytes = idx;
+}
+
 private size_t string_align (size_t size) {
   size_t sz = 8 - (size % 8);
   sz = sizeof (char) * (size + (sz < 8 ? sz : 0));
@@ -1074,23 +1088,10 @@ private string_t *string_new_with_fmt (const char *fmt, ...) {
   return string_new_with_len (bytes, len);
 }
 
-private string_t *string_insert_at (string_t *this, const char *bytes, int idx) {
-  if (0 > idx) idx = this->num_bytes + idx + 1;
-  if (idx < 0 or idx > (int) this->num_bytes) {
-    tostderr ("ERROR THAT SHOULD NOT HAPPEN:\n"
-              "string_insert_at (): index is out of range\n");
-    tostderr (str_fmt ("this->bytes:\n%s\nlen: %zd\n(argument) index: %d\n",
-         this->bytes, this->num_bytes, idx));
-    return this;
-  }
-
-  size_t len = bytelen (bytes);
-  ifnot (len) return this;
-
+private string_t *string_insert_at_with_len (string_t *this,
+                     const char *bytes, int idx, size_t len) {
   size_t bts = this->num_bytes + len;
-
-  if (bts >= this->mem_size)
-    string_reallocate (this, bts - this->mem_size + 1);
+  if (bts >= this->mem_size) string_reallocate (this, bts - this->mem_size + 1);
 
   if (idx is (int) this->num_bytes) {
     memcpy (this->bytes + this->num_bytes, bytes, len);
@@ -1103,6 +1104,22 @@ private string_t *string_insert_at (string_t *this, const char *bytes, int idx) 
   this->num_bytes += len;
   this->bytes[this->num_bytes] = '\0';
   return this;
+}
+
+private string_t *string_insert_at (string_t *this, const char *bytes, int idx) {
+   if (0 > idx) idx = this->num_bytes + idx + 1;
+  if (idx < 0 or idx > (int) this->num_bytes) {
+    tostderr ("ERROR THAT SHOULD NOT HAPPEN:\n"
+              "string_insert_at (): index is out of range\n");
+    tostderr (str_fmt ("this->bytes:\n%s\nlen: %zd\n(argument) index: %d\n",
+         this->bytes, this->num_bytes, idx));
+    return this;
+  }
+
+  size_t len = bytelen (bytes);
+  ifnot (len) return this;
+
+  return string_insert_at_with_len (this, bytes, idx, len);
 }
 
 private string_t *string_append_byte (string_t *this, char c) {
@@ -1128,7 +1145,12 @@ private string_t *string_prepend_byte (string_t *this, char c) {
 }
 
 private string_t *string_append (string_t *this, const char *bytes) {
-  return string_insert_at (this, bytes, -1);
+  return string_insert_at_with_len (this, bytes, this->num_bytes, bytelen (bytes));
+}
+
+private string_t *string_append_with_len (string_t *this, const char *bytes,
+                                                                 size_t len) {
+  return string_insert_at_with_len (this, bytes, this->num_bytes, len);
 }
 
 private string_t *string_prepend (string_t *this, const char *bytes) {
@@ -1177,23 +1199,15 @@ private string_t *string_replace_numbytes_at_with (
   return string_insert_at (this, bytes, idx);
 }
 
-private void string_clear (string_t *this) {
-  ifnot (this->num_bytes) return;
-  this->bytes[0] = '\0';
-  this->num_bytes = 0;
-}
-
-private void string_set_nullbyte_at (string_t *this, int idx) {
-  if (0 > idx) idx += this->num_bytes;
-  if (idx < 0) return;
-  if (idx > (int) this->num_bytes) idx = this->num_bytes;
-  this->bytes[idx] = '\0';
-  this->num_bytes = idx;
-}
-
 private string_t *string_replace_with (string_t *this, char *bytes) {
   string_clear (this);
   return string_append (this, bytes);
+}
+
+private string_t *string_replace_with_len (string_t *this, const char *bytes,
+                                                                  size_t len) {
+  string_clear (this);
+  return string_insert_at_with_len (this, bytes, 0, len);
 }
 
 private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...) {
@@ -1237,7 +1251,7 @@ private string_t *vstr_join (vstr_t *this, char *sep) {
   }
 
   if (this->num_items)
-    string_set_nullbyte_at (bytes, bytes->num_bytes -
+    string_clear_at (bytes, bytes->num_bytes -
         (NULL is sep ? 0 : bytelen (sep)));
 
   return bytes;
@@ -1973,8 +1987,6 @@ private int fd_write (int fd, char *buf, int len) {
   return retval;
 }
 
-#define TERM_MAKE_COLOR(clr) \
-({char b__[8];snprintf (b__, 8, TERM_SET_COLOR_FMT, (clr));b__;})
 #define SEND_ESC_SEQ(fd, seq) fd_write ((fd), seq, seq ## _LEN)
 #define TERM_SEND_ESC_SEQ(seq) fd_write ($my(out_fd), seq, seq ## _LEN)
 
@@ -2834,7 +2846,7 @@ insert_char:
         {
           string_t *p = vstr_join (rl->line, "");
           if (rl->line->tail->data->bytes[0] is ' ')
-            string_set_nullbyte_at (p, p->num_bytes - 1);
+            string_clear_at (p, p->num_bytes - 1);
 
           ifnot (str_eq (menu->pat, p->bytes)) {
             menu->patlen = p->num_bytes;
@@ -2913,7 +2925,11 @@ theend:
   return str;
 }
 
-private dim_t *dim_set (dim_t *dim, int f_row, int l_row, int f_col, int l_col) {
+private dim_t *dim_set (dim_t *dim, int f_row, int l_row,
+                                    int f_col, int l_col) {
+  if (NULL is dim)
+    dim = AllocType (dim);
+
   dim->first_row = f_row;
   dim->last_row = l_row;
   dim->num_rows = l_row - f_row + 1;
@@ -2923,13 +2939,19 @@ private dim_t *dim_set (dim_t *dim, int f_row, int l_row, int f_col, int l_col) 
   return dim;
 }
 
-private dim_t *dim_new (int f_row, int l_row, int f_col, int l_col) {
+private dim_t **ed_dims_init (ed_t *this, int num_frames) {
+  (void) this;
+  return Alloc (sizeof (dim_t *) * num_frames);
+}
+
+private dim_t *ed_dim_new (ed_t *this, int f_row, int l_row, int f_col, int l_col) {
+  (void) this;
   dim_t *dim = AllocType (dim);
   return dim_set (dim, f_row, l_row, f_col, l_col);
 }
 
-private dim_t **dim_calc (win_t *this,
-int num_rows, int num_frames, int min_rows, int has_dividers) {
+private dim_t **ed_dim_calc (ed_t *this, int num_rows, int num_frames,
+                                     int min_rows, int has_dividers) {
   int reserved = $my(has_topline) + $my(has_msgline) + $my(has_promptline);
   int dividers = has_dividers ? num_frames - 1 : 0;
   int rows = (num_frames * min_rows) + dividers + reserved;
@@ -2939,7 +2961,7 @@ int num_rows, int num_frames, int min_rows, int has_dividers) {
   rows = (num_rows - dividers - reserved) / num_frames;
   int mod = (num_rows - dividers - reserved) % num_frames;
 
-  dim_t **dims = Alloc (sizeof (dims) * num_frames);
+  dim_t **dims = self(dims_init, num_frames);
 
   for (int i = 0; i < num_frames; i++) {
     dims[i] = AllocType (dim);
@@ -2948,9 +2970,9 @@ int num_rows, int num_frames, int min_rows, int has_dividers) {
       ? 1 + $my(has_topline)
       : dims[i-1]->last_row + has_dividers + 1;
     dims[i]->last_row = dims[i]->first_row + dims[i]->num_rows - 1;
-    dims[i]->first_col = $my(dim->first_col);
-    dims[i]->last_col  = $my(dim->last_col);
-    dims[i]->num_cols  = $my(dim->num_cols);
+    dims[i]->first_col = $my(dim)->first_col;
+    dims[i]->last_col  = $my(dim)->last_col;
+    dims[i]->num_cols  = $my(dim)->num_cols;
   }
 
   return dims;
@@ -2968,27 +2990,28 @@ private ftype_t *buf_syn_init_c (buf_t *);
 
 char *default_extensions[] = {".txt", NULL};
 
-char *C_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
-char *C_keywords[] = {
-    "is", "isnot", "or", "and", "loop", "ifnot", "forever",
-    "private|", "public|", "self|", "this|", "thisp|", "$my|", "$myprop|", "My|", "$mycur|",
-    "$from|", "theend|", "theerror|", "OK|", "NOTOK|", "mutable|", "uchar|",
-    "uint|", "utf8|", "$myroots|", "$myparents|",
-    "switch", "if", "while", "for", "break", "continue", "else", "do", "default", "goto",
-    "case|", "return|", "free|", "struct|", "union|", "typedef|", "static|", "enum|", "#include|",
-    "volatile|", "register|", "sizeof|", "union|",
-    "const|", "auto|",
-    "#define|", "#endif|", "#error|", "#ifdef|", "#ifndef|", "#undef|", "#if|", "#else",
-    "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
-    "void|", "bool|", "NULL|",
+char *c_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
+char *c_keywords[] = {
+    "is I", "isnot I", "or I", "and I", "if I", "for I", "return I", "else I",
+    "ifnot I", "private I", "self I", "this V", "NULL K", "OK K", "NOTOK K",
+    "switch I", "while I", "break I", "continue I", "do I", "default I",
+    "goto I", "case I", "free F", "$my V", "My V", "$mycur K",
+    "uint T", "int T", "size_t T", "utf8 T", "char T", "uchar T", "sizeof T", "void T",
+    "$from V", "thisp V", "$myprop V", "theend I", "theerror E",
+    "#define M", "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
+    "#include M", "struct T", "union T", "typedef I",
+    "$myroots V", "$myparents V", "public I", "mutable I",
+    "loop I", "forever I", "static I", "enum T", "bool T","long T", "double T",
+    "float T", "unsigned T", "signed T", "volatile T", "register T", "union T",
+    "const T", "auto T",
     NULL
 };
 
 char c_singleline_comment[] = "//";
+char c_multiline_comment_start[] = "/*";
 char c_multiline_comment_end[] = "*/";
 char c_multiline_comment_continuation[] = " * ";
-char c_multiline_comment_start[] = "/*";
-char c_operators[] = "+:-%*^><=|&~.()[]{}!";
+char c_operators[] = "+:?-%*^><=|&~.()[]{}!";
 char *NULL_ARRAY[] = {NULL};
 
 syn_t HL_DB[] = {
@@ -2996,17 +3019,21 @@ syn_t HL_DB[] = {
      "txt", NULL_ARRAY, default_extensions, NULL_ARRAY,
      NULL, NULL,
      NULL, NULL, NULL, NULL,
-     HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init, 0,
+     HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init, 0, NULL, NULL,
   },
   {
-    "c", NULL_ARRAY, C_extensions, NULL_ARRAY,
-    C_keywords, c_operators,
+    "c", NULL_ARRAY, c_extensions, NULL_ARRAY,
+    c_keywords, c_operators,
     c_singleline_comment, c_multiline_comment_start, c_multiline_comment_end,
     c_multiline_comment_continuation,
     HL_STRINGS, HL_NUMBERS,
-    buf_syn_parser, buf_syn_init_c, 0,
+    buf_syn_parser, buf_syn_init_c, 0, NULL, NULL,
   }
 };
+
+#define IsSeparator(c)                          \
+  ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
+   byte_in_str(",.()+-/=*~%<>[]:;}", (c)) isnot NULL)
 
 #define IGNORE(c) ((c) > '~' || (c) <= ' ')
 
@@ -3020,6 +3047,36 @@ syn_t HL_DB[] = {
 #define SYN_HAS_SINGLELINE_COMMENT (1 << 1)
 #define SYN_HAS_MULTILINE_COMMENT  (1 << 2)
 
+private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
+  int found = 0;
+  row_t *it = row->prev;
+
+  for (int i = 0; i < MAX_BACKTRACK_LINES_FOR_ML_COMMENTS and it; i++) {
+    if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
+      break;
+
+    char *sp = strstr (it->data->bytes, $my(syn)->multiline_comment_start);
+
+    if (NULL isnot sp) {
+      if (sp is it->data->bytes or it->data->bytes[sp - it->data->bytes - 1] is ' ') {
+        found = 1;
+        break;
+      }
+    }
+
+    ifnot (NULL is $my(syn)->multiline_comment_continuation) {
+      if (0 is str_cmp_n (it->data->bytes, $my(syn)->multiline_comment_continuation, bytelen ($my(syn)->multiline_comment_continuation))) {
+        found = 1;
+        break;
+      }
+    }
+
+    it = it->prev;
+  }
+
+  return found;
+}
+
 /* Sorry but the highlight system is ridicolous simple (line by line), but is fast and works for me in C */
 private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t *row) {
   (void) index;
@@ -3027,7 +3084,6 @@ private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t
   ifnot (len) return line;
 
   My(String).clear ($my(shared_str));
-  string_t *s = $my(shared_str);
 
   char *m_cmnt_p = NULL;
   int m_cmnt_idx = -1;
@@ -3044,64 +3100,40 @@ private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t
       }
     }
 
-    has_mlcmnt = ({
-      int found = 0;
-      row_t *it = row->prev;
-      for (int i = 0; i < MAX_BACKTRACK_LINES_FOR_ML_COMMENTS and it; i++) {
-        if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
-          break;
-
-        char *sp = strstr (it->data->bytes, $my(syn)->multiline_comment_start);
-        if (NULL isnot sp) {
-          if (sp is it->data->bytes or *sp-1 is ' ') {
-            found = 1;
-            break;
-          }
-        }
-
-        ifnot (NULL is $my(syn)->multiline_comment_continuation) {
-          if (0 is str_cmp_n (it->data->bytes, $my(syn)->multiline_comment_continuation, bytelen ($my(syn)->multiline_comment_continuation))) {
-            found = 1;
-            break;
-          }
-        }
-
-        it = it->prev;
-      }
-
-      found;
-    });
+    if (m_cmnt_idx is -1)
+      has_mlcmnt = buf_syn_has_mlcmnt (this, row);
   }
 
   char *s_cmnt_p = NULL;
   int s_cmnt_idx = -1;
 
-  ifnot (NULL is $my(syn)->singleline_comment) {
-    s_cmnt_p = strstr (line, $my(syn)->singleline_comment);
-    s_cmnt_idx = (NULL is s_cmnt_p ? -1 : s_cmnt_p - line);
-  }
+  if (m_cmnt_idx is -1)
+    ifnot (NULL is $my(syn)->singleline_comment) {
+      s_cmnt_p = strstr (line, $my(syn)->singleline_comment);
+      s_cmnt_idx = (NULL is s_cmnt_p ? -1 : s_cmnt_p - line);
+    }
 
   uchar c;
   int idx = 0;
+
   for (idx = 0; idx < len; idx++) {
-
     c = line[idx];
+    goto parse_char;
 
-parse_char:;
-open_comment:;
+parse_comment:
     if ($my(syn)->state & SYN_HAS_OPEN_COMMENT) {
       $my(syn)->state &= ~SYN_HAS_OPEN_COMMENT;
       int diff = len;
-      My(String).append_fmt (s, "%s%s", TERM_MAKE_COLOR (HL_COMMENT), TERM_ITALIC);
+      My(String).append_fmt ($my(shared_str), "%s%s", TERM_MAKE_COLOR (HL_COMMENT), TERM_ITALIC);
 
       if ($my(syn)->state & SYN_HAS_MULTILINE_COMMENT) {
         $my(syn)->state &= ~SYN_HAS_MULTILINE_COMMENT;
         char *sp = strstr (line + idx, $my(syn)->multiline_comment_end);
         if (sp is NULL) {
           while (idx < len)
-            My(String).append_byte (s, line[idx++]);
+            My(String).append_byte ($my(shared_str), line[idx++]);
 
-          My(String).append (s, TERM_COLOR_RESET);
+          My(String).append ($my(shared_str), TERM_COLOR_RESET);
           goto theend;
         }
 
@@ -3110,76 +3142,77 @@ open_comment:;
       } else
         $my(syn)->state &= ~SYN_HAS_SINGLELINE_COMMENT;
 
-      while (idx < diff) My(String).append_byte (s, line[idx++]);
-      My(String).append (s, TERM_COLOR_RESET);
-
+      while (idx < diff) My(String).append_byte ($my(shared_str), line[idx++]);
+      My(String).append ($my(shared_str), TERM_COLOR_RESET);
       if (idx is len) goto theend;
       c = line[idx];
     }
 
-    if (has_mlcmnt or idx is m_cmnt_idx) {
-      has_mlcmnt = 0;
-      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_MULTILINE_COMMENT);
-      goto open_comment;
-    }
-
-    if (idx is s_cmnt_idx) {
-      if (s_cmnt_idx is 0 or line[s_cmnt_idx-1] is ' ') {
-        $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
-        goto open_comment;
-      }
-    }
-
+parse_char:
     while (IGNORE (c)) {
       if (c is ' ') {
         if (idx + 1 is len) {
           ADD_INVERTED_CHAR (' ', HL_TRAILING_WS);
         }
         else
-          My(String).append_byte (s, c);
+          My(String).append_byte ($my(shared_str), c);
       }
       else
         if (c is '\t') {
           for (int i = 0; i < $my(ftype)->tabwidth; i++)
-            My(String).append_byte (s, ' ');
+            My(String).append_byte ($my(shared_str), ' ');
         }
         else
           if ((c < ' ' and (c isnot 0 and c isnot 0x0a)) or c is 0x7f) {
             ADD_INVERTED_CHAR ('?', HL_ERROR);
           }
           else {
-            My(String).append_byte (s,  c);
+            My(String).append_byte ($my(shared_str),  c);
           }
 
       if (++idx is len) goto theend;
       c = line[idx];
-      goto parse_char;
+    }
+
+    if (has_mlcmnt or idx is m_cmnt_idx) {
+      has_mlcmnt = 0;
+      $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_MULTILINE_COMMENT);
+      goto parse_comment;
+    }
+
+    if (idx is s_cmnt_idx) {
+      if (s_cmnt_idx is 0 or line[s_cmnt_idx-1] is ' ') {
+        $my(syn)->state |= (SYN_HAS_OPEN_COMMENT|SYN_HAS_SINGLELINE_COMMENT);
+        goto parse_comment;
+      }
     }
 
     ifnot (NULL is $my(syn->operators)) {
-      ifnot (NULL is byte_in_str ($my(syn)->operators, c)) {
+      int lidx = idx;
+      while (NULL isnot byte_in_str ($my(syn)->operators, c)) {
         ADD_COLORED_CHAR (c, HL_OPERATOR);
         if (++idx is len) goto theend;
         c = line[idx];
-        ifnot (NULL is byte_in_str ($my(syn)->operators, c)) { /* most likely one or two */
-            ADD_COLORED_CHAR (c, HL_OPERATOR);
-            goto thecontinue;
-        }
-        goto parse_char;
       }
+
+      if (idx isnot lidx) goto parse_char;
     }
 
     if ($my(syn)->hl_strings) {
       if (c is '"' or c is '\'') {
-        ADD_COLORED_CHAR (c, HL_STR_DELIM);
+        My(String).append_fmt ($my(shared_str),
+          TERM_SET_COLOR_FMT "%c" TERM_SET_COLOR_FMT "%s",
+            HL_STRING_DELIM, c, HL_STRING, TERM_ITALIC);
+        char openc = c;
         while (++idx < len) {
-          c = line[idx];
-          if (c is '"' or c is '\'') { /* handle case '"' "'" '\'' "\"" */
-            ADD_COLORED_CHAR (c, HL_STR_DELIM);
-            goto thecontinue;
+          char prevc = c;
+          c = line[idx]; // this code should not highlight properly, this code  
+          if (c is openc and prevc isnot '\\') {
+            ADD_COLORED_CHAR (c, HL_STRING_DELIM);
+            goto next_char;
           }
 
-          My(String).append_byte (s,  c);
+          My(String).append_byte ($my(shared_str),  c);
         }
 
         goto theend;
@@ -3192,7 +3225,7 @@ open_comment:;
         while (++idx < len) {
           c = line[idx];
           if (0 is IS_DIGIT (c) and 0 is IsAlsoANumber (c))
-            goto parse_char; // most likely next loop is useless
+            goto parse_char;
 
           ADD_COLORED_CHAR (c, HL_NUMBER);
         }
@@ -3201,43 +3234,44 @@ open_comment:;
       }
     }
 
-    ifnot (NULL is $my(syn)->keywords) {
+    if (NULL isnot $my(syn)->keywords and (idx is 0 or IsSeparator (line[idx-1]))) {
       for (int j = 0; $my(syn)->keywords[j] isnot NULL; j++) {
-        int kw_len = bytelen($my(syn)->keywords[j]);
-        int kw_2 = $my(syn)->keywords[j][kw_len - 1] is '|';
-
-        if (kw_2) kw_len--;
+        int kw_len = $my(syn)->keywords_len[j];
+        //int is_glob = $my(syn)->keywords[j][kw_len] is '*';if (is_glob) kw_len--;
 
         if (0 is str_cmp_n (&line[idx], $my(syn)->keywords[j], kw_len) and
-            IsSeparator (line[idx + kw_len])) {
+           IsSeparator (line[idx + kw_len])) {
+         //  (0 is is_glob ? IsSeparator (line[idx + kw_len]) : 1)) {
+          int color = $my(syn)->keywords_colors[j];
+          My(String).append ($my(shared_str), TERM_MAKE_COLOR (color));
 
-          char kw[kw_len]; memcpy (kw, &line[idx], kw_len); kw[kw_len] = '\0';
+          for (int i = 0; i < kw_len; i++)
+            My(String).append_byte ($my(shared_str), line[idx+i]);
 
-          My(String).append_fmt (s, "%s%s%s",
-            TERM_MAKE_COLOR (kw_2 ? HL_IDENTIFIER : HL_KEYWORD), kw, TERM_COLOR_RESET);
+          idx += (kw_len - 1);
 
-          idx += kw_len - 1;
-          goto thecontinue;
+          // ifnot (is_glob) {
+          My(String).append ($my(shared_str), TERM_COLOR_RESET);
+          goto next_char;
+          // }
+          /*
+          idx++;
+          while (idx < len) My(String).append_byte ($my(shared_str), line[idx++]);
+          My(String).append ($my(shared_str), TERM_COLOR_RESET);
+          goto theend;
+          */
         }
       }
     }
 
-    My(String).append_byte (s,  c);
+    My(String).append_byte ($my(shared_str),  c);
 
-    while (++idx < len) {
-      c = line[idx];
-      if (IsSeparator (c))
-        goto parse_char;
-
-      My(String).append_byte (s,  c);
-    }
-
-thecontinue: {}
+next_char:;
   }
 
 theend:
-  strncpy (line, s->bytes, s->num_bytes);
-  line[s->num_bytes] = '\0';
+  strncpy (line, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+  line[$my(shared_str)->num_bytes] = '\0';
   return line;
 }
 
@@ -3308,8 +3342,8 @@ private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
 }
 
 private char *ftype_on_open_fname_under_cursor_c (char *fname,
-      size_t len, size_t stack_size) {
-  if (len < 32 or (*fname isnot '<' or fname[len-1] isnot '>'))
+                                size_t len, size_t stack_size) {
+  if (len < 8 or (*fname isnot '<' and fname[len-1] isnot '>'))
     return fname;
 
   char incl_dir[] = {"/usr/include"};
@@ -3318,7 +3352,7 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
   if (tlen + 1 > stack_size) return fname;
 
   char t[tlen + 1];
-  snprintf(t, tlen + 1, "%s/%s", incl_dir, fname + 1);
+  snprintf (t, tlen + 1, "%s/%s", incl_dir, fname + 1);
   for (size_t i = 0; i < tlen; i++) fname[i] = t[i];
   fname[tlen] = '\0';
 
@@ -3347,37 +3381,45 @@ private ftype_t *buf_syn_init (buf_t *this) {
   return buf_ftype_init (this, FTYPE_DEFAULT, buf_ftype_autoindent);
 }
 
-private ftype_t *buf_set_ftype (buf_t *this, int ftype) {
-  if (FTYPE_DEFAULT < ftype and ftype < $myroots(num_syntaxes))
-    return $myroots(syntaxes)[ftype].init (this);
+private void buf_set_ftype (buf_t *this, int ftype) {
+  if (FTYPE_DEFAULT < ftype and ftype < $myroots(num_syntaxes)) {
+    $my(ftype) = $myroots(syntaxes)[ftype].init (this);
+    return;
+  }
 
   for (int i = 0; i < $myroots(num_syntaxes); i++) {
     int j = 0;
     while ($myroots(syntaxes)[i].filenames[j])
-      if (str_eq ($myroots(syntaxes)[i].filenames[j++], $my(basename)))
-        return $myroots(syntaxes)[i].init (this);
+      if (str_eq ($myroots(syntaxes)[i].filenames[j++], $my(basename))) {
+        $my(ftype) = $myroots(syntaxes)[i].init (this);
+        return;
+      }
 
     if (NULL is $my(extname)) continue;
 
     j = 0;
     while ($myroots(syntaxes)[i].extensions[j])
-      if (str_eq ($myroots(syntaxes)[i].extensions[j++], $my(extname)))
-        return $myroots(syntaxes)[i].init (this);
+      if (str_eq ($myroots(syntaxes)[i].extensions[j++], $my(extname))) {
+        $my(ftype) = $myroots(syntaxes)[i].init (this);
+        return;
+      }
 
-    if (this->head->data->num_bytes < 2) continue;
+    if (NULL is this->head or this->head->data->num_bytes < 2) continue;
 
     j = 0;
     while ($myroots(syntaxes)[i].shebangs[j]) {
       ifnot (str_cmp_n ($myroots(syntaxes)[i].shebangs[j], this->head->data->bytes,
-          bytelen ($myroots(syntaxes)[i].shebangs[j])))
-        return $myroots(syntaxes)[i].init (this);
+          bytelen ($myroots(syntaxes)[i].shebangs[j]))) {
+        $my(ftype) = $myroots(syntaxes)[i].init (this);
+        return;
+      }
 
       j++; /* gcc complains (and probably for a right) if j++ at the end of the
             * conditional expression (even if it is right) */
      }
   }
 
-  return buf_syn_init (this);
+  $my(ftype) = buf_syn_init (this);
 }
 
 private void buf_set_modified (buf_t *this) {
@@ -3391,11 +3433,18 @@ private row_t *buf_row_new_with (buf_t *this, const char *bytes) {
   return row;
 }
 
+private row_t *buf_row_new_with_len (buf_t *this, const char *bytes, size_t len) {
+  row_t *row = AllocType (row);
+  string_t *data = My(String).new_with_len (bytes, len);
+  row->data = data;
+  return row;
+}
+
 private row_t *buf_row_get_current (buf_t *this) {
   return this->current;
 }
 
-private string_t *buf_row_get_current_bytes (buf_t *this) {
+private string_t *buf_get_row_current_bytes (buf_t *this) {
   return $mycur(data);
 }
 
@@ -3442,7 +3491,7 @@ private bufiter_t *buf_iter_new (buf_t *this, int start_idx) {
   bufiter_t *it = AllocType (bufiter);
   if (start_idx < 0) start_idx = this->cur_idx;
 
-  it->row = self(get.line_at, start_idx);
+  it->row = self(get.row.at, start_idx);
   it->num_lines = this->num_items - start_idx;
   if (it->row) {
     it->line = it->row->data;
@@ -3490,6 +3539,46 @@ private void buf_free_undo (buf_t *this) {
   free ($my(redo));
 }
 
+/* from slang sources slsh/slsh.c
+
+ * Copyright (C) 2005-2017,2018 John E. Davis
+ * 
+ * This file is part of the S-Lang Library.
+ * 
+ * The S-Lang Library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of the
+ * License, or (at your option) any later version.
+ */
+
+private char *stat_mode_to_string (char *mode_string, mode_t mode) {
+  if (S_ISREG(mode)) mode_string[0] = '-';
+  else if (S_ISDIR(mode)) mode_string[0] = 'd';
+  else if (S_ISLNK(mode)) mode_string[0] = 'l';
+  else if (S_ISCHR(mode)) mode_string[0] = 'c';
+  else if (S_ISFIFO(mode)) mode_string[0] = 'p';
+  else if (S_ISSOCK(mode)) mode_string[0] = 's';
+  else if (S_ISBLK(mode)) mode_string[0] = 'b';
+
+  if (mode & S_IRUSR) mode_string[1] = 'r'; else mode_string[1] = '-';
+  if (mode & S_IWUSR) mode_string[2] = 'w'; else mode_string[2] = '-';
+  if (mode & S_IXUSR) mode_string[3] = 'x'; else mode_string[3] = '-';
+  if (mode & S_ISUID) mode_string[3] = 's';
+
+  if (mode & S_IRGRP) mode_string[4] = 'r'; else mode_string[4] = '-';
+  if (mode & S_IWGRP) mode_string[5] = 'w'; else mode_string[5] = '-';
+  if (mode & S_IXGRP) mode_string[6] = 'x'; else mode_string[6] = '-';
+  if (mode & S_ISGID) mode_string[6] = 'g';
+
+  if (mode & S_IROTH) mode_string[7] = 'r'; else mode_string[7] = '-';
+  if (mode & S_IWOTH) mode_string[8] = 'w'; else mode_string[8] = '-';
+  if (mode & S_IXOTH) mode_string[9] = 'x'; else mode_string[9] = '-';
+  if (mode & S_ISVTX) mode_string[9] = 't';
+
+  mode_string[10] = '\0';
+  return mode_string;
+}
+
 private venv_t *env_new () {
   venv_t *env = AllocType (venv);
   env->pid = getpid ();
@@ -3502,7 +3591,7 @@ private venv_t *env_new () {
   else {
     env->home_dir = string_new_with (hdir);
     if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
-      string_set_nullbyte_at (env->home_dir, env->home_dir->num_bytes - 1);
+      string_clear_at (env->home_dir, env->home_dir->num_bytes - 1);
   }
 
   char *term_name = getenv ("TERM");
@@ -3511,6 +3600,12 @@ private venv_t *env_new () {
     env->term_name = string_new_with ("");
   } else
     env->term_name = string_new_with (term_name);
+  struct stat st;  stat (TMPDIR, &st); char mode_string[12];
+  stat_mode_to_string (mode_string, st.st_mode);
+  ifnot (str_eq (mode_string, "drwx------")) {
+    fprintf (stderr, "tmp directory |%s| permissions is not 0700 or drwx------\n",
+       TMPDIR);
+   }
 
   env->tmp_dir = string_new_with (TMPDIR);
   char *path = getenv ("PATH");
@@ -3538,6 +3633,18 @@ private string_t *venv_get (ed_t *this, char *name) {
   if (str_eq (name, "tmp_dir"))  return $my(env)->tmp_dir;
   if (str_eq (name, "diff_exec")) return $my(env)->diff_exec;
   if (str_eq (name, "xclip_exec")) return $my(env)->xclip_exec;
+  return NULL;
+}
+
+private string_t *venv_set (ed_t *this, char *name, char *val) {
+  if (str_eq (name, "term_name"))
+    return My(String).replace_with ($my(env)->term_name, val);
+  if (str_eq (name, "path"))
+    return My(String).replace_with ($my(env)->path, val);
+  if (str_eq (name, "home_dir"))
+    return My(String).replace_with ($my(env)->home_dir, val);
+  if (str_eq (name, "tmp_dir"))
+    return My(String).replace_with ($my(env)->tmp_dir, val);
   return NULL;
 }
 
@@ -3572,8 +3679,7 @@ private void history_free (hist_t **hist) {
 private void buf_free_handler (buf_t *this) {
   if (this is NULL or $myprop is NULL) return;
 
-  if ($my(fname) isnot NULL)
-    free ($my(fname));
+  if ($my(fname) isnot NULL) free ($my(fname));
 
   free ($my(cwd));
 
@@ -3626,6 +3732,7 @@ private void buf_set_video_first_row (buf_t *this, int idx) {
    }
 }
 
+
 private row_t *buf_current_prepend (buf_t *this, row_t *row) {
   return current_list_prepend (this, row);
 }
@@ -3651,6 +3758,16 @@ private row_t *buf_current_prepend_with(buf_t *this, char *bytes) {
 private row_t *buf_current_append_with (buf_t *this, char *bytes) {
   row_t *row = self(row.new_with, bytes);
   return current_list_append (this, row);
+}
+
+private row_t *buf_current_append_with_len (buf_t *this, char *bytes, size_t len) {
+  row_t *row = self(row.new_with_len, bytes, len);
+  return current_list_append (this, row);
+}
+
+private row_t *buf_current_replace_with (buf_t *this, char *bytes) {
+  My(String).replace_with (this->current->data, bytes);
+  return this->current;
 }
 
 private row_t *__buf_current_delete (buf_t *this, row_t **row) {
@@ -3734,7 +3851,20 @@ private size_t buf_get_num_lines (buf_t *this) {
   return this->num_items;
 }
 
-private row_t *buf_get_line_at (buf_t *this, int idx) {
+private int buf_get_prop_tabwidth (buf_t *this) {
+  return $my(ftype)->tabwidth;
+}
+
+private row_t *buf_get_row_current (buf_t *this) {
+  return this->current;
+}
+
+private int buf_get_row_col_idx (buf_t *this, row_t *row) {
+  (void) this;
+  return row->cur_col_idx;
+}
+
+private row_t *buf_get_row_at (buf_t *this, int idx) {
   return list_get_at (this, row_t, idx);
 }
 
@@ -3769,12 +3899,46 @@ private char *buf_get_line_data (buf_t *this, line_t *line) {
   return $my(shared_str)->bytes;
 }
 
+
+private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
+  do {
+    idx = current_list_set (this, idx);
+    if (idx is INDEX_ERROR) {
+      idx = 0;
+      continue;
+    }
+  } while (0);
+
+  $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
+  $my(video_first_row) = this->current;
+  $my(video_first_row_idx) = idx;
+
+  for (int i = 0; i < ofs and idx-- > 0; i++) {
+    $my(video_first_row_idx)--;
+    $my(video_first_row) = $my(video_first_row)->prev;
+    $my(video)->row_pos = $my(cur_video_row) =
+        $my(cur_video_row) + 1;
+  }
+
+  if (col > $my(dim)->num_cols) col = 1;
+  $my(video)->col_pos = $my(cur_video_col) = col;
+  return this->cur_idx;
+}
+
 private int buf_current_set (buf_t *this, int idx) {
   return current_list_set (this, idx);
 }
 
 private void buf_set_mode (buf_t *this, char *mode) {
   strcpy ($my(mode), mode);
+}
+
+private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
+  this->on_normal_beg = cb;
+}
+
+private void buf_set_show_statusline (buf_t *this, int val) {
+  $my(show_statusline) = val;
 }
 
 private void *mem_should_realloc (void *obj, size_t allocated, size_t len) {
@@ -3784,13 +3948,14 @@ private void *mem_should_realloc (void *obj, size_t allocated, size_t len) {
 
 private void buf_set_as_non_existant (buf_t *this) {
   $my(basename) = $my(fname); $my(extname) = NULL;
+  $my(cwd) = dir_current ();
   $my(flags) &= ~FILE_EXISTS;
 }
 
 private void buf_set_as_unamed (buf_t *this) {
   size_t len = bytelen (UNAMED);
   /* static size_t len = bytelen (UNAMED); fails on tcc with:
-     error: initializer element is not constant
+   * error: initializer element is not constant
    */
   $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
   strcpy ($my(fname), UNAMED);
@@ -3807,49 +3972,44 @@ private int buf_set_fname (buf_t *this, char *filename) {
     return OK;
   }
 
-  int retval = OK;
-
-  char *fname = str_dup (filename, len);
+  string_t *fname = $my(shared_str);
+  My(String).replace_with_len (fname, filename, len);
 
   for (int i = len - 1; i > 0 /* at least a char */; i--) {
-    ifnot (fname[i] is DIR_SEP) break;
-    fname[i] = '\0';
+    ifnot (fname->bytes[i] is DIR_SEP) break;
+    My(String).clear_at (fname, i);
     len--;
   }
 
   if ($my(flags) & BUF_IS_SPECIAL) {
     $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-    strncpy ($my(fname), fname, len + 1);
+    strncpy ($my(fname), fname->bytes, len + 1);
     self(set.as.non_existant);
-    /* this is for tcc that segfaults, when jumping to the label
-     * as the variable is considered uninitialized */
-    free (fname);
-    return retval;
-    goto theend;
+    return OK;
+    /* this stays as a reference as tcc segfault'ed, when jumping to the label
+     * (the old code had fname as char * that it should be freed and there
+     * was a clean-up goto)
+     * The reason was that the variable (fname) was considered uninitialized,
+     * when it wasn't, and it should do here the goto's job
+     * free (fname);
+     * return retval;
+     */
   }
 
-  int fname_exists = file_exists (fname);
-  int is_abs = IS_PATH_ABS (fname);
+  int fname_exists = file_exists (fname->bytes);
+  int is_abs = IS_PATH_ABS (fname->bytes);
 
   if (fname_exists) {
-    ifnot (file_is_reg (fname)) {
-      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE, fname);
+    ifnot (file_is_reg (fname->bytes)) {
+      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE, fname->bytes);
       buf_set_as_unamed (this);
-      retval = NOTOK;
-      /* see above */
-      free (fname);
-      return retval;
-      goto theend;
+      return NOTOK;
     }
 
-    if (file_is_elf (fname)) {
-      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE, fname);
+    if (file_is_elf (fname->bytes)) {
+      VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE, fname->bytes);
       buf_set_as_unamed (this);
-      retval = NOTOK;
-      /* see above */
-      free (fname);
-      return retval;
-      goto theend;
+      return NOTOK;
     }
 
     $my(flags) |= FILE_EXISTS;
@@ -3858,18 +4018,18 @@ private int buf_set_fname (buf_t *this, char *filename) {
       goto concat_with_cwd;
     else {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      strncpy ($my(fname), fname, len + 1);
+      strncpy ($my(fname), fname->bytes, len + 1);
     }
   } else {
     $my(flags) &= ~FILE_EXISTS;
     if (is_abs) {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      strncpy ($my(fname), fname, len + 1);
+      strncpy ($my(fname), fname->bytes, len + 1);
     } else {
 concat_with_cwd:;
       char *cwd = dir_current ();
       len += bytelen (cwd) + 1;
-      char tmp[len + 1]; snprintf (tmp, len + 1, "%s/%s", cwd, fname);
+      char tmp[len + 1]; snprintf (tmp, len + 1, "%s/%s", cwd, fname->bytes);
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
       /* $my(fname) = realpath (tmp, NULL); aborts with invalid argument on tcc */
       realpath (tmp, $my(fname));
@@ -3883,12 +4043,13 @@ concat_with_cwd:;
     $my(flags) |= BUF_IS_RDONLY;
   }
 
+  if ($my(flags) & FILE_EXISTS) stat ($my(fname), &$my(st));
+
   $my(basename) = path_basename ($my(fname));
   $my(extname) = path_extname ($my(fname));
+  $my(cwd) = path_dirname ($my(fname));
 
-theend:
-  free (fname);
-  return retval;
+  return OK;
 }
 
 private int buf_on_no_length (buf_t *this) {
@@ -3914,7 +4075,7 @@ private ssize_t buf_read_fname (buf_t *this) {
   FILE *fp = fopen ($my(fname), "r");
 
   if (fp is NULL) {
-    if (EACCES is errno) {
+     if (EACCES is errno) {
       if (file_exists ($my(fname))) {
         $my(flags) |= FILE_EXISTS;
         $my(flags) &= ~(FILE_IS_READABLE|FILE_IS_WRITABLE);
@@ -3962,6 +4123,26 @@ theend:
   return t_len;
 }
 
+private ssize_t buf_init_fname (buf_t *this, char *fname) {
+  ssize_t retval = buf_set_fname (this, fname);
+  if (NOTOK is retval) return NOTOK;
+
+  if ($my(flags) & FILE_EXISTS) {
+    retval = self(read.fname);
+
+    ifnot (this->num_items)
+      retval = buf_on_no_length (this);
+    } else
+      retval = buf_on_no_length (this);
+
+  $my(video_first_row_idx) = 0;
+  $my(video_first_row) = this->head;
+  $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
+  $my(video)->col_pos = $my(cur_video_col) = 1;
+
+  return retval;
+}
+
 private void win_adjust_buf_dim (win_t *w) {
   buf_t *this = w->head;
   while (this) {
@@ -3980,6 +4161,10 @@ private void win_adjust_buf_dim (win_t *w) {
   }
 }
 
+private void win_set_has_dividers (win_t *this, int val) {
+  $my(has_dividers) = val;
+}
+
 private void win_set_video_dividers (win_t *this) {
   ifnot ($my(has_dividers)) return;
   if ($my(num_frames) - 1 < 1) return;
@@ -3990,8 +4175,8 @@ private void win_set_video_dividers (win_t *this) {
   for (int i = 0; i < $my(dim)->num_cols; i++)
     line[i + TERM_SET_COLOR_FMT_LEN] = '_';
 
-  snprintf (line + TERM_SET_COLOR_FMT_LEN + $my(dim)->num_cols,
-    len, "%s", TERM_COLOR_RESET);
+  snprintf (line + TERM_SET_COLOR_FMT_LEN + $my(dim)->num_cols, len, "%s",
+      TERM_COLOR_RESET);
 
   line[len+1] = '\0';
    for (int i = 0; i < $my(num_frames) - 1; i++) {
@@ -4007,9 +4192,7 @@ private int win_add_frame (win_t *this) {
   free ($my(frames_dim));
 
   $my(num_frames)++;
-  $my(frames_dim) = dim_calc (this, $my(dim)->num_rows, $my(num_frames),
-      $my(min_rows), $my(has_dividers));
-
+  self(dim_calc);
   self(adjust.buf_dim);
   self(set.video_dividers);
   return DONE;
@@ -4023,8 +4206,7 @@ private int win_delete_frame (win_t *this, int idx) {
   free ($my(frames_dim));
 
   $my(num_frames)--;
-  $my(frames_dim) = dim_calc (this, $my(dim)->num_rows, $my(num_frames),
-      $my(min_rows), $my(has_dividers));
+  self(dim_calc);
 
   buf_t *it = this->head;
   while (it isnot NULL) {
@@ -4045,14 +4227,14 @@ private int win_delete_frame (win_t *this, int idx) {
    return DONE;
 }
 
-private buf_t *win_change_frame (win_t* w, int frame, int draw) {
-  if (frame < 0 or frame > $from(w, num_frames) - 1) return NULL;
+private buf_t *win_frame_change (win_t* w, int frame, int draw) {
+  if (frame < FIRST_FRAME or frame > WIN_LAST_FRAME(w)) return NULL;
   int idx = 0;
   buf_t *this = w->head;
   while (this) {
     if ($my(at_frame) is frame and $my(flags) & BUF_IS_VISIBLE) {
       My(Win).set.current_buf ($my(parent), idx, draw);
-      $from(w, cur_frame) = frame;
+      WIN_CUR_FRAME(w) = frame;
       return w->current;
     }
 
@@ -4073,7 +4255,7 @@ private int ved_buf_on_normal_end (buf_t **thisp, utf8 com, int *range, int regi
   return 0;
 }
 
-private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
+private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   buf_t *this = AllocType (buf);
   $myprop = AllocProp (buf);
 
@@ -4102,26 +4284,17 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   $my(term_ptr) = $myroots(term);
   $my(msg_row_ptr) = &$myroots(msg_row);
   $my(prompt_row_ptr) = &$myroots(prompt_row);
-
+  $my(history) = $myroots(history);
+  $my(last_insert) = $myroots(last_insert);
   $my(regs) = &$myroots(regs)[0];
   $my(video) = $myroots(video);
 
   $my(undo) = AllocType (undo);
   $my(redo) = AllocType (undo);
-
-  $my(history) = $myroots(history);
-  $my(last_insert) = $myroots(last_insert);
-
-  $my(at_frame) = frame;
-  $my(dim) = $myparents(frames_dim)[$my(at_frame)];
-
-  $my(statusline_row) = $my(dim->last_row);
+  $my(shared_str) = My(String).new_with ("");
   $my(statusline) = My(String).new_with ("");
   $my(promptline) = My(String).new_with ("");
-
   $my(line) = AllocType(line);
-
-  $my(shared_str) = My(String).new_with ("");
 
   $my(flags) = flags;
   $my(flags) &= ~BUF_IS_MODIFIED;
@@ -4130,33 +4303,40 @@ private buf_t *win_buf_new (win_t *w, char *fname, int frame, int flags) {
   self(set.mode, NORMAL_MODE);
 
   $my(fname) = Alloc (PATH_MAX + 1);
-  self(set.fname, fname);
-
-  if ($my(flags) & FILE_EXISTS) {
-    self(read.fname);
-
-    ifnot (this->num_items)
-      buf_on_no_length (this);
-  } else
-      buf_on_no_length (this);
 
   for (int i = 0; i < NUM_MARKS; i++)
     $my(marks)[i] = (mark_t) {.mark = MARKS[i], .video_first_row = NULL};
 
-  $my(ftype) = self(set.ftype, FTYPE_DEFAULT);
+  $my(at_frame) = at_frame;
+  $my(dim) = $myparents(frames_dim)[$my(at_frame)];
+  $my(statusline_row) = $my(dim->last_row);
+  $my(show_statusline) = 1;
 
-  self(cur.set, 0);
-
-  $my(video_first_row_idx) = 0;
-  $my(video_first_row) = this->head;
-  $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
-  $my(video)->col_pos = $my(cur_video_col) = 1;
-
-  $my(cwd) = str_eq ($my(fname), UNAMED) ? dir_current () : path_dirname ($my(fname));
-  this->free = buf_free_handler;
   this->on_normal_beg = ved_buf_on_normal_beg;
   this->on_normal_end = ved_buf_on_normal_end;
+
   return this;
+}
+
+private buf_t *win_buf_new (win_t *w, char *fname, int at_frame, int flags) {
+  buf_t *this = win_buf_init (w, at_frame, flags);
+
+  self(init_fname, fname);
+
+  self(set.ftype, FTYPE_DEFAULT);
+
+  self(set.row.idx, 0, NO_OFFSET, 1);
+
+  return this;
+}
+
+private void win_set_min_rows (win_t *this, int rows) {
+  $my(min_rows) = rows;
+}
+
+private void win_set_num_frames (win_t *this, int num_frames) {
+  if (num_frames > $my(max_frames)) return;
+  $my(num_frames) = num_frames;
 }
 
 private buf_t *win_set_current_buf (win_t *w, int idx, int draw) {
@@ -4247,6 +4427,14 @@ private int win_get_num_buf (win_t *w) {
   return w->num_items;
 }
 
+private int win_get_num_rows (win_t *this) {
+  return $my(dim)->num_rows;
+}
+
+private int win_get_num_cols (win_t *this) {
+  return $my(dim)->num_cols;
+}
+
 private int win_append_buf (win_t *this, buf_t *buf) {
   current_list_append (this, buf);
   return this->cur_idx;
@@ -4314,7 +4502,7 @@ private void win_free (win_t *this) {
       free ($my(dim));
 
     if ($my(frames_dim) isnot NULL) {
-      for (int i = 0; i < $my(num_frames); i++)  free ($my(frames_dim)[i]);
+      for (int i = 0; i < $my(num_frames); i++) free ($my(frames_dim)[i]);
 
       free ($my(frames_dim));
     }
@@ -4325,7 +4513,18 @@ private void win_free (win_t *this) {
  free (this);
 }
 
-private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
+private dim_t **win_dim_calc_cb (win_t *this, int num_rows, int num_frames,
+                                            int min_rows, int has_dividers) {
+  return ed_dim_calc ($my(parent), num_rows, num_frames, min_rows, has_dividers);
+}
+
+private dim_t **win_dim_calc (win_t *this) {
+  $my(frames_dim) = this->dim_calc (this, $my(dim)->num_rows, $my(num_frames),
+     $my(min_rows), $my(has_dividers));
+  return $my(frames_dim);
+}
+
+private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   win_t *this = AllocType (win);
   $myprop = AllocProp (win);
   if (NULL is name) {
@@ -4362,24 +4561,29 @@ private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
   $my(has_topline) = $myparents(has_topline);
   $my(has_msgline) = $myparents(has_msgline);
   $my(has_promptline) = $myparents(has_promptline);
-  $my(dim) = dim_new (
-      $myparents(dim->first_row),
-      $myparents(dim->num_rows),
-      $myparents(dim->first_col),
-      $myparents(dim->num_cols));
-
   $my(type) = VED_WIN_NORMAL_TYPE;
   $my(has_dividers) = 1;
-  self(set.video_dividers);
+
+  $my(dim) = ed_dim_new (ed,
+      $myparents(dim)->first_row,
+      $myparents(dim)->num_rows,
+      $myparents(dim)->first_col,
+      $myparents(dim)->num_cols);
 
   $my(cur_frame) = 0;
   $my(min_frames) = 1;
-  $my(num_frames) = num_frames;
+  $my(num_frames) = 1;
   $my(max_frames) = MAX_FRAMES;
 
-  $my(frames_dim) = dim_calc (this, $my(dim)->num_rows, $my(num_frames),
-      $my(min_rows), $my(has_dividers));
+  this->dim_calc = (NULL isnot dim_calc_cb ? dim_calc_cb : win_dim_calc_cb);
+  return this;
+}
 
+private win_t *ed_win_new (ed_t *ed, char *name, int num_frames) {
+  win_t *this = ed_win_init (ed, name, win_dim_calc_cb);
+  $my(num_frames) = num_frames;
+  self(dim_calc);
+  self(set.video_dividers);
   return this;
 }
 
@@ -4390,13 +4594,12 @@ private win_t *ed_win_new_special (ed_t *ed, char *name, int num_frames) {
 }
 
 private void ed_win_readjust_size (ed_t *ed, win_t *this) {
-  (void) ed;
   ifnot (NULL is $my(dim)) {
     free ($my(dim));
     $my(dim) = NULL;
   }
 
-  $my(dim) = dim_new (
+  $my(dim) = ed_dim_new (ed,
     $myparents(dim)->first_row, $myparents(dim)->num_rows,
     $myparents(dim)->first_col, $myparents(dim)->num_cols);
 
@@ -4406,8 +4609,7 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
     $my(frames_dim) = NULL;
   }
 
-  $my(frames_dim) = dim_calc (this, $my(dim)->num_rows, $my(num_frames),
-      $my(min_rows), $my(has_dividers));
+  self(dim_calc);
   self(adjust.buf_dim);
   self(set.video_dividers);
   $my(video)->row_pos = $from(this->current, cur_video_row);
@@ -4421,7 +4623,7 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
 
 private void ed_check_msg_status (buf_t *this) {
   if ($myroots(msg_send) is 1)
-      $myroots(msg_send)++;
+    $myroots(msg_send)++;
   else if (2 is $myroots(msg_send)) {
     My(Video).set_with ($my(video), *$my(msg_row_ptr) - 1, " ");
     My(Video).Draw.row_at ($my(video), *$my(msg_row_ptr));
@@ -4452,7 +4654,7 @@ private buf_t *ved_special_buf (ed_t *this, char *wname, char *bname,
 
   buf_t *buf = My(Win).get.buf_by_name (w, bname, &idx);
   if (NULL is buf) {
-    buf = My(Win).buf_new (w, bname, at_frame, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
+    buf = My(Win).buf.new (w, bname, at_frame, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
     My(Win).append_buf (w, buf);
   }
 
@@ -4486,7 +4688,7 @@ private buf_t *ved_scratch_buf (ed_t *this) {
 
   buf_t *buf = My(Win).get.buf_by_name (w, VED_SCRATCH_BUF, &idx);
   if (NULL is buf) {
-    buf = My(Win).buf_new (w, VED_SCRATCH_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
+    buf = My(Win).buf.new (w, VED_SCRATCH_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
     My(Win).append_buf (w, buf);
   }
 
@@ -4579,8 +4781,8 @@ private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
   va_start(ap, msgid);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  My(String).replace_with ($my(shared_str), bytes);
-  return $my(shared_str)->bytes;
+  My(String).replace_with ($my(ed_str), bytes);
+  return $my(ed_str)->bytes;
 }
 
 private void ed_msg_send (ed_t *this, int color, char *msg) {
@@ -4644,8 +4846,8 @@ private char *ed_error_string (ed_t *this, int err) {
   for (; *sp and *sp isnot ','; sp++) ebuf[i++] = *sp;
   ebuf[i] = '\0';
 
-  My(String).replace_with ($my(shared_str), ebuf);
-  return $my(shared_str)->bytes;
+  My(String).replace_with ($my(ed_str), ebuf);
+  return $my(ed_str)->bytes;
 }
 
 private void buf_set_topline (buf_t *this) {
@@ -4655,7 +4857,7 @@ private void buf_set_topline (buf_t *this) {
   My(String).replace_with_fmt ($myroots(topline), "[%s] ftype (%s) [pid %d]",
     $my(mode), $my(ftype)->name, $myroots(env)->pid);
 
-   char tmnow[32];
+  char tmnow[32];
   strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
   int pad = $my(dim->num_cols) - $myroots(topline)->num_bytes - bytelen (tmnow);
   if (pad > 0)
@@ -4672,7 +4874,12 @@ private void buf_set_draw_topline (buf_t *this) {
 }
 
 private void buf_set_statusline (buf_t *this) {
-  if ($my(dim->num_rows) is 1) return;
+  if ($my(dim->num_rows) is 1 or (
+      $my(show_statusline) is 0 and 0 is IS_MODE (INSERT_MODE))) {
+    My(String).replace_with ($my(statusline), " ");
+    My(Video).set_with ($my(video), $my(statusline_row) - 1, $my(statusline)->bytes);
+    return;
+  }
 
   int cur_code = 0;
   if ($mycur(cur_col_idx) < (int) $mycur(data)->num_bytes) {
@@ -5146,7 +5353,7 @@ private int ved_search (buf_t *this, char com) {
     utf8 c = rline_edit (rl)->c;
     string_t *p = vstr_join (rl->line, "");
     if (rl->line->tail->data->bytes[0] is ' ')
-      string_set_nullbyte_at (p, p->num_bytes - 1);
+      string_clear_at (p, p->num_bytes - 1);
 
     if (str_eq (sch->pat->bytes, p->bytes)) {
       string_free (p);
@@ -5335,6 +5542,8 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 
   self(set.video_first_row, 0);
   self(cur.set, 0);
+  $my(video)->row_pos = $my(cur_video_row);
+  $my(video)->col_pos = $my(cur_video_col);
   ved_normal_down (this, 1, DONOT_ADJUST_COL, DONOT_DRAW);
   ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
   return DONE;
@@ -5350,8 +5559,6 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   (v__)->cur_idx = (a__)->cur_idx;                         \
   (v__)->idx = (a__)->idx
 
-//  (v__)->row_pos = $my(video)->row_pos;
-//  (v__)->col_pos = $my(video)->col_pos; 
 #define state_set(v__)                                   \
   (v__)->video_first_row = $my(video_first_row);         \
   (v__)->video_first_row_idx = $my(video_first_row_idx); \
@@ -5395,14 +5602,7 @@ private void redo_clear (buf_t *this) {
     buf_free_action (this, action);
     action = redo_pop (this);
   }
-    /*
-  action_t *action = $my(redo)->head;
-  while (action isnot NULL) {
-    action_t *tmp = action->next;
-    buf_free_action (this, action);
-    action = tmp;
-  }
-    */
+
   $my(redo)->num_items = 0; $my(redo)->cur_idx = 0;
   $my(redo)->head = $my(redo)->tail = $my(redo)->current = NULL;
 }
@@ -5498,8 +5698,8 @@ private int vundo_delete_line (buf_t *this, act_t *act, action_t *redoact) {
     buf_adjust_view (this);
     vundo_set (ract, INSERT_LINE);
     stack_push (redoact, ract);
-//    $my(video_first_row_idx) = this->cur_idx;
-  //  self(cur.append, row);
+    //  $my(video_first_row_idx) = this->cur_idx;
+    //  self(cur.append, row);
   }
 
   if ($my(video_first_row_idx) is this->cur_idx)
@@ -5512,6 +5712,7 @@ private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
   self(cur.set, act->idx);
 
   act_t *ract = AllocType (act);
+  self(set.row.idx, act->idx, act->row_pos - $my(dim)->first_row, act->col_pos);
   vundo_set (ract, REPLACE_LINE);
   ract->idx = this->cur_idx;
   ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
@@ -5536,7 +5737,7 @@ private int vundo (buf_t *this, utf8 com) {
 
   action_t *redoact = AllocType (action);
 
-  while (act isnot NULL) {
+  while (act) {
     if (act->type is DELETE_LINE)
       vundo_delete_line (this, act, redoact);
     else
@@ -5619,7 +5820,7 @@ searchandsub:;
     My(Re).reset_captures (re);
 
     if (0 > My(Re).exec (re, it->data->bytes + bidx,
-        it->data->num_bytes - bidx)) goto thecontinue;
+        it->data->num_bytes - bidx)) goto thenext;
 
     ifnot (NULL is substr) string_free (substr);
     if (NULL is (substr = My(Re).parse_substitute (re, sub, re->match->bytes))) {
@@ -5632,8 +5833,8 @@ searchandsub:;
       memcpy (prefix, it->data->bytes, bidx + re->match_idx);
       prefix[bidx + re->match_idx] = '\0';
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A', 'c', 'C'};
-      char qu[MAXLINE]; /* using str_fmt (a statement expression) causes */
-                        /* messages for uniitialized value[s] (on clang) */
+      char qu[MAXLINE]; /* using str_fmt (a statement expression) causes  */
+                        /* messages for uninitialized value[s] (on clang) */
       snprintf (qu, MAXLINE,
         "|match at line %d byte idx %d|\n"
         "%s%s%s%s%s\n"
@@ -5649,7 +5850,7 @@ searchandsub:;
       switch (c) {
         case 'n': case 'N': goto if_global;
         case 'q': case 'Q': goto theend;
-        case 'c': case 'C': goto thecontinue;
+        case 'c': case 'C': goto thenext;
         case 'a': case 'A': interactive = 0;
       }
     }
@@ -5667,16 +5868,13 @@ searchandsub:;
 
 if_global:
     if (global) {
-      int len = 0;
-      if (done_substitution)
-        len = (int) substr->num_bytes;
-
+      int len = (done_substitution ? (int) substr->num_bytes : 1);
       bidx += (re->match_idx + len);
-      if (bidx >= (int) it->data->num_bytes) goto thecontinue;
+      if (bidx >= (int) it->data->num_bytes) goto thenext;
       goto searchandsub;
     }
 
-thecontinue:
+thenext:
     it = it->next;
   }
 
@@ -6250,7 +6448,7 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
     $mycur(cur_col_idx) -= len;
      vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
 
-    if ($my(video)->col_pos is 1 or $my(video)->col_pos - fcol->width is 0) {
+    if ($my(cur_video_col) is 1 or $my(cur_video_col) - fcol->width is 0) {
       ifnot ($mycur(first_col_idx)) return NOTHING_TODO;
 
       int num = 0;
@@ -6268,6 +6466,7 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
       }
 
       $my(video)->col_pos = $my(cur_video_col) = num;
+
       ifnot (is_ins_mode)
         $my(video)->col_pos = $my(cur_video_col) =
             $my(video)->col_pos + (it->width - 1);
@@ -6423,8 +6622,7 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
   int row = $my(video)->row_pos;
   int orig_count = count;
 
-  while (count && count + row < $my(statusline_row))
-    count--;
+  while (count && count + row < $my(statusline_row)) count--;
 
   ifnot (adjust_col) $mycur(cur_col_idx) = 0;
 
@@ -6791,7 +6989,8 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
   }
 
   char buf[len + 1];
-  memcpy (buf, $mycur(data)->bytes, len);  buf[len] = '\0';
+  memcpy (buf, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+  buf[len] = '\0';
   My(String).delete_numbytes_at ($mycur(data), len, $mycur(cur_col_idx));
 
   if (calc_width and 0 isnot width)
@@ -7195,9 +7394,9 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
     case 'j':
     case 'w':
        {
-         int frame = $myparents(cur_frame) + 1;
-         if (frame is $myparents(num_frames)) frame = 0;
-         this = win_change_frame ($my(parent), frame, DRAW);
+         int frame = WIN_CUR_FRAME($my(parent)) + 1;
+         if (frame > WIN_LAST_FRAME($my(parent))) frame = FIRST_FRAME;
+         this = My(Win).frame.change ($my(parent), frame, DRAW);
          if (NULL isnot this) {
            *thisp = this;
            return DONE;
@@ -7208,9 +7407,9 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
     case ARROW_UP_KEY:
     case 'k':
        {
-         int frame = $myparents(cur_frame) - 1;
-         if (frame is -1) frame = $myparents(num_frames) - 1;
-         this = win_change_frame ($my(parent), frame, DRAW);
+         int frame = WIN_CUR_FRAME($my(parent)) - 1;
+         if (frame < FIRST_FRAME) frame = WIN_LAST_FRAME($my(parent));
+         this = My(Win).frame.change ($my(parent), frame, DRAW);
          if (NULL isnot this) {
            *thisp = this;
            return DONE;
@@ -7366,6 +7565,8 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
   int fidx = this->cur_idx;
   int lidx = fidx + count - 1;
+                                       /* optimization for large buffers */
+  int perfom_reg = (regidx isnot REG_UNAMED or count < $my(dim)->num_rows);
 
   for (int idx = fidx; idx <= lidx; idx++) {
     act_t *act = AllocType (act);
@@ -7374,11 +7575,14 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
 
-    rg = ed_register_push_with (
-      $my(root), regidx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
-    rg->cur_col_idx = $mycur(cur_col_idx);
-    rg->first_col_idx = $mycur(first_col_idx);
-    rg->col_pos = $my(cur_video_col);
+    /* with large buffers, this really slowdown a lot the operation */
+    if (perfom_reg) {
+      rg = ed_register_push_with (
+        $my(root), regidx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
+      rg->cur_col_idx = $mycur(cur_col_idx);
+      rg->first_col_idx = $mycur(first_col_idx);
+      rg->col_pos = $my(cur_video_col);
+    }
 
     if (NULL is self(cur.delete)) break;
   }
@@ -7387,6 +7591,10 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
   $my(video)->col_pos = $my(cur_video_col) = ved_buf_adjust_col (this, nth, isatend);
   buf_adjust_marks (this, DELETE_LINE, fidx, lidx);
+
+  if (this->num_items is 1 and $my(cur_video_row) isnot $my(dim)->first_row)
+    $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
+
 
   if (this->cur_idx is currow_idx) {
     if ($my(video_first_row_idx) < fidx) {
@@ -7404,8 +7612,9 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
-  MSG("deleted into register [%c]", REGISTERS[regidx]);
+  if (perfom_reg) MSG("deleted into register [%c]", REGISTERS[regidx]);
   self(draw);
+
   vundo_push (this, action);
   return DONE;
 }
@@ -7664,7 +7873,7 @@ private int ved_normal_handle_d (buf_t *this, int count, int reg) {
   switch (c) {
     case 'G':
     case END_KEY:
-      count = (this->num_items - 1) - this->cur_idx;
+      count = (this->num_items) - this->cur_idx;
       break;
     case 'g':
     case HOME_KEY:
@@ -8461,9 +8670,15 @@ handle_char:
       case 'I':
       case 'c':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
-        VISUAL_ADJUST_IDXS($my(vis)[1]);
         {
-          string_t *str = self(input_box, $my(vis)[1].fidx + 1, $my(vis)[0].fidx + 1,
+          int row = $my(cur_video_row) - (2 < $my(cur_video_row));
+          int index = $my(vis)[1].lidx;
+          if (index > $my(vis)[1].fidx)
+            while (row > 2 and index > $my(vis)[1].fidx) {
+              row--; index--;
+            }
+
+          string_t *str = self(input_box, row, $my(vis)[0].fidx + 1,
               DONOT_ABORT_ON_ESCAPE, NULL);
 
           action_t *action = AllocType (action);
@@ -8581,7 +8796,7 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
 
     if ($my(at_frame) is frame) $my(flags) &= ~BUF_IS_VISIBLE;
 
-    buf_t *that = My(Win).buf_new (win, fname, frame, 0);
+    buf_t *that = My(Win).buf.new (win, fname, frame, 0);
     current_list_set (that, 0);
 
     int cur_idx = win->cur_idx;
@@ -8679,15 +8894,18 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
 
       if (NULL is bn) break;
       *thisp = My(Win).set.current_buf ($my(parent), idx, DONOT_DRAW);
+      this = *thisp;
       if (NOTHING_TODO is ved_normal_goto_linenr (*thisp, lnr, DRAW))
         self(draw);
       return DONE;
     } while (0);
 
   if (frame is AT_CURRENT_FRAME) frame = $myparents(cur_frame);
-  if (NOTHING_TODO is ved_edit_fname ($my(parent), thisp, fname, frame, 0, 0, 1))
+  if (NOTHING_TODO is ved_edit_fname ($my(parent), thisp, fname, frame, 0,
+  	DONOT_DRAW, 1))
     return NOTHING_TODO;
 
+  this = *thisp;
   if (NOTHING_TODO is ved_normal_goto_linenr (*thisp, lnr, DRAW))
     self(draw);
 
@@ -9148,8 +9366,8 @@ private void ved_buf_clear (buf_t *this) {
 
   self(cur.set, 0);
   $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
-  $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
-  $my(video)->col_pos = $my(cur_video_col) = 1;
+  $my(cur_video_row) = $my(dim)->first_row;
+  $my(cur_video_col) = 1;
 }
 
 private int ved_buf_delete (buf_t **thisp, int idx, int force) {
@@ -9217,9 +9435,9 @@ private int ved_buf_delete (buf_t **thisp, int idx, int force) {
       if (NOTHING_TODO is ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED))
         should_draw = 1;
     } else {
-      int frame = $from(parent, cur_frame) + 1;
-      if (frame is $from(parent, num_frames)) frame = 0;
-      *thisp = win_change_frame ($my(parent), frame, DONOT_DRAW);
+      int frame = WIN_CUR_FRAME(parent) + 1;
+      if (frame > WIN_LAST_FRAME(parent)) frame = FIRST_FRAME;
+      *thisp = My(Win).frame.change ($my(parent), frame, DONOT_DRAW);
     }
   } else should_draw = 1;
 
@@ -11347,10 +11565,11 @@ private int ved_insert (buf_t **thisp, utf8 com) {
   if (com is 'i' or com is 'a') {
     int width = char_utf8_width ($mycur(data)->bytes + $mycur(cur_col_idx),
         $my(ftype)->tabwidth);
+
     if (width > 1) {
       if ($my(cur_video_col) - width + 1 < 1) {
         str_utf8_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-        CLEAR, $my(ftype)->tabwidth, $mycur(first_col_idx));
+            CLEAR, $my(ftype)->tabwidth, $mycur(first_col_idx));
         vchar_t *it = $my(line)->current;
         while ($mycur(first_col_idx) > 0 and $my(cur_video_col) < 1) {
           $mycur(first_col_idx) -= it->len;
@@ -11525,9 +11744,12 @@ theend:
   ved_normal_left (this, 1, DRAW);
   self(set.mode, prev_mode);
 
-  $my(video)->col_pos = $my(cur_video_col) = $my(cur_video_col) +
-     (char_utf8_width ($mycur(data)->bytes + $mycur(cur_col_idx),
-     $my(ftype)->tabwidth) - 1);
+  if ($mycur(data)->num_bytes) {
+    $my(video)->col_pos = $my(cur_video_col) = $my(cur_video_col) +
+       (char_utf8_width ($mycur(data)->bytes + $mycur(cur_col_idx),
+       $my(ftype)->tabwidth) - 1);
+  }
+
   if ($my(cur_video_col) > $my(dim)->num_cols) {
     $mycur(first_col_idx) = $mycur(cur_col_idx);
       $my(video)->col_pos = $my(cur_video_col) =
@@ -11828,7 +12050,7 @@ private int ved_loop (ed_t *ed, buf_t *this) {
   int regidx = -1;
 
   for (;;) {
-new_state:
+ new_state:
     regidx = -1;
     range[0] = range[1] = -1;
 
@@ -12035,13 +12257,15 @@ private void ed_set_screen_size (ed_t *this) {
     $my(dim) = NULL;
   }
 
-  $my(dim) = dim_new (1, $from($my(term), lines), 1, $from($my(term), columns));
+  $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
 }
 
-private dim_t *ed_set_dim (ed_t *this, int f_row, int l_row, int f_col, int l_col) {
-  return dim_set ($my(dim), f_row, l_row, f_col, l_col);
+private dim_t *ed_set_dim (ed_t *this, dim_t *dim, int f_row, int l_row,
+                                                   int f_col, int l_col) {
+  (void) this;
+  return dim_set (dim, f_row, l_row, f_col, l_col);
 }
 
 private int ved_append_win (ed_t *this, win_t *w) {
@@ -12258,7 +12482,36 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
 }
 
 private void ed_syn_append (ed_t *this, syn_t syn) {
-  $my(syntaxes)[$my(num_syntaxes)++] = syn;
+  $my(syntaxes)[$my(num_syntaxes)] = syn;
+  ifnot (NULL is syn.keywords) {
+    char chars[] = COLOR_CHARS;
+    int arlen = 16;
+    int keyword_colors[16] = {
+        HL_IDENTIFIER, HL_KEYWORD, HL_COMMENT, HL_OPERATOR, HL_NUMBER,
+        HL_STRING, HL_STRING_DELIM, HL_FUNCTION, HL_VARIABLE, HL_TYPE,
+        HL_DEFINITION, HL_ERROR, HL_QUOTE, HL_QUOTE_1, HL_QUOTE_2, HL_NORMAL};
+
+#define whereis_c(c_) ({                \
+	int idx_ = arlen - 1;               \
+    char *sp = byte_in_str (chars, c_); \
+    if (sp isnot NULL) idx_ = sp-chars; \
+    idx_;                               \
+})
+
+    int num = 0;
+    while (syn.keywords[num] isnot NULL) num++;
+    $my(syntaxes)[$my(num_syntaxes)].keywords_len = Alloc (sizeof (size_t) * num);
+    $my(syntaxes)[$my(num_syntaxes)].keywords_colors = Alloc (sizeof (size_t) * num);
+    for (int i = 0; i < num; i++) {
+      size_t len = bytelen (syn.keywords[i]);
+      $my(syntaxes)[$my(num_syntaxes)].keywords_len[i] = len - 2;
+      char c = syn.keywords[i][len-1];
+      $my(syntaxes)[$my(num_syntaxes)].keywords_colors[i] =
+         keyword_colors[whereis_c(c)];
+    }
+  }
+  $my(num_syntaxes)++;
+#undef whereis_c
 }
 
 private void ed_init_syntaxes (ed_t *this) {
@@ -12285,7 +12538,8 @@ private void ed_free (ed_t *this) {
     My(String).free ($my(topline));
     My(String).free ($my(msgline));
     My(String).free ($my(last_insert));
-    My(String).free ($my(shared_str));
+    My(String).free ($my(ed_str));
+
     My(Video).free ($my(video));
 
     history_free (&$my(history));
@@ -12293,6 +12547,11 @@ private void ed_free (ed_t *this) {
 
     for (int i = 0; i < NUM_REGISTERS; i++)
       self(free_reg, &$my(regs)[i]);
+
+    for (int i = 0; i < $my(num_syntaxes); i++) {
+      free ($my(syntaxes)[i].keywords_len);
+      free ($my(syntaxes)[i].keywords_colors);
+    }
 
     free ($my(cw_mode_chars)); free ($my(cw_mode_actions));
     free ($my(lw_mode_chars)); free ($my(lw_mode_actions));
@@ -12307,11 +12566,18 @@ private void ed_free (ed_t *this) {
   free (this);
 }
 
-private ed_t *__ed_new__ (ed_T *E) {
+private void ed_init_special_win (ed_t *this) {
+  ved_scratch_buf (this);
+  ved_msg_buf (this);
+  ved_diff_buf (this);
+  ved_search_buf (this);
+}
+
+private ed_t *ed_init (ed_T *E) {
   ed_t *this = AllocType (ed);
   this->prop = AllocProp (ed);
 
-  $my(dim) = dim_new (1, $from($from(E, term), lines), 1, $from($from(E, term), columns));
+  $my(dim) = ed_dim_new (this, 1, $from($from(E, term), lines), 1, $from($from(E, term), columns));
   $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
 
   $my(Me) = E;
@@ -12333,6 +12599,8 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(Vstring) = &E->Vstring;
   $my(Rline) = &E->Rline;
 
+  $my(env) = env_new ();
+
   $my(term) = $from(E, term);
   $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
       $from($my(term), columns), 1, 1);
@@ -12340,15 +12608,12 @@ private ed_t *__ed_new__ (ed_T *E) {
 
   $my(topline) = My(String).new_with ("");
   $my(msgline) = My(String).new_with ("");
+  $my(last_insert) = My(String).new_with ("");
+  $my(ed_str) =  My(String).new_with ("");
 
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
-
-  ed_register_init_all (this);
-
-  ed_init_syntaxes (this);
-
-  $my(env) = env_new ();
+  $my(saved_cwd) = dir_current ();
 
   $my(history) = AllocType (hist);
   $my(history)->search = AllocType (h_search);
@@ -12356,31 +12621,32 @@ private ed_t *__ed_new__ (ed_T *E) {
   $my(history)->rline->history_idx = 0;
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
+
   this->name_gen = 26;
 
-  $my(last_insert) = My(String).new_with ("");
-  $my(shared_str) = My(String).new_with ("");
+  ed_register_init_all (this);
 
-  $my(saved_cwd) = dir_current ();
+  ed_init_syntaxes (this);
 
   ved_init_commands (this);
+
+  ed_init_special_win (this);
 
   ed_set_cw_mode_actions_default (this);
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
+
+  current_list_append (E, this);
+
   return this;
 }
 
 private ed_t *ed_new (ed_T *E, int num_wins) {
-  ed_t *this = __ed_new__ (E);
+  ed_t *this = ed_init (E);
+
   if (num_wins <= 0) num_wins = 1;
 
   int num_frames = 1;
-
-  ved_scratch_buf (this);
-  ved_msg_buf (this);
-  ved_diff_buf (this);
-  ved_search_buf (this);
 
   win_t *w;
   loop (num_wins) {
@@ -12388,7 +12654,6 @@ private ed_t *ed_new (ed_T *E, int num_wins) {
     self(append.win, w);
   }
 
-  current_list_append (E, this);
   return this;
 }
 
@@ -12458,7 +12723,7 @@ public cstring_T __init_cstring__ (void) {
           .code_at = str_utf8_get_code_at
         ),
         .new = str_utf8_new,
-        .free = str_utf8_free_members,
+        .free = str_utf8_free,
         .encode = str_utf8_encode,
         .to_lower = str_utf8_to_lower,
         .to_upper = str_utf8_to_upper,
@@ -12480,8 +12745,10 @@ public string_T __init_string__ (void) {
       .new_with = string_new_with,
       .new_with_len = string_new_with_len,
       .new_with_fmt = string_new_with_fmt,
-      .insert_at  = string_insert_at,
+      .insert_at = string_insert_at,
+      .insert_at_with_len  = string_insert_at_with_len,
       .append = string_append,
+      .append_with_len = string_append_with_len,
       .append_byte = string_append_byte,
       .prepend = string_prepend,
       .prepend_fmt = string_prepend_fmt,
@@ -12489,9 +12756,10 @@ public string_T __init_string__ (void) {
       .delete_numbytes_at = string_delete_numbytes_at,
       .replace_numbytes_at_with = string_replace_numbytes_at_with,
       .replace_with = string_replace_with,
+      .replace_with_len = string_replace_with_len,
       .replace_with_fmt = string_replace_with_fmt,
       .clear = string_clear,
-      .clear_at = string_set_nullbyte_at,
+      .clear_at = string_clear_at,
     )
   );
 }
@@ -12560,6 +12828,7 @@ private ed_T *editor_new (char *name) {
   ed_T *this = Alloc (sizeof (ed_T));
   *this = ClassInit (ed,
     .self = SelfInit (ed,
+      .init = ed_init,
       .new = ed_new,
       .free = ed_free,
       .quit = ved_quit,
@@ -12571,6 +12840,8 @@ private ed_T *editor_new (char *name) {
       .resume = ed_resume,
       .suspend = ed_suspend,
       .question = ved_question,
+      .dim_calc = ed_dim_calc,
+      .dims_init = ed_dims_init,
       .set = SubSelfInit (ed, set,
         .dim = ed_set_dim,
         .screen_size = ed_set_screen_size,
@@ -12623,6 +12894,7 @@ private ed_T *editor_new (char *name) {
         .get = ed_get_buf
       ),
       .win = SubSelfInit (ed, win,
+        .init = ed_win_init,
         .new = ed_win_new,
         .new_special = ed_win_new_special,
         .change = ed_win_change
@@ -12654,14 +12926,25 @@ private ed_T *editor_new (char *name) {
       .self = SelfInit (win,
         .set = SubSelfInit (win, set,
           .current_buf = win_set_current_buf,
-          .video_dividers = win_set_video_dividers
+          .has_dividers = win_set_has_dividers,
+          .video_dividers = win_set_video_dividers,
+          .min_rows = win_set_min_rows,
+          .num_frames = win_set_num_frames
+        ),
+        .buf = SubSelfInit (win, buf,
+          .init = win_buf_init,
+          .new = win_buf_new
+        ),
+        .frame = SubSelfInit (win, frame,
+          .change = win_frame_change
         ),
         .get = SubSelfInit (win, get,
           .current_buf = win_get_current_buf,
           .current_buf_idx = win_get_current_buf_idx,
           .buf_by_idx = win_get_buf_by_idx,
           .buf_by_name = win_get_buf_by_name,
-          .num_buf = win_get_num_buf
+          .num_buf = win_get_num_buf,
+          .num_cols = win_get_num_cols
         ),
         .pop = SubSelfInit (win, pop,
           .current_buf = win_pop_current_buf
@@ -12670,8 +12953,8 @@ private ed_T *editor_new (char *name) {
           .buf_dim = win_adjust_buf_dim,
         ),
         .draw = win_draw,
-        .buf_new = win_buf_new,
-        .append_buf = win_append_buf
+        .append_buf = win_append_buf,
+        .dim_calc = win_dim_calc
       ),
     ),
     .Buf = ClassInit (buf,
@@ -12683,20 +12966,35 @@ private ed_T *editor_new (char *name) {
         .get = SubSelfInit (buf, get,
           .fname = buf_get_fname,
           .num_lines = buf_get_num_lines,
-          .line_at = buf_get_line_at,
           .current_video_row = buf_get_current_video_row,
-          .current_video_col = buf_get_current_video_col
+          .current_video_col = buf_get_current_video_col,
+          .prop = SubSelfInit (bufget, prop,
+            .tabwidth = buf_get_prop_tabwidth
+          ),
+          .row = SubSelfInit (bufget, row,
+            .at = buf_get_row_at,
+            .current = buf_get_row_current,
+            .current_bytes = buf_get_row_current_bytes,
+            .col_idx = buf_get_row_col_idx,
+          ),
         ),
         .set = SubSelfInit (buf, set,
           .fname = buf_set_fname,
           .video_first_row = buf_set_video_first_row,
           .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .show_statusline = buf_set_show_statusline,
           .modified = buf_set_modified,
           .as = SubSelfInit (bufset, as,
             .unamed = buf_set_as_unamed,
             .non_existant = buf_set_as_non_existant
-           ),
+          ),
+          .normal = SubSelfInit (bufset, normal,
+            .at_beg_cb = buf_set_normal_cb
+          ),
+          .row = SubSelfInit (bufset, row,
+            .idx = buf_set_row_idx
+          ),
         ),
         .syn = SubSelfInit (buf, syn,
           .init = buf_syn_init,
@@ -12714,14 +13012,16 @@ private ed_T *editor_new (char *name) {
           .prepend = buf_current_prepend,
           .append = buf_current_append,
           .append_with = buf_current_append_with,
+          .append_with_len = buf_current_append_with_len,
           .prepend_with = buf_current_prepend_with,
+          .replace_with = buf_current_replace_with,
           .delete = buf_current_delete,
           .pop = buf_current_pop,
          ),
         .row =  SubSelfInit (buf, row,
           .new_with = buf_row_new_with,
+          .new_with_len = buf_row_new_with_len,
           .get_current = buf_row_get_current,
-          .get_current_bytes = buf_row_get_current_bytes,
           .get_current_line_idx = buf_row_get_current_line_idx
         ),
         .read = SubSelfInit (buf, read,
@@ -12742,7 +13042,10 @@ private ed_T *editor_new (char *name) {
         ),
         .normal = SubSelfInit (buf, normal,
           .bof = ved_normal_bof,
-          .eof = ved_normal_eof
+          .eof = ved_normal_eof,
+          .down = ved_normal_down,
+          .up = ved_normal_up,
+          .page_down = ved_normal_page_down
         ),
         .draw = buf_draw,
         .flush = buf_flush,
@@ -12751,7 +13054,8 @@ private ed_T *editor_new (char *name) {
         .append_with = buf_append_with,
         .write = buf_write,
         .substitute = buf_substitute,
-        .input_box = buf_input_box
+        .input_box = buf_input_box,
+        .init_fname = buf_init_fname
       ),
     ),
     .Msg = ClassInit (msg,
@@ -12788,7 +13092,7 @@ private ed_T *editor_new (char *name) {
   return this;
 }
 
-public ed_T *__init_ved__ (void) {
+public ed_T *__init_ed__ (void) {
   ed_T *this = editor_new ("veda");
 
   if (NOTOK is __init__ (this)) {
@@ -12796,11 +13100,10 @@ public ed_T *__init_ved__ (void) {
     return NULL;
   }
 
-  self(new, 1);
   return this;
 }
 
-public void __deinit_ved__ (ed_T *Ed) {
+public void __deinit_ed__ (ed_T *Ed) {
   __deinit__ (Ed);
 
   ed_t *this = Ed->head;

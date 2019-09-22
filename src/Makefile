@@ -246,6 +246,8 @@ LD_LIBRARY_PATH := $(SYSLIBDIR)
 #----------------------------------------------------------#
 AR = ar rs
 TEST = test
+STAT = stat
+GREP = grep
 RM = rm -f
 RM_R = rm -r -f
 RMDIR = rmdir
@@ -267,8 +269,8 @@ makeenv:
 	@$(TEST) -d $(SYSLIBDIR)  || $(MKDIR) $(SYSLIBDIR)
 	@$(TEST) -d $(SYSINCDIR)  || $(MKDIR) $(SYSINCDIR)
 	@$(TEST) -d $(SYSBINDIR)  || $(MKDIR) $(SYSBINDIR)
-	@$(TEST) -d $(SYSDATADIR) || $(MKDIR) $(SYSDATADIR)
-	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR) $(SYSTMPDIR)
+	@$(TEST) -d $(SYSDATADIR) || $(MKDIR) --mode=0700 $(SYSDATADIR)
+	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR) --mode=0700 $(SYSTMPDIR)
 
 checkenv:
 	@$(TEST) -w $(SYSDIR)     || exit 1
@@ -289,11 +291,15 @@ endif
 
 run_shared:
 	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(SYSEDSHARED) $(FILE)
+
 run_static:
 	@$(SYSEDSTATIC) $(FILE)
+
 check_veda_memory_leaks:
 	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(VALGRIND) $(VALGRIND_ARGS) $(VALGRIND_V) $(SYSEDSHARED) $(FILE)
+
 debug_veda_static:
 	@$(GDB) $(GDB_ARGS) $(SYSEDSTATIC) $(FILE)
+
 debug_veda_shared:
 	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(GDB) $(GDB_ARGS) $(SYSEDSHARED) $(FILE)

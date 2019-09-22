@@ -39,6 +39,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
        action_t **action, int fidx, int lidx, bufiter_t *iter) {
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
+
   Cstring.substr (prefix, fidx, iter->line->bytes, iter->line->num_bytes, 0);
   Cstring.substr (lpart, iter->line->num_bytes - lidx - 1, iter->line->bytes,
      iter->line->num_bytes, lidx + 1);
@@ -713,13 +714,15 @@ private void __u_add_rline_commands__ (ed_t *this) {
 
 char *make_filenames[] = {"Makefile", NULL};
 char *make_extensions[] = {".Makefile", NULL};
-char *make_keywords[] = {"ifeq", "ifneq", "endif", "else", "ifdef", NULL};
+char *make_keywords[] = {
+  "ifeq I", "ifneq I", "endif I", "else I", "ifdef I", NULL};
 
 char *sh_extensions[] = {".sh", ".bash", NULL};
 char *sh_shebangs[] = {"#!/bin/sh", "#!/bin/bash", NULL};
 char  sh_operators[] = "+:-%*><=|&()[]{}!$/`?";
-char *sh_keywords[] = {"if", "else", "then", "fi", "while", "for", "break", "done",
-    "do", "case", "esac", "in", "EOF", NULL};
+char *sh_keywords[] = {
+    "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
+    "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
 char  sh_singleline_comment[] = "#";
 char *_u_NULL_ARRAY[] = {NULL};
 
@@ -751,14 +754,14 @@ syn_t u_syn[] = {
     make_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_make_syn_init, 0
+    __u_syn_parser, __u_make_syn_init, 0, NULL, NULL,
   },
   {
     "sh", _u_NULL_ARRAY, sh_extensions, sh_shebangs,
     sh_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_sh_syn_init, 0
+    __u_syn_parser, __u_sh_syn_init, 0, NULL, NULL,
   },
 };
 

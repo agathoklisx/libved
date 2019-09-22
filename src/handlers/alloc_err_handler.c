@@ -12,7 +12,7 @@ int err, size_t size,  char *file, const char *func, int line) {
   else
     fprintf (stderr, "Error: Not Enouch Memory\n");
 
-  ifnot (NULL is E) __deinit_ved__ (E);
+  ifnot (NULL is E) __deinit_ed__ (E);
   exit (1);
 }
 
