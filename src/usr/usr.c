@@ -140,6 +140,8 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
   }
 
   ifnot (spell->guesses->num_items) {
+    Msg.send_fmt ($myed, COLOR_RED, "%s is not correct, but cannot find any relative words",
+        word);
     retval = NOTOK;
     goto theend;
   }
@@ -161,7 +163,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
   int range[2];
   int retval = Rline.get.range (rl, *thisp, range);
   if (NOTOK is retval) {
-    range[0] = Buf.row.get_current_line_idx (*thisp);
+    range[0] = Buf.get.row.current_col_idx (*thisp);
     range[1] = range[0];
   }
 
@@ -527,7 +529,7 @@ private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
   int range[2];
   int retval = Rline.get.range (rl, *thisp, range);
   if (NOTOK is retval) {
-    range[0] = Buf.row.get_current_line_idx (*thisp);
+    range[0] = Buf.get.row.current_col_idx (*thisp);
     range[1] = range[0];
   }
 
@@ -782,6 +784,7 @@ private void __init_usr__ (ed_t *this) {
   Uenv = AllocType (uenv);
   string_t *path = Ed.venv.get (this, "path");
   Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
+
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);
 }
@@ -790,6 +793,7 @@ private void __deinit_usr__ (ed_t *this) {
   (void) this;
   String.free (Uenv->man_exec);
   free (Uenv);
+
 #if HAS_SPELL
   __deinit_spell__ (&SpellClass);
 #endif

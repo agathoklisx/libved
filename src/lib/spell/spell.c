@@ -186,7 +186,7 @@ private void spell_insertion (spell_t *spell) {
 
 private int spell_case (spell_t *spell) {
   char buf[spell->word_len];
-  int retval = Cstring.utf8.change_case (buf, spell->word, spell->word_len, TO_LOWER);
+  int retval = Ustring.change_case (buf, spell->word, spell->word_len, TO_LOWER);
   ifnot (retval) return SPELL_WORD_ISNOT_CORRECT;
   if (Imap.key_exists (spell->dic, buf)) return SPELL_WORD_IS_CORRECT;
   Vstring.add.sort_and_uniq (spell->words, buf);
@@ -208,9 +208,9 @@ private int spell_guess (spell_t *spell) {
     if (Imap.key_exists (spell->dic, that->data->bytes))
       Vstring.cur.append_with (spell->guesses, that->data->bytes);
     that = that->next;
-   }
+  }
 
-   return SPELL_WORD_ISNOT_CORRECT;
+  return SPELL_WORD_ISNOT_CORRECT;
 }
 
 private int spell_correct (spell_t *spell) {
@@ -259,8 +259,8 @@ private int spell_init_dictionary (spell_t *spell, char *dic, int num_words, int
   if (-1 is access (dic, F_OK|R_OK)) {
     spell->retval = SPELL_ERROR;
     Vstring.append_with_fmt (spell->messages,
-        "dictionary is not readable: |%s|\n"
-        "errno: %d, error: %s", dic, errno, Error.string ($myed, errno));
+        "dictionary is not readable: |%s|\n" "errno: %d, error: %s",
+        dic, errno, Error.string ($myed, errno));
     return spell->retval;
   }
 

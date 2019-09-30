@@ -1,22 +1,31 @@
-/* A pager for mutt email client, that is being used for testing.
+/* A pager for mutt email client, that is being used mainly for testing.
  * The idea is that since this is C, it can be easily extended or modified to
  * suit the needs, plus it receives the libved features and any future development.
  * This "includes" all the editor capabilities including capabilities out of the
  * main machine.
- *  
+
  * By default this splits the window in two frames, with the upper frame to hold
  * the headers, and the lower the body.
+
  * The body buffer exits with 'q' or with the arrow-left key when the cursor is
  * on the first column.
+ * Also by default `space' is treated like PAGE_DOWN (one page forward).
+
  * The lines are wrapped and the quoted lines are highlighted. It also tries to
  * remove continuously empty lines (more than one), which seems is a habit for some.
  * The default quote char '>', is placed next to each other (if more than one level
  * of quoting).
- * Note that on sigwinch it will probably not behave properly.
- * 
+
+ * Note that it requires at least 14 screen lines, and with less or on sigwinch
+ * that shrinks the window, it will refuse to work or exit, with a violent way.
+
  * Relative mutt setting:
  *   set pager="path_to_executable"
- *
+
+ * And for the reason stated above, maybe is a good idea for something like the
+ * following:
+ * macro index <f3>  '<enter-command>set pager=builtin'
+
  * This builds both a static executable and or an executable which links against
  * the shared library. In the latter case LD_LIBRARY_PATH should point to the lib
  * directory (by default src/sys/library).
@@ -39,6 +48,7 @@ static ed_T *E = NULL;
 #define Ed      E->self
 #define Cstring E->Cstring.self
 #define Vstring E->Vstring.self
+#define Ustring E->Ustring.self
 #define String  E->String.self
 #define Rline   E->Rline.self
 #define Error   E->Error.self
@@ -65,9 +75,9 @@ static ed_T *E = NULL;
 #endif
 
 char *mail_hdrs_keywords[] = {
-  "Subject I", "From I", "To: I", "Date: I", "Reply-To: I", "Cc: I", "cc: I",
-  "Message-ID: I", "Message-Id: I", "User-Agent: I", "X-Mailer: I", "Bc: I", "bc: I",
-  "Mail-Followup-To: I", "Reply-to: I", NULL};
+  "Subject K", "From K", "To: K", "Date: K", "Reply-To: K", "Cc: K", "cc: K",
+  "Message-KD: K", "Message-Kd: K", "User-Agent: K", "X-Mailer: K", "Bc: K", "bc: K",
+  "Mail-Followup-To: K", "Reply-to: K", NULL};
 
 char *__mail_NULL_ARRAY[] = {NULL};
 
@@ -77,43 +87,61 @@ private char *__mail_hdrs_syn_parser (buf_t *this, char *line, int len, int idx,
 
 private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
  (void) this; (void) idx; (void) row;
-  if (line[0] isnot '>') return line;
+  if (line[0] isnot '>') {
+    if (NULL is Cstring.byte_in_str (line, '\t'))
+      return line;
+
+    int tabwidth = Buf.get.prop.tabwidth (this);
+    string_t *lline = String.new (len + 8);
+    for (int i = 0; i < len; i++)
+      if (line[i] is '\t') {
+        for (int j = 0; j < tabwidth; j++)
+          String.append_byte (lline, ' ');
+      } else
+          String.append_byte (lline, line[i]);
+
+     strncpy (line, lline->bytes, lline->num_bytes);
+     line[lline->num_bytes] = '\0';
+     String.free (lline);
+     return line;
+  }
+
   char lline[len + 16];
   int count = 1;
   while (line[count] is '>') count++;
   switch (count) {
     case 1:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(HL_QUOTE),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
     case 2:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(HL_QUOTE_1),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
 
     case 3:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(HL_QUOTE_2),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
 
     case 4:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(COLOR_MAGENTA),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
 
     case 5:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(COLOR_GREEN),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
 
     case 6:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(COLOR_RED),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
       break;
 
     default:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(COLOR_NORMAL),
-        line, COLOR_RESET);
+        line, TERM_COLOR_RESET);
   }
 
   strcpy (line, lline);
@@ -234,10 +262,10 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   size_t k = 0;
   size_t cur_idx = 0;
   int quot_num = 0;
-  char quot_buf[128]; quot_buf[0] = '\0';
+  char quot_buf[64]; quot_buf[0] = '\0';
 
   if (cur_buf is bufs->body and lline[0] is '>') {
-    for (; cur_idx < len and cur_idx < 128; cur_idx++) {
+    for (; cur_idx < len and cur_idx < 64; cur_idx++) {
       if ('>' is lline[cur_idx]) {
         quot_buf[quot_num++] = '>';
         numchars++;
@@ -256,9 +284,10 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
     }
   }
 
-  u8_t *uline = Cstring.utf8.new ();
-  Cstring.utf8.encode (uline, lline, len, DONOT_CLEAR,
-     Buf.get.prop.tabwidth (cur_buf), 0);
+  int tabwidth = Buf.get.prop.tabwidth (cur_buf);
+
+  u8_t *uline = Ustring.new ();
+  Ustring.encode (uline, lline, len, DONOT_CLEAR, tabwidth, 0);
 
   vchar_t *it = uline->head;
   vchar_t *tmp = it;
@@ -310,7 +339,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   if (k isnot j) {
     sp[j] = '\0';
     Buf.cur.replace_with (cur_buf, sp);
-    sp[0] = '\0';
+     sp[0] = '\0';
     j = 0;
 
     if (cur_buf is bufs->body and quot_num) {
@@ -328,7 +357,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   }
 
 deallocate:
-  Cstring.utf8.free (uline);
+  Ustring.free (uline);
 
 theend:
   return 0;

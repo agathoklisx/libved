@@ -111,9 +111,6 @@
 #define NOT_AT_EOF     0
 #define AT_EOF         1
 
-#define NO_APPEND 0
-#define APPEND    1
-
 #define NO_COUNT_SPECIAL 0
 #define COUNT_SPECIAL    1
 
@@ -135,8 +132,11 @@
 #define DONOT_DRAW 0
 #define DRAW       1
 
-#define DONOT_CLEAR 0
-#define CLEAR       1
+#define DONOT_APPEND 0
+#define APPEND       1
+
+#define DONOT_CLEAR  0
+#define CLEAR        1
 
 #define X_PRIMARY     0
 #define X_CLIPBOARD   1
@@ -176,6 +176,18 @@
 
 #define HL_NUMBERS_NO 0
 #define HL_NUMBERS 1
+
+#define NOT       (0 << 0)
+#define UNSET     NOT
+
+#define MSG_SET_RESET       (1 << 0)
+#define MSG_SET_APPEND      (1 << 1)
+#define MSG_SET_OPEN        (1 << 2)
+#define MSG_SET_CLOSE       (1 << 3)
+#define MSG_SET_DRAW        (1 << 4)
+#define MSG_SET_COLOR       (1 << 5)
+#define MSG_SET_TO_MSG_BUF  (1 << 6)
+#define MSG_SET_TO_MSG_LINE (1 << 7)
 
 #define ED_INIT_ERROR   (1 << 0)
 
@@ -221,17 +233,15 @@
 #define COLOR_TOPLINE     COLOR_YELLOW
 #define COLOR_STATUSLINE  COLOR_BLUE
 #define COLOR_SUCCESS     COLOR_GREEN
-#define COLOR_FAILURE     COLOR_RED
 #define COLOR_NORMAL      COLOR_FG_NORMAL
+#define COLOR_ERROR       COLOR_RED
+#define COLOR_WARNING     COLOR_MAGENTA
 #define COLOR_PROMPT      COLOR_YELLOW
 #define COLOR_BOX         COLOR_YELLOW
 #define COLOR_MENU_BG     COLOR_RED
 #define COLOR_MENU_SEL    COLOR_GREEN
 #define COLOR_MENU_HEADER COLOR_CYAN
 #define COLOR_DIVIDER     COLOR_MAGENTA
-
-#define COLOR_FMT       "\033[%dm"
-#define COLOR_RESET     "\033[m"
 
 #define HL_NORMAL       COLOR_NORMAL
 #define HL_VISUAL       COLOR_CYAN
@@ -300,8 +310,6 @@
 #define TERM_MAKE_COLOR(clr) \
 ({char b__[8];snprintf (b__, 8, TERM_SET_COLOR_FMT, (clr));b__;})
 
-#define UNSET      0
-#define SET        1
 #define NO_OFFSET  0
 
 #define ZERO_FLAGS 0
@@ -312,7 +320,7 @@
 
 #define RE_MAX_NUM_CAPTURES 9
 
-/* These corespond to SLRE failure codes */
+/* These correspond to SLRE failure codes */
 #define RE_NO_MATCH                          -1
 #define RE_UNEXPECTED_QUANTIFIER_ERROR       -2
 #define RE_UNBALANCED_BRACKETS_ERROR         -3
@@ -513,6 +521,7 @@ typedef string_t *(Indent_cb) (buf_t *, row_t *);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef int (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
 typedef int (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
+typedef int (*BufNormalOng_cb) (buf_t **, int);
 
 NewType (string,
   size_t  num_bytes;
@@ -741,12 +750,12 @@ NewSubSelf (cstring, trim,
   char *(*end) (char *, char);
 );
 
-NewSubSelf (cstringutf8, get,
+NewSubSelf (ustring, get,
   utf8 (*code_at) (char *, size_t, int, int *);
 );
 
-NewSubSelf (cstring, utf8,
-  SubSelf (cstringutf8, get) get;
+NewSelf (ustring,
+  SubSelf (ustring, get) get;
 
   char *(*character) (utf8, char *, int *);
 
@@ -763,21 +772,25 @@ NewSubSelf (cstring, utf8,
   void (*free) (u8_t *);
   u8_t *(*new) (void);
   u8char_t  *(*encode) (u8_t *, char *, size_t, int, int, int);
+);
 
+NewClass (ustring,
+  Self (ustring) self;
 );
 
 NewSelf (cstring,
   SubSelf (cstring, trim) trim;
-  SubSelf (cstring, utf8) utf8;
 
   char
     *(*substr) (char *, size_t, char *, size_t, size_t),
     *(*extract_word_at) (char *, size_t, char *, size_t, char *, size_t, int, int *, int *),
     *(*itoa) (int, char *, int),
-    *(*dup) (const char *, size_t);
+    *(*dup) (const char *, size_t),
+    *(*byte_in_str) (const char *, int);
 
   int
     (*eq) (const char *, const char *),
+    (*eq_n) (const char *, const char *, size_t),
     (*cmp_n) (const char *, const char *, size_t);
 
   vstr_t *(*chop) (char *, char, vstr_t *, StrChop_cb, void *);
@@ -794,16 +807,16 @@ NewSelf (string,
      (*clear_at) (string_t *, int);
 
   string_t
-    *(*new) (void),
+    *(*new) (size_t),
     *(*new_with) (const char *),
     *(*new_with_len) (const char *, size_t),
     *(*new_with_fmt) (const char *, ...),
     *(*append_byte) (string_t *, char),
     *(*prepend_byte) (string_t *, char),
     *(*append) (string_t *, const char *),
+    *(*append_fmt) (string_t *, const char *, ...),
     *(*append_with_len) (string_t *, const char *, size_t),
     *(*prepend) (string_t *, const char *),
-    *(*append_fmt) (string_t *, const char *, ...),
     *(*prepend_fmt) (string_t *, const char *, ...),
     *(*insert_at) (string_t *, const char *, int),
     *(*insert_at_with_len) (string_t *, const char *, int, size_t),
@@ -906,9 +919,12 @@ NewClass (re,
 
 NewSelf (msg,
   void
+    (*set) (ed_t *, int, int, char *, size_t),
+    (*set_fmt) (ed_t *, int, int, char *, ...),
     (*send) (ed_t *, int, char *),
     (*send_fmt) (ed_t *, int, char *, ...),
     (*error) (ed_t *, char *, ...);
+
   char *(*fmt) (ed_t *, int, ...);
 );
 
@@ -977,6 +993,7 @@ NewSubSelf (bufget, row,
   string_t *(*current_bytes) (buf_t *);
 
   int
+    (*current_col_idx) (buf_t *),
     (*col_idx) (buf_t *, row_t *);
 );
 
@@ -1075,10 +1092,7 @@ NewSubSelf (buf, free,
 NewSubSelf (buf, row,
   row_t
     *(*new_with) (buf_t *, const char *),
-    *(*new_with_len) (buf_t *, const char *, size_t),
-    *(*get_current) (buf_t *);
-
-  int (*get_current_line_idx) (buf_t *);
+    *(*new_with_len) (buf_t *, const char *, size_t);
 );
 
 NewSubSelf (buf, read,
@@ -1234,6 +1248,7 @@ NewSubSelf (ed, set,
      (*screen_size) (ed_t *),
      (*topline) (buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
+     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
      (*word_actions_cb) (ed_t *, WordActions_cb),
@@ -1363,6 +1378,8 @@ NewClass (ed,
   Class (term) Term;
   Class (video) Video;
   Class (cstring) Cstring;
+  Class (vstring) Vstring;
+  Class (ustring) Ustring;
   Class (string) String;
   Class (re) Re;
   Class (input) Input;
@@ -1374,7 +1391,6 @@ NewClass (ed,
   Class (path) Path;
   Class (dir) Dir;
   Class (rline) Rline;
-  Class (vstring) Vstring;
 
   ed_t *head;
   ed_t *tail;

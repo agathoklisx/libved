@@ -1214,19 +1214,25 @@ Search:
 
 /* Acknowledgments, references and inspiration (besides the already mentioned):
 
-    - vim editor at vim.org (the vim we love from Bram (we owe him a lot) and his army)
-    - kilo editor (https://github.com/antirez/kilo.git) (the inspiration for many)
-    - e editor (https://github.com/hellerve/e.git) (a clone of kilo)
-    - tte editor (https://github.com/GrenderG/tte.git) (likewise)
-    - dit editor (https://github.com/hishamhm/dit.git) (and his very nice C)
-    - vis editor (git://repo.or.cz/vis.git) (quite advanced editor)
-    - gnu-ed at http://www.gnu.org/software/ed/ed.html (a stable ed)
-    - ed2 editor (https://github.com/tylerneylon/ed2.git) (another clone of ed)
-    - oed editor (https://github.com/ibara/oed.git) (ed from OpenBSD)
-    - neatvi editor (https://github.com/aligrudi/neatvi.git) (an excellent vi!)
-    - jed editor at http://www.jedsoft.org/jed/ (the stablest editor in the non-vi[m] world)
-    - numerous stackoverflow posts
-    - numerous codebases from the open source enormous pool
+  - vim editor at vim.org (the vim we love from Bram (we owe him a lot) and his army)
+  - kilo editor (https://github.com/antirez/kilo.git) (the inspiration for many)
+  - e editor (https://github.com/hellerve/e.git) (a clone of kilo)
+  - tte editor (https://github.com/GrenderG/tte.git) (likewise)
+  - dit editor (https://github.com/hishamhm/dit.git) (and his very nice C)
+  - vis editor (git://repo.or.cz/vis.git) (quite advanced editor)
+  - gnu-ed at http://www.gnu.org/software/ed/ed.html (a stable ed)
+  - ed2 editor (https://github.com/tylerneylon/ed2.git) (another clone of ed)
+  - oed editor (https://github.com/ibara/oed.git) (ed from OpenBSD)
+  - neatvi editor (https://github.com/aligrudi/neatvi.git) (an excellent vi!)
+  - jed editor at http://www.jedsoft.org/jed/ (the stablest editor in the non-vi[m] world)
+  - slre regexp machine (https://github.com/cesanta/slre)
+  - utf8 project for the case* functions (https://github.com/sheredom/utf8.h)
+  - termux project for wcwidth() (https://github.com/termux/wcwidth)
+  - Lukás Chmela for itoa() (http://www.strudel.org.uk/itoa/)
+  - checkmate_spell project for the algorithms (https://github.com/syb0rg/checkmate)
+  - John Davis for stat_mode_to_string() (http://www.jedsoft.org/slang)
+  - numerous stackoverflow posts
+  - numerous codebases from the open source enormous pool
  */
 
 /* My opinion on this editor.

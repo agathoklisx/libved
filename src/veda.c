@@ -20,6 +20,7 @@ static ed_T *E = NULL;
 
 #define Ed      E->self
 #define Cstring E->Cstring.self
+#define Ustring E->Ustring.self
 #define Vstring E->Vstring.self
 #define String  E->String.self
 #define Rline   E->Rline.self

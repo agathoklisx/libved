@@ -249,7 +249,9 @@ enum {
   My(Msg).error ($my(root), My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
 
 #define MSG(fmt, ...) \
-  My(Msg).send_fmt ($my(root), COLOR_NORMAL, fmt, ##__VA_ARGS__)
+  My(Msg).set_fmt ($my(root), COLOR_NORMAL, MSG_SET_DRAW, fmt, ##__VA_ARGS__)
+
+//  My(Msg).send_fmt ($my(root), COLOR_NORMAL, fmt, ##__VA_ARGS__)
 
 #define MSG_ERROR(fmt, ...) \
   My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
@@ -303,7 +305,7 @@ NewType (video,
     row_pos,
     col_pos;
 
-  int rows[MAX_SCREEN_ROWS];
+  int *rows;
 );
 
 NewType (arg,
@@ -538,6 +540,8 @@ NewType (hist,
   Class (video) *Video;          \
   Class (term) *Term;            \
   Class (cstring) *Cstring;      \
+  Class (vstring) *Vstring;      \
+  Class (ustring) *Ustring;      \
   Class (string) *String;        \
   Class (re) *Re;                \
   Class (input) *Input;          \
@@ -548,8 +552,7 @@ NewType (hist,
   Class (file) *File;            \
   Class (path) *Path;            \
   Class (dir) *Dir;              \
-  Class (rline) *Rline;          \
-  Class (vstring) *Vstring
+  Class (rline) *Rline
 
 NewType (dim,
   int
@@ -572,6 +575,8 @@ NewType (buf,
 
   BufNormalBeg_cb on_normal_beg;
   BufNormalEnd_cb on_normal_end;
+  BufNormalOng_cb on_normal_g;
+
 
   buf_t  *next;
   buf_t  *prev;
@@ -744,9 +749,10 @@ NewProp (ed,
     max_num_hist_entries,
     max_num_undo_entries,
     num_commands,
-    msg_row,
     prompt_row,
-    msg_send;
+    msg_row,
+    msg_send,
+    msg_numchars;
 
   string_t
     *last_insert,
@@ -769,6 +775,8 @@ NewProp (ed,
     *cw_mode_chars,
     *word_actions_chars;
 
+  u8_t *uline;
+
   int
     lw_mode_chars_len,
     cw_mode_chars_len,
@@ -779,6 +787,7 @@ NewProp (ed,
 
   vstr_t *word_actions;
 
+  BufNormalOng_cb on_normal_g_cb;
   VisualLwMode_cb lw_mode_cb;
   VisualCwMode_cb cw_mode_cb;
   WordActions_cb word_actions_cb;
@@ -926,7 +935,7 @@ static const utf8 offsetsFromUTF8[6] = {
 do {                                                                      \
   char *sp_ = (bytes);                                                    \
   for (int i__ = 0; i__ < (len); i__++) {                                 \
-    int clen = str_utf8_charlen ((bytes)[i__]);                           \
+    int clen = ustring_charlen ((bytes)[i__]);                            \
     (rl_)->state |= (RL_INSERT_CHAR|RL_BREAK);                            \
     (rl_)->c = utf8_code (sp_);                                           \
     rline_edit ((rl_));                                                   \
