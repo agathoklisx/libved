@@ -14,6 +14,7 @@
 
 NewType (uenv,
   string_t *man_exec;
+  string_t *elinks_exec;
 );
 
 static uenv_t *Uenv = NULL;
@@ -33,10 +34,9 @@ static   spell_T SpellClass;
 
 #define SPELL_NOTWORD Notword "012345678#:`$_"
 #define SPELL_NOTWORD_LEN (Notword_len + 14)
-#define SPELL_CHANGED_WORD 1
 
 private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
-       action_t **action, int fidx, int lidx, bufiter_t *iter) {
+        action_t **action, int fidx, int lidx, bufiter_t *iter) {
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
 
@@ -44,10 +44,17 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
   Cstring.substr (lpart, iter->line->num_bytes - lidx - 1, iter->line->bytes,
      iter->line->num_bytes, lidx + 1);
 
-  string_t *quest = String.new_with_fmt (
-    "Spelling [%s] at line %d and %d index\n%s%s%s\n"
-    "Suggestions: (enter number to accept one as correct)\n",
-    spell->word, iter->idx + 1, fidx, prefix, spell->word, lpart);
+  string_t *quest = String.new (512);
+
+  String.append_fmt (quest,
+    "Spelling [%s] at line %d and %d index\n%s%s%s\n",
+     spell->word, iter->idx + 1, fidx, prefix, spell->word, lpart);
+
+   ifnot (spell->guesses->num_items)
+     String.append (quest, "Cannot find matching words and there are no suggestions\n");
+   else
+     String.append (quest, "Suggestions: (enter number to accept one as correct)\n");
+
   int charslen = 5 + spell->guesses->num_items;
   utf8 chars[charslen];
   chars[0] = 'A'; chars[1] = 'a'; chars[2] = 'c'; chars[3] = 'i'; chars[4] = 'q';
@@ -59,7 +66,8 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
   }
 
   String.append (quest,
-      "Other Choises:\na[ccept] word as correct and add it to the dictionary\n"
+      "Choises:\n"
+      "a[ccept] word as correct and add it to the dictionary\n"
       "A[ccept] word as correct just for this session\n"
       "c[ansel] operation and continue with the next\n"
       "i[nput]  correct word by getting input\n"
@@ -127,9 +135,36 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
   Buf.action.set_current (*thisp, action, REPLACE_LINE);
 
   int len = lidx - fidx + 1;
+
+  char lword[len + 1];
+  int i = 0;
+  while (i < len and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
+    fidx++;
+    len--;
+    i++;
+  }
+
+  int j = 0;
+  int orig_len = len;
+  len = 0;
+  while (i < orig_len and NULL is Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
+    lword[j++] = word[i++];
+    len++;
+  }
+
+  lword[j] = '\0';
+
+  if (i isnot len) {
+    i = len - 1;
+    while (i >= 0 and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i--])) {
+      lidx--;
+      len--;
+    }
+  }
+
   if (len < (int) spell->min_word_len) goto theend;
 
-  strcpy (spell->word, word);
+  strcpy (spell->word, lword);
   spell->word_len = len;
 
   retval = Spell.correct (spell);
@@ -139,19 +174,13 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
     goto theend;
   }
 
-  ifnot (spell->guesses->num_items) {
-    Msg.send_fmt ($myed, COLOR_RED, "%s is not correct, but cannot find any relative words",
-        word);
-    retval = NOTOK;
-    goto theend;
-  }
-
   retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
 
 theend:
   if (retval is SPELL_CHANGED_WORD) {
     Buf.action.push (*thisp, action);
     Buf.draw (*thisp);
+    retval = SPELL_OK;
   } else
     Buf.action.free (*thisp, action);
 
@@ -212,10 +241,13 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
       retval = Spell.correct (spell);
 
       if (retval >= SPELL_WORD_IS_CORRECT) continue;
-      ifnot (spell->guesses->num_items) continue;
+
       retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
       if (SPELL_ERROR is retval) goto theend;
-      if (SPELL_CHANGED_WORD) buf_changed = 1;
+      if (SPELL_CHANGED_WORD is retval) {
+        retval = SPELL_OK;
+        buf_changed = 1;
+      }
     }
 itnext:
     iter = Buf.iter.next (*thisp, iter);
@@ -767,6 +799,66 @@ syn_t u_syn[] = {
   },
 };
 
+private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
+  (void) this; (void) fp;
+  return 0;
+}
+
+private int __u_open_link_on_browser (buf_t *this) {
+  if (NULL is Uenv->elinks_exec) return NOTOK;
+
+  string_t *str = NULL;
+  string_t *com = NULL;
+  regexp_t *re = NULL;
+
+  str =  Buf.get.row.current_bytes (this);
+  char link[str->num_bytes + 1];
+  /* from slre sources (plus file) */
+  char *pat = "(((https?|file):///?)[^\\s/'\"<>]+/?[^\\s'\"<>]*)";
+  int flags = RE_IGNORE_CASE;
+  re = Re.new (pat, flags, RE_MAX_NUM_CAPTURES, Re.compile);
+  int retval = Re.exec (re, str->bytes, str->num_bytes);
+
+  if (retval < 0) goto theerror;
+
+  int idx = Buf.get.row.current_col_idx (this);
+  if (idx < re->match_idx or re->match_idx + re->match_len < idx)
+    goto theerror;
+
+  for (int i = 0; i < re->match_len; i++)
+    link[i] = re->match_ptr[i];
+
+   link[re->match_len] = '\0';
+
+   /* this seems unneccecary and might give troubles */
+   // com = String.new_with_fmt ("%s -remote \"ping()\"", Lenv->elinks_exec->bytes);
+
+   com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
+      Uenv->elinks_exec->bytes, link);
+
+   retval = Ed.sh.popen ($myed, this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+   goto theend;
+
+theerror:
+  retval = NOTOK;
+
+theend:
+  String.free (com);
+  Re.free (re);
+  return (retval isnot 0 ? NOTOK : OK);
+}
+
+/* extend the actions on 'g' in normal mode */
+private int __u_on_normal_g (buf_t **thisp, utf8 c) {
+  switch (c) {
+    case 'b':
+      return __u_open_link_on_browser (*thisp);
+   default: break;
+   }
+
+  return NOTOK;
+}
+
 private void __init_usr__ (ed_t *this) {
   /* as a first sample, extend the actions on current word, triggered by 'W' */
   __u_add_word_actions__ (this);
@@ -776,6 +868,8 @@ private void __init_usr__ (ed_t *this) {
   __u_add_lw_mode_actions__ (this);
   __u_add_cw_mode_actions__ (this);
 
+  Ed.set.on_normal_g_cb (this, __u_on_normal_g);
+
 #if HAS_SPELL
   Intmap = __init_int_map__ ();
   SpellClass = __init_spell__ ();
@@ -784,6 +878,7 @@ private void __init_usr__ (ed_t *this) {
   Uenv = AllocType (uenv);
   string_t *path = Ed.venv.get (this, "path");
   Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
+  Uenv->elinks_exec = Ed.vsys.which ("elinks", path->bytes);
 
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);
@@ -792,6 +887,7 @@ private void __init_usr__ (ed_t *this) {
 private void __deinit_usr__ (ed_t *this) {
   (void) this;
   String.free (Uenv->man_exec);
+  String.free (Uenv->elinks_exec);
   free (Uenv);
 
 #if HAS_SPELL

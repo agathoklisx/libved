@@ -204,17 +204,30 @@ ifneq ($(VERBOSE), 0)
   VALGRIND_V = -v
 endif
 
+# We want to pass the arguments to the below targets
+ARGS = $(filter-out $@,$(MAKECMDGOALS))
+# but make interpert command line arguments either as targets or as variables.
+# This is a do nothing target, which is executed when there is no matching target.
+%:
+	@true
+# But this is dangerous as silently make will execute, even mispelled targets
+# yet legitimate.
+# https://stackoverflow.com/a/45003119
+
+# So taking with caution for the sake of simplicity, but is better to use a shell
+# script, as described to the above answer to stackoverflow.
+
 run_shared:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(SYSAPPSHARED)
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(SYSAPPSHARED) $(ARGS)
 
 run_static:
-	@$(SYSAPPSTATIC)
+	@$(SYSAPPSTATIC) $(ARGS)
 
 check_app_memory_leaks:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(VALGRIND) $(VALGRIND_ARGS) $(VALGRIND_V) $(SYSAPPSHARED)
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(VALGRIND) $(VALGRIND_ARGS) $(VALGRIND_V) $(SYSAPPSHARED) $(ARGS)
 
 debug_app_static:
-	@$(GDB) $(GDB_ARGS) $(SYSAPPSTATIC)
+	@$(GDB) $(GDB_ARGS) $(SYSAPPSTATIC) $(ARGS)
 
 debug_app_shared:
-	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(GDB) $(GDB_ARGS) $(SYSAPPSHARED)
+	@LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(GDB) $(GDB_ARGS) $(SYSAPPSHARED) $(ARGS)

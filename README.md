@@ -413,8 +413,15 @@ Normal mode:
  | q                 | quit (not delete) and when buffer type is pager|
  |                                                    |
  | Extensions or quite different behavior with vim    |
+ | g                 |                                |
+ |   - b             | open link under the cursor to the browser
+ |             (requires elinks text browser to be installed, and it uses
+ |              the -remote elinks option, so elinks should be run|
 ¹| CTRL-j            | detach editor and gives control to the caller
  |              can be reatached with the exact status|
+ | CTRL-O|CTRL-I     | jump to the previus|next location to the jump list,
+ |              (this differs from vim, as this is like scrolling to the
+ |               history)                             |
  | W                 | word operations (via a selection menu)|
  | (implemented in the library)                       |
  |   - send `word' on XCLIPBOARD                      |
@@ -768,25 +775,27 @@ Search:
      because the code is complex, but is fast and the rules are simple (maybe)).
 
      The highlighted system and specifically the multiline comments has some rules,
-     stemming from sane practicing to simplify parsing, as the code searching for
+     stemming from sane practicing to simplify parsing, as the code is searching for
      comments in previous lines, and if current line has no comment tokens of course
-     (by default 24, and the relative setting is, MAX_BACKTRACK_LINES_FOR_ML_COMMENTS).
+     (by default 24), and the relative setting is:
+       MAX_BACKTRACK_LINES_FOR_ML_COMMENTS (default 24)
 
      For instance in C files, backtracking is done with the following way:
      If ("/*" is on index zero, or "/*" has a space before) and there is no "*/",
      then it considered as line with a comment and the search it stops. It even
      stops if " * " is encountered on the beginning of the line (note the spaces
      surrounding "*").
-     Note: the relative syntax variable is: multiline_comment_continuation as char[]
+     Note: the relative syntax variable is:
+        multiline_comment_continuation as char[]
 
      So this simple means that if someone do not want to penaltize performance then
-     is is wise to use " * " in the beginning of the line to force the code, as soon
+     it is wise to use " * " in the beginning of the line to force the code, as soon
      as possible to search on previous lines (as this is expensive).
 
      The other relative self explained settings:
-         singleline_comment        as char[]
-         multiline_comment_start   likewise
-         multiline_comment_end     likewise
+       - singleline_comment        as char[]
+       - multiline_comment_start   likewise
+       - multiline_comment_end     likewise
 
      The code can set filetypes with the following ways and order.
 
@@ -795,18 +804,24 @@ Search:
      filetype (txt)).
 
      2. Then is looking to the file extension (.c, .h, ...), and the relative variable:
-          extensions   as *char[]
+       - extensions   as *char[]
 
      3. Then is looking to the file name (Makefile, ...) and the relative variable:
-          filenames    as *char[]
+       - filenames    as *char[]
 
      4. Finally is looking for shebang (first bytes of the file), and the relative variable:
-          shebangs     as *char[] e.g., #!/bin/sh or #!/bin/bash and so on
+       - shebangs     as *char[] e.g., #!/bin/sh or #!/bin/bash and so on
 
      The rules and variables:
 
-     1. Keywords as *char[] (e.g., if, else, struct|, ....) (note that the latter is
-        highlighted with a different color)
+     1. Keywords as *char[] (e.g., if, else, struct, ....), example:
+       char *c_keywords[] = {
+           "if I", "for I", "this V", "NULL K", "int T", ...
+       The capital letter after the keyword and a space, denotes the type and the
+       corresponding color:
+           I: identifier, K: keyword, C: comment,  O: operator, N: number, S: string
+           D:_delimiter   F: function V: variable, T: type,     M: macro,
+           E: error,      Q: quote
 
      2. Operators as char[] e.g., +|*()[] ...
 

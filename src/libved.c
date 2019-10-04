@@ -758,7 +758,7 @@ private u8char_t *ustring_encode (u8_t *u8, char *bytes,
 
 push:
     current_list_append (u8, chr);
-    if (curidx is u8->len)
+    if (curidx is u8->len or (u8->len + (chr->len - 1) is curidx))
       curpos = u8->cur_idx;
 
     u8->len += chr->len;
@@ -3009,6 +3009,439 @@ private dim_t **ed_dim_calc (ed_t *this, int num_rows, int num_frames,
   return dims;
 }
 
+#define state_cp(v__, a__)                                 \
+  (v__)->video_first_row = (a__)->video_first_row;         \
+  (v__)->video_first_row_idx = (a__)->video_first_row_idx; \
+  (v__)->row_pos = (a__)->row_pos;                         \
+  (v__)->col_pos = (a__)->col_pos;                         \
+  (v__)->cur_col_idx = (a__)->cur_col_idx;                 \
+  (v__)->first_col_idx = (a__)->first_col_idx;             \
+  (v__)->cur_idx = (a__)->cur_idx;                         \
+  (v__)->idx = (a__)->idx
+
+#define state_set(v__)                                   \
+  (v__)->video_first_row = $my(video_first_row);         \
+  (v__)->video_first_row_idx = $my(video_first_row_idx); \
+  (v__)->row_pos = $my(cur_video_row);                   \
+  (v__)->col_pos = $my(cur_video_col);                   \
+  (v__)->cur_col_idx = $mycur(cur_col_idx);              \
+  (v__)->first_col_idx = $mycur(first_col_idx);          \
+  (v__)->cur_idx = this->cur_idx
+
+#define state_restore(s__)                               \
+  $mycur(first_col_idx) = (s__)->first_col_idx;          \
+  $mycur(cur_col_idx) = (s__)->cur_col_idx;              \
+  $my(video)->row_pos = (s__)->row_pos;                  \
+  $my(video)->col_pos = (s__)->col_pos;                  \
+  $my(video_first_row_idx) = (s__)->video_first_row_idx; \
+  $my(video_first_row) = (s__)->video_first_row;         \
+  $my(cur_video_row) = (s__)->row_pos;                   \
+  $my(cur_video_col) = (s__)->col_pos
+
+private int buf_mark_restore (buf_t *this, mark_t *mark) {
+  if (mark->video_first_row is NULL) return NOTHING_TODO;
+  if (mark->cur_idx is this->cur_idx) return NOTHING_TODO;
+  if (mark->cur_idx >= this->num_items) return NOTHING_TODO;
+
+  self(cur.set, mark->cur_idx);
+  state_restore (mark);
+
+  if ($mycur(first_col_idx) or $mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes) {
+    $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
+    $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
+  }
+
+  return DONE;
+}
+
+private void buf_adjust_view (buf_t *this) {
+  $my(video_first_row) = this->current;
+  $my(video_first_row_idx) = this->cur_idx;
+  int num = (ONE_PAGE / 2);
+
+  while ($my(video_first_row_idx) and num) {
+    $my(video_first_row_idx)--;
+    num--;
+    $my(video_first_row) = $my(video_first_row)->prev;
+  }
+
+  $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
+
+  $my(video)->row_pos = $my(cur_video_row) =
+      $my(dim)->first_row + ((ONE_PAGE / 2) - num);
+  $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
+}
+
+private void buf_adjust_marks (buf_t *this, int type, int fidx, int lidx) {
+  for (int m = 0; m < NUM_MARKS; m++) {
+    mark_t *mark = &$my(marks)[m];
+    if (mark->video_first_row is NULL) continue;
+    if (mark->cur_idx < fidx) continue;
+    if (fidx <= mark->cur_idx and mark->cur_idx <= lidx) {
+      mark->video_first_row = NULL;
+      continue;
+    }
+
+    if (type is DELETE_LINE)
+      if (fidx is 0 and mark->video_first_row_idx is 0)
+        mark->video_first_row = this->head;
+
+    int lcount = lidx - fidx + (type is DELETE_LINE);
+    int idx = this->cur_idx;
+
+    mark->video_first_row_idx = idx;
+    mark->video_first_row = this->current;
+
+    if (type is DELETE_LINE)
+      mark->cur_idx -= lcount;
+    else
+      mark->cur_idx += lcount;
+
+    while (idx++ < mark->cur_idx) {
+      mark->video_first_row_idx++;
+      mark->video_first_row = mark->video_first_row->next;
+    }
+
+    mark->row_pos = $my(dim)->first_row;
+
+    idx = 5 < $my(dim)->num_rows ? 5 : $my(dim)->num_rows;
+    while (mark->video_first_row_idx > 0 and idx--) {
+      if (NULL is mark->video_first_row or NULL is mark->video_first_row->prev)
+        break;
+      mark->video_first_row = mark->video_first_row->prev;
+      mark->video_first_row_idx--;
+      mark->row_pos++;
+    }
+  }
+}
+
+private vchar_t *buf_get_line_nth (line_t *line, int idx) {
+  line->current = line->head;
+  int i = 0;
+  while (line->current) {
+    if (i is idx or (i + (line->current->len - 1) is idx))
+      return line->current;
+
+    i += line->current->len;
+    line->current = line->current->next;
+  }
+
+  if (i is idx or (i + (line->tail->len - 1) is idx))
+    return line->tail;
+  return NULL;
+}
+
+private vchar_t *buf_get_line_idx (line_t *line, int idx) {
+  int cidx = current_list_set (line, idx);
+  if (cidx is INDEX_ERROR) return NULL;
+  return line->current;
+}
+
+private char *buf_get_line_data (buf_t *this, line_t *line) {
+  ifnot (line->num_items) return "";
+  My(String).clear ($my(shared_str));
+  vchar_t *it = line->head;
+  while (it) {
+    My(String).append ($my(shared_str), it->buf);
+    it = it->next;
+  }
+  return $my(shared_str)->bytes;
+}
+
+private int ved_buf_adjust_col (buf_t *this, int nth, int isatend) {
+  if (this->current is NULL) return 1;
+
+  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
+      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
+
+  int hasno_len = ($mycur(data)->num_bytes is 0 or NULL is $my(line));
+  if (hasno_len) isatend = 0;
+  if (0 is isatend and (hasno_len or nth <= 1 or
+      (int) $mycur(data)->num_bytes is $my(line)->head->len)) {
+    $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
+    $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
+
+    if ($mycur(data)->num_bytes)
+      $my(video)->col_pos = $my(cur_video_col) = $my(cur_video_col) +
+          (0 is IS_MODE (INSERT_MODE) ? $my(line)->head->width - 1 : 0);
+
+    return $my(video)->col_pos;
+  }
+
+  vchar_t *it;
+  int clen = 0;
+ // if (isatend and ($my(line)->num_items <= nth or $my(line)->num_items - nth < 30)) {
+  if (isatend) {
+    clen = $my(line)->tail->len;
+    $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
+  } else {
+    int idx = 0;
+    int num = 1;
+    it = $my(line)->head;
+    while (it and (idx < (int) $mycur(data)->num_bytes and num < nth)) {
+      clen = it->len;
+      idx += clen;
+      it = it->next;
+      num++;
+    }
+
+    if (idx >= (int) $mycur(data)->num_bytes)
+      $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
+    else
+      $mycur(cur_col_idx) = idx - (num < nth ? clen : 0);
+  }
+
+
+  it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
+  int cur_width = it->width;
+  int col_pos = cur_width; /* cur_col_idx char */;
+  int idx = $mycur(cur_col_idx);
+
+  it = it->prev;
+  while (it and idx and (col_pos < $my(dim)->num_cols)) {
+    idx -= it->len;
+    col_pos += it->width;
+    it = it->prev;
+  }
+
+  $mycur(first_col_idx) = idx;
+  $my(video)->col_pos = $my(cur_video_col) = col_pos -
+       (IS_MODE (INSERT_MODE) ? (cur_width - 1) : 0);
+
+  return $my(video)->col_pos;
+}
+
+private action_t *buf_action_new (buf_t *this) {
+  (void) this;
+  return AllocType (action);
+}
+
+private void buf_free_action (buf_t *this, action_t *action) {
+  (void) this;
+  act_t *act = stack_pop (action, act_t);
+  while (act) {
+    free (act->bytes);
+    free (act);
+    act = stack_pop (action, act_t);
+  }
+
+  free (action);
+}
+
+#define vundo_set(act, type__)                           \
+  (act)->type = (type__);                                \
+  state_set(act)
+
+#define vundo_restore(act)                               \
+  state_restore(act)
+
+private void buf_vundo_init (buf_t *this) {
+  if (NULL is $my(undo)) $my(undo) = AllocType (undo);
+  if (NULL is $my(redo)) $my(redo) = AllocType (undo);
+}
+
+private action_t *vundo_pop (buf_t *this) {
+  return current_list_pop ($my(undo), action_t);
+}
+
+private action_t *redo_pop (buf_t *this) {
+  if ($my(redo)->head is NULL) return NULL;
+  return current_list_pop ($my(redo), action_t);
+}
+
+private void redo_clear (buf_t *this) {
+  if ($my(redo)->head is NULL) return;
+
+  action_t *action = redo_pop (this);
+  while (action) {
+    buf_free_action (this, action);
+    action = redo_pop (this);
+  }
+
+  $my(redo)->num_items = 0; $my(redo)->cur_idx = 0;
+  $my(redo)->head = $my(redo)->tail = $my(redo)->current = NULL;
+}
+
+private void undo_clear (buf_t *this) {
+  if ($my(undo)->head is NULL) return;
+  action_t *action = vundo_pop (this);
+  while (action isnot NULL) {
+    buf_free_action (this, action);
+    action = vundo_pop (this);
+  }
+  $my(undo)->num_items = 0; $my(undo)->cur_idx = 0;
+  $my(undo)->head = $my(undo)->tail = $my(undo)->current = NULL;
+}
+
+private void vundo_clear (buf_t *this) {
+  undo_clear (this);
+  redo_clear (this);
+}
+
+private void vundo_push (buf_t *this, action_t *action) {
+  if ($my(undo)->num_items > $myroots(max_num_undo_entries)) {
+    action_t *tmp = list_pop_tail ($my(undo), action_t);
+    buf_free_action  (this, tmp);
+  }
+
+  ifnot ($my(undo)->state & VUNDO_RESET)
+    redo_clear (this);
+  else
+    $my(undo)->state &= ~VUNDO_RESET;
+
+  current_list_prepend ($my(undo), action);
+}
+
+private void redo_push (buf_t *this, action_t *action) {
+  if ($my(redo)->num_items > $myroots(max_num_undo_entries)) {
+    action_t *tmp = list_pop_tail ($my(redo), action_t);
+    buf_free_action  (this, tmp);
+  }
+
+  current_list_prepend ($my(redo), action);
+}
+
+private int vundo_insert (buf_t *this, act_t *act, action_t *redoact) {
+  ifnot (this->num_items) return DONE;
+
+  act_t *ract = AllocType (act);
+  self(cur.set, act->idx);
+  buf_adjust_view (this);
+  ract->type = DELETE_LINE;
+  vundo_set (ract, DELETE_LINE);
+  ract->idx = this->cur_idx;
+  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  stack_push (redoact, ract);
+
+  self(cur.delete);
+
+  if (this->num_items) {
+    self(cur.set, act->cur_idx);
+    buf_adjust_marks (this, DELETE_LINE, act->idx, act->idx);
+    vundo_restore (act);
+  }
+
+  return DONE;
+}
+
+private int vundo_delete_line (buf_t *this, act_t *act, action_t *redoact) {
+  act_t *ract = AllocType (act);
+  row_t *row = self(row.new_with, act->bytes);
+  if (this->num_items) {
+    if (act->idx >= this->num_items) {
+      self(cur.set, this->num_items - 1);
+      buf_adjust_view (this);
+      vundo_set (ract, INSERT_LINE);
+      self(cur.append, row);
+      ract->idx = this->cur_idx;
+    } else {
+      self(cur.set, act->idx);
+      buf_adjust_view (this);
+      vundo_set (ract, INSERT_LINE);
+      self(cur.prepend, row);
+      ract->idx = this->cur_idx;
+    }
+    stack_push (redoact, ract);
+    buf_adjust_marks (this, INSERT_LINE, act->idx, act->idx + 1);
+    vundo_restore (act);
+  } else {
+    this->head = row;
+    this->tail = row;
+    this->cur_idx = 0;
+    this->current = this->head;
+    this->num_items = 1;
+    buf_adjust_view (this);
+    vundo_set (ract, INSERT_LINE);
+    stack_push (redoact, ract);
+    //  $my(video_first_row_idx) = this->cur_idx;
+    //  self(cur.append, row);
+  }
+
+  if ($my(video_first_row_idx) is this->cur_idx)
+    $my(video_first_row) = this->current;
+
+  return DONE;
+}
+
+private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
+  self(cur.set, act->idx);
+
+  act_t *ract = AllocType (act);
+  self(set.row.idx, act->idx, act->row_pos - $my(dim)->first_row, act->col_pos);
+  vundo_set (ract, REPLACE_LINE);
+  ract->idx = this->cur_idx;
+  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  stack_push (redoact, ract);
+
+  My(String).replace_with ($mycur(data), act->bytes);
+
+  vundo_restore (act);
+  return DONE;
+}
+
+private int vundo (buf_t *this, utf8 com) {
+  action_t *action = NULL;
+  if (com is 'u')
+    action = vundo_pop (this);
+  else
+    action = redo_pop (this);
+
+  if (NULL is action) return NOTHING_TODO;
+
+  act_t *act = stack_pop (action, act_t);
+
+  action_t *redoact = AllocType (action);
+
+  while (act) {
+    if (act->type is DELETE_LINE)
+      vundo_delete_line (this, act, redoact);
+    else
+      if (act->type is REPLACE_LINE)
+        vundo_replace_line (this, act, redoact);
+      else
+        vundo_insert (this, act, redoact);
+
+    free (act->bytes);
+    free (act);
+    act = stack_pop (action, act_t);
+  }
+
+  if (com is 'u')
+    redo_push (this, redoact);
+  else {
+    $my(undo)->state |= VUNDO_RESET;
+    vundo_push (this, redoact);
+  }
+
+  free (action);
+  self(draw);
+  return DONE;
+}
+
+private void buf_action_set_current (buf_t *this, action_t *action, int type) {
+  act_t *act = AllocType (act);
+  vundo_set (act, type);
+  act->idx = this->cur_idx;
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  stack_push (action, act);
+}
+
+private void buf_action_set_with (buf_t *this, action_t *action,
+                     int type, int idx, char *bytes, size_t len) {
+  act_t *act = AllocType (act);
+  vundo_set (act, type);
+  act->idx = ((idx < 0 or idx >= this->num_items) ? this->cur_idx : idx);
+  if (NULL is bytes)
+    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  else
+    act->bytes = str_dup (bytes, len);
+  stack_push (action, act);
+}
+
+private void buf_action_push (buf_t *this, action_t *action) {
+  vundo_push (this, action);
+}
+
 /* a highlight theme derived from tte editor, fork of kilo editor,
  * adjusted and enhanced for the environment
  * written by itself (the very first lines) (iirc somehow after the middle days
@@ -3024,17 +3457,16 @@ char *default_extensions[] = {".txt", NULL};
 char *c_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *c_keywords[] = {
     "is I", "isnot I", "or I", "and I", "if I", "for I", "return I", "else I",
-    "ifnot I", "gt I", "ge I", "lt I", "le I", "private I", "self I", "this V",
-    "NULL K", "OK K", "NOTOK K", "switch I", "while I", "break I", "continue I",
-    "do I", "default I", "goto I", "case I", "free F", "$my V", "My V", "$mycur K",
-    "uint T", "int T", "size_t T", "utf8 T", "char T", "uchar T", "sizeof T", "void T",
-    "$from V", "thisp V", "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N",
-    "#define M", "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
+    "ifnot I", "private I", "self I", "this V", "NULL K", "OK K", "NOTOK K",
+    "switch I", "while I", "break I", "continue I", "do I", "default I", "goto I",
+    "case I", "free F", "$my V", "My V", "$mycur V", "uint T", "int T", "size_t T",
+    "utf8 T", "char T", "uchar T", "sizeof T", "void T", "$from V", "thisp V",
+    "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
+    "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
-    "$myroots V", "$myparents V", "public I", "mutable I",
-    "loop I", "forever I", "static I", "enum T", "bool T","long T", "double T",
-    "float T", "unsigned T", "signed T", "volatile T", "register T", "union T",
-    "const T", "auto T",
+    "$myroots V", "$myparents V", "public I", "mutable I", "loop I", "forever I",
+    "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
+    "signed T", "volatile T", "register T", "union T", "const T", "auto T",
     NULL
 };
 
@@ -3502,16 +3934,117 @@ private void buf_free_ftype (buf_t *this) {
   free ($my(ftype));
 }
 
-private void buf_free_action (buf_t *this, action_t *action) {
-  (void) this;
-  act_t *act = stack_pop (action, act_t);
-  while (act) {
-    free (act->bytes);
-    free (act);
-    act = stack_pop (action, act_t);
+private void buf_free_jumps (buf_t *this) {
+  jump_t *jump = $my(jumps)->head;
+  while (jump) {
+    jump_t *tmp = jump->next;
+    free (jump->mark);
+    free (jump);
+    jump = tmp;
   }
 
-  free (action);
+  free ($my(jumps));
+}
+
+private void buf_jumps_init (buf_t *this) {
+  if (NULL is $my(jumps)) {
+    $my(jumps) = AllocType (jumps);
+    $my(jumps)->old_idx = -1;
+  }
+}
+
+private void buf_jump_push (buf_t *this, mark_t *mark) {
+  jump_t *jump = AllocType (jump);
+  mark_t *lmark = AllocType (mark);
+  state_cp (lmark, mark);
+  jump->mark = lmark;
+
+  if ($my(jumps)->num_items >= 20) {
+    jump_t *tmp = stack_pop_tail ($my(jumps), jump_t);
+    free (tmp->mark);
+    free (tmp);
+    $my(jumps)->num_items--;
+  }
+
+  stack_push ($my(jumps), jump);
+  $my(jumps)->num_items++;
+  $my(jumps)->cur_idx = 0;
+}
+
+private int mark_get_idx (int c) {
+  char marks[] = MARKS; /* this is for tcc */
+  char *m = byte_in_str (marks, c);
+  if (NULL is m) return -1;
+  return m - marks;
+}
+
+private int mark_set (buf_t *this, int mark) {
+  if (mark < 0) {
+    mark = mark_get_idx (My(Input).get ($my(term_ptr)));
+    if (-1 is mark) return NOTHING_TODO;
+  }
+
+  state_set (&$my(marks)[mark]);
+  $my(marks)[mark].cur_idx = this->cur_idx;
+
+  if (mark isnot MARK_UNAMED)
+    MSG("set [%c] mark", MARKS[mark]);
+
+  buf_jump_push (this, &$my(marks)[mark]);
+  return DONE;
+}
+
+private int mark_goto (buf_t *this) {
+  int c = mark_get_idx (My(Input).get ($my(term_ptr)));
+  if (-1 is c) return NOTHING_TODO;
+
+  mark_t *mark = &$my(marks)[c];
+  mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
+
+  if (NOTHING_TODO is buf_mark_restore (this, mark))
+    return NOTHING_TODO;
+
+  $my(marks)[MARK_UNAMED] = t;
+
+  self(draw);
+  return DONE;
+}
+
+private int buf_jump (buf_t *this, int dir) {
+  ifnot ($my(jumps)->num_items) return NOTHING_TODO;
+
+  jump_t *jump = $my(jumps)->head;
+  if (dir is LEFT_DIRECTION) {
+    for (int i = 0; i + 1 < $my(jumps)->cur_idx; i++)
+      jump = jump->next;
+    $my(jumps)->old_idx = $my(jumps)->cur_idx;
+    if ($my(jumps)->cur_idx) $my(jumps)->cur_idx--;
+    goto theend;
+  }
+
+  if ($my(jumps)->cur_idx + 1 is $my(jumps)->num_items and
+      $my(jumps)->old_idx + 1 is $my(jumps)->num_items)
+    return NOTHING_TODO;
+
+  for (int i = 0; i < $my(jumps)->cur_idx; i++)
+    jump = jump->next;
+
+  if ($my(jumps)->cur_idx is 0) { // and $my(jumps)->num_items is 1) {
+    mark_t m; state_set (&m); m.cur_idx = this->cur_idx;
+    buf_jump_push (this, &m);
+  }
+
+  $my(jumps)->old_idx = $my(jumps)->cur_idx;
+  if ($my(jumps)->cur_idx + 1 isnot $my(jumps)->num_items)
+    $my(jumps)->cur_idx++;
+
+theend:
+  state_set (&$my(marks)[MARK_UNAMED]);
+  $my(marks)[MARK_UNAMED].cur_idx = this->cur_idx;
+
+  buf_mark_restore (this, jump->mark);
+  self(draw);
+  return DONE;
 }
 
 private void buf_iter_free (buf_t *unused, bufiter_t *this) {
@@ -3708,41 +4241,6 @@ private void history_free (hist_t **hist) {
   free (*hist); *hist = NULL;
 }
 
-private void buf_free_handler (buf_t *this) {
-  if (this is NULL or $myprop is NULL) return;
-
-  if ($my(fname) isnot NULL) free ($my(fname));
-
-  free ($my(cwd));
-
-  My(String).free ($my(statusline));
-  My(String).free ($my(promptline));
-  My(String).free ($my(shared_str));
-
-  buf_free_line (this);
-  buf_free_ftype (this);
-  buf_free_undo (this);
-
-  free ($myprop);
-}
-
-private void buf_free_rows (buf_t *this) {
-  row_t *row = this->head;
-  while (row) {
-    row_t *next = row->next;
-    buf_free_row (this, row);
-    row = next;
-  }
-}
-
-private void buf_free (buf_t *this) {
-  if (this is NULL) return;
-  buf_free_rows (this);
-  buf_free_handler (this);
-
-  free (this);
-}
-
 private void buf_set_video_first_row (buf_t *this, int idx) {
   if (idx >= this->num_items or idx < 0 or idx is $my(video_first_row_idx))
     return;
@@ -3885,37 +4383,6 @@ private size_t buf_get_num_lines (buf_t *this) {
 
 private int buf_get_prop_tabwidth (buf_t *this) {
   return $my(ftype)->tabwidth;
-}
-
-private vchar_t *buf_get_line_nth (line_t *line, int idx) {
-  line->current = line->head;
-  int i = 0;
-  while (line->current) {
-    if (i is idx) return line->current;
-
-    i += line->current->len;
-    line->current = line->current->next;
-  }
-
-  if (i is idx) return line->tail;
-  return NULL;
-}
-
-private vchar_t *buf_get_line_idx (line_t *line, int idx) {
-  int cidx = current_list_set (line, idx);
-  if (cidx is INDEX_ERROR) return NULL;
-  return line->current;
-}
-
-private char *buf_get_line_data (buf_t *this, line_t *line) {
-  ifnot (line->num_items) return "";
-  My(String).clear ($my(shared_str));
-  vchar_t *it = line->head;
-  while (it) {
-    My(String).append ($my(shared_str), it->buf);
-    it = it->next;
-  }
-  return $my(shared_str)->bytes;
 }
 
 private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
@@ -4273,6 +4740,38 @@ private int ved_buf_on_normal_end (buf_t **thisp, utf8 com, int *range, int regi
   return 0;
 }
 
+private void buf_free_rows (buf_t *this) {
+  row_t *row = this->head;
+  while (row) {
+    row_t *next = row->next;
+    buf_free_row (this, row);
+    row = next;
+  }
+}
+
+private void buf_free (buf_t *this) {
+  if (this is NULL) return;
+  buf_free_rows (this);
+
+  if (this is NULL or $myprop is NULL) return;
+
+  if ($my(fname) isnot NULL) free ($my(fname));
+
+  free ($my(cwd));
+
+  My(String).free ($my(statusline));
+  My(String).free ($my(promptline));
+  My(String).free ($my(shared_str));
+
+  buf_free_line (this);
+  buf_free_ftype (this);
+  buf_free_undo (this);
+  buf_free_jumps (this);
+
+  free ($myprop);
+  free (this);
+}
+
 private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   buf_t *this = AllocType (buf);
   $myprop = AllocProp (buf);
@@ -4308,8 +4807,9 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(regs) = &$myroots(regs)[0];
   $my(video) = $myroots(video);
 
-  $my(undo) = AllocType (undo);
-  $my(redo) = AllocType (undo);
+  buf_vundo_init (this);
+  buf_jumps_init (this);
+
   $my(shared_str) = My(String).new (128);
   $my(statusline) = My(String).new (64);
   $my(promptline) = My(String).new (64);
@@ -4902,18 +5402,6 @@ private void ed_msg_set_fmt (ed_t *this, int color, int msg_flags, char *fmt, ..
 
 private void ed_msg_send (ed_t *this, int color, char *msg) {
   ed_msg_set (this, color, MSG_SET_DRAW|MSG_SET_COLOR, msg, -1);
-/*  
-  self(append.message, msg);
-  $my(msg_send) = 1;
-  int tabwidth = My(Buf).get.prop.tabwidth (self(get.current_buf));
-  ed_fmt_string_with_numchars (this, $my(msgline), CLEAR, msg, -1,
-      tabwidth, $my(dim)->num_cols);
-
-  My(String).prepend ($my(msgline), TERM_MAKE_COLOR(color));
-  My(String).append($my(msgline), TERM_COLOR_RESET);
-  My(Video).set_with ($my(video), $my(msg_row) - 1, $my(msgline)->bytes);
-  My(Video).Draw.row_at ($my(video), $my(msg_row));
-*/
 }
 
 private void ed_msg_error (ed_t *this, char *fmt, ...) {
@@ -4923,16 +5411,15 @@ private void ed_msg_error (ed_t *this, char *fmt, ...) {
   size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
   ed_msg_set (this, COLOR_ERROR, MSG_SET_DRAW|MSG_SET_COLOR, bytes, len);
- // My(Msg).send (this, COLOR_ERROR, bytes);
 }
 
 private void ed_msg_send_fmt (ed_t *this, int color, char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  My(Msg).send (this, color, bytes);
+  ed_msg_set (this, color, MSG_SET_DRAW|MSG_SET_COLOR, bytes, len);
 }
 
 private char *ed_error_string (ed_t *this, int err) {
@@ -4940,6 +5427,7 @@ private char *ed_error_string (ed_t *this, int err) {
   ebuf[0] = '\0';
   char epat[16];
   snprintf (epat, 16, "%d:", err);
+
   char *sp = strstr (SYS_ERRORS, epat);
   if (sp is NULL) {
     snprintf (epat, 16, "%d:",  err);
@@ -5008,127 +5496,6 @@ private void buf_set_statusline (buf_t *this) {
 private void buf_set_draw_statusline (buf_t *this) {
   buf_set_statusline (this);
   My(Video).Draw.row_at ($my(video), $my(statusline_row));
-}
-
-private int ved_buf_adjust_col (buf_t *this, int nth, int isatend) {
-  if (this->current is NULL) return 1;
-
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  if ($mycur(data)->num_bytes is 0 or nth <= 1 or NULL is $my(line)
-      or (int) $mycur(data)->num_bytes is $my(line)->head->len) {
-    $mycur(cur_col_idx) = $mycur(first_col_idx) = 0;
-    $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
-
-    if ($mycur(data)->num_bytes)
-      $my(video)->col_pos = $my(cur_video_col) =
-          $my(cur_video_col) + (0 is IS_MODE (INSERT_MODE) ? $my(line)->head->width - 1 : 0);
-
-    return $my(video)->col_pos;
-  }
-
-  vchar_t *it;
-  int clen = 0;
-
-  if (isatend) {
-    clen = $my(line)->tail->len;
-    $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
-  } else {
-    int idx = 0;
-    int num = 1;
-    it = $my(line)->head;
-    while (it and (idx < (int) $mycur(data)->num_bytes and num < nth)) {
-      clen = it->len;
-      idx += clen;
-      it = it->next;
-      num++;
-    }
-
-    if (idx >= (int) $mycur(data)->num_bytes)
-      $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
-    else
-      $mycur(cur_col_idx) = idx - (num < nth ? clen : 0);
-  }
-
-
-  it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
-  int cur_width = it->width;
-  int col_pos = cur_width; /* cur_col_idx char */;
-  int idx = $mycur(cur_col_idx);
-
-  it = it->prev;
-  while (it and idx and (col_pos < $my(dim)->num_cols)) {
-    idx -= it->len;
-    col_pos += it->width;
-    it = it->prev;
-  }
-
-  $mycur(first_col_idx) = idx;
-  $my(video)->col_pos = $my(cur_video_col) = col_pos -
-       (IS_MODE (INSERT_MODE) ? (cur_width - 1) : 0);
-  return $my(video)->col_pos;
-}
-
-private void buf_adjust_marks (buf_t *this, int type, int fidx, int lidx) {
-  for (int m = 0; m < NUM_MARKS; m++) {
-    mark_t *mark = &$my(marks)[m];
-    if (mark->video_first_row is NULL) continue;
-    if (mark->cur_idx < fidx) continue;
-    if (fidx <= mark->cur_idx and mark->cur_idx <= lidx) {
-      mark->video_first_row = NULL;
-      continue;
-    }
-
-    if (type is DELETE_LINE)
-      if (fidx is 0 and mark->video_first_row_idx is 0)
-        mark->video_first_row = this->head;
-
-    int lcount = lidx - fidx + (type is DELETE_LINE);
-    int idx = this->cur_idx;
-
-    mark->video_first_row_idx = idx;
-    mark->video_first_row = this->current;
-
-    if (type is DELETE_LINE)
-      mark->cur_idx -= lcount;
-    else
-      mark->cur_idx += lcount;
-
-    while (idx++ < mark->cur_idx) {
-      mark->video_first_row_idx++;
-      mark->video_first_row = mark->video_first_row->next;
-    }
-
-    mark->row_pos = $my(dim)->first_row;
-
-    idx = 5 < $my(dim)->num_rows ? 5 : $my(dim)->num_rows;
-    while (mark->video_first_row_idx > 0 and idx--) {
-      if (NULL is mark->video_first_row or NULL is mark->video_first_row->prev)
-        break;
-      mark->video_first_row = mark->video_first_row->prev;
-      mark->video_first_row_idx--;
-      mark->row_pos++;
-    }
-  }
-}
-
-private void buf_adjust_view (buf_t *this) {
-  $my(video_first_row) = this->current;
-  $my(video_first_row_idx) = this->cur_idx;
-  int num = (ONE_PAGE / 2);
-
-  while ($my(video_first_row_idx) and num) {
-    $my(video_first_row_idx)--;
-    num--;
-    $my(video_first_row) = $my(video_first_row)->prev;
-  }
-
-  $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
-
-  $my(video)->row_pos = $my(cur_video_row) =
-      $my(dim)->first_row + ((ONE_PAGE / 2) - num);
-  $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
 }
 
 private string_t *get_current_number (buf_t *this, int *fidx) {
@@ -5668,249 +6035,6 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   return DONE;
 }
 
-#define state_cp(v__, a__)                                 \
-  (v__)->video_first_row = (a__)->video_first_row;         \
-  (v__)->video_first_row_idx = (a__)->video_first_row_idx; \
-  (v__)->row_pos = (a__)->row_pos;                         \
-  (v__)->col_pos = (a__)->col_pos;                         \
-  (v__)->cur_col_idx = (a__)->cur_col_idx;                 \
-  (v__)->first_col_idx = (a__)->first_col_idx;             \
-  (v__)->cur_idx = (a__)->cur_idx;                         \
-  (v__)->idx = (a__)->idx
-
-#define state_set(v__)                                   \
-  (v__)->video_first_row = $my(video_first_row);         \
-  (v__)->video_first_row_idx = $my(video_first_row_idx); \
-  (v__)->row_pos = $my(cur_video_row);                   \
-  (v__)->col_pos = $my(cur_video_col);                   \
-  (v__)->cur_col_idx = $mycur(cur_col_idx);              \
-  (v__)->first_col_idx = $mycur(first_col_idx);          \
-  (v__)->cur_idx = this->cur_idx
-
-#define state_restore(s__)                               \
-  $mycur(first_col_idx) = (s__)->first_col_idx;          \
-  $mycur(cur_col_idx) = (s__)->cur_col_idx;              \
-  $my(video)->row_pos = (s__)->row_pos;                  \
-  $my(video)->col_pos = (s__)->col_pos;                  \
-  $my(video_first_row_idx) = (s__)->video_first_row_idx; \
-  $my(video_first_row) = (s__)->video_first_row;         \
-  $my(cur_video_row) = (s__)->row_pos;                   \
-  $my(cur_video_col) = (s__)->col_pos
-
-#define vundo_set(act, type__)                           \
-  (act)->type = (type__);                                \
-  state_set(act)
-
-#define vundo_restore(act)                               \
-  state_restore(act)
-
-private action_t *vundo_pop (buf_t *this) {
-  return current_list_pop ($my(undo), action_t);
-}
-
-private action_t *redo_pop (buf_t *this) {
-  if ($my(redo)->head is NULL) return NULL;
-  return current_list_pop ($my(redo), action_t);
-}
-
-private void redo_clear (buf_t *this) {
-  if ($my(redo)->head is NULL) return;
-
-  action_t *action = redo_pop (this);
-  while (action) {
-    buf_free_action (this, action);
-    action = redo_pop (this);
-  }
-
-  $my(redo)->num_items = 0; $my(redo)->cur_idx = 0;
-  $my(redo)->head = $my(redo)->tail = $my(redo)->current = NULL;
-}
-
-private void undo_clear (buf_t *this) {
-  if ($my(undo)->head is NULL) return;
-  action_t *action = vundo_pop (this);
-  while (action isnot NULL) {
-    buf_free_action (this, action);
-    action = vundo_pop (this);
-  }
-  $my(undo)->num_items = 0; $my(undo)->cur_idx = 0;
-  $my(undo)->head = $my(undo)->tail = $my(undo)->current = NULL;
-}
-
-private void vundo_clear (buf_t *this) {
-  undo_clear (this);
-  redo_clear (this);
-}
-
-private void vundo_push (buf_t *this, action_t *action) {
-  if ($my(undo)->num_items > $myroots(max_num_undo_entries)) {
-    action_t *tmp = list_pop_tail ($my(undo), action_t);
-    buf_free_action  (this, tmp);
-  }
-
-  ifnot ($my(undo)->state & VUNDO_RESET)
-    redo_clear (this);
-  else
-    $my(undo)->state &= ~VUNDO_RESET;
-
-  current_list_prepend ($my(undo), action);
-}
-
-private void redo_push (buf_t *this, action_t *action) {
-  if ($my(redo)->num_items > $myroots(max_num_undo_entries)) {
-    action_t *tmp = list_pop_tail ($my(redo), action_t);
-    buf_free_action  (this, tmp);
-  }
-
-  current_list_prepend ($my(redo), action);
-}
-
-private int vundo_insert (buf_t *this, act_t *act, action_t *redoact) {
-  ifnot (this->num_items) return DONE;
-
-  act_t *ract = AllocType (act);
-  self(cur.set, act->idx);
-  buf_adjust_view (this);
-  ract->type = DELETE_LINE;
-  vundo_set (ract, DELETE_LINE);
-  ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
-  stack_push (redoact, ract);
-
-  self(cur.delete);
-
-  if (this->num_items) {
-    self(cur.set, act->cur_idx);
-    buf_adjust_marks (this, DELETE_LINE, act->idx, act->idx);
-    vundo_restore (act);
-  }
-
-  return DONE;
-}
-
-private int vundo_delete_line (buf_t *this, act_t *act, action_t *redoact) {
-  act_t *ract = AllocType (act);
-  row_t *row = self(row.new_with, act->bytes);
-  if (this->num_items) {
-    if (act->idx >= this->num_items) {
-      self(cur.set, this->num_items - 1);
-      buf_adjust_view (this);
-      vundo_set (ract, INSERT_LINE);
-      self(cur.append, row);
-      ract->idx = this->cur_idx;
-    } else {
-      self(cur.set, act->idx);
-      buf_adjust_view (this);
-      vundo_set (ract, INSERT_LINE);
-      self(cur.prepend, row);
-      ract->idx = this->cur_idx;
-    }
-    stack_push (redoact, ract);
-    buf_adjust_marks (this, INSERT_LINE, act->idx, act->idx + 1);
-    vundo_restore (act);
-  } else {
-    this->head = row;
-    this->tail = row;
-    this->cur_idx = 0;
-    this->current = this->head;
-    this->num_items = 1;
-    buf_adjust_view (this);
-    vundo_set (ract, INSERT_LINE);
-    stack_push (redoact, ract);
-    //  $my(video_first_row_idx) = this->cur_idx;
-    //  self(cur.append, row);
-  }
-
-  if ($my(video_first_row_idx) is this->cur_idx)
-    $my(video_first_row) = this->current;
-
-  return DONE;
-}
-
-private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
-  self(cur.set, act->idx);
-
-  act_t *ract = AllocType (act);
-  self(set.row.idx, act->idx, act->row_pos - $my(dim)->first_row, act->col_pos);
-  vundo_set (ract, REPLACE_LINE);
-  ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
-  stack_push (redoact, ract);
-
-  My(String).replace_with ($mycur(data), act->bytes);
-
-  vundo_restore (act);
-  return DONE;
-}
-
-private int vundo (buf_t *this, utf8 com) {
-  action_t *action = NULL;
-  if (com is 'u')
-    action = vundo_pop (this);
-  else
-    action = redo_pop (this);
-
-  if (NULL is action) return NOTHING_TODO;
-
-  act_t *act = stack_pop (action, act_t);
-
-  action_t *redoact = AllocType (action);
-
-  while (act) {
-    if (act->type is DELETE_LINE)
-      vundo_delete_line (this, act, redoact);
-    else
-      if (act->type is REPLACE_LINE)
-        vundo_replace_line (this, act, redoact);
-      else
-        vundo_insert (this, act, redoact);
-
-    free (act->bytes);
-    free (act);
-    act = stack_pop (action, act_t);
-  }
-
-  if (com is 'u')
-    redo_push (this, redoact);
-  else {
-    $my(undo)->state |= VUNDO_RESET;
-    vundo_push (this, redoact);
-  }
-
-  free (action);
-  self(draw);
-  return DONE;
-}
-
-private action_t *buf_action_new (buf_t *this) {
-  (void) this;
-  return AllocType (action);
-}
-
-private void buf_action_set_current (buf_t *this, action_t *action, int type) {
-  act_t *act = AllocType (act);
-  vundo_set (act, type);
-  act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
-  stack_push (action, act);
-}
-
-private void buf_action_set_with (buf_t *this, action_t *action,
-                     int type, int idx, char *bytes, size_t len) {
-  act_t *act = AllocType (act);
-  vundo_set (act, type);
-  act->idx = ((idx < 0 or idx >= this->num_items) ? this->cur_idx : idx);
-  if (NULL is bytes)
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
-  else
-    act->bytes = str_dup (bytes, len);
-  stack_push (action, act);
-}
-
-private void buf_action_push (buf_t *this, action_t *action) {
-  vundo_push (this, action);
-}
-
 private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 int interactive, int fidx, int lidx) {
   int retval = NOTHING_TODO;
@@ -6011,53 +6135,6 @@ theend:
   ifnot (NULL is substr) string_free (substr);
 
   return retval;
-}
-
-private int mark_get_idx (int c) {
-  char marks[] = MARKS; /* this is for tcc */
-  char *m = byte_in_str (marks, c);
-  if (NULL is m) return -1;
-  return m - marks;
-}
-
-private int mark_set (buf_t *this, int mark) {
-  if (mark < 0) {
-    mark = mark_get_idx (My(Input).get ($my(term_ptr)));
-    if (-1 is mark) return NOTHING_TODO;
-  }
-
-  state_set (&$my(marks)[mark]);
-  $my(marks)[mark].cur_idx = this->cur_idx;
-
-  if (mark isnot MARK_UNAMED)
-    MSG("set [%c] mark", MARKS[mark]);
-
-  return DONE;
-}
-
-private int mark_goto (buf_t *this) {
-  int c = mark_get_idx (My(Input).get ($my(term_ptr)));
-  if (-1 is c) return NOTHING_TODO;
-
-  mark_t *mark = &$my(marks)[c];
-  if (mark->video_first_row is NULL) return NOTHING_TODO;
-  if (mark->cur_idx is this->cur_idx) return NOTHING_TODO;
-  if (mark->cur_idx >= this->num_items) return NOTHING_TODO;
-
-  mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
-
-  self(cur.set, mark->cur_idx);
-  state_restore (mark);
-
-  if ($mycur(first_col_idx) or $mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes) {
-    $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
-    $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
-  }
-
-  $my(marks)[MARK_UNAMED] = t;
-
-  self(draw);
-  return DONE;
 }
 
 private FILE *ed_file_pointer_from_X (ed_t *this, int target) {
@@ -6662,27 +6739,46 @@ private int ved_normal_end_word (buf_t **thisp, int count, int run_insert_mode, 
   return DONE;
 }
 
+#define THIS_LINE_PTR_IS_AT_NTH_POS                                          \
+({                                                                           \
+  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,   \
+      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx) -                     \
+      ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes and              \
+       IS_MODE(INSERT_MODE) ? 1 : 0));                                       \
+  int nth__ = $my(line)->cur_idx + 1;                                        \
+  do {                                                                       \
+    if (0 is $mycur(data)->num_bytes or                                      \
+        0 is $mycur(data)->bytes[0] or                                       \
+        '\n' is $mycur(data)->bytes[0]) {                                    \
+       nth__ = $my(nth_ptr_pos);                                             \
+       break;                                                                \
+     }                                                                       \
+     if ($my(line)->num_items is 1)                                          \
+       nth__ = $my(nth_ptr_pos);                                             \
+     else if ($my(line)->current is $my(line)->tail)                         \
+       $my(state) |= PTR_IS_AT_EOL;                                          \
+     else                                                                    \
+       $my(state) &= ~PTR_IS_AT_EOL;                                         \
+     $my(nth_ptr_pos) = nth__;                                               \
+  } while (0);                                                               \
+  nth__;                                                                     \
+})
+
 private int ved_normal_up (buf_t *this, int count, int adjust_col, int draw) {
   int currow_idx = this->cur_idx;
 
   if (0 is currow_idx or 0 is count) return NOTHING_TODO;
   if (count > currow_idx) count = currow_idx;
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   ved_on_blankline (this);
 
   currow_idx -= count;
   self(cur.set, currow_idx);
 
-  int col_pos = adjust_col ? ved_buf_adjust_col (this, nth, isatend) : 1;
+  int col_pos = adjust_col ? ved_buf_adjust_col (this, nth, isatend) : $my(video)->first_col;
   int row = $my(video)->row_pos;
   int orig_count = count;
 
@@ -6720,14 +6816,8 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
   if (count + currow_idx >= this->num_items)
     count = this->num_items - currow_idx - 1;
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   ved_on_blankline (this);
 
@@ -6735,7 +6825,7 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
 
   self(cur.set, currow_idx);
 
-  int col_pos = adjust_col ? ved_buf_adjust_col (this, nth, isatend) : 1;
+  int col_pos = adjust_col ? ved_buf_adjust_col (this, nth, isatend) : $my(video)->first_col;
 
   int row = $my(video)->row_pos;
   int orig_count = count;
@@ -6765,14 +6855,8 @@ private int ved_normal_page_down (buf_t *this, int count) {
 
   mark_set (this, MARK_UNAMED);
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   int row = $my(video)->row_pos;
 
@@ -6805,14 +6889,8 @@ private int ved_normal_page_up (buf_t *this, int count) {
 
   mark_set (this, MARK_UNAMED);
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   int row = $my(video)->row_pos;
   int frow = $my(video_first_row_idx);
@@ -6846,14 +6924,8 @@ private int ved_normal_bof (buf_t *this, int draw) {
 
   mark_set (this, MARK_UNAMED);
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   ved_on_blankline (this);
 
@@ -6877,14 +6949,8 @@ private int ved_normal_eof (buf_t *this, int draw) {
 
   mark_set (this, MARK_UNAMED);
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   ved_on_blankline (this);
 
@@ -7672,14 +7738,8 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
   int currow_idx = this->cur_idx;
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
-      CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
-
-  int nth = $my(line)->cur_idx + 1;
-  int isatend = ($mycur(data)->num_bytes is 0
-      or 0 is $mycur(data)->bytes[0]
-      or '\n' is $mycur(data)->bytes[0]
-      ? 0 : $my(line)->current is $my(line)->tail);
+  int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
+  int isatend = $my(state) & PTR_IS_AT_EOL;
 
   action_t *action = AllocType (action);
   rg_t *rg = ed_register_new ($my(root), regidx);
@@ -10878,8 +10938,10 @@ private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
             if ('"' is it->data->bytes[0])
               if (is_quoted) {
                 is_quoted = 0;
-                if (arg->argval->bytes[arg->argval->num_bytes - 1] is '\\') {
+                if (arg->argval->bytes[arg->argval->num_bytes - 1] is '\\' and
+                    arg->argval->bytes[arg->argval->num_bytes - 2] isnot '\\') {
                   arg->argval->bytes[arg->argval->num_bytes - 1] = '"';
+                  is_quoted = 1;
                   it = it->next;
                   continue;
                 }
@@ -11951,6 +12013,12 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
 
     case '`':
       retval = mark_goto (this); break;
+
+    case CTRL('o'):
+      retval = buf_jump (this, RIGHT_DIRECTION); break;
+
+    case CTRL('i'):
+      retval = buf_jump (this, LEFT_DIRECTION); break;
 
     case '~':
       retval = ved_normal_change_case (this); break;

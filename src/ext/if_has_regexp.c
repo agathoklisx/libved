@@ -72,6 +72,7 @@ theend:
 
 private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
   string_t *substr = String.new_with (NULL);
+
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
@@ -84,6 +85,11 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
         switch (*++sub_p) {
           case '&':
             String.append_byte (substr, '&');
+            sub_p++;
+            continue;
+
+          case 's':
+            String.append_byte (substr, ' ');
             sub_p++;
             continue;
 
@@ -111,7 +117,8 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
             continue;
 
           default:
-            strcpy (re->errmsg, "awaiting \\,&,[0..9,...]");
+            snprintf (re->errmsg, 256, "awaiting \\,&,[0..9,...], got %d [%c]",
+                *sub_p, *sub_p);
             goto theerror;
         }
 

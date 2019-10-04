@@ -43,8 +43,9 @@
 #define SPELL_WORD_IS_CORRECT 0
 #define SPELL_WORD_IS_IGNORED 1
 
-#define SPELL_ERROR -1
+#define SPELL_CHANGED_WORD 1
 #define SPELL_OK     0
+#define SPELL_ERROR -1
 
 NewType (spell,
  char
@@ -53,6 +54,8 @@ NewType (spell,
 
   int
     retval;
+
+  utf8 c;
 
   size_t
     num_dic_words,

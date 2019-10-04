@@ -71,6 +71,7 @@
 #define BUF_IS_PAGER     (1 << 8)
 #define BUF_IS_SPECIAL   (1 << 9)
 #define BUF_FORCE_REOPEN (1 << 10)
+#define PTR_IS_AT_EOL    (1 << 12)
 
 #define WIN_NUM_FRAMES(w_) w_->prop->num_frames
 #define WIN_LAST_FRAME(w_) WIN_NUM_FRAMES(w_) - 1
@@ -203,10 +204,10 @@ enum {
 
 #define ED_ERRORS "\
 -3: RE_UNBALANCHED_BRACKETS_ERROR Unbalanced brackets in the pattern,\
--20: RL_ARG_AWAITING_STRING_OPTION_ERROR Awaiting a string after =,\
--21: RL_ARGUMENT_MISSING_ERROR Awaiting argument after dash,\
--22: RL_UNTERMINATED_QUOTED_STRING_ERROR Quoted String is unterminated,\
--23: RL_UNRECOGNIZED_OPTION Unrecognized option,\
+-22: RL_ARG_AWAITING_STRING_OPTION_ERROR Awaiting a string after =,\
+-23: RL_ARGUMENT_MISSING_ERROR Awaiting argument after dash,\
+-24: RL_UNTERMINATED_QUOTED_STRING_ERROR Quoted String is unterminated,\
+-25: RL_UNRECOGNIZED_OPTION Unrecognized option,\
 -1000: INDEX_ERROR Index is out of range,\
 -1001: NULL_PTR_ERROR NULL Pointer,\
 -1002: INTEGEROVERFLOW_ERROR Integer overflow"
@@ -250,8 +251,6 @@ enum {
 
 #define MSG(fmt, ...) \
   My(Msg).set_fmt ($my(root), COLOR_NORMAL, MSG_SET_DRAW, fmt, ##__VA_ARGS__)
-
-//  My(Msg).send_fmt ($my(root), COLOR_NORMAL, fmt, ##__VA_ARGS__)
 
 #define MSG_ERROR(fmt, ...) \
   My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
@@ -424,7 +423,20 @@ NewType (mark,
     col_pos,
     video_first_row_idx;
 
+  int idx;
   row_t *video_first_row;
+);
+
+NewType (jump,
+  jump_t *next;
+  mark_t *mark;
+);
+
+NewType (jumps,
+  jump_t *head;
+  int num_items;
+  int cur_idx;
+  int old_idx;
 );
 
 NewType (act,
@@ -656,6 +668,7 @@ NewProp (buf,
   int
     fd,
     state,
+    nth_ptr_pos,
     at_frame,
     video_first_row_idx,
     is_sticked,
@@ -673,6 +686,8 @@ NewProp (buf,
 
   line_t *line;
   size_t num_bytes;
+
+  jumps_t *jumps;
 
   string_t
     *last_insert,
@@ -981,13 +996,25 @@ do {                                                                \
  list;                                                              \
 })
 
-#define stack_pop(list, type)                                       \
+#define stack_pop(list_, type_)                                     \
 ({                                                                  \
-  type *node = (list)->head;                                        \
-  if (node != NULL)                                                 \
-    (list)->head = (list)->head->next;                              \
+  type_ *node_ = (list_)->head;                                     \
+  if (node_ != NULL)                                                \
+    (list_)->head = (list_)->head->next;                            \
                                                                     \
-  node;                                                             \
+  node_;                                                            \
+})
+
+#define stack_pop_tail(list_, type_)                                \
+({                                                                  \
+  type_ *node_ = (list_)->head;                                     \
+  type_ *tmp_ = NULL;                                               \
+  while (node_->next) {                                             \
+    tmp_ = node_;                                                   \
+    node_ = node_->next;                                            \
+  }                                                                 \
+  if (tmp_) tmp_->next = NULL;                                      \
+  node_;                                                            \
 })
 
 #define list_push(list, node)                                       \
@@ -1003,8 +1030,8 @@ do {                                                                \
     (list)->head = (node);                                          \
   }                                                                 \
                                                                     \
- (list)->num_items++;                                               \
- list;                                                              \
+  (list)->num_items++;                                              \
+  list;                                                             \
 })
 
 #define current_list_prepend(list, node)                            \

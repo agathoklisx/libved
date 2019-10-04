@@ -144,6 +144,9 @@
 #define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
 
+#define LEFT_DIRECTION   0
+#define RIGHT_DIRECTION -1
+
 #define DONOT_ADJUST_COL 0
 #define ADJUST_COL 1
 
