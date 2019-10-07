@@ -1679,6 +1679,17 @@ theend:
   return llines;
 }
 
+private ssize_t file_write (char *fname, char *bytes, ssize_t size) {
+  if (size < 0) size = bytelen (bytes);
+  if (size <= 0) return NOTOK;
+
+  FILE *fp = fopen (fname, "w");
+  if (NULL is fp) return NOTOK;
+  size = fwrite (bytes, 1, size, fp);
+  fclose (fp);
+  return size;
+}
+
 public file_T __init_file__ (void) {
   return ClassInit (file,
     .self = SelfInit (file,
@@ -1687,7 +1698,8 @@ public file_T __init_file__ (void) {
       .is_executable = file_is_executable,
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
-      .readlines = file_readlines
+      .readlines = file_readlines,
+      .write = file_write
     )
   );
 }
@@ -1697,7 +1709,6 @@ private int is_directory (char *dname) {
   if (NOTOK is stat (dname, &st)) return 0;
   return S_ISDIR (st.st_mode);
 }
-#define isnot_directory(dname) (0 is is_directory (dname))
 
 private char *dir_current (void) {
   size_t size = 64;
@@ -1736,7 +1747,7 @@ private void dirlist_free (dirlist_t *dlist) {
 private dirlist_t *dirlist (char *dir, int flags) {
   (void) flags;
   if (NULL is dir) return NULL;
-  if (isnot_directory (dir)) return NULL;
+  ifnot (is_directory (dir)) return NULL;
 
   DIR *dh = NULL;
   if (NULL is (dh = opendir (dir))) return NULL;
@@ -3171,7 +3182,7 @@ private int ved_buf_adjust_col (buf_t *this, int nth, int isatend) {
   vchar_t *it;
   int clen = 0;
  // if (isatend and ($my(line)->num_items <= nth or $my(line)->num_items - nth < 30)) {
-  if (isatend) {
+  if (isatend and $my(line)->num_items < $my(dim)->num_cols - 10) {
     clen = $my(line)->tail->len;
     $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
   } else {
@@ -6008,8 +6019,8 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   while (it) {
     char *fname = it->data->bytes;
     if (file_exists (fname))
-      if (isnot_directory (fname))
-        ifnot (access (fname, R_OK))
+      ifnot (is_directory (fname))
+        if (file_is_readable (fname))
           ved_search_file (this, fname, re);
     it = it->next;
   }
@@ -6161,6 +6172,15 @@ private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target)
   if (NULL is fp) return;
   fwrite (bytes, 1, len, fp);
   pclose (fp);
+}
+
+private int ed_selection_to_X_word_actions_cb (buf_t **thisp, int fidx, int lidx,
+                                bufiter_t *it, char *word, utf8 c) {
+  (void) it;
+  buf_t *this = *thisp;
+  ed_selection_to_X ($my(root), word, lidx - fidx + 1,
+  	('*' is c ? X_PRIMARY : X_CLIPBOARD));
+  return DONE;
 }
 
 private void ed_register_free (ed_t *this, rg_t *rg) {
@@ -7546,26 +7566,15 @@ private int ved_normal_handle_W (buf_t **thisp) {
   if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
-  switch (c) {
-    case '+':
-    case '*':
-      ed_selection_to_X ($my(root), word, lidx - fidx + 1,
-        ('*' is c ? X_PRIMARY : X_CLIPBOARD));
-      return DONE;
-
-    default:
-      for (int i = 0; i < $myroots(word_actions_chars_len); i++)
-        if (c is $myroots(word_actions_chars)[i]) {
-          bufiter_t *it = self(iter.new, this->cur_idx);
-          int retval = $myroots(word_actions_cb) (thisp, fidx, lidx, it, word, c);
-          self(iter.free, it);
-          if (retval) return NOTHING_TODO;
-        }
-
-      break;
+  int retval = NOTHING_TODO;
+  for (int i = 0; i < $myroots(word_actions_chars_len); i++)
+    if (c is $myroots(word_actions_chars)[i]) {
+      bufiter_t *it = self(iter.new, this->cur_idx);
+      retval = $myroots(word_actions_cb)[i] (thisp, fidx, lidx, it, word, c);
+      self(iter.free, it);
     }
 
-  return DONE;
+  return retval;
 }
 
 private int ved_normal_handle_ctrl_w (buf_t **thisp) {
@@ -10451,6 +10460,13 @@ private void ved_append_rline_commands (ed_t *this, char **commands,
   $my(num_commands) = len;
 }
 
+private void ved_append_rline_command (ed_t *this, char *name, int args, int flags) {
+  char *commands[2] = {name, NULL};
+  int largs[] = {args, 0};
+  int lflags[] = {flags, 0};
+  ved_append_rline_commands (this, commands, 1, largs, lflags);
+}
+
 private int ved_get_num_rline_commands (ed_t *this) {
   return $my(num_commands);
 }
@@ -12551,31 +12567,36 @@ private void ed_resume (ed_t *this) {
   My(Win).draw (this->current);
 }
 
-private void ed_set_word_actions_cb (ed_t *this, WordActions_cb cb) {
-  ifnot (NULL is cb) $my(word_actions_cb) = cb;
-}
-
-private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
-                                  char *actions, WordActions_cb cb) {
-  ifnot (len) return;
-  int tlen = $my(word_actions_chars_len) + len;
-
-  ifnot ($my(word_actions_chars_len))
-    $my(word_actions_chars) = Alloc (sizeof (int *) * len);
-  else
-    $my(word_actions_chars) = Realloc ($my(word_actions_chars), sizeof (int *) * tlen);
-
-  for (int i = $my(word_actions_chars_len), j = 0; i < tlen; i++, j++)
-    $my(word_actions_chars)[i] = chars[j];
-  $my(word_actions_chars_len) = tlen;
-  $my(word_actions) = str_chop (actions, '\n', $my(word_actions), NULL, NULL);
-  self(set.word_actions_cb, cb);
-}
-
 private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
                                 bufiter_t *it, char *word, utf8 c) {
   (void) thisp; (void) word; (void) c; (void) fidx; (void) lidx; (void) it;
   return 1;
+}
+
+private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
+                                  char *actions, WordActions_cb cb) {
+  if (len <= 0) return;
+  int tlen = $my(word_actions_chars_len) + len;
+
+  ifnot ($my(word_actions_chars_len)) {
+    $my(word_actions_chars) = Alloc (sizeof (int *) * len);
+    $my(word_actions_cb) = Alloc (sizeof (WordActions_cb) * len);
+  }
+  else {
+    $my(word_actions_chars) = Realloc ($my(word_actions_chars), sizeof (int *) * tlen);
+    $my(word_actions_cb) = Realloc ($my(word_actions_cb), sizeof (WordActions_cb) * tlen);
+  }
+
+  if (NULL is cb)
+    cb = ed_word_actions_cb;
+
+  for (int i = $my(word_actions_chars_len), j = 0; i < tlen; i++, j++) {
+    $my(word_actions_chars)[i] = chars[j];
+    $my(word_actions_cb)[i] = cb;
+  }
+
+  $my(word_actions_chars_len) = tlen;
+  $my(word_actions) = str_chop (actions, '\n', $my(word_actions), NULL, NULL);
 }
 
 private void ed_set_word_actions_default (ed_t *this) {
@@ -12587,7 +12608,7 @@ private void ed_set_word_actions_default (ed_t *this) {
     "+send selected area to XA_CLIPBOARD\n"
     "*send selected area to XA_PRIMARY";
 
-  self(set.word_actions, chars, ARRLEN(chars), actions, ed_word_actions_cb);
+  self(set.word_actions, chars, ARRLEN(chars), actions, ed_selection_to_X_word_actions_cb);
 }
 
 private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,
@@ -12749,6 +12770,7 @@ private void ed_free (ed_t *this) {
     free ($my(cw_mode_chars)); free ($my(cw_mode_actions));
     free ($my(lw_mode_chars)); free ($my(lw_mode_actions));
     free ($my(word_actions_chars));
+    free ($my(word_actions_cb));
     vstr_free ($my(word_actions));
 
     ved_deinit_commands (this);
@@ -12950,11 +12972,12 @@ public string_T __init_string__ (void) {
       .insert_at = string_insert_at,
       .insert_at_with_len  = string_insert_at_with_len,
       .append = string_append,
+      .append_fmt = string_append_fmt,
       .append_with_len = string_append_with_len,
       .append_byte = string_append_byte,
       .prepend = string_prepend,
       .prepend_fmt = string_prepend_fmt,
-      .append_fmt = string_append_fmt,
+      .prepend_byte = string_prepend_byte,
       .delete_numbytes_at = string_delete_numbytes_at,
       .replace_numbytes_at_with = string_replace_numbytes_at_with,
       .replace_with = string_replace_with,
@@ -13053,7 +13076,6 @@ private ed_T *editor_new (char *name) {
         .lw_mode_actions = ed_set_lw_mode_actions,
         .cw_mode_actions = ed_set_cw_mode_actions,
         .word_actions = ed_set_word_actions,
-        .word_actions_cb = ed_set_word_actions_cb,
         .on_normal_g_cb = ed_set_normal_on_g_cb
       ),
       .get = SubSelfInit (ed, get,
@@ -13084,7 +13106,8 @@ private ed_T *editor_new (char *name) {
         .toscratch = ved_append_toscratch,
         .toscratch_fmt = ved_append_toscratch_fmt,
         .command_arg = ved_append_command_arg,
-        .rline_commands = ved_append_rline_commands
+        .rline_commands = ved_append_rline_commands,
+        .rline_command = ved_append_rline_command
       ),
       .readjust = SubSelfInit (ed, readjust,
         .win_size =ed_win_readjust_size

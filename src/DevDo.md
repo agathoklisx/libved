@@ -1,7 +1,7 @@
 /*  Development Tracker  */
 
 Implement:
-  Command Line:
+  Command Lint:
   :!! (last command, direct execution? or
   :!.  to mean also execution
 

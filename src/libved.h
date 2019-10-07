@@ -951,6 +951,8 @@ NewSelf (file,
     (*is_reg) (const char *),
     (*is_elf) (const char *);
 
+  ssize_t (*write) (char *, char *, ssize_t);
+
   vstr_t *(*readlines) (char *, vstr_t *, FileReadLines_cb, void *);
 );
 
@@ -1254,7 +1256,6 @@ NewSubSelf (ed, set,
      (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
-     (*word_actions_cb) (ed_t *, WordActions_cb),
      (*word_actions)    (ed_t *, utf8 *, int, char *, WordActions_cb);
 
   win_t *(*current_win) (ed_t *, int);
@@ -1275,8 +1276,8 @@ NewSubSelf (ed, append,
     (*toscratch_fmt) (ed_t *, int, char *, ...),
     (*toscratch) (ed_t *, int, char *),
     (*command_arg) (ed_t *, char *, char *),
-    (*rline_commands) (ed_t *, char **, int, int[], int[]);
-
+    (*rline_commands) (ed_t *, char **, int, int[], int[]),
+    (*rline_command) (ed_t *, char *, int, int);
 );
 
 NewSubSelf (ed, readjust,

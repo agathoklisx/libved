@@ -19,310 +19,17 @@ NewType (uenv,
 
 static uenv_t *Uenv = NULL;
 
-/* user sample extension[s] (mostly personal) and basic system command[s],
+/* user sample extension[s] (some personal) and basic system command[s],
 that since explore[s] the API, this unit is also a vehicle to understand
 the needs and establish this application layer */
 
 #if HAS_SPELL
-#include "../lib/map/int_map.h"
-static   intmap_T Intmap;
-#define  Imap Intmap.self
-
-#include "../lib/spell/spell.c"
-static   spell_T SpellClass;
-#define  Spell SpellClass.self
-
-#define SPELL_NOTWORD Notword "012345678#:`$_"
-#define SPELL_NOTWORD_LEN (Notword_len + 14)
-
-private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
-        action_t **action, int fidx, int lidx, bufiter_t *iter) {
-  char prefix[fidx + 1];
-  char lpart[iter->line->num_bytes - lidx];
-
-  Cstring.substr (prefix, fidx, iter->line->bytes, iter->line->num_bytes, 0);
-  Cstring.substr (lpart, iter->line->num_bytes - lidx - 1, iter->line->bytes,
-     iter->line->num_bytes, lidx + 1);
-
-  string_t *quest = String.new (512);
-
-  String.append_fmt (quest,
-    "Spelling [%s] at line %d and %d index\n%s%s%s\n",
-     spell->word, iter->idx + 1, fidx, prefix, spell->word, lpart);
-
-   ifnot (spell->guesses->num_items)
-     String.append (quest, "Cannot find matching words and there are no suggestions\n");
-   else
-     String.append (quest, "Suggestions: (enter number to accept one as correct)\n");
-
-  int charslen = 5 + spell->guesses->num_items;
-  utf8 chars[charslen];
-  chars[0] = 'A'; chars[1] = 'a'; chars[2] = 'c'; chars[3] = 'i'; chars[4] = 'q';
-  vstring_t *it = spell->guesses->head;
-  for (int j = 1; j <= spell->guesses->num_items; j++) {
-    String.append_fmt (quest, "%d: %s\n", j, it->data->bytes);
-    chars[4+j] = '0' + j;
-    it = it->next;
-  }
-
-  String.append (quest,
-      "Choises:\n"
-      "a[ccept] word as correct and add it to the dictionary\n"
-      "A[ccept] word as correct just for this session\n"
-      "c[ansel] operation and continue with the next\n"
-      "i[nput]  correct word by getting input\n"
-      "q[uit]   quit operation\n");
-
-  utf8 c = Ed.question ($myed, quest->bytes, chars, charslen);
-  String.free (quest);
-
-  it = spell->guesses->head;
-  switch (c) {
-    case 'c': return SPELL_OK;
-    case 'a':
-      Spell.add_word_to_dictionary (spell, spell->word);
-      Imap.set_with_keylen (spell->dic, spell->word);
-      return SPELL_OK;
-
-    case 'q': return SPELL_ERROR;
-
-    case 'A':
-      Imap.set_with_keylen (spell->ign_words, spell->word);
-      return SPELL_OK;
-
-    case 'i': {
-      string_t *inp = Buf.input_box (*thisp, Buf.get.current_video_row (*thisp) - 1,
-      Buf.get.current_video_col (*thisp), 0, spell->word);
-      ifnot (inp->num_bytes) {
-        String.free (inp);
-        return SPELL_OK;
-      }
-
-      Buf.action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
-          iter->line->bytes, iter->line->num_bytes);
-      String.replace_numbytes_at_with (iter->line, spell->word_len, fidx, inp->bytes);
-      String.free (inp);
-      Buf.set.modified (*thisp);
-      return SPELL_CHANGED_WORD;
-    }
-
-    default: {
-      Buf.action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
-          iter->line->bytes, iter->line->num_bytes);
-      it = spell->guesses->head;
-      for (int k = '1'; k < c; k++) it = it->next;
-      String.replace_numbytes_at_with (iter->line, spell->word_len, fidx,
-          it->data->bytes);
-      Buf.set.modified (*thisp);
-      return SPELL_CHANGED_WORD;
-    }
-  }
-  return SPELL_OK;
-}
-
-private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
-                                  bufiter_t *iter, char *word) {
-  int retval = NOTOK;
-
-  spell_t *spell = Spell.new ();
-  if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES, NO_FORCE)) {
-    Msg.send ($myed, COLOR_RED, spell->messages->head->data->bytes);
-    Spell.free (spell, SPELL_CLEAR_DICTIONARY);
-    return NOTOK;
-  }
-
-  action_t *action = Buf.action.new (*thisp);
-  Buf.action.set_current (*thisp, action, REPLACE_LINE);
-
-  int len = lidx - fidx + 1;
-
-  char lword[len + 1];
-  int i = 0;
-  while (i < len and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
-    fidx++;
-    len--;
-    i++;
-  }
-
-  int j = 0;
-  int orig_len = len;
-  len = 0;
-  while (i < orig_len and NULL is Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
-    lword[j++] = word[i++];
-    len++;
-  }
-
-  lword[j] = '\0';
-
-  if (i isnot len) {
-    i = len - 1;
-    while (i >= 0 and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i--])) {
-      lidx--;
-      len--;
-    }
-  }
-
-  if (len < (int) spell->min_word_len) goto theend;
-
-  strcpy (spell->word, lword);
-  spell->word_len = len;
-
-  retval = Spell.correct (spell);
-
-  if (retval >= SPELL_WORD_IS_CORRECT) {
-    retval = OK;
-    goto theend;
-  }
-
-  retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
-
-theend:
-  if (retval is SPELL_CHANGED_WORD) {
-    Buf.action.push (*thisp, action);
-    Buf.draw (*thisp);
-    retval = SPELL_OK;
-  } else
-    Buf.action.free (*thisp, action);
-
-  Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
-  return retval;
-}
-
-private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
-  int range[2];
-  int retval = Rline.get.range (rl, *thisp, range);
-  if (NOTOK is retval) {
-    range[0] = Buf.get.row.current_col_idx (*thisp);
-    range[1] = range[0];
-  }
-
-  int count = range[1] - range[0] + 1;
-
-  spell_t *spell = Spell.new ();
-  if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES, NO_FORCE))
-    {
-    Msg.send ($myed, COLOR_RED, spell->messages->head->data->bytes);
-    Spell.free (spell, SPELL_CLEAR_DICTIONARY);
-    return NOTOK;
-    }
-
-  action_t *action = Buf.action.new (*thisp);
-  Buf.action.set_current (*thisp, action, REPLACE_LINE);
-
-  int buf_changed = 0;
-
-  char word[MAXWORD];
-
-  bufiter_t *iter = Buf.iter.new (*thisp, range[0]);
-
-  int i = 0;
-  while (iter and i++ < count) {
-    int fidx = 0; int lidx = -1;
-    string_t *line = iter->line;
-    char *tmp = NULL;
-    for (;;) {
-      int cur_idx = lidx + 1 + (tmp isnot NULL);
-      tmp = Cstring.extract_word_at (line->bytes, line->num_bytes,
-          word, MAXWORD, SPELL_NOTWORD, SPELL_NOTWORD_LEN, cur_idx, &fidx, &lidx);
-
-      if (NULL is tmp) {
-        if (lidx >= (int) line->num_bytes - 1)
-          goto itnext;
-        continue;
-      }
-
-      int len = lidx - fidx + 1;
-      if (len < (int) spell->min_word_len or len >= MAXWORD)
-        continue;
-
-      strcpy (spell->word, word);
-      spell->word_len = len;
-
-      retval = Spell.correct (spell);
-
-      if (retval >= SPELL_WORD_IS_CORRECT) continue;
-
-      retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
-      if (SPELL_ERROR is retval) goto theend;
-      if (SPELL_CHANGED_WORD is retval) {
-        retval = SPELL_OK;
-        buf_changed = 1;
-      }
-    }
-itnext:
-    iter = Buf.iter.next (*thisp, iter);
-  }
-
-theend:
-  if (buf_changed) {
-    Buf.action.push (*thisp, action);
-    Buf.draw (*thisp);
-  } else
-    Buf.action.free (*thisp, action);
-
-  Buf.iter.free (*thisp, iter);
-  spell_free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
-  return retval;
-}
-
-private int __u_word_actions_cb__ (buf_t **, int, int, bufiter_t *, char *, utf8);
-
+#include "../ext/if_has_spell.c"
 #endif
 
-
-/* this function that extends normal mode, performs a simple search on a
- * lexicon defined file for 'word', and then prints the matched lines to
- * the scratch buffer (this buffer can be closed with 'q' (as in a pager)):
- * requires the WORD_LEXICON_FILE to be defined with a way; my way is to
- * compile the distribution through a shell script, that invokes `make`
- * with my specific definitions
- */
-private int __translate_word__ (buf_t **thisp, char *word) {
-  (void) thisp;
-  char *lex = NULL;
-
-#ifndef WORD_LEXICON_FILE
-  Msg.error ($myed, "%s(): lexikon has not been defined", __func__);
-  return NOTOK;
-#else
-  lex = WORD_LEXICON_FILE;
+#ifdef WORD_LEXICON_FILE
+#include "../ext/if_has_lexicon.c"
 #endif
-
-  Msg.send_fmt ($myed, COLOR_YELLOW, "translating [%s]", word);
-
-  ifnot (File.exists (lex)) {
-    Msg.error ($myed, "%s(): lexicon has not been found", __func__);
-    return NOTOK;
-  }
-
-  FILE *fp = fopen (lex, "r");
-  if (NULL is fp) {
-    Msg.error ($myed, Error.string ($myed, errno));
-    return NOTOK;
-  }
-
-  regexp_t *re = Re.new (word, 0, RE_MAX_NUM_CAPTURES, Re.compile);
-  size_t len;
-  char *line = NULL;
-  int nread;
-  int match = 0;
-
-  Ed.append.toscratch ($myed, CLEAR, word);
-  Ed.append.toscratch ($myed, DONOT_CLEAR, "=================");
-
-  while (-1 isnot (nread = getline (&line, &len, fp)))
-    if (0 <= Re.exec (re, line, nread)) {
-      match++;
-      Ed.append.toscratch ($myed, DONOT_CLEAR, line);
-      Re.reset_captures (re);
-    }
-
-  fclose (fp);
-  Re.free (re);
-  if (line isnot NULL) free (line);
-
-  return match;
-}
 
 private int sys_man (buf_t **bufp, char *word, int section) {
   if (NULL is Uenv->man_exec) return NOTOK;
@@ -380,13 +87,16 @@ theend:
   return retval;
 }
 
-
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
                                       bufiter_t *it, char *word, utf8 c) {
   (void) fidx; (void) lidx;
   int retval = 0;
   switch (c) {
+    case 'm':
+      return sys_man (thisp, word, -1);
+
+#ifdef WORD_LEXICON_FILE
     case 't':
       retval = __translate_word__ (thisp, word);
       if (0 is retval)
@@ -394,14 +104,13 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
       else if (0 < retval)
         Ed.scratch ($myed, thisp, NOT_AT_EOF);
       return (retval > 0 ? OK : NOTOK);
-
-      case 'm':
-        return sys_man (thisp, word, -1);
+#endif
 
 #if HAS_SPELL
-      case 'S':
-        return __spell_word__ (thisp, fidx, lidx, it, word);
+    case 'S':
+      return __spell_word__ (thisp, fidx, lidx, it, word);
 #endif
+
     default:
       break;
    }
@@ -410,16 +119,16 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
 }
 
 private void __u_add_word_actions__ (ed_t *this) {
-  int num_commands = 2;
+  utf8 chr[] = {'m'};
+  Ed.set.word_actions (this, chr, 1, "man page", __u_word_actions_cb__);
 #if HAS_SPELL
-  num_commands++;
-  utf8 chars[] = {'t', 'm', 'S'};
-  char actions[] = "translate word\nman page\nSpell word";
-#else
-  utf8 chars[] = {'t', 'm'};
-  char actions[] = "translate word\nman page";
+  chr[0] = 'S';
+  Ed.set.word_actions (this, chr, 1, "Spell word", __u_word_actions_cb__);
 #endif
-  Ed.set.word_actions (this, chars, num_commands, actions, __u_word_actions_cb__);
+#ifdef WORD_LEXICON_FILE
+  chr[0] =  't';
+  Ed.set.word_actions (this, chr, 1, "translate word", __u_word_actions_cb__);
+#endif
 }
 
 /* this function extends standard defined commands with a `battery command
@@ -658,21 +367,22 @@ private void __u_add_cw_mode_actions__ (ed_t *this) {
           /* user defined commands and|or actions */
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
-  int num_commands = 3;
+  int num_commands = 2;
+  char *commands[3] = {"~battery", "@validate_utf8", NULL};
+  int num_args[] = {0, 0, 0}; int flags[] = {0, 0, 0};
+  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
+
 #if HAS_SPELL
-  num_commands++;
-  char *commands[5] = {"~battery", "~spell", "~translate", "@validate_utf8", NULL};
-  int num_args[] = {0, 1, 0, 0, 0}; int flags[] = {0, RL_ARG_RANGE, 0, 0, 0};
-#else
-  char *commands[4] = {"~battery", "~translate", "@validate_utf8", NULL};
-  int num_args[] = {0, 0, 0, 0}; int flags[] = {0, 0, 0, 0};
+  Ed.append.rline_command (this, "~spell", 1, RL_ARG_RANGE);
 #endif
 
-  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
+#ifdef WORD_LEXICON_FILE
+  Ed.append.rline_command (this, "~translate", 0, 0);
+#endif
 }
 
 private int sys_mkdir (char *dir, mode_t mode, int verbose) {
-  ifnot (mkdir (dir, mode)) {
+  if (OK is mkdir (dir, mode)) {
     if (verbose)
       Msg.send_fmt ($myed, COLOR_YELLOW, "created directory `%s', with mode: 0%o",
           dir, mode);
@@ -718,6 +428,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     if (NULL is words) goto theend;
     retval = __file_validate_utf8__ (thisp, words->head->data->bytes);
     Vstring.free (words);
+#ifdef WORD_LEXICON_FILE
   } else if (Cstring.eq (com->bytes, "~translate")) {
     vstr_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
@@ -729,6 +440,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
         Ed.scratch ($myed, thisp, NOT_AT_EOF);
     Vstring.free (words);
     retval = (retval > 0 ? OK : NOTOK);
+#endif
 #if HAS_SPELL
   } else if (Cstring.eq (com->bytes, "~spell")) {
     retval = __buf_spell__ (thisp, rl);
