@@ -91,10 +91,12 @@ theend:
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
                                       bufiter_t *it, char *word, utf8 c) {
   (void) fidx; (void) lidx;
-  int retval = 0;
+  int retval = NOTOK;
+  (void) retval; // gcc complains here for no reason
   switch (c) {
     case 'm':
-      return sys_man (thisp, word, -1);
+      retval = sys_man (thisp, word, -1);
+      break;
 
 #ifdef WORD_LEXICON_FILE
     case 't':
@@ -103,19 +105,21 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
         Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]", word);
       else if (0 < retval)
         Ed.scratch ($myed, thisp, NOT_AT_EOF);
-      return (retval > 0 ? OK : NOTOK);
+      retval = (retval > 0 ? OK : NOTOK);
+      break;
 #endif
 
 #if HAS_SPELL
     case 'S':
-      return __spell_word__ (thisp, fidx, lidx, it, word);
+      retval = __spell_word__ (thisp, fidx, lidx, it, word);
+      break;
 #endif
 
     default:
       break;
    }
 
-  return OK;
+  return retval;
 }
 
 private void __u_add_word_actions__ (ed_t *this) {

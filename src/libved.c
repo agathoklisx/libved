@@ -4852,7 +4852,6 @@ private buf_t *win_buf_new (win_t *w, char *fname, int at_frame, int flags) {
   buf_t *this = win_buf_init (w, at_frame, flags);
 
   self(init_fname, fname);
-
   self(set.ftype, FTYPE_DEFAULT);
 
   self(set.row.idx, 0, NO_OFFSET, 1);
@@ -5378,8 +5377,7 @@ private void ed_msg_set (ed_t *this, int color, int msg_flags, char *msg,
 
   $my(msg_numchars) += ed_fmt_string_with_numchars (this, $my(msgline),
       (clear ? CLEAR : DONOT_CLEAR), msg, maybe_len,
-      My(Buf).get.prop.tabwidth (self(get.current_buf)),
-      $my(dim)->num_cols - $my(msg_numchars));
+      $my(msg_tabwidth), $my(dim)->num_cols - $my(msg_numchars));
 
   int close = (msg_flags & MSG_SET_CLOSE or
               (msg_flags & MSG_SET_OPEN) is UNSET);
@@ -6725,8 +6723,7 @@ private int ved_normal_bol (buf_t *this) {
   $my(video)->col_pos = $my(cur_video_col) =
       char_utf8_width ($mycur(data)->bytes, $my(ftype)->tabwidth);
 
-  buf_set_draw_statusline (this);
-  My(Cursor).set_pos ($my(term_ptr), $my(video)->row_pos, $my(video)->col_pos);
+  self(draw_cur_row);
   return DONE;
 }
 
@@ -12828,6 +12825,7 @@ private ed_t *ed_init (ed_T *E) {
   $my(last_insert) = My(String).new ($from($my(term), columns));
   $my(uline) = My(Ustring).new ();
 
+  $my(msg_tabwidth) = 2;
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
   $my(saved_cwd) = dir_current ();

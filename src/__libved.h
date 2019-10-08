@@ -767,7 +767,8 @@ NewProp (ed,
     prompt_row,
     msg_row,
     msg_send,
-    msg_numchars;
+    msg_numchars,
+    msg_tabwidth;
 
   string_t
     *last_insert,

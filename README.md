@@ -410,33 +410,37 @@ Normal mode:
  |   - f             | open filename under the cursor |
  |     gf on C filetype, can open header <header.h>   |
  | :                 | command line mode              |
- | q                 | quit (not delete) and when buffer type is pager|
- |                                                    |
- | Extensions or quite different behavior with vim    |
- | g                 |                                |
- |   - b             | open link under the cursor to the browser
- |             (requires elinks text browser to be installed, and it uses
- |              the -remote elinks option, so elinks should be run|
-¹| CTRL-j            | detach editor and gives control to the caller
- |              can be reatached with the exact status|
- | CTRL-O|CTRL-I     | jump to the previus|next location to the jump list,
- |              (this differs from vim, as this is like scrolling to the
- |               history)                             |
- | W                 | word operations (via a selection menu)|
- | (implemented in the library)                       |
- |   - send `word' on XCLIPBOARD                      |
- |   - send `word' on XPRIMARY                        |
- | (extended by the test application)                 |
- |   - interpret `word' as a man page and display it to|
- |     the scratch buffer (requires the man utility)  |
+
+ | Normal Mode Extensions or different behavior with vim.|
+ | q                 | quit (not delete) and when buffer |
+ |                     type is pager                     |
+ | g                 |                                   |
+ |   - b             | open link under the cursor to the |
+ |             browser (requires the elinks text browser |
+ |             to be installed, and it uses the -remote  |
+ |             elinks option, so elinks should be running|
+¹| CTRL-j            | detach editor and gives control to|
+ |             the caller, it can be reatached with the  |
+ |             exact status                              |
+ | CTRL-O|CTRL-I     | jump to the previus|next location |
+ |             to the jump list, (this differs from vim, |
+ |             as this is like scrolling to the history) |
+ | W                 | word operations (via a selection  |
+ |                     menu)                             |
+ | (implemented in the library)                          |
+ |   - send `word' on XCLIPBOARD                         |
+ |   - send `word' on XPRIMARY                           |
+ | (extended by the test application)                    |
+ |   - interpret `word' as a man page and display it to  |
+ |     the scratch buffer (requires the man utility)     |
  |   - translate `word' (a personal function for demonstration)|
- |   - spell `word' (check if '`word' is mispelled)   |
- | ,                 |                                |
- |   - n             | like :bn (next buffer)         |  see Command mode
- |   - m             | like :bp (previous buffer)     |      -||-
- |   - ,             | like :b` (prev focused buffer) |      -||-
- |   - .             | like :w` (prev focused window) |      -||-
- |   - /             | like :wn[ext] (next window)    |      -||-
+ |   - spell `word' (check if '`word' is mispelled)      |
+ | ,                 |                                   |
+ |   - n             | like :bn (next buffer)            |  see Command mode
+ |   - m             | like :bp (previous buffer)        |      -||-
+ |   - ,             | like :b` (prev focused buffer)    |      -||-
+ |   - .             | like :w` (prev focused window)    |      -||-
+ |   - /             | like :wn[ext] (next window)       |      -||-
 
 Insert mode:
  |
