@@ -117,7 +117,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
             continue;
 
           default:
-            snprintf (re->errmsg, 256, "awaiting \\,&,[0..9,...], got %d [%c]",
+            snprintf (re->errmsg, 256, "awaiting \\,&,s[0..9,...], got %d [%c]",
                 *sub_p, *sub_p);
             goto theerror;
         }

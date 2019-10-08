@@ -25,6 +25,8 @@ static ed_T *E = NULL;
 #define String  E->String.self
 #define Rline   E->Rline.self
 #define Error   E->Error.self
+#define Vsys    E->Vsys.self
+#define Venv    E->Venv.self
 #define Term    E->Term.self
 #define Input   E->Input.self
 #define File    E->File.self

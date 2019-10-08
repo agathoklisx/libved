@@ -90,6 +90,7 @@ private char *str_substr (char *dest, size_t len, char *src, size_t src_len, siz
     dest[0] = '\0';
     return NULL;
   }
+
   for (size_t i = 0; i < len; i++) dest[i] = src[i+idx];
   dest[len] = '\0';
   return dest;
@@ -1280,6 +1281,9 @@ private void vstr_append_current_with (vstr_t *this, char *bytes) {
 
 private void vstr_append_with (vstr_t *this, char *bytes) {
   int cur_idx = this->cur_idx;
+  if (cur_idx isnot this->num_items - 1)
+    current_list_set (this, -1);
+
   vstr_append_current_with (this, bytes);
   current_list_set(this, cur_idx);
 }
@@ -1410,7 +1414,7 @@ public void __deinit_vstring__ (vstring_T *this) {
 private vstr_t *str_chop (char *buf, char tok, vstr_t *tokstr,
                                      StrChop_cb cb, void *obj) {
   vstr_t *ts = tokstr;
-  int ts_isnull = NULL is ts;
+  int ts_isnull = (NULL is ts);
   if (ts_isnull) ts = vstr_new ();
 
   char *sp = buf;
@@ -1580,8 +1584,13 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
             sub_p++;
             continue;
 
+          case 's':
+            string_append_byte (substr, ' ');
+            sub_p++;
+            continue;
+
           default:
-            strcpy (re->errmsg, "awaiting \\,&");
+            snprintf (re->errmsg, 256, "awaiting \\,&,s, got %d [%c]", *sub_p, *sub_p);
             goto theerror;
         }
 
@@ -1679,15 +1688,23 @@ theend:
   return llines;
 }
 
-private ssize_t file_write (char *fname, char *bytes, ssize_t size) {
+private ssize_t __file_write__ (char *fname, char *bytes, ssize_t size, char *mode) {
   if (size < 0) size = bytelen (bytes);
   if (size <= 0) return NOTOK;
 
-  FILE *fp = fopen (fname, "w");
+  FILE *fp = fopen (fname, mode);
   if (NULL is fp) return NOTOK;
   size = fwrite (bytes, 1, size, fp);
   fclose (fp);
   return size;
+}
+
+private ssize_t file_write (char *fname, char *bytes, ssize_t size) {
+  return __file_write__ (fname, bytes, size, "w");
+}
+
+private ssize_t file_append (char *fname, char *bytes, ssize_t size) {
+  return __file_write__ (fname, bytes, size, "a+");
 }
 
 public file_T __init_file__ (void) {
@@ -1699,7 +1716,8 @@ public file_T __init_file__ (void) {
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
       .readlines = file_readlines,
-      .write = file_write
+      .write = file_write,
+      .append = file_append
     )
   );
 }
@@ -4127,7 +4145,7 @@ private void buf_free_undo (buf_t *this) {
  * License, or (at your option) any later version.
  */
 
-private char *stat_mode_to_string (char *mode_string, mode_t mode) {
+private char *vsys_stat_mode_to_string (char *mode_string, mode_t mode) {
   if (S_ISREG(mode)) mode_string[0] = '-';
   else if (S_ISDIR(mode)) mode_string[0] = 'd';
   else if (S_ISLNK(mode)) mode_string[0] = 'l';
@@ -4155,6 +4173,21 @@ private char *stat_mode_to_string (char *mode_string, mode_t mode) {
   return mode_string;
 }
 
+public vsys_T __init_vsys__ (void) {
+  return ClassInit (vsys,
+    .self = SelfInit (vsys,
+      .which = vsys_which,
+      .stat = SubSelfInit (vsys, stat,
+        .mode_to_string = vsys_stat_mode_to_string
+      )
+    )
+  );
+}
+
+public void __deinit_vsys__ (vsys_T *this) {
+  (void) this;
+}
+
 private venv_t *env_new () {
   venv_t *env = AllocType (venv);
   env->pid = getpid ();
@@ -4177,7 +4210,7 @@ private venv_t *env_new () {
   } else
     env->term_name = string_new_with (term_name);
   struct stat st;  stat (TMPDIR, &st); char mode_string[12];
-  stat_mode_to_string (mode_string, st.st_mode);
+  vsys_stat_mode_to_string (mode_string, st.st_mode);
   ifnot (str_eq (mode_string, "drwx------")) {
     fprintf (stderr, "tmp directory |%s| permissions is not 0700 or drwx------\n",
        TMPDIR);
@@ -4186,7 +4219,7 @@ private venv_t *env_new () {
   env->tmp_dir = string_new_with (TMPDIR);
   char *path = getenv ("PATH");
   env->diff_exec = vsys_which ("diff", path);
-  env->xclip_exec =vsys_which ("xclip", path);
+  env->xclip_exec = vsys_which ("xclip", path);
   env->path = (path is NULL) ? NULL : string_new_with (path);
   return env;
 }
@@ -4222,6 +4255,18 @@ private string_t *venv_set (ed_t *this, char *name, char *val) {
   if (str_eq (name, "tmp_dir"))
     return My(String).replace_with ($my(env)->tmp_dir, val);
   return NULL;
+}
+
+public venv_T __init_venv__ (void) {
+  return ClassInit (venv,
+    .self = SelfInit (venv,
+      .get = venv_get
+    )
+  );
+}
+
+public void __deinit_venv__ (venv_T *this) {
+  (void) this;
 }
 
 private void history_free (hist_t **hist) {
@@ -4809,6 +4854,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(Path) = $myparents(Path);
   $my(Dir) = $myparents(Dir);
   $my(Rline) = $myparents(Rline);
+  $my(Vsys) = $myparents(Vsys);
+  $my(Venv) = $myparents(Venv);
 
   $my(term_ptr) = $myroots(term);
   $my(msg_row_ptr) = &$myroots(msg_row);
@@ -5085,6 +5132,8 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   $my(Path) = $myparents(Path);
   $my(Dir) = $myparents(Dir);
   $my(Rline) = $myparents(Rline);
+  $my(Vsys) = $myparents(Vsys);
+  $my(Venv) = $myparents(Venv);
 
   $my(video) = $myparents(video);
   $my(min_rows) = 1;
@@ -11000,8 +11049,23 @@ arg_type:
           arg->type |= RL_ARG_FILENAME;
         else {
           arg->type |= RL_ARG_ANYTYPE;
-          MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
-          rl->com = RL_UNRECOGNIZED_OPTION;
+          int found_arg = 0;
+          if (rl->com < rl->commands_len) {
+            int idx = 0;
+            while (idx++ < rl->commands[rl->com]->num_args) {
+              ifnot (NULL is rl->commands[rl->com]->args[idx]) {
+                if (str_eq_n (opt->bytes, rl->commands[rl->com]->args[idx]+2, opt->num_bytes)) {
+                  found_arg = 1;
+                  break;
+                }
+              }
+            }
+          }
+
+          ifnot (found_arg) {
+            MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
+            rl->com = RL_UNRECOGNIZED_OPTION;
+          }
         }
 
         goto argtype_succeed;
@@ -12811,6 +12875,8 @@ private ed_t *ed_init (ed_T *E) {
   $my(Path) = &E->Path;
   $my(Dir) =  &E->Dir;
   $my(Rline) = &E->Rline;
+  $my(Vsys) = &E->Vsys;
+  $my(Venv) = &E->Venv;
 
   $my(env) = env_new ();
 
@@ -12876,6 +12942,7 @@ private ed_T *__allocate_prop__ (ed_T *this) {
   $myprop = AllocProp (ed);
   $my(Cstring) = &this->Cstring;
   $my(String) = &this->String;
+  $my(Vstring) = &this->Vstring;
   $my(Re) = &this->Re;
   $my(Term) = &this->Term;
   $my(Input) = &this->Input;
@@ -12889,8 +12956,9 @@ private ed_T *__allocate_prop__ (ed_T *this) {
   $my(File) = &this->File;
   $my(Path) = &this->Path;
   $my(Dir) = &this->Dir;
-  $my(Vstring) = &this->Vstring;
   $my(Rline) = &this->Rline;
+  $my(Vsys) = &this->Vsys;
+  $my(Venv) = &this->Venv;
 
   $my(Me) = this;
   return this;
@@ -13131,12 +13199,6 @@ private ed_T *editor_new (char *name) {
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
       ),
-      .vsys = SubSelfInit (ed, vsys,
-        .which = vsys_which
-      ),
-      .venv = SubSelfInit (ed, venv,
-        .get = venv_get
-      ),
       .history = SubSelfInit (ed, history,
         .add = ved_history_add,
         .read = ved_history_read,
@@ -13307,7 +13369,9 @@ private ed_T *editor_new (char *name) {
     .File = __init_file__ (),
     .Path = __init_path__ (),
     .Dir = __init_dir__ (),
-    .Rline = __init_rline__ ()
+    .Rline = __init_rline__ (),
+    .Vsys = __init_vsys__ (),
+    .Venv = __init_venv__ ()
   );
 
   this->Cursor.self = this->Term.self.Cursor;

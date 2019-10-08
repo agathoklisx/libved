@@ -34,6 +34,7 @@ THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
+
 DEBUG_FLAGS := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
 # -fsanitize=undefined
 # -Wpedantic
@@ -65,6 +66,14 @@ ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
     FLAGS += $(LOCAL_EXTENSIONS_FLAGS)
   endif
 endif
+
+############################
+# private (testing)
+HAS_CURL := 0
+ifneq ($(HAS_CURL), 0)
+  FLAGS += -lcurl -DHAS_CURL
+endif
+############################
 
 DEBUG := 0
 ENABLE_WRITING := 0

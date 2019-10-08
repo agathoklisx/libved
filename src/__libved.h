@@ -564,7 +564,9 @@ NewType (hist,
   Class (file) *File;            \
   Class (path) *Path;            \
   Class (dir) *Dir;              \
-  Class (rline) *Rline
+  Class (rline) *Rline;          \
+  Class (vsys) *Vsys;            \
+  Class (venv) *Venv
 
 NewType (dim,
   int

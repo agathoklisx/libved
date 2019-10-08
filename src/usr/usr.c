@@ -387,9 +387,19 @@ private void __u_add_rline_user_commands__ (ed_t *this) {
 
 private int sys_mkdir (char *dir, mode_t mode, int verbose) {
   if (OK is mkdir (dir, mode)) {
-    if (verbose)
-      Msg.send_fmt ($myed, COLOR_YELLOW, "created directory `%s', with mode: 0%o",
-          dir, mode);
+    if (verbose) {
+      struct stat st;
+      if (NOTOK is stat (dir, &st)) {
+        Msg.error ($myed, "failed to stat directory, %s", Error.string ($myed, errno));
+        return NOTOK;
+      }
+      char mode_string[16];
+      Vsys.stat.mode_to_string (mode_string, st.st_mode);
+      char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
+
+      Msg.send_fmt ($myed, COLOR_YELLOW, "created directory `%s', with mode: %s (%s)",
+          dir, mode_oct + 1, mode_string);
+    }
     return OK;
   }
 
@@ -401,9 +411,11 @@ private void __u_add_rline_sys_commands__ (ed_t *this) {
  /* sys defined commands can begin with '`': associated with shell syntax */
   int num_commands = 2;
   char *commands[3] = {"`mkdir", "`man", NULL};
-  int num_args[] = {2, 1, 0}; int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
+  int num_args[] = {3, 1, 0};
+  int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "`man", "--section=");
+  Ed.append.command_arg (this, "`mkdir", "--mode=");
 }
 
 /* this is the callback function that is called on the extended commands */
@@ -412,30 +424,44 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   int retval = NOTOK;
   string_t *com = Rline.get.command (rl);
 
-  if (Cstring.eq (com->bytes, "~battery"))
+  if (Cstring.eq (com->bytes, "~battery")) {
     retval = sys_battery_info (NULL, 1);
-  else if (Cstring.eq (com->bytes, "`mkdir")) {
+
+  } else if (Cstring.eq (com->bytes, "`mkdir")) {
     vstr_t *dirs = Rline.get.arg_fnames (rl, 1);
     if (NULL is dirs) goto theend;
+
     int is_verbose = Rline.arg.exists (rl, "verbose");
-    retval = sys_mkdir (dirs->tail->data->bytes, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH, is_verbose);
+
+    mode_t def_mode = S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH;
+    string_t *mode_s = Rline.get.anytype_arg (rl, "mode");
+    mode_t mode = (NULL is mode_s ? def_mode : (uint) strtol (mode_s->bytes, NULL, 8));
+
+    retval = sys_mkdir (dirs->tail->data->bytes, mode, is_verbose);
     Vstring.free (dirs);
+
   } else if (Cstring.eq (com->bytes, "`man")) {
     vstr_t *names = Rline.get.arg_fnames (rl, 1);
     if (NULL is names) goto theend;
+
     string_t *section = Rline.get.anytype_arg (rl, "section");
     int sect_id = (NULL is section ? 0 : atoi (section->bytes));
+
     retval = sys_man (thisp, names->head->data->bytes, sect_id);
     Vstring.free (names);
+
   } else if (Cstring.eq (com->bytes, "@validate_utf8")) {
     vstr_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
+
     retval = __file_validate_utf8__ (thisp, words->head->data->bytes);
     Vstring.free (words);
+
 #ifdef WORD_LEXICON_FILE
   } else if (Cstring.eq (com->bytes, "~translate")) {
     vstr_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
+
     retval = __translate_word__ (thisp, words->head->data->bytes);
     if (0 is retval)
        Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]",
@@ -445,6 +471,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     Vstring.free (words);
     retval = (retval > 0 ? OK : NOTOK);
 #endif
+
 #if HAS_SPELL
   } else if (Cstring.eq (com->bytes, "~spell")) {
     retval = __buf_spell__ (thisp, rl);
@@ -592,9 +619,9 @@ private void __init_usr__ (ed_t *this) {
 #endif
 
   Uenv = AllocType (uenv);
-  string_t *path = Ed.venv.get (this, "path");
-  Uenv->man_exec = Ed.vsys.which ("man", path->bytes);
-  Uenv->elinks_exec = Ed.vsys.which ("elinks", path->bytes);
+  string_t *path = Venv.get (this, "path");
+  Uenv->man_exec = Vsys.which ("man", path->bytes);
+  Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
 
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);

@@ -951,7 +951,9 @@ NewSelf (file,
     (*is_reg) (const char *),
     (*is_elf) (const char *);
 
-  ssize_t (*write) (char *, char *, ssize_t);
+  ssize_t
+    (*write) (char *, char *, ssize_t),
+    (*append) (char *, char *, ssize_t);
 
   vstr_t *(*readlines) (char *, vstr_t *, FileReadLines_cb, void *);
 );
@@ -1043,6 +1045,27 @@ enum {
   BUF_EXIT,
   BUF_QUIT,
 };
+
+NewSubSelf (vsys, stat,
+  char *(*mode_to_string) (char *, mode_t);
+);
+
+NewSelf (vsys,
+  SubSelf (vsys, stat) stat;
+  string_t *(*which) (char *, char *);
+);
+
+NewClass (vsys,
+  Self (vsys) self;
+);
+
+NewSelf (venv,
+  string_t *(*get) (ed_t *, char *);
+);
+
+NewClass (venv,
+  Self (venv) self;
+);
 
 NewSubSelf (buf, set,
   SubSelf (bufset, as) as;
@@ -1311,14 +1334,6 @@ NewSubSelf (ed, sh,
   int (*popen) (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
 );
 
-NewSubSelf (ed, vsys,
-  string_t *(*which) (char *, char *);
-);
-
-NewSubSelf (ed, venv,
-  string_t *(*get) (ed_t *, char *);
-);
-
 NewSubSelf (ed, history,
   void
      (*add) (ed_t *, vstr_t *, int),
@@ -1345,8 +1360,6 @@ NewSelf (ed,
   SubSelf (ed, win) win;
   SubSelf (ed, menu) menu;
   SubSelf (ed, sh) sh;
-  SubSelf (ed, vsys) vsys;
-  SubSelf (ed, venv) venv;
   SubSelf (ed, history) history;
   SubSelf (ed, draw) draw;
 
@@ -1395,6 +1408,8 @@ NewClass (ed,
   Class (path) Path;
   Class (dir) Dir;
   Class (rline) Rline;
+  Class (vsys) Vsys;
+  Class (venv) Venv;
 
   ed_t *head;
   ed_t *tail;
