@@ -12,6 +12,13 @@
 
 #include "../lib/utf8/is_utf8.c"
 
+#if HAS_JSON
+#include "../lib/json/json.c"
+
+static json_T JsonClass;
+#define Json JsonClass.self
+#endif
+
 NewType (uenv,
   string_t *man_exec;
   string_t *elinks_exec;
@@ -329,7 +336,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       __validate_utf8__ (thisp, rl);
       Rline.free (rl);
     }
-    break;
+      break;
   }
 
   return retval;
@@ -393,6 +400,7 @@ private int sys_mkdir (char *dir, mode_t mode, int verbose) {
         Msg.error ($myed, "failed to stat directory, %s", Error.string ($myed, errno));
         return NOTOK;
       }
+
       char mode_string[16];
       Vsys.stat.mode_to_string (mode_string, st.st_mode);
       char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
@@ -400,22 +408,23 @@ private int sys_mkdir (char *dir, mode_t mode, int verbose) {
       Msg.send_fmt ($myed, COLOR_YELLOW, "created directory `%s', with mode: %s (%s)",
           dir, mode_oct + 1, mode_string);
     }
+
     return OK;
   }
 
-/* to do: handle errno */
+  Msg.error ($myed, "failed to create directory, (%s)", Error.string ($myed, errno));
   return NOTOK;
 }
 
 private void __u_add_rline_sys_commands__ (ed_t *this) {
  /* sys defined commands can begin with '`': associated with shell syntax */
   int num_commands = 2;
-  char *commands[3] = {"`mkdir", "`man", NULL};
-  int num_args[] = {3, 1, 0};
+  char *commands[] = {"`mkdir", "`man", NULL};
+  int num_args[] = {3, 0, 0};
   int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
-  Ed.append.command_arg (this, "`man", "--section=");
-  Ed.append.command_arg (this, "`mkdir", "--mode=");
+  Ed.append.command_arg (this, "`man", "--section=", 10);
+  Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
 }
 
 /* this is the callback function that is called on the extended commands */
@@ -433,8 +442,10 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     int is_verbose = Rline.arg.exists (rl, "verbose");
 
-    mode_t def_mode = S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH;
+    mode_t def_mode = S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH; // 0755
+
     string_t *mode_s = Rline.get.anytype_arg (rl, "mode");
+
     mode_t mode = (NULL is mode_s ? def_mode : (uint) strtol (mode_s->bytes, NULL, 8));
 
     retval = sys_mkdir (dirs->tail->data->bytes, mode, is_verbose);
@@ -618,6 +629,10 @@ private void __init_usr__ (ed_t *this) {
   SpellClass = __init_spell__ ();
 #endif
 
+#if HAS_JSON
+  JsonClass = __init_json__ ();
+#endif
+
   Uenv = AllocType (uenv);
   string_t *path = Venv.get (this, "path");
   Uenv->man_exec = Vsys.which ("man", path->bytes);
@@ -632,6 +647,10 @@ private void __deinit_usr__ (ed_t *this) {
   String.free (Uenv->man_exec);
   String.free (Uenv->elinks_exec);
   free (Uenv);
+
+#if HAS_JSON
+  __deinit_json__ (&JsonClass);
+#endif
 
 #if HAS_SPELL
   __deinit_spell__ (&SpellClass);

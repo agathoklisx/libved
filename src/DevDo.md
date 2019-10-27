@@ -1,9 +1,9 @@
 /*  Development Tracker  */
 
 Implement:
-  Command Lint:
+  Command Line:
   :!! (last command, direct execution? or
-  :!.  to mean also execution
+  :!.  to mean also execution)
 
   : 0x1f (CTRL('_')): to mean last component of previous command,
       (on repetition: scroll to history)

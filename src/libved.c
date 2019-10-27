@@ -1148,7 +1148,7 @@ private string_t *string_append_byte (string_t *this, char c) {
 
 private string_t *string_insert_byte_at (string_t *this, char c, int idx) {
   char buf[2]; buf[0] = c; buf[1] = '\0';
-  return string_insert_at (this, buf, idx);
+  return string_insert_at_with_len (this, buf, idx, 1);
 }
 
 private string_t *string_prepend_byte (string_t *this, char c) {
@@ -1177,18 +1177,18 @@ private string_t *string_append_fmt (string_t *this, const char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  return string_insert_at (this, bytes, -1);
+  return string_insert_at_with_len (this, bytes, this->num_bytes, len);
 }
 
 private string_t *string_prepend_fmt (string_t *this, const char *fmt, ...) {
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  return string_insert_at (this, bytes, 0);
+  return string_insert_at_with_len (this, bytes, 0, len);
 }
 
 private int string_delete_numbytes_at (string_t *this, int num, int idx) {
@@ -1230,9 +1230,9 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
   char bytes[(VA_ARGS_FMT_SIZE) + 1];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
-  return string_replace_with (this, bytes);
+  return string_replace_with_len (this, bytes, len);
 }
 
 private void vstr_clear (vstr_t *this) {
@@ -1431,10 +1431,10 @@ private vstr_t *str_chop (char *buf, char tok, vstr_t *tokstr,
     if (*sp is tok) {
 tokenize:;
       size_t len = sp - p;
-      ifnot (len) {
-        sp++; p = sp;
-        continue;
-      }
+      /* ifnot (len) {
+         sp++; p = sp;
+         continue;
+      } */
 
       char s[len + 1];
       memcpy (s, p, len);
@@ -2460,8 +2460,7 @@ private void video_draw_at (video_t *this, int at) {
   if (current_list_set(this, idx) is INDEX_ERROR) return;
 
   vstring_t *row = this->current;
-  string_clear (this->tmp_render);
-  string_append_fmt (this->tmp_render,
+  string_replace_with_fmt (this->tmp_render,
       "%s" TERM_GOTO_PTR_POS_FMT "%s%s%s" TERM_GOTO_PTR_POS_FMT,
       TERM_CURSOR_HIDE, at, this->first_col, TERM_LINE_CLR_EOL,
       row->data->bytes, TERM_CURSOR_SHOW, this->row_pos, this->col_pos);
@@ -2919,6 +2918,8 @@ insert_char:
 
         menu->process_list (menu);
 
+        if (menu->state & MENU_QUIT) goto theend;
+
         if (menu->list->num_items is 1)
           if (menu->return_if_one_item) {
             menu->c = '\r';
@@ -2928,7 +2929,6 @@ insert_char:
         /* this it can be change in the callback, and is intented for backspace */
         menu->return_if_one_item = orig_beh;
 
-        if (menu->state & MENU_QUIT) goto theend;
         if (menu->state & MENU_REINIT_LIST) goto init_list;
 
         continue;
@@ -3199,8 +3199,11 @@ private int ved_buf_adjust_col (buf_t *this, int nth, int isatend) {
 
   vchar_t *it;
   int clen = 0;
- // if (isatend and ($my(line)->num_items <= nth or $my(line)->num_items - nth < 30)) {
-  if (isatend and $my(line)->num_items < $my(dim)->num_cols - 10) {
+  /* some heuristics, this can never be perfect, unless a specific keybinding|set */
+  if (isatend and
+      ($my(prev_nth_ptr_pos) > $my(line)->num_items or
+      ($my(line)->num_items < ($my(prev_nth_ptr_pos) + 20) and
+       $my(prev_num_items) > 1))) {
     clen = $my(line)->tail->len;
     $mycur(cur_col_idx) = $mycur(data)->num_bytes - clen;
   } else {
@@ -3219,7 +3222,6 @@ private int ved_buf_adjust_col (buf_t *this, int nth, int isatend) {
     else
       $mycur(cur_col_idx) = idx - (num < nth ? clen : 0);
   }
-
 
   it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
   int cur_width = it->width;
@@ -3495,7 +3497,7 @@ char *c_keywords[] = {
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
     "$myroots V", "$myparents V", "public I", "mutable I", "loop I", "forever I",
     "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
-    "signed T", "volatile T", "register T", "union T", "const T", "auto T",
+    "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
     NULL
 };
 
@@ -4209,14 +4211,68 @@ private venv_t *env_new () {
     env->term_name = string_new (1);
   } else
     env->term_name = string_new_with (term_name);
-  struct stat st;  stat (TMPDIR, &st); char mode_string[12];
+
+#ifndef TMPDIR
+  char tmpt[PATH_MAX];
+  char *dtmpt = path_dirname (realpath (__FILE__, tmpt));
+  env->data_dir = string_new_with_fmt ("%s/%s", dtmpt, THIS_SYS_TMP_DIR);
+  free (dtmpt);
+#else
+  char tmpdir[] = TMPDIR;
+#endif
+
+  int fexists = file_exists (tmpdir);
+  ifnot (fexists) {
+    if (-1 is mkdir (tmpdir, S_IRWXU)) {
+      fprintf (stderr, "Fatal Error: Cannot create %s directory\n", tmpdir);
+      exit (errno);
+    }
+  }
+
+  if (-1 is access (tmpdir, R_OK)) {
+    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not Readable\n", tmpdir);
+    exit (errno);
+  }
+
+  if (-1 is access (tmpdir, W_OK)) {
+    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not Writable\n", tmpdir);
+    exit (errno);
+  }
+
+  if (-1 is access (tmpdir, W_OK)) {
+    fprintf (stderr, "Fatal Error: %s, temp directory, Has Not Execution Bits\n", tmpdir);
+    exit (errno);
+  }
+
+  struct stat st;
+  if (-1 is stat (tmpdir, &st)) {
+    fprintf (stderr, "Fatal Error: %s, temp directory, Can not stat()\n", tmpdir);
+    exit (errno);
+  }
+
+  ifnot (S_ISDIR (st.st_mode)) {
+    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not A Directory\n", tmpdir);
+    exit (errno);
+  }
+
+  char mode_string[12];
   vsys_stat_mode_to_string (mode_string, st.st_mode);
   ifnot (str_eq (mode_string, "drwx------")) {
-    fprintf (stderr, "tmp directory |%s| permissions is not 0700 or drwx------\n",
-       TMPDIR);
+    fprintf (stderr, "Warning: tmp directory |%s| permissions is not 0700 or drwx------\n",
+       tmpdir);
    }
 
-  env->tmp_dir = string_new_with (TMPDIR);
+  env->tmp_dir = string_new_with (tmpdir);
+
+#ifndef VED_DATA_DIR
+  char tmpd[PATH_MAX];
+  char *dtmpd = path_dirname (realpath (__FILE__, tmpd));
+  env->data_dir = string_new_with_fmt ("%s/%s", dtmpd, THIS_SYS_DATA_DIR);
+  free (dtmpd);
+#else
+  env->data_dir = string_new_with (VED_DATA_DIR);
+#endif
+
   char *path = getenv ("PATH");
   env->diff_exec = vsys_which ("diff", path);
   env->xclip_exec = vsys_which ("xclip", path);
@@ -4228,6 +4284,7 @@ private void env_free (venv_t **env) {
   if (NULL is env) return;
   string_free ((*env)->home_dir);
   string_free ((*env)->tmp_dir);
+  string_free ((*env)->data_dir);
   ifnot (NULL is (*env)->diff_exec) string_free ((*env)->diff_exec);
   ifnot (NULL is (*env)->xclip_exec) string_free ((*env)->xclip_exec);
   ifnot (NULL is (*env)->path) string_free ((*env)->path);
@@ -4239,7 +4296,8 @@ private string_t *venv_get (ed_t *this, char *name) {
   if (str_eq (name, "term_name")) return $my(env)->term_name;
   if (str_eq (name, "path")) return $my(env)->path;
   if (str_eq (name, "home_dir")) return $my(env)->home_dir;
-  if (str_eq (name, "tmp_dir"))  return $my(env)->tmp_dir;
+  if (str_eq (name, "tmp_dir")) return $my(env)->tmp_dir;
+  if (str_eq (name, "data_dir")) return $my(env)->data_dir;
   if (str_eq (name, "diff_exec")) return $my(env)->diff_exec;
   if (str_eq (name, "xclip_exec")) return $my(env)->xclip_exec;
   return NULL;
@@ -5274,17 +5332,6 @@ private buf_t *ved_scratch_buf (ed_t *this) {
   return buf;
 }
 
-private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
-  self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
-  ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF))
-   (*bufp) = ved_scratch_buf (this);
-
-  if (at_eof) ved_normal_eof (*bufp, DRAW);
-  else My(Buf).draw (*bufp);
-
-  return DONE;
-}
-
 private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
   buf_t *buf = self(buf.get, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   if (NULL is buf)
@@ -5294,8 +5341,13 @@ private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
 
   vstr_t *lines = str_chop (bytes, '\n', NULL, NO_CB_FN, NULL);
   vstring_t *it = lines->head;
+
+  int ifclear = 0;
   while (it) {
-    My(Buf).append_with (buf, it->data->bytes);
+    if (clear_first and 0 is ifclear++)
+      My(Buf).cur.replace_with (buf, it->data->bytes);
+    else
+      My(Buf).append_with (buf, it->data->bytes);
     it = it->next;
   }
   vstr_free (lines);
@@ -5308,6 +5360,17 @@ private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, .
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
   va_end(ap);
   ved_append_toscratch (this, clear_first, bytes);
+}
+
+private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
+  self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
+  ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF))
+   (*bufp) = ved_scratch_buf (this);
+
+  if (at_eof) ved_normal_eof (*bufp, DRAW);
+  else My(Buf).draw (*bufp);
+
+  return DONE;
 }
 
 private int ved_messages (ed_t *this, buf_t **bufp, int at_eof) {
@@ -5410,6 +5473,10 @@ thenext_it:
   }
 
   return numchars;
+}
+
+private void ed_msg_write (ed_t *this, char *msg) {
+  self(append.message, msg);
 }
 
 private void ed_msg_set (ed_t *this, int color, int msg_flags, char *msg,
@@ -6812,6 +6879,8 @@ private int ved_normal_end_word (buf_t **thisp, int count, int run_insert_mode, 
       ($mycur(cur_col_idx) is (int) $mycur(data)->num_bytes and              \
        IS_MODE(INSERT_MODE) ? 1 : 0));                                       \
   int nth__ = $my(line)->cur_idx + 1;                                        \
+  $my(prev_nth_ptr_pos) = nth__;                                             \
+  $my(prev_num_items) = $my(line)->num_items;                                \
   do {                                                                       \
     if (0 is $mycur(data)->num_bytes or                                      \
         0 is $mycur(data)->bytes[0] or                                       \
@@ -9780,14 +9849,13 @@ private int ved_complete_arg (menu_t *menu) {
 
   ifnot (menu->patlen) {
     while ($myroots(commands)[com]->args[i])
-      ifnot (str_eq ($myroots(commands)[com]->args[i], "--fname="))
-        vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i++]);
+      vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i++]);
   } else {
     while ($myroots(commands)[com]->args[i]) {
-      ifnot (str_eq ($myroots(commands)[com]->args[i], "--fname="))
-        if (str_eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
-          if (NULL is strstr (line, $myroots(commands)[com]->args[i]))
-            vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i]);
+      if (str_eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
+        if (NULL is strstr (line, $myroots(commands)[com]->args[i]) or
+        	str_eq ($myroots(commands)[com]->args[i], "--fname="))
+          vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i]);
       i++;
     }
   }
@@ -9846,7 +9914,7 @@ private int ved_complete_filename (menu_t *menu) {
   char dir[PATH_MAX];
   int joinpath;
 
-  if (menu->state & MENU_FINALIZE)  goto finalize;
+  if (menu->state & MENU_FINALIZE) goto finalize;
 
   dir[0] = '\0';
   joinpath = 0;
@@ -9882,7 +9950,7 @@ private int ved_complete_filename (menu_t *menu) {
     goto getlist;
   }
 
-  if (is_directory (menu->pat)) {
+  if (is_directory (menu->pat) and bytelen (path_basename (menu->pat)) > 1) {
     strcpy (dir, menu->pat);
     end = NULL;
     joinpath = 1;
@@ -10294,6 +10362,7 @@ redo:;
   while (sp < cur) tok[toklen++] = *sp++;
   tok[toklen] = '\0';
 
+  int orig_len = toklen;
   int type = 0;
 
   if (fidx is 0) {
@@ -10304,14 +10373,17 @@ redo:;
     $from(curbuf, shared_int) = rl->com;
     My(String).replace_with ($from(curbuf, shared_str), currline->bytes);
 
+
     if (rl->com isnot RL_NO_COMMAND) {
-      if (str_eq_n (tok, "--fname=\"", 9)) {
+      if (str_eq_n (tok, "--fname=", 8)) {
         type |= RL_TOK_ARG_FILENAME;
-        char tmp[toklen - 9];
+        int len = 8 + (tok[8] is '"');
+        char tmp[toklen - len + 1];
         int i;
-        for (i = 9; i < toklen; i++) tmp[i-9] = tok[i];
-        tmp[i-9] = '\0';
+        for (i = len; i < toklen; i++) tmp[i-len] = tok[i];
+        tmp[i-len] = '\0';
         strcpy (tok, tmp);
+        toklen = i-len;
       } else if (tok[0] is '-') {
         type |= RL_TOK_ARG;
         ifnot (NULL is strstr (tok, "="))
@@ -10338,8 +10410,6 @@ redo:;
   else if (type & RL_TOK_ARG)
     process_list = ved_complete_arg;
 
-  int orig_len = toklen;
-
   menu_t *menu = menu_new (this, $my(prompt_row) - 2, $my(prompt_row) - 2, 0,
       process_list, tok, toklen);
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
@@ -10354,6 +10424,7 @@ redo:;
   char *item;
   for (;;) {
     item = menu_create (this, menu);
+
     if (NULL is item) goto theend;
     if (menu->state & MENU_QUIT) break;
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
@@ -10368,6 +10439,7 @@ redo:;
     if (menu->process_list (menu) is NOTHING_TODO) goto theend;
 
     if (menu->state & (MENU_REDO|MENU_DONE)) break;
+    if (menu->state & MENU_QUIT) goto theend;
   }
 
   if (type & RL_TOK_ARG_FILENAME) {
@@ -10442,32 +10514,55 @@ private void ved_deinit_commands (ed_t *this) {
   free ($my(commands)); $my(commands) = NULL;
 }
 
-private void ved_add_command_arg (rlcom_t *rlcom, int flags) {
-#define ADD_ARG(arg, len, idx) rlcom->args[idx] = str_dup (arg, len)
-
-  int i = 0;
-  if (flags & RL_ARG_INTERACTIVE) ADD_ARG ("--interactive", 13, i++);
-  if (flags & RL_ARG_BUFNAME) ADD_ARG ("--bufname=", 10, i++);
-  if (flags & RL_ARG_RANGE) ADD_ARG ("--range=", 8, i++);
-  if (flags & RL_ARG_GLOBAL) ADD_ARG ("--global", 8, i++);
-  if (flags & RL_ARG_APPEND) ADD_ARG ("--append", 8, i++);
-  if (flags & RL_ARG_FILENAME) ADD_ARG ("--fname=", 8, i++);
-  if (flags & RL_ARG_SUB) ADD_ARG ("--sub=", 6, i++);
-  if (flags & RL_ARG_PATTERN) ADD_ARG ("--pat=", 6, i++);
-  if (flags & RL_ARG_VERBOSE) ADD_ARG ("--verbose", 9, i++);
-
-  rlcom->args[i] = NULL;
+private void ved_realloc_command_arg (rlcom_t *rlcom, int num) {
+  int orig_num = rlcom->num_args;
+  rlcom->num_args = num;
+  rlcom->args = Realloc (rlcom->args, sizeof (char *) * (rlcom->num_args + 1));
+  for (int i = orig_num; i <= num; i++)
+    rlcom->args[i] = NULL;
 }
 
-private void ved_append_command_arg (ed_t *this, char *com, char *argname) {
+private void ved_add_command_arg (rlcom_t *rlcom, int flags) {
+#define ADD_ARG(arg, len, idx) ({                             \
+  if (idx is rlcom->num_args)                                 \
+    ved_realloc_command_arg (rlcom, idx);                     \
+  rlcom->args[idx] = str_dup (arg, len);                      \
+  idx++;                                                      \
+})
+
+  int i = 0;
+  if (flags & RL_ARG_INTERACTIVE) ADD_ARG ("--interactive", 13, i);
+  if (flags & RL_ARG_BUFNAME) ADD_ARG ("--bufname=", 10, i);
+  if (flags & RL_ARG_RANGE) ADD_ARG ("--range=", 8, i);
+  if (flags & RL_ARG_GLOBAL) ADD_ARG ("--global", 8, i);
+  if (flags & RL_ARG_APPEND) ADD_ARG ("--append", 8, i);
+  if (flags & RL_ARG_FILENAME) ADD_ARG ("--fname=", 8, i);
+  if (flags & RL_ARG_SUB) ADD_ARG ("--sub=", 6, i);
+  if (flags & RL_ARG_PATTERN) ADD_ARG ("--pat=", 6, i);
+  if (flags & RL_ARG_VERBOSE) ADD_ARG ("--verbose", 9, i);
+  if (flags & RL_ARG_RECURSIVE) ADD_ARG ("--recursive", 11, i);
+}
+
+private void ved_append_command_arg (ed_t *this, char *com, char *argname, size_t len) {
+  if (len <= 0) len = bytelen (argname);
+
   int i = 0;
   while (i < $my(num_commands)) {
     if (str_eq ($my(commands)[i]->com, com)) {
       int idx = 0;
+      int found = 0;
       while (idx < $my(commands)[i]->num_args) {
-        if (NULL is $my(commands)[i]->args[idx])
-          $my(commands)[i]->args[idx] = str_dup (argname, bytelen (argname));
+        if (NULL is $my(commands)[i]->args[idx]) {
+          $my(commands)[i]->args[idx] = str_dup (argname, len);
+          found = 1;
+          break;
+        }
         idx++;
+      }
+
+      ifnot (found) {
+        ved_realloc_command_arg ($my(commands)[i], $my(commands)[i]->num_args + 1);
+        $my(commands)[i]->args[$my(commands)[i]->num_args - 1] = str_dup (argname, len);
       }
 
       return;
@@ -10477,7 +10572,7 @@ private void ved_append_command_arg (ed_t *this, char *com, char *argname) {
 }
 
 private void ved_append_rline_commands (ed_t *this, char **commands,
-                int commands_len, int num_args[], int flags[]) {
+                     int commands_len, int num_args[], int flags[]) {
   int len = $my(num_commands) + commands_len;
 
   ifnot ($my(num_commands))
@@ -10499,6 +10594,9 @@ private void ved_append_rline_commands (ed_t *this, char **commands,
 
     $my(commands)[i]->args = Alloc (sizeof (char *) * ((int) num_args[j] + 1));
     $my(commands)[i]->num_args = num_args[j];
+    for (int k = 0; k <= num_args[j]; k++)
+      $my(commands)[i]->args[k] = NULL;
+
     ved_add_command_arg ($my(commands)[i], flags[j]);
   }
 
@@ -10613,6 +10711,8 @@ private void ved_init_commands (ed_t *this) {
 
     $my(commands)[i]->args = Alloc (sizeof (char *) * (num_args[i] + 1));
     $my(commands)[i]->num_args = num_args[i];
+    for (int j = 0; j <= num_args[i]; j++)
+      $my(commands)[i]->args[j] = NULL;
 
     ved_add_command_arg ($my(commands)[i], flags[i]);
   }
@@ -11052,13 +11152,14 @@ arg_type:
           int found_arg = 0;
           if (rl->com < rl->commands_len) {
             int idx = 0;
-            while (idx++ < rl->commands[rl->com]->num_args) {
+            while (idx < rl->commands[rl->com]->num_args) {
               ifnot (NULL is rl->commands[rl->com]->args[idx]) {
                 if (str_eq_n (opt->bytes, rl->commands[rl->com]->args[idx]+2, opt->num_bytes)) {
                   found_arg = 1;
                   break;
                 }
               }
+              idx++;
             }
           }
 
@@ -11078,6 +11179,8 @@ arg_type:
           arg->type |= RL_ARG_APPEND;
         else if (str_eq (opt->bytes, "verbose"))
           arg->type |= RL_ARG_VERBOSE;
+        else if (str_eq (opt->bytes, "r") or str_eq (opt->bytes, "recursive"))
+          arg->type |= RL_ARG_RECURSIVE;
         else
           arg->type |= RL_ARG_ANYTYPE;
 
@@ -13032,6 +13135,7 @@ public string_T __init_string__ (void) {
     .self = SelfInit (string,
       .free = string_free,
       .new = string_new,
+      .reallocate = string_reallocate,
       .new_with = string_new_with,
       .new_with_len = string_new_with_len,
       .new_with_fmt = string_new_with_fmt,
@@ -13351,7 +13455,8 @@ private ed_T *editor_new (char *name) {
         .send_fmt = ed_msg_send_fmt,
         .error = ed_msg_error,
         //.error_fmt = ed_msg_error_fmt,
-        .fmt = ed_msg_fmt
+        .fmt = ed_msg_fmt,
+        .write = ed_msg_write
       ),
     ),
     .Error = ClassInit (error,

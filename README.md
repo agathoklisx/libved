@@ -47,11 +47,18 @@
    - the code is young and fragile in places and some crude algorithms that had
      been used during this initiation, need revision and functions needs to catch
      more conditions.
+     [update - last days of October-2019] While still many of those crude initial
+     algorithms haven't been replaced, they happen to work! and probably will stay
+     unchanged, though are quite complicated in places.
 
    - it doesn't try to catch conditions that don't make logical sense and expects
      a common workflow, and there is not really a desire to overflow the universe
      with conditional branches to catch conditions, that never met, and when met,
      there are ways to know where to meet them.
+     [update - last days of October-2019] This is a philosophy that stands, but many
+     conditions, especially during this last period, should be handled properly now
+     (still should be quite more to catch, but most of them quite exotic, though still
+      there are many that make sense to catch).
 
    - the highlighted system is ridiculously simple (note: this never is going to be
      nor ever intented as a general purpose editor; it strives to achieve this level of
@@ -201,6 +208,10 @@
    or just because of a tiny compilation error), compilations like these can
    happen (and if it was possible) sometimes 10 times in a couple of minutes, so
    tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.))
+      (note: since commit d7c2ccd of 8 October-2019, unfortunatelly this not true.
+       While tcc can compile the shared library and the test application, without
+       errors, the application segfaults, because of the call to stat(). This was
+       reported upstream.)
   */
 
   /* All the compilation options: */
@@ -260,7 +271,7 @@ C_TAB_ON_INSERT_MODE_INDENTS (1|0) the wrong indentation here is by purpose (def
    SMALL_E_ON_NORMAL_GOES_INSERT_MODE (1|0) 'e' in normal mode after operation
                           enters insert mode (default 1)
    READ_FROM_SHELL (1|0)  this option enables reading from the standard output
-                          of a shell command (default 1) note that this option
+                          of a shell command (default 1), note: that this option
                           activates HAS_SHELL_COMMANDS
 
  /* (those set the defaults during filetype initiation) */

@@ -29,6 +29,7 @@ make                                                \
     HAS_SHELL_COMMANDS=1                            \
     HAS_USER_EXTENSIONS=1                           \
     HAS_SPELL=1                                     \
+    HAS_JSON=1                                      \
     HAS_LOCAL_EXTENSIONS=0                          \
     HAS_HISTORY=1                                   \
     VED_DATA_DIR="$PWD/sys/data"                    \

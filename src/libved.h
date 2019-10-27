@@ -7,9 +7,8 @@
 #define DEFAULT_SHIFTWIDTH 2
 #define DEFAULT_PROMPT_CHAR ':'
 
-#ifndef TMPDIR
-#define TMPDIR "/tmp"
-#endif
+#define THIS_SYS_DATA_DIR "sys/data"
+#define THIS_SYS_TMP_DIR "sys/tmp"
 
 #ifndef RLINE_HISTORY_NUM_ENTRIES
 #define RLINE_HISTORY_NUM_ENTRIES 20
@@ -85,9 +84,9 @@
 #define Notfname_len 4
 
 #define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
-#define PATH_SEP       ':'
-#define DIR_SEP        '/'
-#define IS_DIR_SEP(c)  (c == DIR_SEP)
+#define PATH_SEP        ':'
+#define DIR_SEP         '/'
+#define IS_DIR_SEP(c)   (c == DIR_SEP)
 #define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
 #define IS_CNTRL(c)     ((c < 0x20 and c >= 0) || c == 0x7f)
@@ -96,7 +95,7 @@
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
 
-#define IsAlsoAHex(c) (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
+#define IsAlsoAHex(c)    (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 
 #define NO_GLOBAL 0
@@ -315,10 +314,12 @@
 
 #define NO_OFFSET  0
 
+/* #define RESET_ERRNO errno = 0   mostly as an indicator and reminder */
+
 #define ZERO_FLAGS 0
 
-#define RE_IGNORE_CASE (1 << 0)
-#define RE_ENCLOSE_PAT_IN_PAREN (1 << 1)
+#define RE_IGNORE_CASE               (1 << 0)
+#define RE_ENCLOSE_PAT_IN_PAREN      (1 << 1)
 #define RE_PATTERN_IS_STRING_LITERAL (1 << 2)
 
 #define RE_MAX_NUM_CAPTURES 9
@@ -342,20 +343,21 @@
 #define RL_UNTERMINATED_QUOTED_STRING_ERROR  -24
 #define RL_UNRECOGNIZED_OPTION               -25
 
-#define RL_ARG_FILENAME (1 << 0)
-#define RL_ARG_RANGE (1 << 1)
-#define RL_ARG_GLOBAL (1 << 2)
-#define RL_ARG_PATTERN (1 << 3)
-#define RL_ARG_SUB (1 << 4)
+#define RL_ARG_FILENAME    (1 << 0)
+#define RL_ARG_RANGE       (1 << 1)
+#define RL_ARG_GLOBAL      (1 << 2)
+#define RL_ARG_PATTERN     (1 << 3)
+#define RL_ARG_SUB         (1 << 4)
 #define RL_ARG_INTERACTIVE (1 << 5)
-#define RL_ARG_APPEND (1 << 6)
-#define RL_ARG_BUFNAME (1 << 7)
-#define RL_ARG_VERBOSE (1 << 8)
-#define RL_ARG_ANYTYPE (1 << 9)
+#define RL_ARG_APPEND      (1 << 6)
+#define RL_ARG_BUFNAME     (1 << 7)
+#define RL_ARG_VERBOSE     (1 << 8)
+#define RL_ARG_ANYTYPE     (1 << 9)
+#define RL_ARG_RECURSIVE   (1 << 10)
 
-#define INDEX_ERROR                          -1000
-#define NULL_PTR_ERROR                       -1001
-#define INTEGEROVERFLOW_ERROR                -1002
+#define INDEX_ERROR            -1000
+#define NULL_PTR_ERROR         -1001
+#define INTEGEROVERFLOW_ERROR  -1002
 
 typedef signed int utf8;
 typedef unsigned int uint;
@@ -520,11 +522,11 @@ typedef int  (*MenuProcessList_cb) (menu_t *);
 typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8);
 typedef int  (*WordActions_cb) (buf_t **, int, int, bufiter_t *, char *, utf8);
+typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
+typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
+typedef int  (*BufNormalOng_cb) (buf_t **, int);
 typedef string_t *(Indent_cb) (buf_t *, row_t *);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
-typedef int (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
-typedef int (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
-typedef int (*BufNormalOng_cb) (buf_t **, int);
 
 NewType (string,
   size_t  num_bytes;
@@ -811,6 +813,7 @@ NewSelf (string,
 
   string_t
     *(*new) (size_t),
+    *(*reallocate) (string_t *, size_t),
     *(*new_with) (const char *),
     *(*new_with_len) (const char *, size_t),
     *(*new_with_fmt) (const char *, ...),
@@ -875,7 +878,7 @@ NewSubSelf (rline, get,
 
   int (*range) (rline_t *, buf_t *, int *);
 
-  vstr_t   *(*arg_fnames) (rline_t *, int);
+  vstr_t *(*arg_fnames) (rline_t *, int);
 );
 
 NewSubSelf (rline, arg,
@@ -922,6 +925,7 @@ NewClass (re,
 
 NewSelf (msg,
   void
+    (*write) (ed_t *, char *),
     (*set) (ed_t *, int, int, char *, size_t),
     (*set_fmt) (ed_t *, int, int, char *, ...),
     (*send) (ed_t *, int, char *),
@@ -1298,7 +1302,7 @@ NewSubSelf (ed, append,
     (*message) (ed_t *, char *),
     (*toscratch_fmt) (ed_t *, int, char *, ...),
     (*toscratch) (ed_t *, int, char *),
-    (*command_arg) (ed_t *, char *, char *),
+    (*command_arg) (ed_t *, char *, char *, size_t),
     (*rline_commands) (ed_t *, char **, int, int[], int[]),
     (*rline_command) (ed_t *, char *, int, int);
 );

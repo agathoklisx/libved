@@ -37,7 +37,7 @@ BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
 DEBUG_FLAGS := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
 # -fsanitize=undefined
-# -Wpedantic
+# -Wpedantic if turn on this gives: ISO C forbids braced-groups within expressions
 
 SHARED_CFLAGS := -shared -fPIC
 STATIC_CFLAGS := -static
@@ -57,24 +57,6 @@ ifeq (-$(CC), -gcc)
 endif
 
 #----------------------------------------------------------#
-HAS_LOCAL_EXTENSIONS := 0
-LOCAL_EXTENSIONS_FLAGS :=
-
-ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
-  FLAGS += -DHAS_LOCAL_EXTENSIONS
-  ifdef LOCAL_EXTENSIONS_FLAGS
-    FLAGS += $(LOCAL_EXTENSIONS_FLAGS)
-  endif
-endif
-
-############################
-# private (testing)
-HAS_CURL := 0
-ifneq ($(HAS_CURL), 0)
-  FLAGS += -lcurl -DHAS_CURL
-endif
-############################
-
 DEBUG := 0
 ENABLE_WRITING := 0
 
@@ -88,32 +70,10 @@ endif
 
 HAS_REGEXP := 0
 
-ifneq ($(HAS_REGEXP), 0)
-  FLAGS += -DHAS_REGEXP
-endif
-
 HAS_SHELL_COMMANDS := 1
 
 ifneq ($(HAS_SHELL_COMMANDS), 0)
   FLAGS += -DHAS_SHELL_COMMANDS
-endif
-
-HAS_USER_EXTENSIONS := 0
-USER_EXTENSIONS_FLAGS :=
-HAS_SPELL := 0
-SPELL_DICTIONARY := $(SYSDATADIR)/spell/spell.txt
-SPELL_DICTIONARY_NUM_ENTRIES := 10000
-
-ifneq ($(HAS_USER_EXTENSIONS), 0)
-  FLAGS += -DHAS_USER_EXTENSIONS
-  ifdef USER_EXTENSIONS_FLAGS
-    FLAGS += $(USER_EXTENSIONS_FLAGS)
-  endif
-  ifneq ($(HAS_SPELL), 0)
-    FLAGS += -DHAS_SPELL
-    FLAGS += -DSPELL_DICTIONARY='"$(SPELL_DICTIONARY)"'
-    FLAGS += -DSPELL_DICTIONARY_NUM_ENTRIES=$(SPELL_DICTIONARY_NUM_ENTRIES)
-  endif
 endif
 
 HAS_HISTORY := 0
@@ -123,17 +83,6 @@ ifneq ($(HAS_HISTORY), 0)
 endif
 
 VED_DATA_DIR := $(SYSDATADIR)
-
-ifdef VED_DATA_DIR
-  FLAGS += -DVED_DATA_DIR='"$(VED_DATA_DIR)"'
-endif
-
-WORD_LEXICON_FILE :=
-
-ifdef WORD_LEXICON_FILE
-  FLAGS += -DWORD_LEXICON_FILE='"$(WORD_LEXICON_FILE)"'
-endif
-
 TMPDIR  := $(SYSTMPDIR)
 
 TABWIDTH := 8
@@ -148,6 +97,7 @@ BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES := 1
 BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE := 1
 READ_FROM_SHELL := 1
 
+FLAGS += -DVED_DATA_DIR='"$(VED_DATA_DIR)"'
 FLAGS += -DTMPDIR='"$(TMPDIR)"'
 FLAGS += -DTABWIDTH=$(TABWIDTH)
 FLAGS += -DUNDO_NUM_ENTRIES=$(UNDO_NUM_ENTRIES)
@@ -220,6 +170,50 @@ SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
 APPFLAGS    := -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(LIBNAME)
+
+HAS_LOCAL_EXTENSIONS := 0
+LOCAL_EXTENSIONS_FLAGS :=
+
+ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
+  APPFLAGS += -DHAS_LOCAL_EXTENSIONS
+  ifdef LOCAL_EXTENSIONS_FLAGS
+    APPFLAGS += $(LOCAL_EXTENSIONS_FLAGS)
+  endif
+endif
+
+ifneq ($(HAS_REGEXP), 0)
+  APPFLAGS += -DHAS_REGEXP
+endif
+
+HAS_USER_EXTENSIONS := 0
+USER_EXTENSIONS_FLAGS :=
+HAS_SPELL := 0
+SPELL_DICTIONARY := $(SYSDATADIR)/spell/spell.txt
+SPELL_DICTIONARY_NUM_ENTRIES := 10000
+
+HAS_JSON := 0
+
+ifneq ($(HAS_USER_EXTENSIONS), 0)
+  APPFLAGS += -DHAS_USER_EXTENSIONS
+  ifdef USER_EXTENSIONS_FLAGS
+    APPFLAGS += $(USER_EXTENSIONS_FLAGS)
+  endif
+  ifneq ($(HAS_SPELL), 0)
+    APPFLAGS += -DHAS_SPELL
+    APPFLAGS += -DSPELL_DICTIONARY='"$(SPELL_DICTIONARY)"'
+    APPFLAGS += -DSPELL_DICTIONARY_NUM_ENTRIES=$(SPELL_DICTIONARY_NUM_ENTRIES)
+  endif
+
+  ifneq ($(HAS_JSON), 0)
+    APPFLAGS += -DHAS_JSON
+  endif
+endif
+
+WORD_LEXICON_FILE :=
+
+ifdef WORD_LEXICON_FILE
+  APPFLAGS += -DWORD_LEXICON_FILE='"$(WORD_LEXICON_FILE)"'
+endif
 
 VED_APPLICATION_FLAGS :=
 

@@ -44,7 +44,7 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   while (-1 isnot (nread = getline (&line, &len, fp)))
     if (0 <= Re.exec (re, line, nread)) {
       match++;
-      Ed.append.toscratch ($myed, DONOT_CLEAR, line);
+      Ed.append.toscratch ($myed, DONOT_CLEAR, Cstring.trim.end (line, '\n'));
       Re.reset_captures (re);
     }
 
