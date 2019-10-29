@@ -487,7 +487,8 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   } else if (Cstring.eq (com->bytes, "~spell")) {
     retval = __buf_spell__ (thisp, rl);
 #endif
-  }
+  } else
+    retval = RLINE_NO_COMMAND;
 
 theend:
   String.free (com);

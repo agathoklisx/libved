@@ -11510,7 +11510,13 @@ public void __deinit_rline__ (rline_T *this) {
 }
 
 private void ved_set_rline_cb (ed_t *this, Rline_cb cb) {
-  $my(rline_cb) = cb;
+  $my(num_rline_cbs)++;
+  ifnot ($my(num_rline_cbs) - 1)
+    $my(rline_cbs) = Alloc (sizeof (Rline_cb));
+  else
+    $my(rline_cbs) = Realloc ($my(rline_cbs), sizeof (Rline_cb) * $my(num_rline_cbs));
+
+  $my(rline_cbs)[$my(num_rline_cbs) - 1] = cb;
 }
 
 private void ed_set_normal_on_g_cb (ed_t *this, BufNormalOng_cb cb) {
@@ -11785,8 +11791,10 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        goto theend;
 
     default:
-      if ($myroots(rline_cb) isnot NULL)
-        retval = $myroots(rline_cb) (thisp, rl, rl->com);
+      for (int i = 0; i < $myroots(num_rline_cbs); i++) {
+        retval = $myroots(rline_cbs)[i] (thisp, rl, rl->com);
+        if (retval isnot RLINE_NO_COMMAND) break;
+      }
       goto theend;
   }
 
@@ -12935,6 +12943,7 @@ private void ed_free (ed_t *this) {
     free ($my(lw_mode_chars)); free ($my(lw_mode_actions));
     free ($my(word_actions_chars));
     free ($my(word_actions_cb));
+    free ($my(rline_cbs));
     vstr_free ($my(word_actions));
 
     ved_deinit_commands (this);
@@ -13019,6 +13028,8 @@ private ed_t *ed_init (ed_T *E) {
   ed_set_cw_mode_actions_default (this);
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
+
+  $my(num_rline_cbs) = 0;
 
   current_list_append (E, this);
 

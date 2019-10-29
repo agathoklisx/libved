@@ -1040,6 +1040,7 @@ NewSubSelf (bufset, normal,
 );
 
 enum {
+  RLINE_NO_COMMAND = -3,
   ERROR = -2,
   NOTHING_TODO = -1,
   DONE = 0,

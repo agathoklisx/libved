@@ -810,7 +810,9 @@ NewProp (ed,
   BufNormalOng_cb on_normal_g_cb;
   VisualLwMode_cb lw_mode_cb;
   VisualCwMode_cb cw_mode_cb;
-  Rline_cb rline_cb;
+
+  int num_rline_cbs;
+  Rline_cb *rline_cbs;
 );
 
 #undef MY_CLASSES

@@ -1261,6 +1261,8 @@ Search:
   - Lukás Chmela for itoa() (http://www.strudel.org.uk/itoa/)
   - checkmate_spell project for the algorithms (https://github.com/syb0rg/checkmate)
   - John Davis for stat_mode_to_string() (http://www.jedsoft.org/slang)
+  - jsmn (json decoder) (https://github.com/zserge/jsmn)
+  - jsmn-example (the state machine for jsmn) (https://github.com/alisdair/jsmn-example)
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
  */
