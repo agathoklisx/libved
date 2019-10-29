@@ -96,8 +96,8 @@ theend:
 
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
-                                      bufiter_t *it, char *word, utf8 c) {
-  (void) fidx; (void) lidx;
+                                      bufiter_t *it, char *word, utf8 c, char *action) {
+  (void) fidx; (void) lidx; (void) action;
   int retval = NOTOK;
   (void) retval; // gcc complains here for no reason
   switch (c) {
@@ -356,13 +356,15 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
 }
 
-private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c) {
+private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c, char *action) {
   int retval = NOTOK;
   switch (c) {
 #if HAS_SPELL
     case 'S': {
       bufiter_t *iter = Buf.iter.new (*thisp, -1);
-      return __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c);
+      retval = __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c, action);
+      Buf.iter.free (*thisp, iter);
+      break;
     }
 #endif
 

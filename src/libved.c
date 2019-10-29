@@ -6289,8 +6289,8 @@ private void ed_selection_to_X (ed_t *this, char *bytes, size_t len, int target)
 }
 
 private int ed_selection_to_X_word_actions_cb (buf_t **thisp, int fidx, int lidx,
-                                bufiter_t *it, char *word, utf8 c) {
-  (void) it;
+                                bufiter_t *it, char *word, utf8 c, char *action) {
+  (void) it; (void) action;
   buf_t *this = *thisp;
   ed_selection_to_X ($my(root), word, lidx - fidx + 1,
   	('*' is c ? X_PRIMARY : X_CLIPBOARD));
@@ -7655,7 +7655,7 @@ private int ved_complete_word_actions_cb (menu_t *menu) {
   return DONE;
 }
 
-private utf8 ved_complete_word_actions (buf_t *this) {
+private utf8 ved_complete_word_actions (buf_t *this, char *action) {
   int retval = DONE;
   utf8 c = ESCAPE_KEY;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
@@ -7664,7 +7664,14 @@ private utf8 ved_complete_word_actions (buf_t *this) {
   menu->this = this;
   menu->return_if_one_item = 1;
   char *item = menu_create ($my(root), menu);
-  if (item isnot NULL) c = *item;
+  if (item isnot NULL) {
+    c = *item;
+    char *tmp = item;
+    int i = 0;
+    for (; i < MAX_WORD_ACTION_LEN - 1 and *tmp; i++)
+      action[i] = *tmp++;
+    action[i] = '\0';
+  }
 
 theend:                                     /* avoid list (de|re)allocation */
   //menu->state &= ~MENU_LIST_IS_ALLOCATED; /* list will be free'd at ed_free() */
@@ -7674,7 +7681,8 @@ theend:                                     /* avoid list (de|re)allocation */
 
 private int ved_normal_handle_W (buf_t **thisp) {
   buf_t *this = *thisp;
-  utf8 c = ved_complete_word_actions (this);
+  char action[MAX_WORD_ACTION_LEN];
+  utf8 c = ved_complete_word_actions (this, action);
   if (c is ESCAPE_KEY) return NOTHING_TODO;
 
   char word[MAXWORD]; int fidx, lidx;
@@ -7685,7 +7693,7 @@ private int ved_normal_handle_W (buf_t **thisp) {
   for (int i = 0; i < $myroots(word_actions_chars_len); i++)
     if (c is $myroots(word_actions_chars)[i]) {
       bufiter_t *it = self(iter.new, this->cur_idx);
-      retval = $myroots(word_actions_cb)[i] (thisp, fidx, lidx, it, word, c);
+      retval = $myroots(word_actions_cb)[i] (thisp, fidx, lidx, it, word, c, action);
       self(iter.free, it);
     }
 
@@ -8475,7 +8483,7 @@ private int ved_visual_complete_actions_cb (menu_t *menu) {
   return DONE;
 }
 
-private utf8 ved_visual_complete_actions (buf_t *this) {
+private utf8 ved_visual_complete_actions (buf_t *this, char *action) {
   int retval = DONE;
   utf8 c = ESCAPE_KEY;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
@@ -8486,7 +8494,14 @@ private utf8 ved_visual_complete_actions (buf_t *this) {
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
 
   char *item = menu_create ($my(root), menu);
-  if (item isnot NULL) c = *item;
+  if (item isnot NULL) {
+    c = *item;
+    char *tmp = item;
+    int i = 0;
+    for (; i < MAX_WORD_ACTION_LEN - 1 and *tmp; i++)
+      action[i] = *tmp++;
+    action[i] = '\0';
+  }
 
 theend:
   menu_free (menu);
@@ -8500,6 +8515,8 @@ private int ved_normal_visual_lw (buf_t **thisp) {
 
   int goto_cb = 0;
   utf8 c;
+  char vis_action[MAX_WORD_ACTION_LEN];
+  vis_action[0] = '\0';
 
   for (;;) {
     $my(vis)[0].lidx = this->cur_idx;
@@ -8510,7 +8527,7 @@ private int ved_normal_visual_lw (buf_t **thisp) {
 handle_char:
     switch (c) {
       case '\t':
-        c = ved_visual_complete_actions (this);
+        c = ved_visual_complete_actions (this, vis_action);
         goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
@@ -8758,8 +8775,8 @@ private char *ved_syn_parse_visual_cw (buf_t *this, char *line, int len, int idx
   return ved_syn_parse_visual_line (this, line, len, row);
 }
 
-private int ed_cw_mode_cb (buf_t **thisp, int fcol, int lcol, string_t *str, utf8 c) {
-  (void) thisp; (void) str; (void) c; (void) fcol; (void) lcol;
+private int ed_cw_mode_cb (buf_t **thisp, int fcol, int lcol, string_t *str, utf8 c, char *action) {
+  (void) thisp; (void) str; (void) c; (void) fcol; (void) lcol; (void) action;
   return 1;
 }
 
@@ -8773,6 +8790,8 @@ private int ved_normal_visual_cw (buf_t **thisp) {
      .orig_syn_parser = $my(vis)[1].orig_syn_parser};
 
   int goto_cb = 0;
+  char vis_action[MAX_WORD_ACTION_LEN];
+  vis_action[0] = '\0';
 
   for (;;) {
     $my(vis)[0].lidx = $mycur(cur_col_idx);
@@ -8782,7 +8801,7 @@ private int ved_normal_visual_cw (buf_t **thisp) {
 handle_char:
     switch (c) {
       case '\t':
-        c = ved_visual_complete_actions (this);
+        c = ved_visual_complete_actions (this, vis_action);
         goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
@@ -8874,7 +8893,7 @@ handle_char:
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
               string_append_byte (str, $mycur(data)->bytes[ii]);
 
-            $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, str, c);
+            $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, str, c, vis_action);
             string_free (str);
             goto thereturn;
           }
@@ -8918,6 +8937,9 @@ private char *ved_syn_parse_visual_bw (buf_t *this, char *line, int len, int idx
 private int ved_normal_visual_bw (buf_t *this) {
   VISUAL_INIT_FUN (VISUAL_MODE_BW, ved_syn_parse_visual_bw);
 
+  char vis_action[MAX_WORD_ACTION_LEN];
+  vis_action[0] = '\0';
+
   for (;;) {
     $my(vis)[1].lidx = this->cur_idx;
     $my(vis)[0].lidx = $mycur(cur_col_idx);
@@ -8928,7 +8950,7 @@ private int ved_normal_visual_bw (buf_t *this) {
 handle_char:
     switch (c) {
       case '\t':
-        c = ved_visual_complete_actions (this);
+        c = ved_visual_complete_actions (this, vis_action);
         goto handle_char;
 
       VIS_HNDL_CASE_REG(reg);
@@ -12740,8 +12762,9 @@ private void ed_resume (ed_t *this) {
 }
 
 private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
-                                bufiter_t *it, char *word, utf8 c) {
+                                bufiter_t *it, char *word, utf8 c, char *action) {
   (void) thisp; (void) word; (void) c; (void) fidx; (void) lidx; (void) it;
+  (void) action;
   return 1;
 }
 

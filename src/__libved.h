@@ -3,6 +3,7 @@
 #define MAXCOMLEN   32
 #define MAXERRLEN   256
 #define MAX_SCREEN_ROWS  256
+#define MAX_WORD_ACTION_LEN 512
 #define MAX_COUNT_DIGITS 8
 
 #define VED_WIN_NORMAL_TYPE  0
