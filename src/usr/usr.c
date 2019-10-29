@@ -613,7 +613,7 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
    default: break;
    }
 
-  return NOTOK;
+  return NO_CALLBACK_FUNCTION;
 }
 
 private void __init_usr__ (ed_t *this) {

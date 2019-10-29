@@ -7776,8 +7776,10 @@ private int ved_normal_handle_g (buf_t **thisp, int count) {
          ? 0 : AT_CURRENT_FRAME, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
 
     default:
-      ifnot (NULL is $myroots(on_normal_g_cb))
-        return $myroots(on_normal_g_cb) (thisp, c);
+      for (int i = 0; i < $myroots(num_on_normal_g_cbs); i++) {
+        int retval = $myroots(on_normal_g_cbs)[i] (thisp, c);
+        if (retval isnot NO_CALLBACK_FUNCTION) return retval;
+      }
 
       return NOTHING_TODO;
   }
@@ -11541,8 +11543,24 @@ private void ved_set_rline_cb (ed_t *this, Rline_cb cb) {
   $my(rline_cbs)[$my(num_rline_cbs) - 1] = cb;
 }
 
-private void ed_set_normal_on_g_cb (ed_t *this, BufNormalOng_cb cb) {
-  $my(on_normal_g_cb) = cb;
+private void ved_free_rline_cbs (ed_t *this) {
+  ifnot ($my(num_rline_cbs)) return;
+  free ($my(rline_cbs));
+}
+
+private void ved_set_normal_on_g_cb (ed_t *this, BufNormalOng_cb cb) {
+  $my(num_on_normal_g_cbs)++;
+  ifnot ($my(num_on_normal_g_cbs) - 1)
+    $my(on_normal_g_cbs) = Alloc (sizeof (BufNormalOng_cb));
+  else
+    $my(on_normal_g_cbs) = Realloc ($my(on_normal_g_cbs), sizeof (BufNormalOng_cb) * $my(num_on_normal_g_cbs));
+
+  $my(on_normal_g_cbs)[$my(num_on_normal_g_cbs) - 1] = cb;
+}
+
+private void ved_free_on_normal_g_cbs (ed_t *this) {
+  ifnot ($my(num_on_normal_g_cbs)) return;
+  free ($my(on_normal_g_cbs));
 }
 
 private int ved_rline (buf_t **thisp, rline_t *rl) {
@@ -12966,7 +12984,11 @@ private void ed_free (ed_t *this) {
     free ($my(lw_mode_chars)); free ($my(lw_mode_actions));
     free ($my(word_actions_chars));
     free ($my(word_actions_cb));
-    free ($my(rline_cbs));
+
+    ved_free_rline_cbs (this);
+
+    ved_free_on_normal_g_cbs (this);
+
     vstr_free ($my(word_actions));
 
     ved_deinit_commands (this);
@@ -13052,7 +13074,7 @@ private ed_t *ed_init (ed_T *E) {
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
 
-  $my(num_rline_cbs) = 0;
+  $my(num_rline_cbs) = $my(num_on_normal_g_cbs) = 0;
 
   current_list_append (E, this);
 
@@ -13280,7 +13302,7 @@ private ed_T *editor_new (char *name) {
         .lw_mode_actions = ed_set_lw_mode_actions,
         .cw_mode_actions = ed_set_cw_mode_actions,
         .word_actions = ed_set_word_actions,
-        .on_normal_g_cb = ed_set_normal_on_g_cb
+        .on_normal_g_cb = ved_set_normal_on_g_cb
       ),
       .get = SubSelfInit (ed, get,
         .bufname = ed_get_bufname,

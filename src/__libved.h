@@ -808,9 +808,11 @@ NewProp (ed,
   vstr_t *word_actions;
 
   WordActions_cb *word_actions_cb;
-  BufNormalOng_cb on_normal_g_cb;
   VisualLwMode_cb lw_mode_cb;
   VisualCwMode_cb cw_mode_cb;
+
+  int num_on_normal_g_cbs;
+  BufNormalOng_cb *on_normal_g_cbs;
 
   int num_rline_cbs;
   Rline_cb *rline_cbs;
