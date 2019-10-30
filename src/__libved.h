@@ -802,20 +802,24 @@ NewProp (ed,
     cw_mode_chars_len,
     word_actions_chars_len;
 
-  syn_t syntaxes[NUM_SYNTAXES];
-  int num_syntaxes;
-
   vstr_t *word_actions;
-
   WordActions_cb *word_actions_cb;
-  VisualLwMode_cb lw_mode_cb;
-  VisualCwMode_cb cw_mode_cb;
+
+  int num_lw_mode_cbs;
+  VisualLwMode_cb *lw_mode_cbs;
+
+  int num_cw_mode_cbs;
+  VisualCwMode_cb *cw_mode_cbs;
 
   int num_on_normal_g_cbs;
   BufNormalOng_cb *on_normal_g_cbs;
 
   int num_rline_cbs;
   Rline_cb *rline_cbs;
+
+  int num_syntaxes;
+  syn_t syntaxes[NUM_SYNTAXES];
+
 );
 
 #undef MY_CLASSES

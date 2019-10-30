@@ -272,7 +272,10 @@ private int __file_validate_utf8__ (buf_t **thisp, char *fname) {
   retval = OK;
   File.readlines (fname, &unused, __validate_utf8_cb__, &retval);
 
-  if (retval is NOTOK) Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  if (retval is NOTOK)
+    Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  else
+    Msg.send_fmt ($myed, COLOR_SUCCESS, "Validating %s ... OK", fname);
 
   return OK;
 }
@@ -303,13 +306,17 @@ private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
   }
 
   Buf.iter.free (*thisp, iter);
-  if (retval is NOTOK) Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  if (retval is NOTOK)
+    Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  else
+    Msg.send ($myed, COLOR_SUCCESS, "Validating text ... OK");
+
   return retval;
 }
 
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c) {
   (void) vstr;
-  int retval = NOTOK;
+  int retval = NO_CALLBACK_FUNCTION;
   switch (c) {
 #if HAS_SPELL
     case 'S': {
@@ -337,6 +344,9 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       Rline.free (rl);
     }
       break;
+
+    default:
+      retval = NO_CALLBACK_FUNCTION;
   }
 
   return retval;
@@ -357,7 +367,7 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
 }
 
 private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c, char *action) {
-  int retval = NOTOK;
+  int retval = NO_CALLBACK_FUNCTION;
   switch (c) {
 #if HAS_SPELL
     case 'S': {
@@ -368,6 +378,8 @@ private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, 
     }
 #endif
 
+    default:
+      retval = NO_CALLBACK_FUNCTION;
   }
   return retval;
 }

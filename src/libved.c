@@ -8698,7 +8698,13 @@ handle_char:
               row = row->next;
             }
 
-            $myroots(lw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
+            for (int j = 0; j < $myroots(num_lw_mode_cbs); j++) {
+              int retval = $myroots(lw_mode_cbs)[j] (thisp,
+              	  $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
+              if (retval isnot NO_CALLBACK_FUNCTION)
+                break;
+            }
+
             vstr_free (rows);
             goto thereturn;
           }
@@ -8895,7 +8901,13 @@ handle_char:
             for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
               string_append_byte (str, $mycur(data)->bytes[ii]);
 
-            $myroots(cw_mode_cb) (thisp, $my(vis)[0].fidx, $my(vis)[0].lidx, str, c, vis_action);
+            for (int j = 0; j < $myroots(num_cw_mode_cbs); j++) {
+              int retval = $myroots(cw_mode_cbs)[j] (thisp,
+                  $my(vis)[0].fidx, $my(vis)[0].lidx, str, c, vis_action);
+              if (retval isnot NO_CALLBACK_FUNCTION)
+                break;
+            }
+
             string_free (str);
             goto thereturn;
           }
@@ -12848,7 +12860,21 @@ private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,
   for (int i = $my(cw_mode_chars_len), j = 0; i < tlen; i++, j++)
     $my(cw_mode_chars)[i] = chars[j];
   $my(cw_mode_chars_len) = tlen;
-  ifnot (NULL is cb) $my(cw_mode_cb) = cb;
+
+  if (NULL is cb) return;
+
+  $my(num_cw_mode_cbs)++;
+  ifnot ($my(num_cw_mode_cbs))
+    $my(cw_mode_cbs) = Alloc (sizeof (VisualCwMode_cb) * $my(num_cw_mode_cbs));
+  else
+    $my(cw_mode_cbs) = Realloc ($my(cw_mode_cbs), sizeof (VisualCwMode_cb) * $my(num_cw_mode_cbs));
+
+  $my(cw_mode_cbs)[$my(num_cw_mode_cbs) -1] = cb;
+}
+
+private void ved_free_cw_mode_cbs (ed_t *this) {
+  ifnot ($my(num_cw_mode_cbs)) return;
+  free ($my(cw_mode_cbs));
 }
 
 private void ed_set_cw_mode_actions_default (ed_t *this) {
@@ -12888,7 +12914,21 @@ private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
   for (int i = $my(lw_mode_chars_len), j = 0; i < tlen; i++, j++)
     $my(lw_mode_chars)[i] = chars[j];
   $my(lw_mode_chars_len) = tlen;
-  ifnot (NULL is cb) $my(lw_mode_cb) = cb;
+
+  if (NULL is cb) return;
+
+  $my(num_lw_mode_cbs)++;
+  ifnot ($my(num_lw_mode_cbs))
+    $my(lw_mode_cbs) = Alloc (sizeof (VisualLwMode_cb) * $my(num_lw_mode_cbs));
+  else
+    $my(lw_mode_cbs) = Realloc ($my(lw_mode_cbs), sizeof (VisualLwMode_cb) * $my(num_lw_mode_cbs));
+
+  $my(lw_mode_cbs)[$my(num_lw_mode_cbs) -1] = cb;
+}
+
+private void ved_free_lw_mode_cbs (ed_t *this) {
+  ifnot ($my(num_lw_mode_cbs)) return;
+  free ($my(lw_mode_cbs));
 }
 
 private void ed_set_lw_mode_actions_default (ed_t *this) {
@@ -12986,8 +13026,9 @@ private void ed_free (ed_t *this) {
     free ($my(word_actions_cb));
 
     ved_free_rline_cbs (this);
-
     ved_free_on_normal_g_cbs (this);
+    ved_free_lw_mode_cbs (this);
+    ved_free_cw_mode_cbs (this);
 
     vstr_free ($my(word_actions));
 
@@ -13074,7 +13115,8 @@ private ed_t *ed_init (ed_T *E) {
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
 
-  $my(num_rline_cbs) = $my(num_on_normal_g_cbs) = 0;
+  $my(num_rline_cbs) = $my(num_on_normal_g_cbs) =
+  $my(num_lw_mode_cbs) = $my(num_cw_mode_cbs) = 0;
 
   current_list_append (E, this);
 
