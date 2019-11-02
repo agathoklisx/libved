@@ -4874,8 +4874,8 @@ private void buf_free (buf_t *this) {
   free ($my(cwd));
 
   My(String).free ($my(statusline));
-  My(String).free ($my(promptline));
   My(String).free ($my(shared_str));
+  My(String).free ($my(cur_insert));
 
   buf_free_line (this);
   buf_free_ftype (this);
@@ -4928,7 +4928,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
 
   $my(shared_str) = My(String).new (128);
   $my(statusline) = My(String).new (64);
-  $my(promptline) = My(String).new (64);
+  $my(cur_insert) = My(String).new (128);
+
   $my(line) = AllocType(line);
 
   $my(flags) = flags;
@@ -6753,7 +6754,7 @@ private int ved_normal_eol (buf_t *this) {
 
 private int ved_normal_left (buf_t *this, int count, int draw) {
   int is_ins_mode = IS_MODE (INSERT_MODE);
-  if ($mycur(cur_col_idx) is 0) {
+  ifnot ($mycur(cur_col_idx)) {
     if ($my(cur_video_col) isnot 1 and $mycur(data)->bytes[0] is 0)
       $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
     return NOTHING_TODO;
@@ -6764,10 +6765,10 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
 
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
 
-  if (it is NULL) {
-      it = $my(line)->tail;
-  } else     /* otherwise it->prev is null and pass the loop */
-    ifnot ($my(line)->num_items is 1)  // and is_ins_mode)
+  if (it is NULL)
+    it = $my(line)->tail;
+  else
+    if ($my(line)->num_items isnot 1)
       it = it->prev;
 
   int curcol = $mycur(first_col_idx);
@@ -6775,7 +6776,7 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
   while (it and count-- and $mycur(cur_col_idx)) {
     int len = it->len;
     $mycur(cur_col_idx) -= len;
-     vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
+    vchar_t *fcol = buf_get_line_nth ($my(line), $mycur(first_col_idx));
 
     if ($my(cur_video_col) is 1 or $my(cur_video_col) - fcol->width is 0) {
       ifnot ($mycur(first_col_idx)) return NOTHING_TODO;
@@ -6808,7 +6809,8 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
       if (is_ins_mode)
         width -= it->width - 1;
       else
-        if (it->next) width -= (it->next->width) - 1;
+        if (it->next)
+          width -= (it->next->width) - 1;
 
       ifnot (width) {
         width = 1;
@@ -11963,7 +11965,7 @@ private int ved_insert (buf_t **thisp, utf8 com) {
     c = '\n';
   }
 
-  string_t *cur_insert = string_new ($my(dim)->num_cols);
+  My(String).clear ($my(cur_insert));
 
   char prev_mode[bytelen ($my(mode)) + 1];
   memcpy (prev_mode, $my(mode), sizeof (prev_mode));
@@ -12055,7 +12057,7 @@ handle_char:
         goto get_char;
 
       case CTRL('r'):
-        ved_insert_reg (thisp, cur_insert);
+        ved_insert_reg (thisp, $my(cur_insert));
         goto get_char;
 
       case CTRL('k'):
@@ -12141,9 +12143,9 @@ handle_char:
       case  '\n':
         insert_change_line (this, c, &action);
 
-        if ('\r' is c and cur_insert->num_bytes) {
-          string_replace_with ($my(last_insert), cur_insert->bytes);
-          string_clear (cur_insert);
+        if ('\r' is c and $my(cur_insert)->num_bytes) {
+          string_replace_with ($my(last_insert), $my(cur_insert)->bytes);
+          My(String).clear ($my(cur_insert));
         }
 
         if ('\n' is c) goto theend;
@@ -12155,17 +12157,16 @@ handle_char:
     }
 
 new_char:
-    this = ved_insert_char_rout (this, c, cur_insert);
+    this = ved_insert_char_rout (this, c, $my(cur_insert));
     $my(flags) |= BUF_IS_MODIFIED;
     self(draw_cur_row);
     goto get_char;
   }
 
 theend:
+  ved_normal_left (this, 1, DRAW);
   if ($mycur(data)->num_bytes)
     RM_TRAILING_NEW_LINE;
-
-  ved_normal_left (this, 1, DRAW);
   self(set.mode, prev_mode);
 
   if ($mycur(data)->num_bytes) {
@@ -12181,25 +12182,18 @@ theend:
            $my(ftype)->tabwidth - 1);
   }
 
-/*
-  if ($mycur(data)->bytes[$mycur(cur_col_idx)] is '\t') {
-    $my(video)->col_pos = $my(cur_video_col) =
-        $my(cur_video_col) + ($my(ftype)->tabwidth - 1);
- */
-    self(draw_cur_row);
- // }
+  self(draw_cur_row);
 
   buf_set_draw_topline (this);
 
-  if (cur_insert->num_bytes)
-    string_replace_with ($my(last_insert), cur_insert->bytes);
-
-  string_free (cur_insert);
+  if ($my(cur_insert)->num_bytes)
+    string_replace_with ($my(last_insert), $my(cur_insert)->bytes);
 
   if (NULL isnot action->head)
     vundo_push (this, action);
   else
     free (action);
+
   return DONE;
 }
 

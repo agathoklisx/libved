@@ -32,8 +32,11 @@ private int __translate_word__ (buf_t **thisp, char *word) {
     return NOTOK;
   }
 
-  regexp_t *re = Re.new (word, 0, RE_MAX_NUM_CAPTURES, Re.compile);
-  size_t len;
+  size_t len = bytelen (word);
+  char rgxp[len + 5];
+  snprintf (rgxp, len + 5, "(?i)%s", word);
+
+  regexp_t *re = Re.new (rgxp, 0, RE_MAX_NUM_CAPTURES, Re.compile);
   char *line = NULL;
   int nread;
   int match = 0;
@@ -41,6 +44,7 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   Ed.append.toscratch ($myed, CLEAR, word);
   Ed.append.toscratch ($myed, DONOT_CLEAR, "=================");
 
+  len = 0;
   while (-1 isnot (nread = getline (&line, &len, fp)))
     if (0 <= Re.exec (re, line, nread)) {
       match++;

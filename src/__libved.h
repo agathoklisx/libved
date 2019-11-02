@@ -693,6 +693,7 @@ NewProp (buf,
   jumps_t *jumps;
 
   string_t
+    *cur_insert,
     *last_insert,
     *statusline,
     *promptline;

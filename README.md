@@ -214,6 +214,9 @@
        reported upstream.)
   */
 
+  /* But see at the very last section of this document (ERRORS - WARNINGS - BUGS),
+     for issues/details. */
+
   /* All the compilation options: */
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
@@ -1371,4 +1374,20 @@ Search:
   the desire is by itself enough to walk the path of learning and creating.
   And with a little bit help of our friends.
  */
+
+ /* ERRORS - WARNINGS - BUGS
+	Compilation.
+    This constantly compiled with -Werror -Wextra -Wall and compilation with
+    the three compilers should not produce a single warning, else is an error.
+
+    The static targets (since recently in my local copy, where i'm linking against
+    libraries (like tinytcc or libcurl), or using functions from the C library) can
+    produce warnings like:
+
+      warning: Using 'getpwuid' in statically linked applications requires at runtime
+      the shared libraries from the glibc version used for linking
+
+    These warnings can not and should not be hided, but the application at runtime,
+    should work/behave correctly, as long this prerequisite/condition is true.
+  */
 ```
