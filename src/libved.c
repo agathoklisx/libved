@@ -14,6 +14,7 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/types.h>
+#include <pwd.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <time.h>
@@ -50,16 +51,6 @@ private int str_eq_n  (const char *sa, const char *sb, size_t n) {
   return (0 == str_cmp_n (sa, sb, n));
 }
 
-/* the signature changed as in this namespace, size has been already computed */
-private char *str_dup (const char *src, size_t len) {
-  /* avoid recomputation */
-  // size_t len = bytelen (src);
-  char *dest = Alloc (len + 1);
-  if (len) memcpy (dest, src, len);
-  dest[len] = '\0';
-  return dest;
-}
-
 private char *byte_in_str (const char *s, int c) {
   const char *sp = s;
   while (*sp != c) {
@@ -71,6 +62,77 @@ private char *byte_in_str (const char *s, int c) {
 
 private char *nullbyte_in_str (const char *s) {
   return byte_in_str (s, 0);
+}
+
+private size_t byte_cp (char *dest, const char *src, size_t nelem) {
+  const char *sp = src;
+  size_t len = 0;
+
+  while (len < nelem and *sp) {
+    dest[len] = *sp++;
+    len++;
+  }
+
+  return len;
+}
+
+private size_t str_byte_mv (char *str, size_t len, size_t to_idx,
+                                   size_t from_idx, size_t nelem) {
+  if (from_idx is to_idx) return 0;
+  while (to_idx + nelem > len) nelem--;
+
+  size_t n = nelem;
+
+  if (to_idx > from_idx) {
+    char *sp = str + from_idx + nelem;
+    char *dsp = str + to_idx + nelem;
+
+    while (nelem--) *--dsp = *--sp;
+    return (n - nelem) - 1;
+  }
+
+  while (from_idx + nelem > len) nelem--;
+  n = nelem;
+
+  char *sp = str + from_idx;
+  char *dsp = str + to_idx;
+
+  while (nelem) {
+    ifnot (*sp) { // stop at the first null byte
+      *dsp = '\0';
+      break;
+    }
+
+    *dsp++ = *sp++;
+    nelem--;
+  }
+
+  return n - nelem;
+}
+
+private size_t str_cp (char *dest, size_t dest_len, const char *src, size_t nelem) {
+  size_t num = (nelem > (dest_len - 1) ? dest_len - 1 : nelem);
+  size_t len = (NULL is src ? 0 : byte_cp (dest, src, num));
+  dest[len] = '\0';
+  return len;
+}
+
+private size_t str_cp_fmt (char *dest, size_t dest_len, char *fmt, ...) {
+  char bytes[(VA_ARGS_FMT_SIZE) + 1];
+  va_list ap;
+  va_start(ap, fmt);
+  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  va_end(ap);
+  return str_cp (dest, dest_len, bytes, len);
+}
+
+/* the signature changed as in this namespace, size has been already computed */
+private char *str_dup (const char *src, size_t len) {
+  /* avoid recomputation */
+  // size_t len = bytelen (src);
+  char *dest = Alloc (len + 1);
+  str_cp (dest, len + 1, src, len);
+  return dest;
 }
 
 private char *str_trim_end (char *bytes, char c) {
@@ -1082,8 +1144,7 @@ private string_t *string_new_with_len (const char *bytes, size_t len) {
   string_t *new = AllocType (string);
   size_t sz = string_align (len + 1);
   char *buf = Alloc (sz);
-  memcpy (buf, bytes, len);
-  buf[len] = '\0';
+  len = str_cp (buf, sz, bytes, len);
   new->bytes = buf;
   new->num_bytes = len;
   new->mem_size = sz;
@@ -1110,11 +1171,10 @@ private string_t *string_insert_at_with_len (string_t *this,
   if (bts >= this->mem_size) string_reallocate (this, bts - this->mem_size + 1);
 
   if (idx is (int) this->num_bytes) {
-    memcpy (this->bytes + this->num_bytes, bytes, len);
+    byte_cp (this->bytes + this->num_bytes, bytes, len);
   } else {
-    memmove (this->bytes + idx + len, this->bytes + idx,
-        this->num_bytes - idx);
-    memcpy (this->bytes + idx, bytes, len);
+    str_byte_mv (this->bytes, this->mem_size - 1, idx + len, idx, this->num_bytes - idx);
+    byte_cp (this->bytes + idx, bytes, len);
   }
 
   this->num_bytes += len;
@@ -1123,7 +1183,7 @@ private string_t *string_insert_at_with_len (string_t *this,
 }
 
 private string_t *string_insert_at (string_t *this, const char *bytes, int idx) {
-   if (0 > idx) idx = this->num_bytes + idx + 1;
+  if (0 > idx) idx = this->num_bytes + idx + 1;
   if (idx < 0 or idx > (int) this->num_bytes) {
     tostderr ("ERROR THAT SHOULD NOT HAPPEN:\n"
               "string_insert_at (): index is out of range\n");
@@ -1154,9 +1214,11 @@ private string_t *string_insert_byte_at (string_t *this, char c, int idx) {
 private string_t *string_prepend_byte (string_t *this, char c) {
   int bts = this->mem_size - (this->num_bytes + 2);
   if (1 > bts) string_reallocate (this, 8);
-  memmove (this->bytes + 1, this->bytes, this->num_bytes++);
+
+  str_byte_mv (this->bytes, this->num_bytes + 1, 1, 0, this->num_bytes);
+
   this->bytes[0] = c;
-  this->bytes[this->num_bytes] = '\0';
+  this->bytes[++this->num_bytes] = '\0';
   return this;
 }
 
@@ -1200,7 +1262,7 @@ private int string_delete_numbytes_at (string_t *this, int num, int idx) {
     return INDEX_ERROR;
 
   if (idx + num isnot (int) this->num_bytes)
-    memmove (this->bytes + idx, this->bytes + idx + num,
+    byte_cp (this->bytes + idx, this->bytes + idx + num,
         this->num_bytes - (idx + num - 1));
 
   this->num_bytes -= num;
@@ -1236,13 +1298,14 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
 }
 
 private void vstr_clear (vstr_t *this) {
-  vstring_t *vs = this->head;
-  while (vs) {
-    vstring_t *tmp = vs->next;
-    string_free (vs->data);
-    free (vs);
-    vs = tmp;
+  vstring_t *it = this->head;
+  while (it) {
+    vstring_t *tmp = it->next;
+    string_free (it->data);
+    free (it);
+    it = tmp;
   }
+
   this->head = this->tail = this->current = NULL;
   this->num_items = 0; this->cur_idx = -1;
 }
@@ -1437,8 +1500,7 @@ tokenize:;
       } */
 
       char s[len + 1];
-      memcpy (s, p, len);
-      s[len] = '\0';
+      str_cp (s, len + 1, p, len);
 
       ifnot (NULL is cb) {
         int retval;
@@ -1569,7 +1631,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
     switch (*sub_p) {
       case '\\':
         if (*(sub_p + 1) is 0) {
-          strcpy (re->errmsg, "awaiting escaped char, found (null byte) 0");
+          str_cp (re->errmsg, RE_MAXLEN_ERR_MSG, "awaiting escaped char, found (null byte) 0", RE_MAXLEN_ERR_MSG - 1);
           goto theerror;
         }
 
@@ -1776,7 +1838,7 @@ private dirlist_t *dirlist (char *dir, int flags) {
   dirlist_t *dlist = AllocType (dirlist);
   dlist->free = dirlist_free;
   dlist->list = vstr_new ();
-  strncpy (dlist->dir, dir, PATH_MAX - 1);
+  str_cp (dlist->dir, PATH_MAX, dir, PATH_MAX - 1);
 
   while (1) {
     errno = 0;
@@ -1959,12 +2021,13 @@ private char *path_dirname (char *name) {
   }
 
   len = sep - name + 1;
-  dname = Alloc (len + 1); memcpy (dname, name, len); dname[len] = '\0';
+  dname = Alloc (len + 1);
+  str_cp (dname, len + 1, name, len);
   return dname;
 }
 
 private int path_is_absolute (char *path) {
-  return IS_PATH_ABS (path);
+  return IS_DIR_ABS (path);
 }
 
 public path_T __init_path__ (void) {
@@ -2612,8 +2675,8 @@ private menu_t *menu_new (ed_t *this, int first_row, int last_row, int first_col
   menu->header = string_new (8);
   menu->this = self(get.current_buf);
   ifnot (NULL is pat) {
-    memcpy (menu->pat, pat, patlen);
     menu->patlen = patlen;
+    str_cp (menu->pat, MAXLEN_PAT, pat, patlen);
   }
 
   menu->retval = menu->process_list (menu);
@@ -2775,7 +2838,9 @@ init_list:;
 
       for (iidx = 0; iidx < num and iidx + (ridx  * num) + (frow_idx * num) < menu->list->num_items; iidx++) {
         int len = ((int) it->data->num_bytes > maxlen ? maxlen : (int) it->data->num_bytes);
-        char item[len+1]; memcpy(item, it->data->bytes, len); item[len] = '\0';
+        char item[len + 1];
+        str_cp (item, len + 1, it->data->bytes, len);
+
         int color = (iidx + (ridx * num) + (frow_idx * num) is cur_idx)
            ? COLOR_MENU_SEL : COLOR_MENU_BG;
         string_append_fmt (render, fmt, color, item, TERM_COLOR_RESET);
@@ -2909,8 +2974,7 @@ insert_char:
 
           ifnot (str_eq (menu->pat, p->bytes)) {
             menu->patlen = p->num_bytes;
-            strcpy (menu->pat, p->bytes);
-            menu->pat[menu->patlen] = '\0';
+            str_cp (menu->pat, MAXLEN_PAT, p->bytes, p->num_bytes);
           }
 
           string_free (p);
@@ -3757,8 +3821,7 @@ next_char:;
   }
 
 theend:
-  strncpy (line, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
-  line[$my(shared_str)->num_bytes] = '\0';
+  str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
   return line;
 }
 
@@ -3809,7 +3872,7 @@ private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
   if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
 
   $my(syn) = &$myroots(syntaxes)[ftype];
-  strcpy ($my(ftype)->name, $my(syn)->filetype);
+  str_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
   $my(ftype)->autochdir = 1;
   $my(ftype)->shiftwidth = 0;
   $my(ftype)->tabwidth = TABWIDTH;
@@ -3824,7 +3887,8 @@ private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
   $my(ftype)->read_from_shell = READ_FROM_SHELL;
 
   $my(ftype)->autoindent = (NULL is indent_cb ? buf_ftype_autoindent : indent_cb);
-  strcpy ($my(ftype)->on_emptyline, "~");
+  $my(ftype)->on_emptyline[0] = DEFAULT_ON_EMPTY_LINE_CHAR;
+  $my(ftype)->on_emptyline[1] = '\0';
   return $my(ftype);
 }
 
@@ -4190,20 +4254,82 @@ public void __deinit_vsys__ (vsys_T *this) {
   (void) this;
 }
 
-private venv_t *env_new () {
+private int __env_check_directory__ (char *dir, char *dir_descr,
+               int exit_on_error, int exit_on_warning, int warn) {
+  int retval = OK;
+
+  if (NULL is dir) {
+    fprintf (stderr, "Fatal Error: NULL (%s) directory argument\n", dir_descr);
+    retval = 1;
+    goto theend;
+  }
+
+  int fexists = file_exists (dir);
+
+  ifnot (fexists)
+    if (-1 is mkdir (dir, S_IRWXU)) {
+      fprintf (stderr, "Fatal Error: Cannot create %s directory\n", dir);
+      retval = errno;
+      goto theend;
+    }
+
+  if (-1 is access (dir, R_OK)) {
+    fprintf (stderr, "Fatal Error: %s, (%s) directory, Is Not Readable\n", dir_descr, dir);
+    retval = errno;
+    goto theend;
+  }
+
+  if (-1 is access (dir, W_OK)) {
+    fprintf (stderr, "Fatal Error: %s, (%s) directory, Is Not Writable\n", dir_descr, dir);
+    retval = errno;
+    goto theend;
+  }
+
+  if (-1 is access (dir, X_OK)) {
+    fprintf (stderr, "Fatal Error: %s, (%s) directory, Has Not Execution Bits\n", dir_descr, dir);
+    retval = errno;
+    goto theend;
+  }
+
+  struct stat st;
+  if (-1 is stat (dir, &st)) {
+    fprintf (stderr, "Fatal Error: %s, (%s) directory, Can not stat()\n", dir_descr, dir);
+    retval = errno;
+    goto theend;
+  }
+
+  ifnot (S_ISDIR (st.st_mode)) {
+    fprintf (stderr, "Fatal Error: %s, (%s) directory, Is Not A Directory\n", dir_descr, dir);
+    retval = errno;
+    goto theend;
+  }
+
+  if (warn) {
+    char mode_string[12];
+    vsys_stat_mode_to_string (mode_string, st.st_mode);
+    ifnot (str_eq (mode_string, "drwx------")) {
+      fprintf (stderr, "Warning: (%s) directory |%s| permissions is not 0700 or drwx------\n",
+         dir_descr, dir);
+
+      if (exit_on_warning) {
+        retval = 1;
+        goto theend;
+      }
+    }
+  }
+
+theend:
+  if (retval isnot OK)
+    if (exit_on_error) exit (retval);
+
+  return retval;
+}
+
+private venv_t *venv_new () {
   venv_t *env = AllocType (venv);
   env->pid = getpid ();
   env->uid = getuid ();
   env->gid = getgid ();
-
-  char *hdir = getenv ("HOME");
-  if (NULL is hdir)
-    env->home_dir = string_new (1);
-  else {
-    env->home_dir = string_new_with (hdir);
-    if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
-      string_clear_at (env->home_dir, env->home_dir->num_bytes - 1);
-  }
 
   char *term_name = getenv ("TERM");
   if (NULL is term_name) {
@@ -4212,106 +4338,81 @@ private venv_t *env_new () {
   } else
     env->term_name = string_new_with (term_name);
 
-#ifndef TMPDIR
-  char tmpt[PATH_MAX];
-  char *dtmpt = path_dirname (realpath (__FILE__, tmpt));
-  env->data_dir = string_new_with_fmt ("%s/%s", dtmpt, THIS_SYS_TMP_DIR);
-  free (dtmpt);
+  char *hdir = getenv ("HOME");
+  ifnot (NULL is hdir)
+    env->home_dir = string_new_with (hdir);
+  else {
+    struct passwd *pswd = getpwuid (env->uid);
+    if (NULL is pswd)
+      fprintf (stderr, "Can not read password record, and can not determinate home directory\n");
+    env->home_dir = string_new_with ((NULL is pswd ? "NONE" : pswd->pw_name));
+  }
+
+  if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
+    string_clear_at (env->home_dir, env->home_dir->num_bytes - 1);
+
+#ifndef VED_DIR
+  env->my_dir = string_new_with_fmt ("%s/.libved", env->home_dir->bytes);
 #else
-  char tmpdir[] = TMPDIR;
+  env->my_dir = string_new_with (VED_DIR);
 #endif
+  __env_check_directory__ (env->my_dir->bytes, "libved directory", 1, 0, 0);
 
-  int fexists = file_exists (tmpdir);
-  ifnot (fexists) {
-    if (-1 is mkdir (tmpdir, S_IRWXU)) {
-      fprintf (stderr, "Fatal Error: Cannot create %s directory\n", tmpdir);
-      exit (errno);
-    }
-  }
-
-  if (-1 is access (tmpdir, R_OK)) {
-    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not Readable\n", tmpdir);
-    exit (errno);
-  }
-
-  if (-1 is access (tmpdir, W_OK)) {
-    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not Writable\n", tmpdir);
-    exit (errno);
-  }
-
-  if (-1 is access (tmpdir, W_OK)) {
-    fprintf (stderr, "Fatal Error: %s, temp directory, Has Not Execution Bits\n", tmpdir);
-    exit (errno);
-  }
-
-  struct stat st;
-  if (-1 is stat (tmpdir, &st)) {
-    fprintf (stderr, "Fatal Error: %s, temp directory, Can not stat()\n", tmpdir);
-    exit (errno);
-  }
-
-  ifnot (S_ISDIR (st.st_mode)) {
-    fprintf (stderr, "Fatal Error: %s, temp directory, Is Not A Directory\n", tmpdir);
-    exit (errno);
-  }
-
-  char mode_string[12];
-  vsys_stat_mode_to_string (mode_string, st.st_mode);
-  ifnot (str_eq (mode_string, "drwx------")) {
-    fprintf (stderr, "Warning: tmp directory |%s| permissions is not 0700 or drwx------\n",
-       tmpdir);
-   }
-
-  env->tmp_dir = string_new_with (tmpdir);
+#ifndef TMPDIR
+  env->tmp_dir = string_new_with_fmt ("%s/tmp", env->my_dir->bytes);
+#else
+  env->tmp_dir = string_new_with (TMPDIR);
+#endif
+  __env_check_directory__ (env->tmp_dir->bytes, "temp directory", 1, 1, 0);
 
 #ifndef VED_DATA_DIR
-  char tmpd[PATH_MAX];
-  char *dtmpd = path_dirname (realpath (__FILE__, tmpd));
-  env->data_dir = string_new_with_fmt ("%s/%s", dtmpd, THIS_SYS_DATA_DIR);
-  free (dtmpd);
+  env->data_dir = string_new_with_fmt ("%s/data", env->my_dir->bytes);
 #else
   env->data_dir = string_new_with (VED_DATA_DIR);
 #endif
+  __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
 
   char *path = getenv ("PATH");
-  env->diff_exec = vsys_which ("diff", path);
-  env->xclip_exec = vsys_which ("xclip", path);
   env->path = (path is NULL) ? NULL : string_new_with (path);
+
+  env->diff_exec = vsys_which ("diff", env->path->bytes);
+  env->xclip_exec = vsys_which ("xclip", env->path->bytes);
+
+  env->env_str = string_new (8);
+
   return env;
 }
 
-private void env_free (venv_t **env) {
+private void venv_free (venv_t **env) {
   if (NULL is env) return;
+
+  string_free ((*env)->my_dir);
   string_free ((*env)->home_dir);
   string_free ((*env)->tmp_dir);
   string_free ((*env)->data_dir);
-  ifnot (NULL is (*env)->diff_exec) string_free ((*env)->diff_exec);
-  ifnot (NULL is (*env)->xclip_exec) string_free ((*env)->xclip_exec);
-  ifnot (NULL is (*env)->path) string_free ((*env)->path);
-  ifnot (NULL is (*env)->term_name) string_free ((*env)->term_name);
+  string_free ((*env)->diff_exec);
+  string_free ((*env)->xclip_exec);
+  string_free ((*env)->path);
+  string_free ((*env)->term_name);
+  string_free ((*env)->env_str);
+
   free (*env); *env = NULL;
 }
 
-private string_t *venv_get (ed_t *this, char *name) {
-  if (str_eq (name, "term_name")) return $my(env)->term_name;
-  if (str_eq (name, "path")) return $my(env)->path;
-  if (str_eq (name, "home_dir")) return $my(env)->home_dir;
-  if (str_eq (name, "tmp_dir")) return $my(env)->tmp_dir;
-  if (str_eq (name, "data_dir")) return $my(env)->data_dir;
-  if (str_eq (name, "diff_exec")) return $my(env)->diff_exec;
-  if (str_eq (name, "xclip_exec")) return $my(env)->xclip_exec;
-  return NULL;
+private string_t *__venv_get__ (ed_t *this, string_t *v) {
+  My(String).replace_with_len ($my(env)->env_str, v->bytes, v->num_bytes);
+  return $my(env)->env_str;
 }
 
-private string_t *venv_set (ed_t *this, char *name, char *val) {
-  if (str_eq (name, "term_name"))
-    return My(String).replace_with ($my(env)->term_name, val);
-  if (str_eq (name, "path"))
-    return My(String).replace_with ($my(env)->path, val);
-  if (str_eq (name, "home_dir"))
-    return My(String).replace_with ($my(env)->home_dir, val);
-  if (str_eq (name, "tmp_dir"))
-    return My(String).replace_with ($my(env)->tmp_dir, val);
+private string_t *venv_get (ed_t *this, char *name) {
+  if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
+  if (str_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
+  if (str_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
+  if (str_eq (name, "my_dir")) return __venv_get__ (this,  $my(env)->my_dir);
+  if (str_eq (name, "tmp_dir")) return __venv_get__ (this, $my(env)->tmp_dir);
+  if (str_eq (name, "data_dir")) return __venv_get__ (this, $my(env)->data_dir);
+  if (str_eq (name, "diff_exec")) return __venv_get__ (this, $my(env)->diff_exec);
+  if (str_eq (name, "xclip_exec")) return __venv_get__ (this,  $my(env)->xclip_exec);
   return NULL;
 }
 
@@ -4529,7 +4630,7 @@ private int buf_current_set (buf_t *this, int idx) {
 }
 
 private void buf_set_mode (buf_t *this, char *mode) {
-  strcpy ($my(mode), mode);
+  str_cp ($my(mode), MAXLEN_MODE, mode, MAXLEN_MODE - 1);
 }
 
 private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
@@ -4557,7 +4658,7 @@ private void buf_set_as_unamed (buf_t *this) {
    * error: initializer element is not constant
    */
   $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-  strcpy ($my(fname), UNAMED);
+  str_cp ($my(fname), len + 1, UNAMED, len);
   self(set.as.non_existant);
 }
 
@@ -4582,7 +4683,7 @@ private int buf_set_fname (buf_t *this, char *filename) {
 
   if ($my(flags) & BUF_IS_SPECIAL) {
     $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-    strncpy ($my(fname), fname->bytes, len + 1);
+    str_cp ($my(fname), len + 1, fname->bytes, len);
     self(set.as.non_existant);
     return OK;
     /* this stays as a reference as tcc segfault'ed, when jumping to the label
@@ -4596,7 +4697,7 @@ private int buf_set_fname (buf_t *this, char *filename) {
   }
 
   int fname_exists = file_exists (fname->bytes);
-  int is_abs = IS_PATH_ABS (fname->bytes);
+  int is_abs = IS_DIR_ABS (fname->bytes);
 
   if (fname_exists) {
     ifnot (file_is_reg (fname->bytes)) {
@@ -4617,13 +4718,13 @@ private int buf_set_fname (buf_t *this, char *filename) {
       goto concat_with_cwd;
     else {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      strncpy ($my(fname), fname->bytes, len + 1);
+      str_cp ($my(fname), len + 1, fname->bytes, len);
     }
   } else {
     $my(flags) &= ~FILE_EXISTS;
     if (is_abs) {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      strncpy ($my(fname), fname->bytes, len + 1);
+      str_cp ($my(fname), len + 1, fname->bytes, len);
     } else {
 concat_with_cwd:;
       char *cwd = dir_current ();
@@ -5355,7 +5456,7 @@ private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
 }
 
 private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, ...) {
-  char bytes[MAXLINE];
+  char bytes[MAXLEN_LINE];
   va_list ap;
   va_start(ap, fmt);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
@@ -5400,7 +5501,7 @@ private void ved_append_message (ed_t *this, char *msg) {
 }
 
 private void ved_append_message_fmt (ed_t *this, char *fmt, ...) {
-  char bytes[MAXLINE];
+  char bytes[MAXLEN_LINE];
   va_list ap;
   va_start(ap, fmt);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
@@ -5409,7 +5510,7 @@ private void ved_append_message_fmt (ed_t *this, char *fmt, ...) {
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
-  char fmt[MAXERRLEN]; fmt[0] = '%'; fmt[1] = 's'; fmt[2] = '\0';
+  char fmt[MAXLEN_ERR_MSG]; fmt[0] = '%'; fmt[1] = 's'; fmt[2] = '\0';
   char pat[16]; snprintf (pat, 16, "%d:", msgid);
   char *sp = strstr (ED_MSGS_FMT, pat);
   if (sp isnot NULL) {
@@ -5419,7 +5520,7 @@ private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
     fmt[i] = '\0';
   }
 
-  char bytes[MAXLINE];
+  char bytes[MAXLEN_LINE];
   va_list ap;
   va_start(ap, msgid);
   vsnprintf (bytes, sizeof (bytes), fmt, ap);
@@ -5549,7 +5650,7 @@ private void ed_msg_send_fmt (ed_t *this, int color, char *fmt, ...) {
 }
 
 private char *ed_error_string (ed_t *this, int err) {
-  char ebuf[MAXERRLEN];
+  char ebuf[MAXLEN_ERR_MSG];
   ebuf[0] = '\0';
   char epat[16];
   snprintf (epat, 16, "%d:", err);
@@ -5783,7 +5884,7 @@ private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t
 private char *get_current_word (buf_t *this, char *word, char *Nwtype,
                                   int Nwtypelen, int *fidx, int *lidx) {
   return str_extract_word_at ($mycur(data)->bytes, $mycur(data)->num_bytes,
-    word, MAXWORD, Nwtype, Nwtypelen, $mycur (cur_col_idx), fidx, lidx);
+    word, MAXLEN_WORD, Nwtype, Nwtypelen, $mycur (cur_col_idx), fidx, lidx);
 }
 
 #define SEARCH_UPDATE_ROW(idx)                    \
@@ -5844,14 +5945,14 @@ private int __ved_search__ (buf_t *this, search_t *sch) {
     if (0 <= ret) {
       sch->idx = idx;
       sch->found = 1;
-      sch->col = re->match_idx;
-      sch->match = Alloc ((sizeof (char) * re->match_len) + 1);
-      memcpy (sch->match, re->match_ptr, re->match_len);
-      sch->match[re->match_len] = '\0';
 
-      sch->prefix = Alloc ((sizeof (char) * sch->col) + 1);
-      memcpy (sch->prefix, sch->row->data->bytes, sch->col);
-      sch->prefix[sch->col] = '\0';
+      sch->match = Alloc ((size_t) (re->match_len) + 1);
+      str_cp (sch->match, re->match_len + 1, re->match_ptr, re->match_len);
+
+      sch->col = re->match_idx;
+      sch->prefix = Alloc ((size_t) sch->col + 1);
+      str_cp (sch->prefix, sch->col + 1, sch->row->data->bytes, sch->col);
+
       sch->end = sch->row->data->bytes + re->retval;
       retval = OK;
       goto theend;
@@ -5929,7 +6030,7 @@ private int ved_search (buf_t *this, char com) {
   if (com is '*' or com is '#') {
     com = '*' is com ? '/' : '?';
 
-    char word[MAXWORD]; int fidx, lidx;
+    char word[MAXLEN_WORD]; int fidx, lidx;
     get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
@@ -6198,13 +6299,14 @@ searchandsub:;
     }
 
     if (interactive) {
-      char prefix[bidx + re->match_idx + 1];
-      memcpy (prefix, it->data->bytes, bidx + re->match_idx);
-      prefix[bidx + re->match_idx] = '\0';
+      size_t stacklen = bidx + re->match_idx + 1;
+      char prefix[stacklen];
+      str_cp (prefix, stacklen, it->data->bytes, stacklen - 1);
+
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A', 'c', 'C'};
-      char qu[MAXLINE]; /* using str_fmt (a statement expression) causes  */
+      char qu[MAXLEN_LINE]; /* using str_fmt (a statement expression) causes  */
                         /* messages for uninitialized value[s] (on clang) */
-      snprintf (qu, MAXLINE,
+      snprintf (qu, MAXLEN_LINE,
         "|match at line %d byte idx %d|\n"
         "%s%s%s%s%s\n"
         "|substitution string|\n"
@@ -6437,7 +6539,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
 
     case REG_CURWORD:
       {
-        char word[MAXWORD]; int fidx, lidx;
+        char word[MAXLEN_WORD]; int fidx, lidx;
         ifnot (NULL is get_current_word (buf, word, Notword, Notword_len,
             &fidx, &lidx)) {
           ed_register_new (this, regidx);
@@ -6521,7 +6623,7 @@ private char *buf_parse_line (buf_t *this, row_t *row, char *line, int idx) {
 }
 
 private void buf_draw_cur_row (buf_t *this) {
-  char line[MAXLINE];
+  char line[MAXLEN_LINE];
   buf_parse_line (this, this->current, line, this->cur_idx);
   My(Video).set_with ($my(video), $my(video)->row_pos - 1, line);
   My(Video).Draw.row_at ($my(video), $my(video)->row_pos);
@@ -6532,7 +6634,7 @@ private void buf_draw_cur_row (buf_t *this) {
 private void buf_to_video (buf_t *this) {
   row_t *row = $my(video_first_row);
   int idx = $my(video_first_row_idx);
-  char line[MAXLINE];
+  char line[MAXLEN_LINE];
 
   int i;
   for (i = $my(dim)->first_row - 1; i < $my(statusline_row) - 1; i++) {
@@ -7165,9 +7267,8 @@ private int ved_normal_delete_eol (buf_t *this, int regidx) {
 
   int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
   char buf[len + 1];
-  memcpy (buf, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+  str_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
-  buf[len] = '\0';
   ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
 
   My(String).delete_numbytes_at ($mycur(data),
@@ -7310,8 +7411,7 @@ private int ved_normal_delete (buf_t *this, int count, int regidx) {
   }
 
   char buf[len + 1];
-  memcpy (buf, $mycur(data)->bytes + $mycur(cur_col_idx), len);
-  buf[len] = '\0';
+  str_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
   My(String).delete_numbytes_at ($mycur(data), len, $mycur(cur_col_idx));
 
   if (calc_width and 0 isnot width)
@@ -7467,7 +7567,7 @@ private int ved_complete_word_callback (menu_t *menu) {
     if (row->data->bytes and ++idx isnot this->cur_idx) {
       char *p = strstr (row->data->bytes, menu->pat);
       if (NULL isnot p) {
-        char word[MAXWORDLEN];
+        char word[MAXLEN_WORD];
         int lidx = 0;
         while (*p and (
             IS_SPACE (*p) is 0 and
@@ -7670,7 +7770,7 @@ private utf8 ved_complete_word_actions (buf_t *this, char *action) {
     c = *item;
     char *tmp = item;
     int i = 0;
-    for (; i < MAX_WORD_ACTION_LEN - 1 and *tmp; i++)
+    for (; i < MAXLEN_WORD_ACTION - 1 and *tmp; i++)
       action[i] = *tmp++;
     action[i] = '\0';
   }
@@ -7683,11 +7783,11 @@ theend:                                     /* avoid list (de|re)allocation */
 
 private int ved_normal_handle_W (buf_t **thisp) {
   buf_t *this = *thisp;
-  char action[MAX_WORD_ACTION_LEN];
+  char action[MAXLEN_WORD_ACTION];
   utf8 c = ved_complete_word_actions (this, action);
   if (c is ESCAPE_KEY) return NOTHING_TODO;
 
-  char word[MAXWORD]; int fidx, lidx;
+  char word[MAXLEN_WORD]; int fidx, lidx;
   if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
@@ -7838,7 +7938,7 @@ private int ved_handle_ctrl_x (buf_t **thisp) {
 private int ved_delete_word (buf_t *this, int regidx) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
-  char word[MAXWORD]; int fidx, lidx;
+  char word[MAXLEN_WORD]; int fidx, lidx;
   if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
@@ -7850,8 +7950,7 @@ private int ved_delete_word (buf_t *this, int regidx) {
 
   int len = $mycur(cur_col_idx) - fidx;
   char buf[len + 1];
-  memcpy (buf, $mycur(data)->bytes + fidx, len);
-  buf[len] = '\0';
+  str_cp (buf, len + 1, $mycur(data)->bytes + fidx, len);
 
   act->cur_col_idx = $mycur(cur_col_idx);
   act->first_col_idx = $mycur(first_col_idx);
@@ -8226,10 +8325,10 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
     if (isatend) {
       self(cur.append_with, $my(ftype)->autoindent (this, this->current)->bytes);
     } else {
-      char bytes[MAXLINE];
+      char bytes[MAXLEN_LINE];
       int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
-      memcpy (bytes, $mycur(data)->bytes + $mycur(cur_col_idx), len);
-      bytes[len] = '\0';
+      str_cp (bytes, MAXLEN_LINE, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+
       My(String).clear_at ($mycur(data), $mycur(cur_col_idx));
       self(cur.append_with, str_fmt ("%s%s",
           $my(ftype)->autoindent (this, this->current)->bytes, bytes));
@@ -8364,8 +8463,8 @@ do {                                        \
 })
 
 #define VISUAL_INIT_FUN(fmode, parse_fun)                                           \
-  char prev_mode[bytelen ($my(mode)) + 1];                                          \
-  memcpy (prev_mode, $my(mode), sizeof (prev_mode));                                \
+  char prev_mode[MAXLEN_MODE];                                                      \
+  str_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);                      \
   self(set.mode, (fmode));                                                          \
   buf_set_draw_topline (this);                                                      \
   mark_t mark; state_set (&mark); mark.cur_idx = this->cur_idx;                     \
@@ -8440,8 +8539,7 @@ next:
     }
 
     My(String).append ($my(shared_str), TERM_COLOR_RESET);
-    strncpy (line, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
-    line[$my(shared_str)->num_bytes] = '\0';
+    str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     return $my(shared_str)->bytes;
   }
 
@@ -8502,7 +8600,7 @@ private utf8 ved_visual_complete_actions (buf_t *this, char *action) {
     c = *item;
     char *tmp = item;
     int i = 0;
-    for (; i < MAX_WORD_ACTION_LEN - 1 and *tmp; i++)
+    for (; i < MAXLEN_WORD_ACTION - 1 and *tmp; i++)
       action[i] = *tmp++;
     action[i] = '\0';
   }
@@ -8519,7 +8617,7 @@ private int ved_normal_visual_lw (buf_t **thisp) {
 
   int goto_cb = 0;
   utf8 c;
-  char vis_action[MAX_WORD_ACTION_LEN];
+  char vis_action[MAXLEN_WORD_ACTION];
   vis_action[0] = '\0';
 
   for (;;) {
@@ -8587,8 +8685,10 @@ handle_char:
               free (laction);
             }
 
-            this->current = this->current->next;
-            this->cur_idx++;
+            ifnot (this->current is this->tail) {
+              this->current = this->current->next;
+              this->cur_idx++;
+            }
           }
 
           vundo_push (this, action);
@@ -8775,8 +8875,7 @@ next:
     it = it->next;
   }
 
-  strncpy (line, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
-  line[$my(shared_str)->num_bytes] = '\0';
+  str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
   return $my(shared_str)->bytes;
 }
 
@@ -8800,7 +8899,7 @@ private int ved_normal_visual_cw (buf_t **thisp) {
      .orig_syn_parser = $my(vis)[1].orig_syn_parser};
 
   int goto_cb = 0;
-  char vis_action[MAX_WORD_ACTION_LEN];
+  char vis_action[MAXLEN_WORD_ACTION];
   vis_action[0] = '\0';
 
   for (;;) {
@@ -8841,8 +8940,7 @@ handle_char:
         {
           int len = $my(vis)[0].lidx - $my(vis)[0].fidx + 1;
           char fname[len + 1];
-          strncpy (fname, $mycur(data)->bytes + $my(vis)[0].fidx, len);
-          fname[len] = '\0';
+          str_cp (fname, len + 1, $mycur(data)->bytes + $my(vis)[0].fidx, len);
           ifnot (file_exists (fname)) goto theend;
           ved_edit_fname ($my(parent), thisp, fname, $myparents(cur_frame), 0, 0, 0);
         }
@@ -8953,7 +9051,7 @@ private char *ved_syn_parse_visual_bw (buf_t *this, char *line, int len, int idx
 private int ved_normal_visual_bw (buf_t *this) {
   VISUAL_INIT_FUN (VISUAL_MODE_BW, ved_syn_parse_visual_bw);
 
-  char vis_action[MAX_WORD_ACTION_LEN];
+  char vis_action[MAXLEN_WORD_ACTION];
   vis_action[0] = '\0';
 
   for (;;) {
@@ -9967,7 +10065,7 @@ private int ved_complete_filename (menu_t *menu) {
 
   if (NULL is sp) {
     char *cwd = dir_current ();
-    strcpy (dir, cwd);
+    str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     end = NULL;
     goto getlist;
@@ -9981,15 +10079,14 @@ private int ved_complete_filename (menu_t *menu) {
       if (*end is DIR_SEP) { if (*(end + 1)) end++; else end = NULL; }
     }
 
-    memcpy (dir, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
+    str_cp (dir, PATH_MAX, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
 
-    dir[$myroots(env)->home_dir->num_bytes] = '\0';
     joinpath = 1;
     goto getlist;
   }
 
   if (is_directory (menu->pat) and bytelen (path_basename (menu->pat)) > 1) {
-    strcpy (dir, menu->pat);
+    str_cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -10002,7 +10099,7 @@ private int ved_complete_filename (menu_t *menu) {
       end = NULL;
     } else {
       char *cwd = dir_current ();
-      strcpy (dir, cwd);
+      str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
       free (cwd);
       end = sp;
     }
@@ -10011,8 +10108,7 @@ private int ved_complete_filename (menu_t *menu) {
   }
 
   if (*sp is DIR_SEP) {
-    memcpy (dir, menu->pat, menu->patlen - 1);
-    dir[menu->patlen - 1] = '\0';
+    str_cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -10022,7 +10118,7 @@ private int ved_complete_filename (menu_t *menu) {
   if (sp is menu->pat) {
     end = sp;
     char *cwd = dir_current ();
-    strcpy (dir, cwd);
+    str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     goto getlist;
   }
@@ -10091,7 +10187,8 @@ private int ved_insert_complete_filename (buf_t **thisp) {
   buf_t *this = *thisp;
   int retval = DONE;
   int fidx = 0; int lidx = 0;
-  char word[PATH_MAX + 1]; word[0] = '\0';
+  size_t WORD_LEN = PATH_MAX + 1;
+  char word[WORD_LEN]; word[0] = '\0';
   if (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]) and (
       $mycur(data)->num_bytes > 1 and 0 is IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx) - 1])))
     ved_normal_left (this, 1, DRAW);
@@ -10110,18 +10207,16 @@ redo:;
     char *item  = menu_create ($my(root), menu);
     if (NULL is item) { retval = NOTHING_TODO; goto theend; }
 
-    memcpy (menu->pat, item, bytelen (item));
     menu->patlen = bytelen (item);
-    menu->pat[menu->patlen] = '\0';
+    str_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
     menu->state |= MENU_FINALIZE;
 
     ved_complete_filename (menu);
 
     if (menu->state & MENU_DONE) break;
 
-    memcpy (word, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     len = $my(shared_str)->num_bytes;
-    word[len] = '\0';
+    str_cp (word, WORD_LEN, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     menu_free (menu);
     goto redo;
   }
@@ -10331,7 +10426,7 @@ private void ved_rline_history_push_api (rline_t *rl) {
 
 private vstring_t *ved_rline_parse_command (rline_t *rl) {
   vstring_t *it = rl->line->head;
-  char com[MAXCOMLEN]; com[0] = '\0';
+  char com[MAXLEN_COM]; com[0] = '\0';
   int com_idx = 0;
   while (it isnot NULL and it->data->bytes[0] is ' ') it = it->next;
   if (it isnot NULL and it->data->bytes[0] is '!') {
@@ -10395,7 +10490,8 @@ redo:;
 
   while (sp > currline->bytes and *(sp - 1) isnot ' ') sp--;
   int fidx = sp - currline->bytes;
-  char tok[cur - sp + 1];
+  size_t tok_stacklen = (cur - sp) + 1;
+  char tok[tok_stacklen];
   int toklen = 0;
   while (sp < cur) tok[toklen++] = *sp++;
   tok[toklen] = '\0';
@@ -10420,7 +10516,7 @@ redo:;
         int i;
         for (i = len; i < toklen; i++) tmp[i-len] = tok[i];
         tmp[i-len] = '\0';
-        strcpy (tok, tmp);
+        str_cp (tok, tok_stacklen, tmp, i-len);
         toklen = i-len;
       } else if (tok[0] is '-') {
         type |= RL_TOK_ARG;
@@ -10467,10 +10563,8 @@ redo:;
     if (menu->state & MENU_QUIT) break;
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
 
-    int len = bytelen (item);
-    memcpy (menu->pat, item, len);
-    menu->pat[len] = '\0';
-    menu->patlen = len;
+    menu->patlen = bytelen (item);
+    str_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
 
     if (type & RL_TOK_ARG_FILENAME) menu->state |= MENU_FINALIZE;
 
@@ -10622,8 +10716,9 @@ private void ved_append_rline_commands (ed_t *this, char **commands,
   int i = $my(num_commands);
   for (; i < len; i++, j++) {
     $my(commands)[i] = AllocType (rlcom);
-    $my(commands)[i]->com = Alloc (bytelen (commands[j]) + 1);
-    strcpy ($my(commands)[i]->com, commands[j]);
+    size_t clen = bytelen (commands[j]);
+    $my(commands)[i]->com = Alloc (clen + 1);
+    str_cp ($my(commands)[i]->com, clen + 1, commands[j], clen);
 
     ifnot (num_args[j]) {
       $my(commands)[i]->args = NULL;
@@ -10739,8 +10834,9 @@ private void ved_init_commands (ed_t *this) {
   int i = 0;
   for (i = 0; i < VED_COM_END; i++) {
     $my(commands)[i] = AllocType (rlcom);
-    $my(commands)[i]->com = Alloc (bytelen (ved_commands[i]) + 1);
-    strcpy ($my(commands)[i]->com, ved_commands[i]);
+    size_t clen = bytelen (ved_commands[i]);
+    $my(commands)[i]->com = Alloc (clen + 1);
+    str_cp ($my(commands)[i]->com, clen + 1, ved_commands[i], clen);
 
     ifnot (num_args[i]) {
       $my(commands)[i]->args = NULL;
@@ -11967,8 +12063,8 @@ private int ved_insert (buf_t **thisp, utf8 com) {
 
   My(String).clear ($my(cur_insert));
 
-  char prev_mode[bytelen ($my(mode)) + 1];
-  memcpy (prev_mode, $my(mode), sizeof (prev_mode));
+  char prev_mode[MAXLEN_MODE];
+  str_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);
 
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
@@ -12009,7 +12105,7 @@ private int ved_insert (buf_t **thisp, utf8 com) {
     }
   }
 
-  strcpy ($my(mode), INSERT_MODE);
+  str_cp ($my(mode), MAXLEN_MODE, INSERT_MODE, MAXLEN_MODE - 1);
   self(set.mode, INSERT_MODE);
 
   if ($my(show_statusline) is UNSET) buf_set_draw_statusline (this);
@@ -12756,15 +12852,18 @@ private void ved_history_write (ed_t *this, char *dir) {
 private void ved_history_read (ed_t *this, char *dir) {
    if (-1 is access (dir, F_OK|R_OK)) return;
    ifnot (is_directory (dir)) return;
+
    size_t dirlen = bytelen (dir);
    char fname[dirlen + 16];
    snprintf (fname, dirlen + 16, "%s/.ved_h_search", dir);
    vstr_t *lines = file_readlines (fname, NULL, NULL, NULL);
    self(history.add, lines, SEARCH_HISTORY);
+   vstr_clear (lines);
+
    snprintf (fname, dirlen + 16, "%s/.ved_h_rline", dir);
-   vstr_free (lines);
-   lines = file_readlines (fname, NULL, NULL, NULL);
+   file_readlines (fname, lines, NULL, NULL);
    self(history.add, lines, RLINE_HISTORY);
+
    vstr_free (lines);
 }
 
@@ -13004,7 +13103,7 @@ private void ed_free (ed_t *this) {
     My(Video).free ($my(video));
 
     history_free (&$my(history));
-    env_free (&$my(env));
+    venv_free (&$my(env));
 
     for (int i = 0; i < NUM_REGISTERS; i++)
       self(free_reg, &$my(regs)[i]);
@@ -13070,7 +13169,7 @@ private ed_t *ed_init (ed_T *E) {
   $my(Vsys) = &E->Vsys;
   $my(Venv) = &E->Venv;
 
-  $my(env) = env_new ();
+  $my(env) = venv_new ();
 
   $my(term) = $from(E, term);
   $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
@@ -13195,8 +13294,13 @@ public cstring_T __init_cstring__ (void) {
       .extract_word_at = str_extract_word_at,
       .substr = str_substr,
       .byte_in_str = byte_in_str,
+      .cp = str_cp,
+      .cp_fmt = str_cp_fmt,
       .trim = SubSelfInit (cstring, trim,
         .end = str_trim_end,
+      ),
+      .byte = SubSelfInit (cstring, byte,
+        .mv = str_byte_mv
       ),
     )
   );
@@ -13575,7 +13679,8 @@ private ed_T *editor_new (char *name) {
   this->Screen.self = this->Term.self.Screen;
   this->Input.self = this->Term.self.Input;
 
-  strcpy (this->name, name);
+  str_cp (this->name, 8, name, 8);
+
   return this;
 }
 

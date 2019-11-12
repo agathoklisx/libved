@@ -49,7 +49,7 @@
 
 NewType (spell,
  char
-     word[MAXWORD],
+     word[MAXLEN_WORD],
      *dictionary;
 
   int
@@ -218,7 +218,7 @@ private int spell_guess (spell_t *spell) {
 
 private int spell_correct (spell_t *spell) {
   if (spell->word_len < spell->min_word_len or
-      spell->word_len >= MAXWORD)
+      spell->word_len >= MAXLEN_WORD)
     return SPELL_WORD_IS_IGNORED;
 
   if (Imap.key_exists (spell->dic, spell->word)) return SPELL_WORD_IS_CORRECT;

@@ -174,7 +174,7 @@ foundbat:;
   char dir[64];
   snprintf (dir, 64, "%s/%s/", SYS_BATTERY_DIR, it->data->bytes);
   size_t len = bytelen (dir);
-  strcpy (dir + len, "capacity");
+  Cstring.cp (dir + len, 64 - len, "capacity", 8);
   FILE *fp = fopen (dir, "r");
   if (NULL is fp) goto theend;
 
@@ -186,7 +186,7 @@ foundbat:;
   fclose (fp);
 
   dir[len] = '\0';
-  strcpy (dir + len, "status");
+  Cstring.cp (dir + len, 64 - len, "status", 6);
   fp = fopen (dir, "r");
   if (NULL is fp) goto theend;
 

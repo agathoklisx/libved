@@ -82,6 +82,7 @@ ifneq ($(HAS_HISTORY), 0)
   FLAGS += -DHAS_HISTORY
 endif
 
+VED_DIR := $(SYSDIR)
 VED_DATA_DIR := $(SYSDATADIR)
 TMPDIR  := $(SYSTMPDIR)
 
@@ -97,6 +98,7 @@ BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES := 1
 BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE := 1
 READ_FROM_SHELL := 1
 
+FLAGS += -DVED_DIR='"$(VED_DIR)"'
 FLAGS += -DVED_DATA_DIR='"$(VED_DATA_DIR)"'
 FLAGS += -DTMPDIR='"$(TMPDIR)"'
 FLAGS += -DTABWIDTH=$(TABWIDTH)
@@ -125,7 +127,6 @@ FLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
 #----------------------------------------------------------#
 LIBFLAGS := -I. -I$(SYSINCDIR) $(FLAGS)
 # clang complains about unused command line arguments
-#LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
 #LIBFLAGS := -I. -I$(SYSINCDIR) -L$(SYSLIBDIR) $(FLAGS)
 
 all: shared static veda-all

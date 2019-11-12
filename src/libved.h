@@ -1,14 +1,10 @@
 #ifndef LIBVED_H
 #define LIBVED_H
 
-#define OUTPUT_FD STDOUT_FILENO
-
 #define MAX_FRAMES 3
 #define DEFAULT_SHIFTWIDTH 2
 #define DEFAULT_PROMPT_CHAR ':'
-
-#define THIS_SYS_DATA_DIR "sys/data"
-#define THIS_SYS_TMP_DIR "sys/tmp"
+#define DEFAULT_ON_EMPTY_LINE_CHAR '~'
 
 #ifndef RLINE_HISTORY_NUM_ENTRIES
 #define RLINE_HISTORY_NUM_ENTRIES 20
@@ -62,6 +58,10 @@
 #define NUM_SYNTAXES 32
 #endif
 
+#ifndef MAX_BACKTRACK_LINES_FOR_ML_COMMENTS
+#define MAX_BACKTRACK_LINES_FOR_ML_COMMENTS 24
+#endif
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096  /* bytes in a path name */
 #endif
@@ -70,13 +70,17 @@
 #define NAME_MAX 255  /* bytes in a file name */
 #endif
 
-#ifndef MAXLINE
-#define MAXLINE 4096
-#endif
+#define MAXLEN_LINE        4096
+#define MAXLEN_WORD        256
+#define MAXLEN_ERR_MSG     256
+#define MAXLEN_PAT         PATH_MAX
+#define MAXLEN_MODE        16
+#define MAXLEN_FTYPE_NAME  16
+#define MAXLEN_WORD_ACTION 512
+#define MAX_SCREEN_ROWS    256
+#define MAXLEN_COM         32
 
-#ifndef MAXWORD
-#define MAXWORD 64
-#endif
+#define OUTPUT_FD STDOUT_FILENO
 
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
@@ -87,7 +91,7 @@
 #define PATH_SEP        ':'
 #define DIR_SEP         '/'
 #define IS_DIR_SEP(c)   (c == DIR_SEP)
-#define IS_PATH_ABS(p)  IS_DIR_SEP (p[0])
+#define IS_DIR_ABS(p)   IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
 #define IS_CNTRL(c)     ((c < 0x20 and c >= 0) || c == 0x7f)
 #define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
@@ -195,16 +199,13 @@
 
 #define ED_SUSPENDED    (1 << 0)
 
-#define  FTYPE_DEFAULT 0
-#define  MAX_BACKTRACK_LINES_FOR_ML_COMMENTS 24
+#define FTYPE_DEFAULT 0
 
 #define UNAMED          "[No Name]"
 
 #define FIRST_FRAME 0
 #define SECOND_FRAME 1
 #define THIRD_FRAME 2
-
-#define MAXPATLEN PATH_MAX
 
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
@@ -575,7 +576,7 @@ NewType (syn,
 
 NewType (ftype,
   char
-    name[16],
+    name[MAXLEN_FTYPE_NAME],
     on_emptyline[2];
 
   int
@@ -615,6 +616,8 @@ NewType (capture,
   int len;
 );
 
+#define RE_MAXLEN_ERR_MSG MAXLEN_ERR_MSG
+
 NewType (regexp,
   string_t *pat;
   capture_t **cap;
@@ -628,7 +631,7 @@ NewType (regexp,
   int match_len;
   char *match_ptr;
   string_t *match;
-  char errmsg[256];
+  char errmsg[RE_MAXLEN_ERR_MSG];
 );
 
 NewType (bufiter,
@@ -751,10 +754,6 @@ NewClass (term,
   Self (term) self;
 );
 
-NewSubSelf (cstring, trim,
-  char *(*end) (char *, char);
-);
-
 NewSubSelf (ustring, get,
   utf8 (*code_at) (char *, size_t, int, int *);
 );
@@ -783,8 +782,17 @@ NewClass (ustring,
   Self (ustring) self;
 );
 
+NewSubSelf (cstring, trim,
+  char *(*end) (char *, char);
+);
+
+NewSubSelf (cstring, byte,
+  size_t (*mv) (char *, size_t, size_t, size_t, size_t);
+);
+
 NewSelf (cstring,
   SubSelf (cstring, trim) trim;
+  SubSelf (cstring, byte) byte;
 
   char
     *(*substr) (char *, size_t, char *, size_t, size_t),
@@ -797,6 +805,10 @@ NewSelf (cstring,
     (*eq) (const char *, const char *),
     (*eq_n) (const char *, const char *, size_t),
     (*cmp_n) (const char *, const char *, size_t);
+
+  size_t
+    (*cp) (char *, size_t, const char *, size_t),
+    (*cp_fmt) (char *, size_t, char *, ...);
 
   vstr_t *(*chop) (char *, char, vstr_t *, StrChop_cb, void *);
 );
@@ -1430,4 +1442,8 @@ public void __deinit_ed__ (ed_T *);
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);
 
+#define CSTRING_OUT_OF_RANGE -1
+
+ public mutable int byte_mv (char *str, size_t len, size_t from_idx, size_t to_idx,
+     size_t nelem);
 #endif /* LIBVED_H */

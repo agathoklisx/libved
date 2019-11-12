@@ -98,9 +98,9 @@ private int json_parse (json_t *this) {
 
   if (this->retval < 0) {
     if (this->retval is JSMN_ERROR_INVAL)
-      strcpy (this->error_msg, "jsmn_parse: invalid JSON string");
+      Cstring.cp (this->error_msg, JSON_ERR_MSG_LEN, "jsmn_parse: invalid JSON string", JSON_ERR_MSG_LEN -1);
     else if (this->retval is JSMN_ERROR_PART)
-      strcpy (this->error_msg, "jsmn_parse: truncated JSON string");
+      Cstring.cp (this->error_msg, JSON_ERR_MSG_LEN, "jsmn_parse: truncated JSON string", JSON_ERR_MSG_LEN - 1);
   }
 
   ifnot (NULL is this->parse) return this->parse (this);

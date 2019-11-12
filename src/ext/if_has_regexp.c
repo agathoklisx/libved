@@ -78,7 +78,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
     switch (*sub_p) {
       case '\\':
         if (*(sub_p + 1) is 0) {
-          strcpy (re->errmsg, "awaiting escaped char, found (null byte) 0");
+          Cstring.cp (re->errmsg, RE_MAXLEN_ERR_MSG, "awaiting escaped char, found (null byte) 0", RE_MAXLEN_ERR_MSG - 1);
           goto theerror;
         }
 
@@ -109,8 +109,7 @@ private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace
               if (0 > idx or idx + 1 > re->total_caps) goto theerror;
 
               char buf[re->cap[idx]->len + 1];
-              memcpy (buf, re->cap[idx]->ptr, re->cap[idx]->len);
-              buf[re->cap[idx]->len] = '\0';
+              Cstring.cp (buf, re->cap[idx]->len + 1, re->cap[idx]->ptr, re->cap[idx]->len);
               String.append (substr, buf);
             }
 

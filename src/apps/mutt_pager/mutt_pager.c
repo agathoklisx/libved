@@ -102,8 +102,7 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
       } else
           String.append_byte (lline, line[i]);
 
-     strncpy (line, lline->bytes, lline->num_bytes);
-     line[lline->num_bytes] = '\0';
+     Cstring.cp (line, MAXLEN_LINE, lline->bytes, lline->num_bytes);
      String.free (lline);
      return line;
   }
@@ -146,7 +145,7 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
         line, TERM_COLOR_RESET);
   }
 
-  strcpy (line, lline);
+  Cstring.cp (line, MAXLEN_LINE, lline, len + 16);
   return line;
 }
 

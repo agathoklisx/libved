@@ -1375,8 +1375,15 @@ Search:
   And with a little bit help of our friends.
  */
 
+ /* THE FAR AWAY FUTURE
+    - Self Sufficiency, so to be the easiest thing ever to integrate
+
+    - Underlying Machine, so enough capabilities and easy to use them
+
+ */
  /* ERRORS - WARNINGS - BUGS
-	Compilation.
+
+    Compilation:
     This constantly compiled with -Werror -Wextra -Wall and compilation with
     the three compilers should not produce a single warning, else is an error.
 
@@ -1389,5 +1396,16 @@ Search:
 
     These warnings can not and should not be hided, but the application at runtime,
     should work/behave correctly, as long this prerequisite/condition is true.
+
+    C strings:
+    All the generated strings in the library for the library, are and should be '\0'
+    terminated, else is an error.
+
+    API:
+      Functions:
+    Many of the exposed functions are not safe, especially for C strings. They most
+    made for internal usage, that the data is controlled by the itself code, but were
+    made also exposable. Normally, if it wasn't for the extra verbosity, they should
+    be post-fixed with an "_un" to denote this unsafety.
   */
 ```

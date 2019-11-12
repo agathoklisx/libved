@@ -138,8 +138,8 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
 
   if (len < (int) spell->min_word_len) goto theend;
 
-  strcpy (spell->word, lword);
   spell->word_len = len;
+  Cstring.cp (spell->word, MAXLEN_WORD, lword, len);
 
   retval = Spell.correct (spell);
 
@@ -185,7 +185,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
 
   int buf_changed = 0;
 
-  char word[MAXWORD];
+  char word[MAXLEN_WORD];
 
   bufiter_t *iter = Buf.iter.new (*thisp, range[0]);
 
@@ -197,7 +197,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     for (;;) {
       int cur_idx = lidx + 1 + (tmp isnot NULL);
       tmp = Cstring.extract_word_at (line->bytes, line->num_bytes,
-          word, MAXWORD, SPELL_NOTWORD, SPELL_NOTWORD_LEN, cur_idx, &fidx, &lidx);
+          word, MAXLEN_WORD, SPELL_NOTWORD, SPELL_NOTWORD_LEN, cur_idx, &fidx, &lidx);
 
       if (NULL is tmp) {
         if (lidx >= (int) line->num_bytes - 1)
@@ -206,11 +206,11 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
       }
 
       int len = lidx - fidx + 1;
-      if (len < (int) spell->min_word_len or len >= MAXWORD)
+      if (len < (int) spell->min_word_len or len >= MAXLEN_WORD)
         continue;
 
-      strcpy (spell->word, word);
       spell->word_len = len;
+      Cstring.cp (spell->word, MAXLEN_WORD, word, len);
 
       retval = Spell.correct (spell);
 

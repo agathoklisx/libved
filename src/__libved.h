@@ -1,9 +1,4 @@
 
-#define MAXWORDLEN  256
-#define MAXCOMLEN   32
-#define MAXERRLEN   256
-#define MAX_SCREEN_ROWS  256
-#define MAX_WORD_ACTION_LEN 512
 #define MAX_COUNT_DIGITS 8
 
 #define VED_WIN_NORMAL_TYPE  0
@@ -369,8 +364,8 @@ NewType (rline,
 );
 
 NewType (menu,
-  int fd;
   int
+    fd,
     num_cols,
     num_rows,
     first_row,
@@ -390,7 +385,7 @@ NewType (menu,
 
   utf8 c;
   vstr_t  *list;
-    char   pat[MAXPATLEN];
+    char   pat[MAXLEN_PAT];
      int   patlen;
 
   string_t *header;
@@ -666,7 +661,7 @@ NewProp (buf,
     *basename,
     *extname,
     *cwd,
-     mode[16];
+     mode[MAXLEN_MODE];
 
   int
     fd,
@@ -739,13 +734,16 @@ NewType (venv,
 
   string_t
     *term_name,
+    *my_dir,
     *home_dir,
     *tmp_dir,
     *data_dir,
     *diff_exec,
     *xclip_exec,
     *path,
-    *display;
+    *display,
+    *env_str;
+
 );
 
 NewProp (ed,
@@ -820,7 +818,6 @@ NewProp (ed,
 
   int num_syntaxes;
   syn_t syntaxes[NUM_SYNTAXES];
-
 );
 
 #undef MY_CLASSES
@@ -876,7 +873,7 @@ static const utf8 offsetsFromUTF8[6] = {
 #define ARRLEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define isnotutf8(c) IS_UTF8 (c) == 0
 #define isnotatty(fd__) (0 == isatty ((fd__)))
-#define IsNotDirSep(c) (c != '/')
+#define IsNotDirSep(c) (c != DIR_SEP)
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \
@@ -890,8 +887,8 @@ static const utf8 offsetsFromUTF8[6] = {
 
 #define str_fmt(fmt, ...)                                 \
 ({                                                        \
-  char buf_[MAXLINE];                                     \
-  snprintf (buf_, MAXLINE, fmt, __VA_ARGS__);             \
+  char buf_[MAXLEN_LINE];                                     \
+  snprintf (buf_, MAXLEN_LINE, fmt, __VA_ARGS__);             \
   buf_;                                                   \
 })
 
@@ -1212,4 +1209,4 @@ do {                                                                \
  *  in a call to built-in allocation function '__builtin_alloca_with_align'
  */
 
-#define VA_ARGS_FMT_SIZE (MAXLINE * 2)
+#define VA_ARGS_FMT_SIZE (MAXLEN_LINE * 2)

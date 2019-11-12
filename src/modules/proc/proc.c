@@ -134,8 +134,7 @@ add_arg:
     $my(argc)++;
     $my(argv) = Realloc ($my(argv), sizeof (char *) * ($my(argc) + 1));
     $my(argv)[$my(argc)-1] = Alloc (len + 1);
-    memcpy ($my(argv)[$my(argc)-1], tokbeg, len);
-    $my(argv)[$my(argc)-1][len] = '\0';
+    Cstring.cp ($my(argv)[$my(argc)-1], len + 1, tokbeg, len);
     sp++;
   }
 
