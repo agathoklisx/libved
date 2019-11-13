@@ -1297,7 +1297,8 @@ NewSubSelf (ed, set,
      (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
-     (*word_actions)    (ed_t *, utf8 *, int, char *, WordActions_cb);
+     (*word_actions)    (ed_t *, utf8 *, int, char *, WordActions_cb),
+     (*lang_map) (ed_t *, int[][26]);
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, dim_t *, int, int, int, int);

@@ -796,6 +796,8 @@ NewProp (ed,
 
   u8_t *uline;
 
+  int lmap[2][26];
+
   int
     lw_mode_chars_len,
     cw_mode_chars_len,

@@ -12316,6 +12316,20 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
     default: break;
   }
 
+  if (com > 'z') {
+    if ($myroots(lmap)[0][0] isnot 0) {
+      for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 26; j++) {
+          if ($myroots(lmap)[i][j] is com) {
+            com = (i is 1 ? 'a' : 'A') + j;
+            goto handle_com;
+          }
+        }
+      }
+    }
+  }
+
+handle_com:
   switch (com) {
     case 'q':
       if ($my(flags) & BUF_IS_PAGER) return BUF_QUIT;
@@ -13133,6 +13147,12 @@ private void ed_free (ed_t *this) {
   free (this);
 }
 
+private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
+  for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 26; j++)
+      $my(lmap)[i][j] = lmap[i][j];
+}
+
 private void ed_init_special_win (ed_t *this) {
   ved_scratch_buf (this);
   ved_msg_buf (this);
@@ -13442,7 +13462,8 @@ private ed_T *editor_new (char *name) {
         .lw_mode_actions = ed_set_lw_mode_actions,
         .cw_mode_actions = ed_set_cw_mode_actions,
         .word_actions = ed_set_word_actions,
-        .on_normal_g_cb = ved_set_normal_on_g_cb
+        .on_normal_g_cb = ved_set_normal_on_g_cb,
+        .lang_map = ed_set_lang_map
       ),
       .get = SubSelfInit (ed, get,
         .bufname = ed_get_bufname,
