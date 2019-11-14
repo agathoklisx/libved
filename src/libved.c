@@ -10295,6 +10295,71 @@ private int rline_history_at_beg (rline_t **rl) {
   return RL_OK;
 }
 
+private int rline_last_arg_at_beg (rline_t **rl) {
+  switch ((*rl)->c) {
+    case LAST_ARG_KEY:
+    (*rl)->state |= RL_POST_PROCESS;
+    return RL_POST_PROCESS;
+  }
+
+  (*rl)->state |= RL_OK;
+  return RL_OK;
+}
+
+private rline_t *rline_complete_last_arg (rline_t *rl) {
+  ed_t *this = rl->ed;
+  ifnot ($my(rl_last_component)->num_items)
+    return rl;
+
+  $my(rl_last_component)->current = $my(rl_last_component)->head;
+
+  rline_t *lrl = rline_new (this, $my(term), My(Input).get, $my(prompt_row),
+      1, $my(dim)->num_cols, $my(video));
+
+  lrl->at_beg = rline_last_arg_at_beg;
+  lrl->at_end = rline_break;
+
+  lrl->prompt_row = rl->first_row - 1;
+  lrl->prompt_char = 0;
+
+loop_again:
+  if (lrl->line isnot NULL)
+    vstr_free (lrl->line);
+
+  lrl->line = vstr_dup (rl->line);
+  BYTES_TO_RLINE (lrl, $my(rl_last_component)->current->data->bytes,
+                 (int) $my(rl_last_component)->current->data->num_bytes);
+  rline_write_and_break (lrl);
+
+get_char:;
+  utf8 c = rline_edit (lrl)->c;
+  switch (c) {
+    case ESCAPE_KEY:
+      goto theend;
+
+    case ' ':
+    case '\r': goto thesuccess;
+    case LAST_ARG_KEY:
+      if ($my(rl_last_component)->current is $my(rl_last_component)->tail)
+        goto theend;
+
+      $my(rl_last_component)->current = $my(rl_last_component)->current->next;
+      goto loop_again;
+
+    default: goto get_char;
+  }
+
+thesuccess:
+  vstr_free (rl->line);
+  rl->line = vstr_dup (lrl->line);
+
+theend:
+  rline_clear (lrl);
+  rline_free (lrl);
+  video_draw_at (rl->cur_video, rl->first_row); // is minus one
+  return rl;
+}
+
 private rline_t *rline_complete_history (rline_t *rl, int *idx, int dir) {
   ed_t *this = rl->ed;
   ifnot ($my(history)->rline->num_items) return rl;
@@ -10422,6 +10487,20 @@ private void ved_rline_history_push_api (rline_t *rl) {
   rline_clear (rl);
   rl->state &= ~RL_CLEAR_FREE_LINE;
   ved_rline_history_push (rl);
+}
+
+private void ved_rline_last_component_push (rline_t *rl) {
+  if (rl->tail is NULL) return;
+  if (rl->tail->argval is NULL) return;
+
+  ed_t *this = rl->ed;
+  vstr_prepend_current_with ($my(rl_last_component), rl->tail->argval->bytes);
+
+  if ($my(rl_last_component)->num_items > RLINE_LAST_COMPONENT_NUM_ENTRIES) {
+    vstring_t *item = list_pop_tail ($my(rl_last_component), vstring_t);
+    string_free (item->data);
+    free (item);
+  }
 }
 
 private vstring_t *ved_rline_parse_command (rline_t *rl) {
@@ -11055,9 +11134,13 @@ process_char:
       case ARROW_DOWN_KEY:
         ifnot (rl->opts & RL_OPT_HAS_HISTORY_COMPLETION) goto post_process;
         $my(history)->rline->history_idx = (rl->c is ARROW_DOWN_KEY
-           ? 0 : $my(history)->rline->num_items - 1);
+            ? 0 : $my(history)->rline->num_items - 1);
         rl = rline_complete_history (rl, &$my(history)->rline->history_idx,
-           (rl->c is ARROW_DOWN_KEY ? -1 : 1));
+            (rl->c is ARROW_DOWN_KEY ? -1 : 1));
+        goto post_process;
+
+      case LAST_ARG_KEY:
+        rl = rline_complete_last_arg (rl);
         goto post_process;
 
       case ARROW_LEFT_KEY:
@@ -11835,6 +11918,12 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         string_t *com = vstr_join (rl->line, "");
         string_delete_numbytes_at (com, (rl->com is VED_COM_SHELL ? 1 : 3), 0);
         retval = ved_buf_read_from_shell (this, com->bytes, rl->com);
+        if (retval > OK) {
+          My(Ed).append.message_fmt ($my(root), "%s exit_status %d\n", com->bytes, retval);
+          retval = OK; // in case command exit_status is > 0
+          // as on internal error NOTOK is returned
+        }
+
         string_free (com);
         goto theend;
       }
@@ -11955,6 +12044,7 @@ theend:
   else {
     rl->state &= ~RL_CLEAR_FREE_LINE;
     ved_rline_history_push (rl);
+    ved_rline_last_component_push (rl);
   }
 
   return retval;
@@ -13113,7 +13203,7 @@ private void ed_free (ed_t *this) {
     My(String).free ($my(last_insert));
     My(String).free ($my(ed_str));
     My(Ustring).free ($my(uline));
-
+    My(Vstring).free ($my(rl_last_component));
     My(Video).free ($my(video));
 
     history_free (&$my(history));
@@ -13200,6 +13290,7 @@ private ed_t *ed_init (ed_T *E) {
   $my(msgline) = My(String).new ($from($my(term), columns));
   $my(ed_str) =  My(String).new  ($from($my(term), columns));
   $my(last_insert) = My(String).new ($from($my(term), columns));
+  $my(rl_last_component) = My(Vstring).new ();
   $my(uline) = My(Ustring).new ();
 
   $my(msg_tabwidth) = 2;

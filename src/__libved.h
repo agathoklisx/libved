@@ -779,6 +779,7 @@ NewProp (ed,
     *topline,
     *ed_str;
 
+  vstr_t *rl_last_component;
   term_t *term;
   hist_t *history;
   rg_t regs[NUM_REGISTERS];

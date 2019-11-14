@@ -10,6 +10,8 @@
 #define RLINE_HISTORY_NUM_ENTRIES 20
 #endif
 
+#define RLINE_LAST_COMPONENT_NUM_ENTRIES 10
+
 #ifndef UNDO_NUM_ENTRIES
 #define UNDO_NUM_ENTRIES 40
 #endif
@@ -209,6 +211,7 @@
 
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
+#define LAST_ARG_KEY    037
 #define ARROW_DOWN_KEY  0402
 #define ARROW_UP_KEY    0403
 #define ARROW_LEFT_KEY  0404

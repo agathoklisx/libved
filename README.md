@@ -512,6 +512,8 @@ Command line mode:
  | DELETE|BACKSPACE  | delete next|previous char      |
  | CTRL-r            | insert register contents (charwise only)|
  | CTRL-l            | clear line                     |
+ | CTRL-/ |CTRL-_    | insert last component of previous command|
+ |   can be repeated for: RLINE_LAST_COMPONENT_NUM_ENTRIES (default: 10)|
  | TAB               | trigger completion[s]          |
 
 Search:
@@ -560,6 +562,7 @@ Search:
    Options are usually long (that means prefixed with two dashes), unless some
    established/unambiguous like (for now):
     -i  for interactive
+    -r  for recursive
 
    Default command line switches:
    --range=...
@@ -635,6 +638,7 @@ Search:
 
    :`mkdir   dir       (create directory)
    :`man     manpage   (display man page on the scratch buffer)
+   :`stat    file      (display file status information)
    :~battery           (display battery status to the message line)
    :~spell --range=`range' (without range default current line)
    :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
@@ -652,6 +656,7 @@ Search:
 
    The `mkdir cannot understand --parents and not --mode= for now. By default the
    permissions are: S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH (this command needs revision).
+   (update: this command got a --mode= argument)
 
    The ~battery command it should work only for Linux.
 
@@ -1407,5 +1412,35 @@ Search:
     made for internal usage, that the data is controlled by the itself code, but were
     made also exposable. Normally, if it wasn't for the extra verbosity, they should
     be post-fixed with an "_un" to denote this unsafety.
+
+    Also it has to be realized, that the intentions to use internal functions that have
+    similar functionality with standard libc functions, is not obviously the speed, which
+    can not compare with the optimized functions from libc (but here we have to deal
+    with mostly small strings, that the difference in execution, perhaps is negligible),
+    are:
+
+      - flexibility, as we can tune, by avoiding un-needed checks (since we are making
+        these strings, and if we don't make them well, then it is our fault, in any case
+        wrong composed strings will fail even in libc functions), and even change the
+        signature of the function. Because of this flexibility, then actually we can
+        even have a gain in speed, because the conditional checks might be the biggest
+        bottleneck actually).
+
+      - self-sufficiency and minimizing of dependencies. I hate to say that, but libces
+        are huge beasts for primitive environments. And I even hate to say that, because
+        i do not believe in self-sufficiency or anyway self-sufficiency is an utopic
+        dream (very nice to believe) and even much more nice to exercise and hunt for
+        it like super crazy, but this seems that the route should be the exact opposite.
+        Collaboration. But really i do! Many small projects, that trying to assist with
+        a smart, generous, practical, simple, easy, suckless, sane/logical way, are already
+        have been incorporated in this project, and many others will follow, if we'll
+        be blessed with time and motivation (both hard, as we are walking by default
+        in a huge unbeliavable high bridge (like the ones made with rope, over the huge
+        rivers, on the holy Macha-Puchare mountain on the glorius Annapurna), so we're
+        in a so fragile situation, that in a glance of an eye, the time will out, and
+        secondly, and i'm positive, that the universe plays very strange games with us).
+
+      - educational, documentation and understanding, as this is a serious personal
+        motivation for programming in general, but especially programming in C.
   */
 ```
