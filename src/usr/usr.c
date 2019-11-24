@@ -19,7 +19,15 @@
 #include "../lib/json/json.c"
 
 static json_T JsonClass;
-#define Json JsonClass.self
+#define  Json JsonClass.self
+#endif
+
+#if HAS_EXPR
+#include "../modules/tinyexpr/tinyexpr.c"
+#include "../ext/if_has_expr.c"
+
+static expr_T ExprClass;
+#define  Expr ExprClass.self
 #endif
 
 NewType (uenv,
@@ -41,61 +49,13 @@ the needs and establish this application layer */
 #include "../ext/if_has_lexicon.c"
 #endif
 
-private int sys_man (buf_t **bufp, char *word, int section) {
-  if (NULL is Uenv->man_exec) return NOTOK;
-  if (NULL is word) return NOTOK;
+#include "../lib/sys/com/man.c"
+#include "../lib/sys/com/battery.c"
+#include "../lib/sys/com/mkdir.c"
+#include "../lib/sys/com/stat.c"
 
-  int retval = NOTOK;
-  string_t *com;
-
-  buf_t *this = Ed.get.scratch_buf ($myed);
-  Buf.clear (this);
-
-  if (File.exists (word)) {
-    if (Path.is_absolute (word))
-      com = String.new_with_fmt ("%s %s", Uenv->man_exec->bytes, word);
-    else {
-      char *cwdir = Dir.current ();
-      com = String.new_with_fmt ("%s %s/%s", Uenv->man_exec->bytes, cwdir, word);
-      free (cwdir);
-    }
-
-    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
-    goto theend;
-  }
-
-  int sections[9]; for (int i = 0; i < 9; i++) sections[i] = 0;
-  int def_sect = 2;
-
-  section = ((section <= 0 or section > 8) ? def_sect : section);
-  com = String.new_with_fmt ("%s -s %d %s", Uenv->man_exec->bytes,
-     section, word);
-
-  int total_sections = 0;
-  for (int i = 1; i < 9; i++) {
-    sections[section] = 1;
-    total_sections++;
-    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
-    ifnot (retval) break;
-
-    while (sections[section] and total_sections < 8) {
-      if (section is 8) section = 1;
-      else section++;
-    }
-
-    String.replace_with_fmt (com, "%s -s %d %s", Uenv->man_exec->bytes,
-        section, word);
-  }
-
-theend:
-  String.free (com);
-
-  Ed.scratch ($myed, bufp, 0);
-  Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
-      Buf.get.num_lines (this) - 1);
-  Buf.normal.bof (this, DRAW);
-  return retval;
-}
+#include "../lib/fun/callbacks/validate_utf8.c"
+#include "../lib/fun/validate_utf8.c"
 
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
@@ -145,180 +105,47 @@ private void __u_add_word_actions__ (ed_t *this) {
 #endif
 }
 
-/* this function extends standard defined commands with a `battery command
- * this prints to the message line (through an over simplistic way and only
- * on Linux systems) the battery status and capacity */
-private int sys_battery_info (char *buf, int should_print) {
-  int retval = NOTOK;
+#if HAS_EXPR
+private int __u_math_expr_interp__ (expr_t *expr) {
+  int err = 0;
 
-  /* use the SYS_NAME defined in the Makefile and avoid uname() for now */
-  ifnot (Cstring.eq ("Linux", SYS_NAME)) {
-    Msg.error ($myed, "battery function implemented for Linux");
+  expr->ff_obj = (te_expr *) te_compile (expr->data->bytes, 0, 0, &err);
+
+  ifnot (expr->ff_obj) {
+    buf_t **thisp = (buf_t **) expr->i_obj;
+    Expr.strerror (expr, EXPR_COMPILE_ERROR);
+    String.append_fmt (expr->error_string, "\n%s\n%*s^\nError near here",
+        expr->data->bytes, err-1, "");
+    Ed.append.message_fmt ($myed, expr->error_string->bytes);
+    Ed.messages ($myed, thisp, NOT_AT_EOF);
+    expr->retval = EXPR_NOTOK;
     return NOTOK;
   }
 
-  dirlist_t *dlist = Dir.list (SYS_BATTERY_DIR, 0);
-  char *cap = NULL;
-  char *status = NULL;
-
-  if (NULL is dlist) return NOTOK;
-
-  vstring_t *it = dlist->list->head;
-  while (it) {
-    ifnot (Cstring.cmp_n ("BAT", it->data->bytes, 3)) goto foundbat;
-    it = it->next;
-    }
-
-  goto theend;
-
-/* funny goto's (i like them (the goto's i mean)) */
-foundbat:;
-  /* some maybe needless verbosity */
-  char dir[64];
-  snprintf (dir, 64, "%s/%s/", SYS_BATTERY_DIR, it->data->bytes);
-  size_t len = bytelen (dir);
-  Cstring.cp (dir + len, 64 - len, "capacity", 8);
-  FILE *fp = fopen (dir, "r");
-  if (NULL is fp) goto theend;
-
-  size_t clen = 0;
-  ssize_t nread = getline (&cap, &clen, fp);
-  if (-1 is nread) goto theend;
-
-  cap[nread - 1] = '\0';
-  fclose (fp);
-
-  dir[len] = '\0';
-  Cstring.cp (dir + len, 64 - len, "status", 6);
-  fp = fopen (dir, "r");
-  if (NULL is fp) goto theend;
-
-/* here clen it should be zero'ed because on the second call the application
- * segfaults (compiled with gcc and clang and at the first call with tcc);
- * this is when the code tries to free both char *variables arguments to getline();
- * this is as (clen) possibly interpeted as the length of the buffer
- */
-  clen = 0;
-
-  nread = getline (&status, &clen, fp);
-  if (-1 is nread) goto theend;
-
-  status[nread - 1] = '\0';
-  fclose (fp);
-
-  retval = OK;
-
-  if (should_print)
-    Msg.send_fmt ($myed, COLOR_YELLOW, "[Battery is %s, remaining %s%%]",
-        status, cap);
-
-  ifnot (NULL is buf) snprintf (buf, 64, "[Battery is %s, remaining %s%%]",
-      status, cap);
-
-theend:
-  ifnot (NULL is cap) free (cap);
-  ifnot (NULL is status) free (status);
-  dlist->free (dlist);
-  return retval;
-}
-
-private int __validate_utf8_cb__ (vstr_t *unused, char *line, size_t len,
-                                                      int lnr, void *obj) {
-  (void) unused;
-  int *retval = (int *) obj;
-  char *message;
-  int num_faultbytes;
-  int cur_idx = 0;
-  char *bytes = line;
-  size_t orig_len = len;
-  size_t index;
-
-check_utf8:
-  index = is_utf8 ((unsigned char *) bytes, len, &message, &num_faultbytes);
-
-  ifnot (index) return OK;
-
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR,
-      "--== Invalid UTF8 sequence ==-\n"
-      "message: %s\n"
-      "%s\nat line number %d, at index %zd, num invalid bytes %d\n",
-      message, line, lnr, index + cur_idx, num_faultbytes);
-
-  *retval = NOTOK;
-  cur_idx += index + num_faultbytes;
-  len = orig_len - cur_idx;
-  bytes = line + cur_idx;
-  num_faultbytes = 0;
-  message = NULL;
-  goto check_utf8;
-
-  return *retval;
-}
-
-private int __file_validate_utf8__ (buf_t **thisp, char *fname) {
-  (void) thisp;
-  int retval = NOTOK;
-  ifnot (File.exists (fname)) {
-    Msg.send_fmt ($myed, COLOR_RED, "%s doesn't exists", fname);
-    return retval;
-  }
-
-  ifnot (File.is_readable (fname)) {
-    Msg.send_fmt ($myed, COLOR_RED, "%s is not readable", fname);
-    return retval;
-  }
-
-  buf_t *this = Ed.get.scratch_buf ($myed);
-  Buf.clear (this);
-
-  vstr_t unused;
-  retval = OK;
-  File.readlines (fname, &unused, __validate_utf8_cb__, &retval);
-
-  if (retval is NOTOK)
-    Ed.scratch ($myed, thisp, NOT_AT_EOF);
-  else
-    Msg.send_fmt ($myed, COLOR_SUCCESS, "Validating %s ... OK", fname);
+  expr->val.double_v = te_eval (expr->ff_obj);
+  Ed.append.message_fmt ($myed, "Result:\n%f\n", expr->val.double_v);
+  char buf[256]; buf[0] = '\0';
+  snprintf (buf, 256, "%f", expr->val.double_v);
+  Ed.reg.set ($myed, 'M', CHARWISE, buf, NORMAL_ORDER);
+  Msg.send_fmt ($myed, COLOR_NORMAL, "Result =  %f (stored to 'M' register)", expr->val.double_v);
+  te_free (expr->ff_obj);
 
   return OK;
 }
 
-private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
-  int range[2];
-  int retval = Rline.get.range (rl, *thisp, range);
-  if (NOTOK is retval) {
-    range[0] = Buf.get.row.current_col_idx (*thisp);
-    range[1] = range[0];
-  }
-
-  int count = range[1] - range[0] + 1;
-
-  buf_t *this = Ed.get.scratch_buf ($myed);
-  Buf.clear (this);
-
-  vstr_t unused;
-  bufiter_t *iter = Buf.iter.new (*thisp, range[0]);
-  int i = 0;
-
-  retval = OK;
-
-  while (iter and i++ < count) {
-    __validate_utf8_cb__ (&unused, iter->line->bytes, iter->line->num_bytes,
-         iter->idx + 1, &retval);
-    iter = Buf.iter.next (*thisp, iter);
-  }
-
-  Buf.iter.free (*thisp, iter);
-  if (retval is NOTOK)
-    Ed.scratch ($myed, thisp, NOT_AT_EOF);
-  else
-    Msg.send ($myed, COLOR_SUCCESS, "Validating text ... OK");
-
+private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
+  expr_t *expr = Expr.new ("Math", NULL_REF, NULL_REF, __u_math_expr_interp__, NULL_REF);
+  expr->i_obj = thisp;
+  expr->data = String.new_with (bytes);
+  int retval = Expr.interp (expr);
+  Expr.free (&expr);
   return retval;
 }
+#endif // HAS_EXPR
 
-private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c) {
-  (void) vstr;
+private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
+  (void) vstr; (void) action;
+
   int retval = NO_CALLBACK_FUNCTION;
   switch (c) {
 #if HAS_SPELL
@@ -336,6 +163,15 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
     }
 #endif
 
+#ifdef HAS_EXPR
+    case 'm': {
+      string_t *expression = Vstring.join (vstr, "\n");
+      retval = __math_expr_evaluate__ (thisp, expression->bytes);
+      String.free (expression);
+    }
+      break;
+#endif
+
     case 'v': {
       rline_t *rl = Rline.new ($myed);
       string_t *str = String.new_with_fmt ("ignore --range=%d,%d",
@@ -345,6 +181,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       Rline.parse (*thisp, rl);
       __validate_utf8__ (thisp, rl);
       Rline.free (rl);
+      retval = OK;
     }
       break;
 
@@ -359,12 +196,29 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 1;
 #if HAS_SPELL
   num_actions++;
-  utf8 chars[] = {'S', 'v'};
-  char actions[] = "Spell line[s]\nvalidate utf8";
-#else
-  utf8 chars[] = {'v'};
-  char actions[] = "validate utf8";
 #endif
+
+#if HAS_EXPR
+  num_actions++;
+#endif
+
+  utf8 chars[] = {
+#if HAS_SPELL
+  'S',
+#endif
+#if HAS_EXPR
+  'm',
+#endif
+  'v'};
+
+  char actions[] =
+#if HAS_SPELL
+     "Spell line[s]\n"
+#endif
+#if HAS_EXPR
+     "math expression\n"
+#endif
+     "validate utf8";
 
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
 }
@@ -381,6 +235,12 @@ private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, 
     }
 #endif
 
+#if HAS_EXPR
+    case 'm': {
+      retval = __math_expr_evaluate__ (thisp, str->bytes);
+      break;
+    }
+#endif
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -388,10 +248,37 @@ private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, 
 }
 
 private void __u_add_cw_mode_actions__ (ed_t *this) {
-  utf8 chars[] = {'S'};
-  char actions[] = "Spell selected";
-  Ed.set.cw_mode_actions (this, chars, 1, actions, __u_cw_mode_cb__);
+  int num_actions = 0;
+
+#if HAS_SPELL
+  num_actions++;
+#endif
+
+#if HAS_EXPR
+  num_actions++;
+#endif
+
+  utf8 chars[] = {
+#if HAS_SPELL
+  'S',
+#endif
+#if HAS_EXPR
+  'm'
+#endif
+  };
+
+ char actions[] = ""
+#if HAS_SPELL
+   "Spell selected\n"
+#endif
+#if HAS_EXPR
+  "math expression\n"
+#endif
+   ;
+
+  Ed.set.cw_mode_actions (this, chars, num_actions, actions, __u_cw_mode_cb__);
 }
+
           /* user defined commands and|or actions */
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
@@ -407,110 +294,6 @@ private void __u_add_rline_user_commands__ (ed_t *this) {
 #ifdef WORD_LEXICON_FILE
   Ed.append.rline_command (this, "~translate", 0, 0);
 #endif
-}
-
-private int sys_mkdir (char *dir, mode_t mode, int verbose) {
-  if (OK is mkdir (dir, mode)) {
-    if (verbose) {
-      struct stat st;
-      if (NOTOK is stat (dir, &st)) {
-        Msg.error ($myed, "failed to stat directory, %s", Error.string ($myed, errno));
-        return NOTOK;
-      }
-
-      char mode_string[16];
-      Vsys.stat.mode_to_string (mode_string, st.st_mode);
-      char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
-
-      Msg.send_fmt ($myed, COLOR_YELLOW, "created directory `%s', with mode: %s (%s)",
-          dir, mode_oct + 1, mode_string);
-    }
-
-    return OK;
-  }
-
-  Msg.error ($myed, "failed to create directory, (%s)", Error.string ($myed, errno));
-  return NOTOK;
-}
-
-private string_t *__readlink__ (char *obj) {
-  string_t *link = String.new (PATH_MAX);
-
-  int loops = 0;
-readthelink:
-  link->num_bytes = readlink (obj, link->bytes, link->mem_size);
-  if (NOTOK is (ssize_t) link->num_bytes)
-    return link;
-
-  if (link->num_bytes is link->mem_size and loops++ is 0) {
-    String.reallocate (link, (link->mem_size / 2));
-    goto readthelink;
-  }
-
-  link->bytes[link->num_bytes] = '\0'; // readlink() does not append the nullbyte
-  return link;
-}
-
-private int sys_stat (buf_t **thisp, char *obj) {
-  struct stat st;
-  if (NOTOK is lstat (obj, &st)) {
-    Msg.error ($myed, "failed to lstat() file, %s", Error.string ($myed, errno));
-    return NOTOK;
-  }
-
-  Ed.append.toscratch ($myed, CLEAR, "==- stat output -==");
-
-  int islink = S_ISLNK (st.st_mode);
-  string_t *link = NULL;
-
-  if (islink) {
-    link = __readlink__ (obj);
-    if (NOTOK is (ssize_t) link->num_bytes) {
-      Msg.error ($myed, "readlink(): %s", Error.string ($myed, errno));
-      Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
-    } else
-      Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s -> %s", obj, link->bytes);
-  } else
-    Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
-
-theoutput:
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  Size: %ld,  Blocks: %ld,  I/O Block: %ld",
-      st.st_size, st.st_blocks, st.st_blksize);
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "Device: %ld,  Inode: %ld,  Links: %d",
-      st.st_dev, st.st_ino, st.st_nlink);
-
-  char mode_string[16];
-  Vsys.stat.mode_to_string (mode_string, st.st_mode);
-  char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
-  struct passwd *pswd = getpwuid (st.st_uid);
-  struct group *grp = getgrgid (st.st_gid);
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR,
-  	"Access: (%s/%s), Uid: (%ld / %s), Gid: (%d / %s)\n",
-     mode_oct+2, mode_string, st.st_uid,
-    (NULL is pswd ? "NONE" : pswd->pw_name), st.st_gid,
-    (NULL is grp  ? "NONE" : grp->gr_name));
-  time_t atm = (long int) st.st_atime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "       Last Access: %s", Cstring.trim.end (ctime (&atm), '\n'));
-  time_t mtm = (long int) st.st_mtime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, " Last Modification: %s", Cstring.trim.end (ctime (&mtm), '\n'));
-  time_t ctm = (long int) st.st_ctime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "Last Status Change: %s\n", Cstring.trim.end (ctime (&ctm), '\n'));
-
-  if (islink and NULL isnot link) {
-    islink = 0;
-    ifnot (Path.is_absolute (link->bytes)) {
-      char *dname = Path.dirname (obj);
-      String.prepend_fmt (link, "%s/", dname);
-      free (dname);
-    }
-    obj = link->bytes;
-    Ed.append.toscratch ($myed, DONOT_CLEAR, "==- Link info -==");
-    Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
-    if (OK is stat (link->bytes, &st)) goto theoutput;
-  }
-  String.free (link);
-  Ed.scratch ($myed, thisp, NOT_AT_EOF);
-  return OK;
 }
 
 private void __u_add_rline_sys_commands__ (ed_t *this) {
@@ -640,6 +423,7 @@ private ftype_t *__u_sh_syn_init (buf_t *this) {
   return ft;
 }
 
+/* really minimal and incomplete support */
 syn_t u_syn[] = {
   {
     "make", make_filenames, make_extensions, _u_NULL_ARRAY,
@@ -737,6 +521,10 @@ private void __init_usr__ (ed_t *this) {
   JsonClass = __init_json__ ();
 #endif
 
+#if HAS_EXPR
+  ExprClass = __init_expr__ ();
+#endif
+
   Uenv = AllocType (uenv);
   string_t *path = Venv.get (this, "path");
   Uenv->man_exec = Vsys.which ("man", path->bytes);
@@ -752,11 +540,16 @@ private void __deinit_usr__ (ed_t *this) {
   String.free (Uenv->elinks_exec);
   free (Uenv);
 
+#if HAS_SPELL
+  __deinit_spell__ (&SpellClass);
+#endif
+
 #if HAS_JSON
   __deinit_json__ (&JsonClass);
 #endif
 
-#if HAS_SPELL
-  __deinit_spell__ (&SpellClass);
+#if HAS_EXPR
+  __deinit_expr__ (&ExprClass);
 #endif
+
 }

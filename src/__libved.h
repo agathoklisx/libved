@@ -140,8 +140,8 @@ enum {
   char *r = strchr (REGISTERS, register); r - REGISTERS;
  */
 
-#define REGISTERS      "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890^_\n"
-#define NUM_REGISTERS  46
+#define REGISTERS "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890ABCDGHJKLQWERTYUIOPZXCVBNM^_\n"
+#define NUM_REGISTERS  72
 
 enum {
   REG_UNAMED = 0,

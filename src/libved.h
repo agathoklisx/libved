@@ -148,6 +148,7 @@
 
 #define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
+#define NORMAL_ORDER DEFAULT_ORDER
 
 #define LEFT_DIRECTION   0
 #define RIGHT_DIRECTION -1
@@ -523,14 +524,17 @@ typedef int  (*RlineAtEnd_cb) (rline_t **);
 typedef int  (*RlineTabCompletion_cb) (rline_t *);
 typedef int  (*PopenRead_cb) (buf_t *, fp_t *);
 typedef int  (*MenuProcessList_cb) (menu_t *);
-typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8);
+typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
 typedef int  (*WordActions_cb) (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
 typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalOng_cb) (buf_t **, int);
+typedef int  (*ReCompile_cb) (regexp_t *);
 typedef string_t *(Indent_cb) (buf_t *, row_t *);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
+
+#define NULL_REF NULL
 
 NewType (string,
   size_t  num_bytes;
@@ -1312,6 +1316,11 @@ NewSubSelf (ed, syn,
   int  (*get_ftype_idx) (ed_t *, char *);
 );
 
+NewSubSelf (ed, reg,
+  rg_t
+     *(*set) (ed_t *, int, int, char *, int);
+);
+
 NewSubSelf (ed, append,
   int (*win) (ed_t *, win_t *);
 
@@ -1375,6 +1384,7 @@ NewSelf (ed,
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
   SubSelf (ed, syn) syn;
+  SubSelf (ed, reg) reg;
   SubSelf (ed, append) append;
   SubSelf (ed, exec) exec;
   SubSelf (ed, readjust) readjust;

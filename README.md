@@ -208,10 +208,13 @@
    or just because of a tiny compilation error), compilations like these can
    happen (and if it was possible) sometimes 10 times in a couple of minutes, so
    tcc makes this possib[oll]!. Many Thanks guys on and for tcc development.))
-      (note: since commit d7c2ccd of 8 October-2019, unfortunatelly this not true.
+      (note 1: since commit d7c2ccd of 8 October-2019, unfortunatelly this not true.
        While tcc can compile the shared library and the test application, without
        errors, the application segfaults, because of the call to stat(). This was
        reported upstream.)
+
+      (note 2: since the introduction of tinyexpr and if HAS_EXPR=1, tcc can not
+       compile the source of tinyexpr)
   */
 
   /* But see at the very last section of this document (ERRORS - WARNINGS - BUGS),
@@ -241,12 +244,14 @@
       the behavior, but this file is not visible in git and should be created
       by the user.
       As the last on the chain this can overide everything. This file should
-      provide: */
+      provide:
 
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
+   */
 
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
+   HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
    SPELL_DICTIONARY="path/to/spell_dictionary" (default $(SYSDATADIR)/spell/spell.txt)
    SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
    /* The above options requires HAS_USER_EXTENSIONS=1,
@@ -483,17 +488,19 @@ Visual mode:
  | y                 | yank selected                  |
  | s                 | search selected [linewise]     |
  | w                 | write selected [linewise]      |
- | i|I               | insert in front [blockwise|    |
+ | i|I               | insert in front [blockwise]    |
  | c                 | change [blockwise]             |
  | both commands above use a readline instance (but without tab|history completion)|
- | x|d               | delete [[block|char]wise]      |
- | +                 | send selected to XA_CLIPBOARD (char|line)wise|
- | *                 | send selected to XA_PRIMARY   (char|line)wise|
+ | x|d               | delete [(block|char)wise]      |
+ | +                 | send selected to XA_CLIPBOARD [(char|line)wise|
+ | *                 | send selected to XA_PRIMARY   [(char|line)wise|
  | e                 | edit as filename [charwise]    |
  | v                 | check line[s] for invalid UTF-8 byte sequences [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|
- | S                 | Spell line[s] (char|line)wise
- |             note: this requires HAS_SPELL          |
+ | S                 | Spell line[s] [(char|line)wise]
+ |             note: this requires HAS_USER_EXTENSIONS|HAS_SPELL          |
+ | M                 | evaluate selected as a math expression [(char|line)wise]
+ |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
  | TAB               | triggers a completion menu with the correspondent to the
  |                     specific mode above actions    |
  | escape            | aborts                         |
@@ -536,6 +543,20 @@ Search:
      |line_nr byte_index| matched line
 
  */
+
+/* On Normal mode, it is possible to map native language to normal mode commands.
+   Here is a sample:
+
+   int lmap[2][26] = {{
+     913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
+     925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
+     945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
+     957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
+   }};
+
+  Ed.set.lang_map (this, lmap);
+
+  These correspond to 'A'-'Z' and 'a'-'z' respectively.
 
 /* Command line mode:
    (note) Commands do not get a range as in vi[like], but from the command line
@@ -1271,6 +1292,7 @@ Search:
   - John Davis for stat_mode_to_string() (http://www.jedsoft.org/slang)
   - jsmn (json decoder) (https://github.com/zserge/jsmn)
   - jsmn-example (the state machine for jsmn) (https://github.com/alisdair/jsmn-example)
+  - tinyexpr (https://github.com/codeplea/tinyexpr)
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
  */
@@ -1440,7 +1462,103 @@ Search:
         in a so fragile situation, that in a glance of an eye, the time will out, and
         secondly, and i'm positive, that the universe plays very strange games with us).
 
+          - As a duty to next humans to come. Really there is not so much to say to
+            them, but probably something like this:
+
+            "Look around". "It is You and the Outside of You". "You own a planet.
+            Noone else lives in that planet but you."
+
+            "See around. This is the world. What you see is Uniq. No one else can see
+            the world from this angle. The only thing that is impossible to ever see,
+            is only You. The best thing you can do about this is to see yourself through
+            a mirror. So it is You and Your Mirror and the world."
+
+            "You are just the Human Being in that world. A link in this chain, equally
+            important like all the others.
+            Your planet is important. You really want the best for this planet as You
+            are the keeper for this planet. You really want to have total control over
+            the environment of your planet, you really want to be healthy.
+            We want the same.
+            And it is wise and really smart for You, to feel the same for Us. As the
+            outiside of You is equally important with You. Though the You - and this
+            by default - will always prioritize the self, usually without even the
+            self realize it..., it is this magnificent undescrible structure that is
+            the real treasure (and for you); so this is also equally important with
+            You.
+            It is unthinkable important. As this might? is the way to an eternal -
+              (where eternal here might translated accurately as "aenaos - αέναος",
+               something that has no start as no end in time, it is just this) -
+            evolve, so the way to self evolution with no real END defined - even if
+            there was a scratch in time, which probably was and probably is wise to
+            research this scratch as it might be reproducible. But how this works?
+            Probably by just building bridges (like the spiders build their webs).
+            Probably just because there is this capability, perhaps it is the only
+            required capability. So probably there is a right when we say that the
+            Will builds the required chains, by just using the mechanism, which is
+            probably free (as free beer here mostly, probably).
+
+            So is this web of bridges to each other planets that matters for our ash.
+            Because we are alone. As even the paradise is a hell when you are alone."
+
+            "It is Your Time to participate. You got this ticket. Do not wait any other
+            ticket like this one. This is THE ticket. You breath for real. You are in
+            the game. This is your chance you was hoping for. We are trying again and
+            again, hoping that this time we will understand and we will complete the
+            mission for the final gift."
+
+            "So you are just a human being, an exceptional miracle.
+            Noone will live for you and it is stupid to let others to live for you.
+            And probably you do not want to live through others too. Breath Now!"
+
+            Dedicated to the human beings around the Mimbren river, where the self
+            sufficiency was a build in their kernel. Especially to their PaPa, to
+            Mangas Coloradas.
+
       - educational, documentation and understanding, as this is a serious personal
         motivation for programming in general, but especially programming in C.
   */
+
+ * We all have to thank each other for their work to open/free source way of thinking
+   and life.
+
+   Specifically, we all first owe to our stubborn hero Richard (time will give us all
+   the place we actually deserve and rms will have a glory place).
+
+   At the end, we owe all to each other for this perfect __ professionalism __.
+
+   To huge projects like our (G)reat Libc that we owe so much (we just want it a bit
+   more flexible and adjust to current environments (current great times that we live
+   and comming - difficult times, damn interesting but strange, damn strange. To be
+   fair, really really damn strange)).
+
+   But also to all these tiny projects. All those simple humble commands that helped
+   us when we need it, as someone generously offered his time, and offered his code
+   as he opened her heart or he opened her mind, doesn't really matter here, and he
+   contributed it to the community. All these uncountable tiny projects!
+
+   Or geniously code like Lua or crazy one like this by Fabrice of tcc, or beautiful
+   code like Ruby. Or complicated that carry also the heaviest responsibility, like
+   our Kernel, or blessed tools like our Compiler. Or even a better C like zig.
+   Or tools that wrote all that code, like our editor.
+   You know the one that has modes! Okey the one of the two editors!
+
+   But and also to those who offered portions of code, that helped the community to
+   create excellent products, that even the richest people on earth with all the money
+   of the earth can not do.
+
+   And we all know the reasons why.
+
+   Of course first is this fachinating and proud way to evolution that attract us.
+   But at the end is that, we really like to do what we do; assisting to our mailing
+   lists or writing documentation or managing the infrastructure or writing code.
+
+   Yea i believe this is love and a very very veeeery (really very) smart way to live
+   and breath in peace and to feel free, even if you know that you live in a fjail,
+       (what you can wait from a world, where our best method to move, our best move
+        with our body, where our body it is in its best, it is the only one that we
+        can not do it in public - it is absolutely crazy if you think about it),
+   that is almost mission impossible to escape. But people did it, so there is a way.
+   And if there is a way, we have to found it and describe it.
+   So have a good research, as we go back (or forth anyway) to our only duty, which
+   it is the way to our Re-Evolution.
 ```

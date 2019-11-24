@@ -98,8 +98,8 @@ private size_t str_byte_mv (char *str, size_t len, size_t to_idx,
   char *dsp = str + to_idx;
 
   while (nelem) {
-    ifnot (*sp) { // stop at the first null byte
-      *dsp = '\0';
+    ifnot (*sp) {  // stop at the first null byte
+      *dsp = '\0'; // this differs in memmove()
       break;
     }
 
@@ -1039,6 +1039,7 @@ private int ustring_is_upper (utf8 chr) {
   return chr != ustring_to_lower (chr);
 }
 
+/* use the above code (many thanks) and adjust it for this environment */
 private int ustring_change_case (char *dest, char *src, size_t src_len, int to_type) {
   int idx = 0;
   int changed = 0;
@@ -1067,6 +1068,9 @@ private int ustring_change_case (char *dest, char *src, size_t src_len, int to_t
 /* This is itoa version 0.4, written by Lukás Chmela and released under GPLv3,
  * Original Source:  http://www.strudel.org.uk/itoa/
  */
+
+/* this is for integers (i wonder maybe is better to use *printf(), but i hate to
+   do it, because of the short code and its focus to this specific functionality) */
 private char *itoa (int value, char *result, int base) {
   if (base < 2 || base > 36) {
     *result = '\0';
@@ -1097,6 +1101,7 @@ private char *itoa (int value, char *result, int base) {
   return result;
 }
 
+/* and here it starts */
 private void string_free (string_t *this) {
   if (this is NULL) return;
   if (this->mem_size) free (this->bytes);
@@ -1123,6 +1128,7 @@ private size_t string_align (size_t size) {
   return sz;
 }
 
+/* this is not like realloc(), as len here is the extra size */
 private string_t *string_reallocate (string_t *this, size_t len) {
   size_t sz = string_align (this->mem_size + len + 1);
   this->bytes = Realloc (this->bytes, sz);
@@ -1297,6 +1303,7 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
   return string_replace_with_len (this, bytes, len);
 }
 
+/* like an array semantics */
 private void vstr_clear (vstr_t *this) {
   vstring_t *it = this->head;
   while (it) {
@@ -1320,6 +1327,7 @@ private vstr_t *vstr_new (void) {
   return AllocType (vstr);
 }
 
+/* maybe also a vstr_join_u() for characters as separators */
 private string_t *vstr_join (vstr_t *this, char *sep) {
   string_t *bytes = string_new (32);
   vstring_t *it = this->head;
@@ -1366,6 +1374,7 @@ private void vstr_prepend_current_with (vstr_t *this, char *bytes) {
   current_list_prepend (this, vstr);
 }
 
+/* like str_dup(), as a new copy */
 private vstr_t *vstr_dup (vstr_t *this) {
   vstr_t *vs = vstr_new ();
   vstring_t *it = this->head;
@@ -1378,6 +1387,7 @@ private vstr_t *vstr_dup (vstr_t *this) {
   return vs;
 }
 
+/* so far, we always want sorted and unique members */
 private vstr_t *vstr_add_sort_and_uniq (vstr_t *this, char *bytes) {
   vstring_t *vs = AllocType (vstring);
   vs->data = string_new_with (bytes);
@@ -1474,6 +1484,7 @@ public void __deinit_vstring__ (vstring_T *this) {
   (void) this;
 }
 
+/* this replaced str_tok() below */
 private vstr_t *str_chop (char *buf, char tok, vstr_t *tokstr,
                                      StrChop_cb cb, void *obj) {
   vstr_t *ts = tokstr;
@@ -1497,7 +1508,7 @@ tokenize:;
       /* ifnot (len) {
          sp++; p = sp;
          continue;
-      } */
+      } when commented, this broke once the code */
 
       char s[len + 1];
       str_cp (s, len + 1, p, len);
@@ -1526,8 +1537,8 @@ tokenize:;
   return ts;
 }
 
-/* unused
- * private vstr_t *str_tok (char *buf, char *tok, vstr_t *tokstr,
+/* unused (based on strtok(), but i do not want functions with static state) */
+/* private vstr_t *str_tok (char *buf, char *tok, vstr_t *tokstr,
  *     void (*cb) (vstr_t *, char *, void *), void *obj) {
  *   vstr_t *ts = tokstr;
  *   if (NULL is ts) ts = vstr_new ();
@@ -1547,6 +1558,7 @@ tokenize:;
  * }
  */
 
+/* primitive search, based on strstr(), based on kilo editor */
 private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
   (void) buf_len;
   char *sp = strstr (bytes, re->pat->bytes);
@@ -1566,6 +1578,7 @@ theend:
   return re->retval;
 }
 
+/* following re code should work transparently with the external re implementation */
 private void re_reset_captures (regexp_t *re) {
   re->match_len = re->match_idx = 0;
   re->match_ptr = NULL;
@@ -1614,7 +1627,7 @@ private int re_compile (regexp_t *re) {
   return OK;
 }
 
-private regexp_t *re_new (char *pat, int flags, int num_caps, int (*compile) (regexp_t *)) {
+private regexp_t *re_new (char *pat, int flags, int num_caps, ReCompile_cb compile) {
   regexp_t *re = AllocType (regexp);
   re->flags |= flags;
   re->pat = string_new_with (pat);
@@ -1646,8 +1659,8 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
             sub_p++;
             continue;
 
-          case 's':
-            string_append_byte (substr, ' ');
+          case 's': /* not sure but is convienent, though readline should handle */
+            string_append_byte (substr, ' ');  /* "quoted strings", can be empty */
             sub_p++;
             continue;
 
@@ -1736,7 +1749,7 @@ private vstr_t *file_readlines (char *file, vstr_t *lines,
     while (-1 isnot (nread = getline (&buf, &len, fp))) {
       cb (llines, buf, nread, ++num, obj);
     }
-  } else {
+  } else {  /* by default an array of lines */
     while (-1 isnot (nread = getline (&buf, &len, fp))) {
       buf[nread - 1] = '\0';
       vstr_append_current_with (llines, buf);
@@ -1784,6 +1797,7 @@ public file_T __init_file__ (void) {
   );
 }
 
+/* i like the idea for an __is_directory (char *dname, struct stat st); */
 private int is_directory (char *dname) {
   struct stat st;
   if (NOTOK is stat (dname, &st)) return 0;
@@ -1816,7 +1830,10 @@ private char *buf_get_current_dir (buf_t *this, int new_allocation) {
 
   My(String).replace_with ($my(shared_str), cwd);
   free (cwd);
+  /* dangerous because it is used in so many cases but effective, */
   return $my(shared_str)->bytes;
+  /* as cut a lot of alloc's, this is like a static string, with local scope, it
+   * doesn't really mind, as long is under control and do not used at the same time */
 }
 
 private void dirlist_free (dirlist_t *dlist) {
@@ -1824,6 +1841,7 @@ private void dirlist_free (dirlist_t *dlist) {
   free (dlist);
 }
 
+/* this needs a simplification and enhancement */
 private dirlist_t *dirlist (char *dir, int flags) {
   (void) flags;
   if (NULL is dir) return NULL;
@@ -1968,6 +1986,7 @@ theend:
   return this;
 }
 
+/* a pointer to (base) name, i wonder if this is safe */
 private char *path_basename (char *name) {
   ifnot (name) return name;
   char *p = nullbyte_in_str (name);
@@ -1976,6 +1995,7 @@ private char *path_basename (char *name) {
   return p;
 }
 
+/* likewise */
 private char *path_extname (char *name) {
   ifnot (name) return name;
   char *p = nullbyte_in_str (name);
@@ -1986,6 +2006,8 @@ private char *path_extname (char *name) {
   return p;
 }
 
+/* as a new c string (null terninated), note: that all new c strings here
+ * should be null byte terminated */
 private char *path_dirname (char *name) {
   size_t len = bytelen (name);
   char *dname = NULL;
@@ -2199,6 +2221,7 @@ private void term_init_size (term_t *this, int *rows, int *cols) {
   term_cursor_set_ptr_pos (this, orig_row, orig_col);
 }
 
+/* three modes: 's' for sane, 'r' for raw and 'o' for original */
 private int term_sane_mode (term_t *this) {
   if ($my(mode) is 's') return OK;
    if (isnotatty ($my(in_fd))) return NOTOK;
@@ -2264,10 +2287,6 @@ private int *term_get_dim (term_t *this, int *dim) {
   return dim;
 }
 
-private void term_set_name (term_t *this) {
-  $my(name) = NULL;
-}
-
 private int term_set_mode (term_t *this, char mode) {
   switch (mode) {
     case 'o': return term_orig_mode (this);
@@ -2275,6 +2294,11 @@ private int term_set_mode (term_t *this, char mode) {
     case 'r': return term_raw_mode (this);
   }
   return NOTOK;
+}
+
+/* for now */
+private void term_set_name (term_t *this) {
+  $my(name) = NULL;
 }
 
 private int term_set (term_t *this) {
@@ -2296,6 +2320,8 @@ private int term_reset (term_t *this) {
 /* this is an extended version of the same function of
  * the kilo editor at https://github.com/antirez/kilo.git
  */
+/* it should work the same, under xterm, rxvt-unicode, st and linux terminals */
+/* it also handles utf8 byte sequences, so it should return the integer represanation */
 private utf8 term_get_input (term_t *this) {
   char c;
   int n;
@@ -3102,6 +3128,8 @@ private dim_t **ed_dim_calc (ed_t *this, int num_rows, int num_frames,
   return dims;
 }
 
+/* bad code, this is the case where the only thing you can do is to
+ * pray to got the things right, very fragile code */
 #define state_cp(v__, a__)                                 \
   (v__)->video_first_row = (a__)->video_first_row;         \
   (v__)->video_first_row_idx = (a__)->video_first_row_idx; \
@@ -3474,6 +3502,10 @@ private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
   return DONE;
 }
 
+/* ATTENTION */
+/* generally speaking the undo/redo basic functionality seems to be
+ * working. what is not working always perfect, is the state of the
+ * screen, i thing on redoing'it, so this has a very serious bug */
 private int vundo (buf_t *this, utf8 com) {
   action_t *action = NULL;
   if (com is 'u')
@@ -3635,7 +3667,7 @@ private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
   return found;
 }
 
-/* Sorry but the highlight system is ridicolous simple (line by line), but is fast and works for me in C */
+/* Sorry but the highlight system is ridicolous simple (word by word), but is fast and works for me in C */
 private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t *row) {
   (void) index;
 
@@ -6434,7 +6466,7 @@ private int ed_register_get_idx (ed_t *this, int c) {
   if (c is 0x17) c = '^';
   char regs[] = REGISTERS; /* this is for tcc */
   char *r = byte_in_str (regs, c);
-  return (NULL isnot r) ? (r - regs) : -1;
+  return (NULL isnot r) ? (r - regs) : NOTOK;
 }
 
 private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
@@ -6477,8 +6509,27 @@ private rg_t *ed_register_push_with (ed_t *this, int regidx, int type, char *byt
   return ed_register_push (this, regidx, type, reg);
 }
 
-private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
+private rg_t *ed_register_set (ed_t *this, int regidx, int type, reg_t *reg) {
+  ed_register_new (this, regidx);
+  return ed_register_push (this, regidx, type, reg);
+}
+
+private int ed_register_is_special (ed_t *this, int regidx) {
+  (void) this; // maybe in future
   if (REG_SEARCH > regidx or (regidx > REG_EXPR and regidx < REG_CURWORD))
+    return NOTOK;
+  return OK;
+}
+
+private rg_t *ed_register_set_api (ed_t *this, int c, int type, char *bytes, int dir) {
+  int regidx = ed_register_get_idx (this, c);
+  if (NOTOK is regidx) return NULL;
+  ed_register_new (this, regidx);
+  return ed_register_push_with (this, regidx, type, bytes, dir);
+}
+
+private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
+  if (NOTOK is ed_register_is_special (this, regidx))
     return NOTHING_TODO;
 
   switch (regidx) {
@@ -6556,13 +6607,6 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
 
   return NOTHING_TODO;
 }
-
-/*
-private rg_t *ed_register_set (ed_t *this, int regidx, int type, reg_t *reg) {
-  ed_register_new (this, regidx);
-  return ed_register_push (this, regidx, type, reg);
-}
-*/
 
 private rg_t *ed_register_set_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
@@ -7982,7 +8026,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
   int fidx = this->cur_idx;
   int lidx = fidx + count - 1;
                                        /* optimization for large buffers */
-  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 3));
+  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 5));
 
   for (int idx = fidx; idx <= lidx; idx++) {
     act_t *act = AllocType (act);
@@ -8546,8 +8590,8 @@ next:
   return $my(vis)[0].orig_syn_parser (this, line, len, idx, currow);
 }
 
-private int ed_lw_mode_cb (buf_t **thisp, int frow, int lrow, vstr_t *vstr, utf8 c) {
-  (void) thisp; (void) vstr; (void) c; (void) frow; (void) lrow;
+private int ed_lw_mode_cb (buf_t **thisp, int frow, int lrow, vstr_t *vstr, utf8 c, char *action) {
+  (void) thisp; (void) vstr; (void) c; (void) frow; (void) lrow; (void) action;
   return 1;
 }
 
@@ -8802,7 +8846,7 @@ handle_char:
 
             for (int j = 0; j < $myroots(num_lw_mode_cbs); j++) {
               int retval = $myroots(lw_mode_cbs)[j] (thisp,
-              	  $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c);
+              	  $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c, vis_action);
               if (retval isnot NO_CALLBACK_FUNCTION)
                 break;
             }
@@ -11068,7 +11112,7 @@ private void rline_write (rline_t *rl) {
 private void ved_rline_reg (rline_t *rl) {
   ed_t *this = rl->ed;
   int regidx = ed_register_get_idx (this, My(Input).get ($my(term)));
-  if (-1 is regidx) return;
+  if (NOTOK is regidx) return;
 
   buf_t *buf = self(get.current_buf);
   if (ERROR is ed_register_special_set (this, buf, regidx))
@@ -12115,7 +12159,7 @@ private int ved_insert_reg (buf_t **thisp, string_t *cur_insert) {
   buf_t *this = *thisp;
   MSG ("insert register (charwise mode):");
   int regidx = ed_register_get_idx ($my(root), My(Input).get ($my(term_ptr)));
-  if (-1 is regidx) return NOTHING_TODO;
+  if (NOTOK is regidx) return NOTHING_TODO;
 
   if (ERROR is ed_register_special_set ($my(root), this, regidx))
     return NOTHING_TODO;
@@ -13576,6 +13620,9 @@ private ed_T *editor_new (char *name) {
       .syn = SubSelfInit (ed, syn,
         .append = ed_syn_append,
         .get_ftype_idx = ed_syn_get_ftype_idx
+      ),
+      .reg = SubSelfInit (ed, reg,
+        .set = ed_register_set_api
       ),
       .append = SubSelfInit (ed, append,
         .win = ved_append_win,

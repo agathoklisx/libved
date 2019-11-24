@@ -1,17 +1,10 @@
 #!/bin/sh
 
-# This is a sample that can be used to compile the source code
-# and should provide a shared library and an executable.
-
-# Adjust for the static targets accordingly.
-
-# If the number of args is > 0 then it builds only the executable.
+# This is a convenience file to compile the shared targets with the default
+# options. See convenience.sh for the opposite (compile with all the options
+# enabled)
 
 # You may need first to `chmod' this unit to make it executable.
-
-# This sample enables almost everything, except local additions and the dict
-# file, which anyway is here for demonstration and might not have any interest
-# except the author.
 
 if [ 0 = $# ]; then
   make clean_shared
@@ -24,15 +17,15 @@ fi
 
 make                                                \
     CC=$CC                                          \
-    DEBUG=1                                         \
-    HAS_REGEXP=1                                    \
+    DEBUG=0                                         \
+    HAS_REGEXP=0                                    \
     HAS_SHELL_COMMANDS=1                            \
-    HAS_USER_EXTENSIONS=1                           \
-    HAS_SPELL=1                                     \
-    HAS_JSON=1                                      \
-    HAS_EXPR=1                                      \
+    HAS_USER_EXTENSIONS=0                           \
+    HAS_SPELL=0                                     \
+    HAS_JSON=0                                      \
+    HAS_EXPR=0                                      \
     HAS_LOCAL_EXTENSIONS=0                          \
-    HAS_HISTORY=1                                   \
+    HAS_HISTORY=0                                   \
     VED_DATA_DIR="$PWD/sys/data"                    \
     TMPDIR="$PWD/sys/tmp"                           \
     CLEAR_BLANKLINES=1                              \
@@ -45,6 +38,3 @@ make                                                \
     BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
     READ_FROM_SHELL=1                               \
     veda-shared
-
-#   WORD_LEXICON_FILE="/path/to/some/dict.txt"      \
-#   VED_APPLICATION_FLAGS=-lutil                    \
