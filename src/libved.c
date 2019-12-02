@@ -1782,6 +1782,99 @@ private ssize_t file_append (char *fname, char *bytes, ssize_t size) {
   return __file_write__ (fname, bytes, size, "a+");
 }
 
+private void tmpfname_free (tmpfname_t *this) {
+  ifnot (this) return;
+  ifnot (NULL is this->fname) {
+    unlink (this->fname->bytes);
+    string_free (this->fname);
+    this->fname = NULL;
+  }
+  free (this);
+}
+
+private tmpfname_t *tmpfname_new (char *dname, char *prefix) {
+  static unsigned int seed = 12252;
+  if (NULL is dname) return NULL;
+  ifnot (is_directory (dname)) return NULL;
+
+  tmpfname_t *this = NULL;
+
+  char bpid[6];
+  pid_t pid = getpid ();
+  itoa ((int) pid, bpid, 10);
+
+  int len = bytelen (dname) + bytelen (bpid) + bytelen (prefix) + 10;
+
+  char name[len];
+  snprintf (name, len, "%s/%s-%s.xxxxxx", dname, prefix, bpid);
+
+  srand ((unsigned int) time (NULL) + (unsigned int) pid + seed++);
+
+  dirlist_t *dlist = dirlist (dname, 0);
+  if (NULL is dlist) return NULL;
+
+  int
+    found = 0,
+    loops = 0,
+    max_loops = 1024,
+    inner_loops = 0,
+    max_inner_loops = 1024;
+  char c;
+
+  while (1) {
+again:
+    found = 0;
+    if (++loops is max_loops) goto theend;
+
+    for (int i = 0; i < 6; i++) {
+      inner_loops = 0;
+      while (1) {
+        if (++inner_loops is max_inner_loops) goto theend;
+
+        c = (char) (rand () % 123);
+        if ((c <= 'z' and c >= 'a') or (c >= '0' and c <= '9') or
+            (c >= 'A' and c <= 'Z') or c is '_') {
+          name[len - i - 2] = c;
+          break;
+        }
+      }
+    }
+
+    vstring_t *it = dlist->list->head;
+    while (it) {
+      if (str_eq (name, it->data->bytes)) goto again;
+      it = it->next;
+    }
+
+    found = 1;
+    break;
+  }
+
+  ifnot (found) goto theend;
+
+  this = AllocType (tmpfname);
+  this->fd = open (name, O_RDWR|O_CREAT|O_EXCL, S_IRUSR|S_IWUSR);
+
+  if (-1 is this->fd) goto theerror;
+  if (-1 is fchmod (this->fd, 0600)) {
+    close (this->fd);
+    goto theerror;
+  }
+
+  this->fname = string_new_with (name);
+  goto theend;
+
+theerror:
+  ifnot (NULL is this) {
+    tmpfname_free (this);
+    this = NULL;
+  }
+
+theend:
+  dlist->free (dlist);
+  return this;
+}
+
 public file_T __init_file__ (void) {
   return ClassInit (file,
     .self = SelfInit (file,
@@ -1792,7 +1885,11 @@ public file_T __init_file__ (void) {
       .is_reg = file_is_reg,
       .readlines = file_readlines,
       .write = file_write,
-      .append = file_append
+      .append = file_append,
+      .tmpfname = SubSelfInit (file, tmpfname,
+        .new = tmpfname_new,
+        .free = tmpfname_free
+      )
     )
   );
 }
@@ -1892,98 +1989,6 @@ public dir_T __init_dir__ (void) {
       .current = dir_current
     )
   );
-}
-
-private void tmpfname_free (tmpname_t *this) {
-  ifnot (this) return;
-  ifnot (NULL is this->fname) {
-    unlink (this->fname->bytes);
-    string_free (this->fname);
-    this->fname = NULL;
-  }
-  free (this);
-}
-
-private tmpname_t *tmpfname (char *dname, char *prefix) {
-  static unsigned int seed = 12252;
-  ifnot (is_directory (dname)) return NULL;
-
-  tmpname_t *this = NULL;
-
-  char bpid[6];
-  pid_t pid = getpid ();
-  itoa ((int) pid, bpid, 10);
-
-  int len = bytelen (dname) + bytelen (bpid) + bytelen (prefix) + 10;
-
-  char name[len];
-  snprintf (name, len, "%s/%s-%s.xxxxxx", dname, prefix, bpid);
-
-  srand ((unsigned int) time (NULL) + (unsigned int) pid + seed++);
-
-  dirlist_t *dlist = dirlist (dname, 0);
-  if (NULL is dlist) return NULL;
-
-  int
-    found = 0,
-    loops = 0,
-    max_loops = 1024,
-    inner_loops = 0,
-    max_inner_loops = 1024;
-  char c;
-
-  while (1) {
-again:
-    found = 0;
-    if (++loops is max_loops) goto theend;
-
-    for (int i = 0; i < 6; i++) {
-      inner_loops = 0;
-      while (1) {
-        if (++inner_loops is max_inner_loops) goto theend;
-
-        c = (char) (rand () % 123);
-        if ((c <= 'z' and c >= 'a') or (c >= '0' and c <= '9') or
-            (c >= 'A' and c <= 'Z') or c is '_') {
-          name[len - i - 2] = c;
-          break;
-        }
-      }
-    }
-
-    vstring_t *it = dlist->list->head;
-    while (it) {
-      if (str_eq (name, it->data->bytes)) goto again;
-      it = it->next;
-    }
-
-    found = 1;
-    break;
-  }
-
-  ifnot (found) goto theend;
-
-  this = Alloc (sizeof (tmpname_t));
-  this->fd = open (name, O_RDWR|O_CREAT|O_EXCL, S_IRUSR|S_IWUSR);
-
-  if (-1 is this->fd) goto theerror;
-  if (-1 is fchmod (this->fd, 0600)) {
-    close (this->fd);
-    goto theerror;
-  }
-
-  this->fname = string_new_with (name);
-  goto theend;
-
-theerror:
-  ifnot (NULL is this) {
-    tmpfname_free (this);
-    this = NULL;
-  }
-
-theend:
-  dlist->free (dlist);
-  return this;
 }
 
 /* a pointer to (base) name, i wonder if this is safe */
@@ -3943,12 +3948,14 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
 }
 
 private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
+  if (NULL is name) return FTYPE_DEFAULT;
+
   for (int i = 0; i < $my(num_syntaxes); i++) {
     if (str_eq ($my(syntaxes)[i].filetype, name))
       return i;
   }
 
-  return 0;
+  return FTYPE_DEFAULT;
 }
 
 private ftype_t *buf_syn_init_c (buf_t *this) {
@@ -4652,7 +4659,7 @@ private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
         $my(cur_video_row) + 1;
   }
 
-  if (col > $my(dim)->num_cols) col = 1;
+  if (col > (int) $mycur(data)->num_bytes) col = 1;
   $my(video)->col_pos = $my(cur_video_col) = col;
   return this->cur_idx;
 }
@@ -4707,9 +4714,17 @@ private int buf_set_fname (buf_t *this, char *filename) {
   string_t *fname = $my(shared_str);
   My(String).replace_with_len (fname, filename, len);
 
-  for (int i = len - 1; i > 0 /* at least a char */; i--) {
-    ifnot (fname->bytes[i] is DIR_SEP) break;
-    My(String).clear_at (fname, i);
+  /* normalize */
+  for (size_t i = 0; i < len; i++) {
+    if (fname->bytes[i] isnot DIR_SEP) continue;
+    i++;
+    while (i < len and fname->bytes[i] is DIR_SEP) {
+      My(String).delete_numbytes_at (fname, 1, i);
+      len--;
+    }
+  }
+  if (len > 1 and fname->bytes[len-1] is DIR_SEP) {
+    My(String).clear_at (fname, len-1);
     len--;
   }
 
@@ -5087,13 +5102,15 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   return this;
 }
 
-private buf_t *win_buf_new (win_t *w, char *fname, int at_frame, int flags) {
-  buf_t *this = win_buf_init (w, at_frame, flags);
+private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
+  buf_t *this = win_buf_init (win, opts.at_frame, opts.flags);
 
-  self(init_fname, fname);
-  self(set.ftype, FTYPE_DEFAULT);
-
+  self(init_fname, opts.fname);
+  self(set.ftype, opts.ftype);
   self(set.row.idx, 0, NO_OFFSET, 1);
+
+  ved_normal_goto_linenr (this, opts.at_linenr, DONOT_DRAW);
+  ved_normal_right (this, opts.at_column, DONOT_DRAW);
 
   return this;
 }
@@ -5143,10 +5160,10 @@ change:
   if ($my(flags) & FILE_EXISTS) {
     struct stat st;
     if (-1 is stat ($my(fname), &st)) {
-      VED_MSG_ERROR(MSG_FILE_REMOVED_FROM_FILESYSTEM);
+      VED_MSG_ERROR(MSG_FILE_REMOVED_FROM_FILESYSTEM, $my(fname));
     } else {
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec)
-        VED_MSG_ERROR(MSG_FILE_HAS_BEEN_MODIFIED);
+        VED_MSG_ERROR(MSG_FILE_HAS_BEEN_MODIFIED, $my(fname));
     }
   }
 
@@ -5425,7 +5442,9 @@ private buf_t *ved_special_buf (ed_t *this, char *wname, char *bname,
 
   buf_t *buf = My(Win).get.buf_by_name (w, bname, &idx);
   if (NULL is buf) {
-    buf = My(Win).buf.new (w, bname, at_frame, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
+      buf = My(Win).buf.new (w, QUAL(BUF_INIT,
+        .fname = bname, .at_frame = at_frame,
+        .flags = BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
     My(Win).append_buf (w, buf);
   }
 
@@ -5459,7 +5478,8 @@ private buf_t *ved_scratch_buf (ed_t *this) {
 
   buf_t *buf = My(Win).get.buf_by_name (w, VED_SCRATCH_BUF, &idx);
   if (NULL is buf) {
-    buf = My(Win).buf.new (w, VED_SCRATCH_BUF, 0, BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL);
+    buf = My(Win).buf.new (w, QUAL(BUF_INIT,
+      .fname = VED_SCRATCH_BUF, .flags = BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
     My(Win).append_buf (w, buf);
   }
 
@@ -6720,7 +6740,7 @@ private int ved_diff (buf_t **thisp, int to_stdout) {
   }
 
   ifnot (file_exists ($my(fname))) return NOTOK;
-  tmpname_t *tmpn = tmpfname ($myroots(env)->tmp_dir->bytes, $my(basename));
+  tmpfname_t *tmpn = tmpfname_new ($myroots(env)->tmp_dir->bytes, $my(basename));
   if (NULL is tmpn or -1 is tmpn->fd) return NOTOK;
   ved_write_to_fname (this, tmpn->fname->bytes, DONOT_APPEND, 0, this->num_items - 1, FORCE, VERBOSE_OFF);
   size_t len = $myroots(env)->diff_exec->num_bytes + tmpn->fname->num_bytes +
@@ -9281,7 +9301,8 @@ private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
 
     if ($my(at_frame) is frame) $my(flags) &= ~BUF_IS_VISIBLE;
 
-    buf_t *that = My(Win).buf.new (win, fname, frame, 0);
+    buf_t *that = My(Win).buf.new (win, QUAL(BUF_INIT,
+      .fname = fname, .at_frame = frame));
     current_list_set (that, 0);
 
     int cur_idx = win->cur_idx;
@@ -10267,6 +10288,7 @@ redo:;
 
   My(String).replace_numbytes_at_with ($mycur(data), orig_len, fidx,
       $my(shared_str)->bytes);
+
   $my(flags) |= BUF_IS_MODIFIED;
   ved_normal_end_word (thisp, 1, 0, DONOT_DRAW);
   self(draw_cur_row);
@@ -13789,7 +13811,8 @@ private ed_T *editor_new (char *name) {
           .eof = ved_normal_eof,
           .down = ved_normal_down,
           .up = ved_normal_up,
-          .page_down = ved_normal_page_down
+          .page_down = ved_normal_page_down,
+          .goto_linenr = ved_normal_goto_linenr
         ),
         .draw = buf_draw,
         .flush = buf_flush,

@@ -78,7 +78,7 @@ static ed_T *E = NULL;
 
 char *mail_hdrs_keywords[] = {
   "Subject K", "From K", "To: K", "Date: K", "Reply-To: K", "Cc: K", "cc: K",
-  "Message-KD: K", "Message-Kd: K", "User-Agent: K", "X-Mailer: K", "Bc: K", "bc: K",
+  "Message-ID: K", "Message-id: K", "User-Agent: K", "X-Mailer: K", "Bc: K", "bc: K",
   "Mail-Followup-To: K", "Reply-to: K", NULL};
 
 char *__mail_NULL_ARRAY[] = {NULL};
@@ -471,7 +471,7 @@ int main (int argc, char **argv) {
       if (E->num_items is 1) {
         this = Ed.new (E, 1);
         w = Ed.get.current_win (this);
-        buf = Win.buf.new (w, NULL, FIRST_FRAME, ZERO_FLAGS);
+        buf = Win.buf.new (w, QUAL(BUF_INIT));
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {

@@ -110,13 +110,13 @@ int main (int argc, char **argv) {
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = Win.buf.new (w, NULL, FIRST_FRAME, 0);
+    buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL());
     Win.append_buf (w, buf);
   } else
     /* else create a new buffer for every file in the argvlist
      * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
-      buf_t *buf = Win.buf.new (w, argv[i], FIRST_FRAME, 0);
+      buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT, .fname = argv[i]));
       Win.append_buf (w, buf);
     }
 
@@ -137,7 +137,7 @@ int main (int argc, char **argv) {
         /* as an example, we simply create another independed instance */
         this = Ed.new (E, 1);
         w = Ed.get.current_win (this);
-        buf = Win.buf.new (w, NULL, FIRST_FRAME, 0);
+        buf = Win.buf.new (w, BUF_INIT_QUAL());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {

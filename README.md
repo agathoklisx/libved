@@ -1430,23 +1430,23 @@ Search:
 
     API:
       Functions:
-    Many of the exposed functions are not safe, especially for C strings. They most
-    made for internal usage, that the data is controlled by the itself code, but were
-    made also exposable. Normally, if it wasn't for the extra verbosity, they should
-    be post-fixed with an "_un" to denote this unsafety.
+    Many of the exposed functions are not safe, especially those for C strings. They
+    most made for internal usage, that the data is controlled by the itself code, but
+    were made also exposable. But normally, if it wasn't for the extra verbosity, they
+    should be post-fixed with an "_un" to denote this unsafety.
 
     Also it has to be realized, that the intentions to use internal functions that have
-    similar functionality with standard libc functions, is not obviously the speed, which
-    can not compare with the optimized functions from libc (but here we have to deal
-    with mostly small strings, that the difference in execution, perhaps is negligible),
-    are:
+    similar functionality with standard libc functions, are not obviously the speed (
+    which can not be compared with the optimized functions from libc (here we have to 
+    deal with mostly small strings, that the difference in execution time, perhaps is
+    negligible though)), but:
 
       - flexibility, as we can tune, by avoiding un-needed checks (since we are making
         these strings, and if we don't make them well, then it is our fault, in any case
         wrong composed strings will fail even in libc functions), and even change the
         signature of the function. Because of this flexibility, then actually we can
         even have a gain in speed, because the conditional checks might be the biggest
-        bottleneck actually).
+        bottleneck actually in the language (perhaps)).
 
       - self-sufficiency and minimizing of dependencies. I hate to say that, but libces
         are huge beasts for primitive environments. And I even hate to say that, because
@@ -1462,8 +1462,8 @@ Search:
         in a so fragile situation, that in a glance of an eye, the time will out, and
         secondly, and i'm positive, that the universe plays very strange games with us).
 
-          - As a duty to next humans to come. Really there is not so much to say to
-            them, but probably something like this:
+            As a duty to next humans to come.
+            Really there is not so much to tell them, than probably something like this:
 
             "Look around". "It is You and the Outside of You". "You own a planet.
             Noone else lives in that planet but you."
@@ -1477,15 +1477,18 @@ Search:
             important like all the others.
             Your planet is important. You really want the best for this planet as You
             are the keeper for this planet. You really want to have total control over
-            the environment of your planet, you really want to be healthy.
+            the environment of your planet, you really want your planet healthy.
+
             We want the same.
+
             And it is wise and really smart for You, to feel the same for Us. As the
             outiside of You is equally important with You. Though the You - and this
             by default - will always prioritize the self, usually without even the
             self realize it..., it is this magnificent undescrible structure that is
-            the real treasure (and for you); so this is also equally important with
-            You.
-            It is unthinkable important. As this might? is the way to an eternal -
+            the real treasure (and this is for you and this is for me and this is for
+            all); so this is also (total) equally important with You.
+
+            And it is unthinkable important. As this might? is a way to an eternal -
               (where eternal here might translated accurately as "aenaos - αέναος",
                something that has no start as no end in time, it is just this) -
             evolve, so the way to self evolution with no real END defined - even if
@@ -1495,7 +1498,7 @@ Search:
             Probably just because there is this capability, perhaps it is the only
             required capability. So probably there is a right when we say that the
             Will builds the required chains, by just using the mechanism, which is
-            probably free (as free beer here mostly, probably).
+            probably free (as free beer here mostly, ... probably).
 
             So is this web of bridges to each other planets that matters for our ash.
             Because we are alone. As even the paradise is a hell when you are alone."

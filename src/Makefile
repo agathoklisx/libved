@@ -35,7 +35,9 @@ THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
-DEBUG_FLAGS := -Wextra -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
+DEBUG_FLAGS := -Wextra -Wno-override-init -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
+# -Wno-override-init: is for designated initializers and included in Wextra
+
 # -fsanitize=undefined
 # -Wpedantic if turn on this gives: ISO C forbids braced-groups within expressions
 

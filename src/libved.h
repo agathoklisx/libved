@@ -72,6 +72,7 @@
 #define NAME_MAX 255  /* bytes in a file name */
 #endif
 
+#define MAXLEN_PATH        PATH_MAX
 #define MAXLEN_LINE        4096
 #define MAXLEN_WORD        256
 #define MAXLEN_ERR_MSG     256
@@ -609,6 +610,11 @@ NewType (dirlist,
   void (*free) (dirlist_t *);
 );
 
+NewType (tmpfname,
+  int fd;
+  string_t *fname;
+);
+
 NewType (fp,
   FILE   *fp;
   size_t  num_bytes;
@@ -650,6 +656,26 @@ NewType (bufiter,
   row_t *row;
   string_t *line;
 );
+
+NewType (buf_init_opts,
+   win_t *win;
+
+   char *fname;
+   int
+     flags,
+     ftype,
+     at_frame,
+     at_linenr,
+     at_column;
+);
+
+/* QUALIFIERS (quite ala S_Lang (in C they have to be declared though)) */
+#define QUAL(__qual, ...) __qual##_QUAL (__VA_ARGS__)
+
+#define BUF_INIT_OPTS Type (buf_init_opts)
+#define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {                             \
+  .at_frame = 0, .at_linenr = 1, .at_column = 1, .ftype = FTYPE_DEFAULT, \
+  .flags = 0, .fname = UNAMED, __VA_ARGS__}
 
 NewType (vchar,
   utf8 code;
@@ -966,7 +992,14 @@ NewClass (error,
   Self (error) self;
 );
 
+NewSubSelf (file, tmpfname,
+  tmpfname_t *(*new) (char *, char *);
+  void (*free) (tmpfname_t *);
+);
+
 NewSelf (file,
+  SubSelf (file, tmpfname) tmpfname;
+
   int
     (*exists) (const char *),
     (*is_readable) (const char *),
@@ -1168,7 +1201,8 @@ NewSubSelf (buf, normal,
     (*down) (buf_t *, int, int, int),
     (*bof) (buf_t *, int),
     (*eof) (buf_t *, int),
-    (*page_down) (buf_t *, int);
+    (*page_down) (buf_t *, int),
+    (*goto_linenr) (buf_t *, int, int);
 );
 
 NewSelf (buf,
@@ -1240,7 +1274,7 @@ NewSubSelf (win, pop,
 NewSubSelf (win, buf,
   buf_t
     *(*init) (win_t *, int, int),
-    *(*new) (win_t *, char *, int, int);
+    *(*new) (win_t *, BUF_INIT_OPTS);
 );
 
 NewSubSelf (win, frame,

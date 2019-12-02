@@ -274,11 +274,6 @@ NewType (term,
   Prop (term) *prop;
 );
 
-NewType (tmpname,
-  int fd;
-  string_t *fname;
-);
-
 NewType (video,
   vstring_t *head;
   vstring_t *tail;
@@ -828,6 +823,8 @@ NewProp (ed,
 
 private int ved_quit (ed_t *, int);
 private int ved_normal_goto_linenr (buf_t *, int, int);
+private int ved_normal_left (buf_t *, int, int);
+private int ved_normal_right (buf_t *, int, int);
 private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
 private int ved_normal_eol (buf_t *);
@@ -860,6 +857,8 @@ private int ed_win_change (ed_t *, buf_t **, int, char *, int, int);
 private int fd_read (int, char *, size_t);
 private string_t *vsys_which (char *, char *);
 private void vundo_clear (buf_t *);
+private int is_directory (char *);
+private dirlist_t *dirlist (char *, int);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

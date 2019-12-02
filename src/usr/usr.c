@@ -60,7 +60,8 @@ the needs and establish this application layer */
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
                                       bufiter_t *it, char *word, utf8 c, char *action) {
-  (void) fidx; (void) lidx; (void) action;
+  (void) fidx; (void) lidx; (void) action; (void) it; (void) word; (void) thisp;
+
   int retval = NOTOK;
   (void) retval; // gcc complains here for no reason
   switch (c) {
@@ -473,7 +474,7 @@ private int __u_open_link_on_browser (buf_t *this) {
    link[re->match_len] = '\0';
 
    /* this seems unneccecary and might give troubles */
-   // com = String.new_with_fmt ("%s -remote \"ping()\"", Lenv->elinks_exec->bytes);
+   // com = String.new_with_fmt ("%s -remote \"ping()\"", Uenv->elinks_exec->bytes);
 
    com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
       Uenv->elinks_exec->bytes, link);
