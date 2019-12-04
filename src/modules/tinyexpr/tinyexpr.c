@@ -593,19 +593,19 @@ te_expr *te_compile(const char *expression, const te_variable *variables, int va
     s.lookup_len = var_count;
 
     next_token(&s);
-    te_expr *root = list(&s);
+    te_expr *expr = list(&s);
 
     if (s.type != TOK_END) {
-        te_free(root);
+        te_free(expr);
         if (error) {
             *error = (s.next - s.start);
             if (*error == 0) *error = 1;
         }
         return 0;
     } else {
-        optimize(root);
+        optimize(expr);
         if (error) *error = 0;
-        return root;
+        return expr;
     }
 }
 

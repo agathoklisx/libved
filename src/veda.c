@@ -61,6 +61,13 @@ static ed_T *E = NULL;
 #include "local/local.c"
 #endif
 
+#include "lib/argparse/argparse.c"
+
+static const char *const usage[] = {
+    "veda [options] [filename]",
+    NULL,
+};
+
 int main (int argc, char **argv) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */
@@ -73,7 +80,23 @@ int main (int argc, char **argv) {
 
   AllocErrorHandler = __alloc_error_handler__;
 
-  ++argv; --argc;
+  char *ftype = NULL;
+  int filetype = FTYPE_DEFAULT;
+  int linenr = 0;
+  int column = 1;
+
+  struct argparse_option options[] = {
+    OPT_HELP (),
+    OPT_GROUP("Options:"),
+    OPT_INTEGER('+', "line-nr", &linenr, "start at line number", NULL, 0, SHORT_OPT_HAS_NO_DASH),
+    OPT_INTEGER(0, "column", &column, "set pointer at column", NULL, 0, 0),
+    OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
+    OPT_END(),
+  };
+
+  struct argparse argparse;
+  argparse_init(&argparse, options, usage, 0);
+  argc = argparse_parse(&argparse, argc, (const char **) argv);
 
   if (NULL is (E = __init_ed__ ()))
     return 1;
@@ -104,6 +127,8 @@ int main (int argc, char **argv) {
   __init_local__ (this);
 #endif
 
+  filetype = Ed.syn.get_ftype_idx (this, ftype);
+
 /* at the begining at least a win_t type is allocated */
   win_t *w = Ed.get.current_win (this);
 
@@ -116,7 +141,13 @@ int main (int argc, char **argv) {
     /* else create a new buffer for every file in the argvlist
      * (assumed files for simplification without an arg-parser) */
     for (int i = 0; i < argc; i++) {
-      buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT, .fname = argv[i]));
+      buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
+        .fname = argv[i],
+        .ftype = filetype,
+        .at_frame = FIRST_FRAME,
+        .at_linenr = linenr,
+        .at_column = column));
+
       Win.append_buf (w, buf);
     }
 
