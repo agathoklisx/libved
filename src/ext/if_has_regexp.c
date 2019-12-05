@@ -26,7 +26,7 @@ int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
   return retval;
 }
 
-private int my_re_compile (regexp_t *re) {
+private int ext_re_compile (regexp_t *re) {
   ifnot (Cstring.cmp_n (re->pat->bytes, "(?i)", 4)) {
     re->flags |= RE_IGNORE_CASE;
     String.delete_numbytes_at (re->pat, 4, 0);
@@ -35,7 +35,7 @@ private int my_re_compile (regexp_t *re) {
   return OK;
 }
 
-private int my_re_exec (regexp_t *re, char *buf, size_t buf_len) {
+private int ext_re_exec (regexp_t *re, char *buf, size_t buf_len) {
   re->retval = RE_NO_MATCH;
   if (re->pat->num_bytes is 1 and
      (re->pat->bytes[0] is '^' or
@@ -70,7 +70,7 @@ theend:
   return re->retval;
 }
 
-private string_t *my_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
+private string_t *ext_re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
   string_t *substr = String.new_with (NULL);
 
   char *sub_p = sub;
@@ -138,11 +138,3 @@ theerror:
   String.free (substr);
   return NULL;
 }
-
-/*
-#ifdef HAS_REGEXP
-  My(Re).exec = my_re_exec;
-  My(Re).parse_substitute = my_re_parse_substitute;
-  My(Re).compile = my_re_compile;
-#endif
-*/

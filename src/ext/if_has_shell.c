@@ -12,7 +12,7 @@ private int proc_output_to_stdout (buf_t *this, fp_t *fp) {
   return 0;
 }
 
-private int my_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
+private int ext_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
 
   int retval = NOTOK;
@@ -53,9 +53,3 @@ theend:
   Win.draw (w);
   return retval;
 }
-
-/*
-#ifdef HAS_SHELL_COMMANDS
-  Ed.sh.popen = my_ed_sh_popen;
-#endif
- */

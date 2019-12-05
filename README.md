@@ -1005,6 +1005,16 @@ Search:
   */
 
 /* Application Interface.
+    This library can be used with two ways:
+
+      - copy libved.c libved.h and __libved.h to the project directory
+        and #include libved.h and either #include libved.c or compile it
+        at the same compiler invocation
+
+      - link against the shared or static library and use -lved during
+        compilation (if the library was installed in a not standard location
+        use -L/dir/where/libved/was/installed)
+
     The library exposes an enormous root struct, two de|init public functions
     that de|initialize the structure and quite a lot of opaque pointers.
 
@@ -1141,6 +1151,12 @@ Search:
    unexpected behavior in this implementation. To disable these features (as they
    are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
 
+   Invocation.
+   Options:
+    +, --line-nr=<int>    start at line number
+    --column=<int>        set pointer at column
+    --ftype=<str>         set the file type
+
    But see the src/usr/usr.c for more up to date commands or extensions, as this
    unit is meant as testing field.
  */
@@ -1178,7 +1194,7 @@ Search:
    we (humans) full of the gained conscience, can guard it and keep it safe, as it
    is also (besides ideology) the road to paradise.
 
-   Any way.
+   Anyway.
    Since it seems there is no other way, other than to specify a license to avoid
    stupid, stupid troubles, is licensed under GPL2, but my mind still refuces and
    with a huge right, to accept this word (at least in this domain and at this time
@@ -1293,6 +1309,7 @@ Search:
   - jsmn (json decoder) (https://github.com/zserge/jsmn)
   - jsmn-example (the state machine for jsmn) (https://github.com/alisdair/jsmn-example)
   - tinyexpr (https://github.com/codeplea/tinyexpr)
+  - argparse (https://github.com/cofyc/argparse)
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
  */
@@ -1328,7 +1345,8 @@ Search:
    (something like the Linux kernel or gnu-lib projects do).
 
    It could be great if the programmer could extract the specific code and hook it to
-   his program, so it could optimize it for the specific environment. As an example:
+   his program, so it could optimize it for the specific environment.
+   As an example:
    At the beginning this program implemented the strdup() function with the standard
    signature, having as "const char *src" as the only argument. Since this function
    it returns an allocated string, it should iterate over the "src" string to find its

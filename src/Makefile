@@ -9,9 +9,11 @@ THISDIR := $(shell realpath .)
 
 THIS_LIBVERS  :=  $(API).$(REV)
 
-THIS_HEADER   :=  lib$(THIS_LIBNAME).h
-THIS_LIBSRC   :=  lib$(THIS_LIBNAME).c
-THIS_LIB      :=  lib$(THIS_LIBNAME)-$(THIS_LIBVERS)
+THIS_HEADER     = lib$(THIS_LIBNAME).h
+THIS_HEADER_EXT = lib$(THIS_LIBNAME)+.h
+THIS_LIBSRC     = lib$(THIS_LIBNAME).c
+LIBNAME         = $(THIS_LIBNAME)-$(THIS_LIBVERS)
+THIS_LIB        = lib$(LIBNAME)
 
 CC            := gcc
 CC_STD        := -std=c11
@@ -28,10 +30,8 @@ SYSDATADIR := $(SYSDIR)/data
 SYSTMPDIR  := $(SYSDIR)/tmp
 
 #----------------------------------------------------------#
-LIBNAME        := $(THIS_LIBNAME)-$(THIS_LIBVERS)
-
 THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
-THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
+THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
@@ -138,6 +138,7 @@ prereq: Env
 shared: prereq $(THIS_SHAREDLIB) header
 $(THIS_SHAREDLIB):
 	$(CC) -x c $(THIS_LIBSRC) $(LIBFLAGS) $(SHARED_CFLAGS) -o $(THIS_SHAREDLIB)
+	@$(LN_S) -vf $(THIS_SHAREDLIB) $(SYSLIBDIR)/lib$(THIS_LIBNAME).so
 
 static: prereq $(THIS_STATICLIB) header
 $(THIS_STATICLIB):
@@ -145,9 +146,11 @@ $(THIS_STATICLIB):
 	@$(AR) $(THIS_STATICLIB) $(THIS_LIB).o
 	@$(RM) $(THIS_LIB).o
 
-header: $(SYSINCDIR)/$(THIS_HEADER)
+header: $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 $(SYSINCDIR)/$(THIS_HEADER):
 	@$(CP) $(THIS_HEADER) $(SYSINCDIR)
+$(SYSINCDIR)/$(THIS_HEADER_EXT):
+	@$(CP) $(THIS_HEADER_EXT) $(SYSINCDIR)
 
 preproc:
 	$(CC) -x c $(THIS_LIBSRC) $(LIBFLAGS) $(SHARED_CFLAGS) -E
@@ -159,6 +162,7 @@ clean_static: clean_header
 	@$(TEST) ! -f $(THIS_STATICLIB) || $(RM) $(THIS_STATICLIB)
 clean_header:
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER) || $(RM) $(SYSINCDIR)/$(THIS_HEADER)
+	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 
 #----------------------------------------------------------#
 EDNAME := veda
@@ -172,16 +176,23 @@ SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
 SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
-APPFLAGS    := -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(LIBNAME)
+APPFLAGS = lib/argparse/argparse.c libved+.c
+APPFLAGS += -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
 
 HAS_LOCAL_EXTENSIONS := 0
 LOCAL_EXTENSIONS_FLAGS :=
 
 ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
-  APPFLAGS += -DHAS_LOCAL_EXTENSIONS
   ifdef LOCAL_EXTENSIONS_FLAGS
     APPFLAGS += $(LOCAL_EXTENSIONS_FLAGS)
   endif
+  APPFLAGS += -DHAS_LOCAL_EXTENSIONS
+endif
+
+VED_APPLICATION_FLAGS :=
+
+ifdef VED_APPLICATION_FLAGS
+  APPFLAGS += $(VED_APPLICATION_FLAGS)
 endif
 
 ifneq ($(HAS_REGEXP), 0)
@@ -229,12 +240,6 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
 
 endif
 
-VED_APPLICATION_FLAGS :=
-
-ifdef VED_APPLICATION_FLAGS
-  APPFLAGS += $(VED_APPLICATION_FLAGS)
-endif
-
 APPFLAGS += $(FLAGS)
 
 veda-all: veda-static veda-shared
@@ -271,6 +276,7 @@ MKDIR = mkdir
 MKDIR_P = $(MKDIR) -p
 CP = cp
 CP_R = $(CP) -r
+LN_S = ln -s
 INSTALL = install
 MAKE = make
 VALGRIND = valgrind

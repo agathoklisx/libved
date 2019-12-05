@@ -42,39 +42,7 @@
 #include <errno.h>
 
 #include <libved.h>
-
-static ed_T *E = NULL;
-
-#define Ed      E->self
-#define Cstring E->Cstring.self
-#define Vstring E->Vstring.self
-#define Ustring E->Ustring.self
-#define String  E->String.self
-#define Rline   E->Rline.self
-#define Error   E->Error.self
-#define Vsys    E->Vsys.self
-#define Venv    E->Venv.self
-#define Term    E->Term.self
-#define Input   E->Input.self
-#define File    E->File.self
-#define Path    E->Path.self
-#define Buf     E->Buf.self
-#define Win     E->Win.self
-#define Msg     E->Msg.self
-#define Dir     E->Dir.self
-#define Re      E->Re.self
-
-#define $myed E->current
-
-#include "../../ext/if_has_regexp.c"
-#include "../../ext/if_has_shell.c"
-#include "../../handlers/sigwinch_handler.c"
-#include "../../handlers/alloc_err_handler.c"
-#include "../../usr/usr.c"
-
-#ifdef HAS_LOCAL_EXTENSIONS
-#include "../../local/local.c"
-#endif
+#include <libved+.h>
 
 char *mail_hdrs_keywords[] = {
   "Subject K", "From K", "To: K", "Date: K", "Reply-To: K", "Cc: K", "cc: K",
@@ -438,22 +406,13 @@ int main (int argc, char **argv) {
 
   AllocErrorHandler = __alloc_error_handler__;
 
-  ++argv; --argc;
+  argc--; argv++;
 
   if (NULL is (E = __init_ed__ ())) return 1;
 
-  Re.exec = my_re_exec;
-  Re.parse_substitute = my_re_parse_substitute;
-  Re.compile = my_re_compile;
-  Ed.sh.popen = my_ed_sh_popen;
-
   ed_t *this = Ed.init (E);
 
-  __init_usr__ (this);
-
-#ifdef HAS_LOCAL_EXTENSIONS
-  __init_local__ (this);
-#endif
+  __init_ext__ (E, this);
 
   int retval = 1;
 
@@ -482,12 +441,7 @@ int main (int argc, char **argv) {
 
  Ed.history.write (this, VED_DATA_DIR);
 
-  __deinit_usr__ (this);
-
-#ifdef HAS_LOCAL_EXTENSIONS
-  __deinit_local__ (this);
-#endif
-
+  __deinit_ext__ (this);
   __deinit_ed__ (E);
 
   return retval;

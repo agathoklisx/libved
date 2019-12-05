@@ -4659,7 +4659,8 @@ private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
         $my(cur_video_row) + 1;
   }
 
-  if (col > (int) $mycur(data)->num_bytes) col = 1;
+  if (col > (int) $mycur(data)->num_bytes or col < 1)
+    col = 1;
   $my(video)->col_pos = $my(cur_video_col) = col;
   return this->cur_idx;
 }
@@ -5110,7 +5111,7 @@ private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
   self(set.row.idx, 0, NO_OFFSET, 1);
 
   ved_normal_goto_linenr (this, opts.at_linenr, DONOT_DRAW);
-  ved_normal_right (this, opts.at_column, DONOT_DRAW);
+  ved_normal_right (this, opts.at_column - 1, DONOT_DRAW);
 
   return this;
 }

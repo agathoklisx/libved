@@ -15,53 +15,7 @@
 #include <errno.h>
 
 #include <libved.h>
-
-static ed_T *E = NULL;
-
-#define Ed      E->self
-#define Cstring E->Cstring.self
-#define Ustring E->Ustring.self
-#define Vstring E->Vstring.self
-#define String  E->String.self
-#define Rline   E->Rline.self
-#define Error   E->Error.self
-#define Vsys    E->Vsys.self
-#define Venv    E->Venv.self
-#define Term    E->Term.self
-#define Input   E->Input.self
-#define File    E->File.self
-#define Path    E->Path.self
-#define Buf     E->Buf.self
-#define Win     E->Win.self
-#define Msg     E->Msg.self
-#define Dir     E->Dir.self
-#define Re      E->Re.self
-
-#define $myed E->current
-
-/* Here, we enable regexp support by overiding structure fields, the
- * interface is exactly the same */
-#ifdef HAS_REGEXP
-#include "ext/if_has_regexp.c"
-#endif /* HAS_REGEXP */
-
-/* Here we enable the :r! cmd and :!cmd commands */
-#ifdef HAS_SHELL_COMMANDS
-#include "ext/if_has_shell.c"
-#endif   /* HAS_SHELL_COMMANDS */
-
-#include "handlers/sigwinch_handler.c"
-#include "handlers/alloc_err_handler.c"
-
-#ifdef HAS_USER_EXTENSIONS
-#include "usr/usr.c"
-#endif
-
-#ifdef HAS_LOCAL_EXTENSIONS
-#include "local/local.c"
-#endif
-
-#include "lib/argparse/argparse.c"
+#include <libved+.h>
 
 static const char *const usage[] = {
     "veda [options] [filename]",
@@ -103,28 +57,10 @@ int main (int argc, char **argv) {
 
   ed_t *this = Ed.new (E, 1);
 
-#ifdef HAS_REGEXP
-  Re.exec = my_re_exec;
-  Re.parse_substitute = my_re_parse_substitute;
-  Re.compile = my_re_compile;
-#endif
-
-#ifdef HAS_SHELL_COMMANDS
-  Ed.sh.popen = my_ed_sh_popen;
-#endif
+  __init_ext__ (E, this);
 
 #ifdef HAS_HISTORY
-  #ifdef VED_DATA_DIR
-    Ed.history.read (this, VED_DATA_DIR);
-  #endif
-#endif
-
-#ifdef HAS_USER_EXTENSIONS
-  __init_usr__ (this);
-#endif
-
-#ifdef HAS_LOCAL_EXTENSIONS
-  __init_local__ (this);
+  Ed.history.read (this, VED_DATA_DIR);
 #endif
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
@@ -138,8 +74,7 @@ int main (int argc, char **argv) {
     buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL());
     Win.append_buf (w, buf);
   } else
-    /* else create a new buffer for every file in the argvlist
-     * (assumed files for simplification without an arg-parser) */
+    /* else create a new buffer for every file in the argvlist */
     for (int i = 0; i < argc; i++) {
       buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
         .fname = argv[i],
@@ -179,19 +114,10 @@ int main (int argc, char **argv) {
   }
 
 #ifdef HAS_HISTORY
-  #ifdef VED_DATA_DIR
-    Ed.history.write (this, VED_DATA_DIR);
-  #endif
+  Ed.history.write (this, VED_DATA_DIR);
 #endif
 
-#ifdef HAS_USER_EXTENSIONS
-  __deinit_usr__ (this);
-#endif
-
-#ifdef HAS_LOCAL_EXTENSIONS
-  __deinit_local__ (this);
-#endif
-
+  __deinit_ext__ (this);
   __deinit_ed__ (E);
 
 /* the end */
