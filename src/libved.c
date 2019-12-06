@@ -1982,11 +1982,135 @@ private dirlist_t *dirlist (char *dir, int flags) {
   return dlist;
 }
 
+private void dir_walk_free (dirwalk_t **thisp) {
+  if (NULL is thisp) return;
+  dirwalk_t *this = *thisp;
+  vstr_free (this->files);
+  string_free (this->dir);
+  free (this);
+  *thisp = NULL;
+}
+
+private int dir_walk_process_dir_def (dirwalk_t *this, char *dir, struct stat *st) {
+  (void) st;
+  vstr_add_sort_and_uniq (this->files, dir);
+  return 1;
+}
+
+private int dir_walk_process_file_def (dirwalk_t *this, char *file, struct stat *st) {
+  (void) st;
+  vstr_add_sort_and_uniq (this->files, file);
+  return 1;
+}
+
+private dirwalk_t *dir_walk_new (DirProcessDir_cb process_dir, DirProcessFile_cb process_file) {
+  dirwalk_t *this = AllocType (dirwalk);
+  this->orig_depth = this->depth = 0;
+  this->dir = string_new (PATH_MAX);
+  this->files = vstr_new ();
+  this->process_dir = (NULL is process_dir ? dir_walk_process_dir_def : process_dir);
+  this->process_file = (NULL is process_file ? dir_walk_process_file_def : process_file);
+  this->stat_file = stat;
+  return this;
+}
+
+private int __dir_walk_run__ (dirwalk_t *this, char *dir) {
+  if (-1 is this->status) return this->status;
+
+  int depth = 0;
+  char *sp = dir;
+  while (*sp) {
+    if (*sp is DIR_SEP) depth++;
+    sp++;
+  }
+
+  depth -= this->orig_depth;
+
+  struct stat st;
+  ifnot (OK is (this->status = this->stat_file (dir, &st)))
+    return this->status;
+
+  ifnot (S_ISDIR (st.st_mode)) {
+    this->status = this->process_file (this, dir, &st);
+    return NOTOK;
+  }
+
+  if (depth >= this->depth) {
+    this->status = this->process_dir (this, dir, &st);
+    return OK;
+  }
+
+  DIR *dh = NULL;
+  if (NULL is (dh = opendir (dir))) return OK;
+  struct dirent *dp;
+
+  string_t *new = string_new (PATH_MAX);
+
+  while (1) {
+    errno = 0;
+    if (NULL is (dp = readdir (dh)))
+      break;
+
+    size_t len = bytelen (dp->d_name);
+
+    if (len < 3 and dp->d_name[0] is '.')
+      if (len is 1 or dp->d_name[1] is '.')
+        continue;
+
+    string_replace_with_fmt (new, "%s/%s", dir, dp->d_name);
+
+    switch (dp->d_type) {
+      case DT_DIR:
+      case DT_UNKNOWN:
+        this->status = this->process_dir (this, new->bytes, &st);
+        if (1 is this->status) {
+          __dir_walk_run__ (this, new->bytes);
+        } else if (-1 is this->status)
+          goto theend;
+        break;
+
+      default:
+        this->status = this->process_file (this, new->bytes, &st);
+        if (-1 is this->status)
+          goto theend;
+    }
+  }
+
+theend:
+  closedir (dh);
+  string_free (new);
+  return this->status;
+}
+
+private int dir_walk_run (dirwalk_t *this, char *dir) {
+  string_replace_with (this->dir, dir);
+  char *sp = dir;
+  size_t len = 0;
+  while (*sp) {
+    len++;
+    if (*sp is DIR_SEP) this->orig_depth++;
+    sp++;
+  }
+
+  if (dir[len-1] is DIR_SEP)
+    dir[len-1] = '\0';
+  else
+    this->orig_depth++;
+
+  __dir_walk_run__ (this, dir);
+  return OK;
+}
+
 public dir_T __init_dir__ (void) {
   return ClassInit (dir,
     .self = SelfInit (dir,
       .list = dirlist,
-      .current = dir_current
+      .current = dir_current,
+      .walk = SubSelfInit (dir, walk,
+        .free = dir_walk_free,
+        .new = dir_walk_new,
+        .run = dir_walk_run
+      )
     )
   );
 }
@@ -10955,7 +11079,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_DELETE_FORCE ... VED_COM_BUF_DELETE_ALIAS] = 1,
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = 1,
     [VED_COM_EDIT ... VED_COM_ENEW] = 1,
-    [VED_COM_GREP] = 2,
+    [VED_COM_GREP] = 3,
     [VED_COM_READ ... VED_COM_READ_ALIAS] = 1,
     [VED_COM_SPLIT] = 1,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] = 5,
@@ -10966,7 +11090,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_DELETE_FORCE ... VED_COM_BUF_DELETE_ALIAS] = RL_ARG_BUFNAME,
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = RL_ARG_BUFNAME,
     [VED_COM_EDIT ... VED_COM_ENEW] = RL_ARG_FILENAME,
-    [VED_COM_GREP] = RL_ARG_FILENAME|RL_ARG_PATTERN,
+    [VED_COM_GREP] = RL_ARG_FILENAME|RL_ARG_PATTERN|RL_ARG_RECURSIVE,
     [VED_COM_READ ... VED_COM_READ_ALIAS] = RL_ARG_FILENAME,
     [VED_COM_SPLIT] = RL_ARG_FILENAME,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] =
@@ -11950,11 +12074,37 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
           fnames = dlist->list;
         }
 
+        arg_t *rec = rline_get_arg (rl, RL_ARG_RECURSIVE);
+        dirwalk_t *dw = NULL;
+
+        ifnot (NULL is rec) {
+          dw = dir_walk_new (NULL, NULL);
+          dw->depth = DIRWALK_MAX_DEPTH;
+          vstring_t *it = fnames->head;
+          while (it) {
+            dir_walk_run (dw, it->data->bytes);
+            it = it->next;
+          }
+
+          ifnot (NULL is dlist) {
+            dlist->free (dlist);
+            dlist = NULL;
+          } else
+            vstr_free (fnames);
+
+          fnames = dw->files;
+        }
+
         retval = ved_grep (thisp, pat->argval->bytes, fnames);
         ifnot (NULL is dlist)
           dlist->free (dlist);
         else
-          vstr_free (fnames);
+          if (NULL is dw)
+            vstr_free (fnames);
+
+        ifnot (NULL is dw)
+          dir_walk_free (&dw);
+
       }
       goto theend;
 

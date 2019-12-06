@@ -12,6 +12,7 @@
 #include <string.h>
 #include <signal.h>
 #include <locale.h>
+#include <sys/stat.h>
 #include <errno.h>
 
 #include <libved.h>

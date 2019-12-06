@@ -82,6 +82,7 @@
 #define MAXLEN_WORD_ACTION 512
 #define MAX_SCREEN_ROWS    256
 #define MAXLEN_COM         32
+#define DIRWALK_MAX_DEPTH 1024
 
 #define OUTPUT_FD STDOUT_FILENO
 
@@ -494,6 +495,8 @@ DeclareType (dim);
 DeclareType (syn);
 DeclareType (fp);
 
+DeclareType (dirwalk);
+
 DeclareType (bufiter);
 DeclareType (buf);
 DeclareProp (buf);
@@ -532,6 +535,10 @@ typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalOng_cb) (buf_t **, int);
 typedef int  (*ReCompile_cb) (regexp_t *);
+typedef int  (*DirProcessDir_cb) (dirwalk_t *, char *, struct stat *);
+typedef int  (*DirProcessFile_cb) (dirwalk_t *, char *, struct stat *);
+typedef int  (*DirStatFile_cb) (const char *, struct stat *);
+
 typedef string_t *(Indent_cb) (buf_t *, row_t *);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 
@@ -608,6 +615,21 @@ NewType (dirlist,
   vstr_t *list;
   char dir[PATH_MAX];
   void (*free) (dirlist_t *);
+);
+
+NewType (dirwalk,
+  string_t *dir;
+
+  vstr_t *files;
+
+  int
+    orig_depth,
+    depth,
+    status;
+
+  DirProcessDir_cb process_dir;
+  DirProcessFile_cb process_file;
+  DirStatFile_cb stat_file;
 );
 
 NewType (tmpfname,
@@ -1031,7 +1053,14 @@ NewClass (path,
   Self (path) self;
 );
 
+NewSubSelf (dir, walk,
+  dirwalk_t *(*new) (DirProcessDir_cb, DirProcessFile_cb);
+  void (*free) (dirwalk_t **);
+  int (*run) (dirwalk_t *, char *);
+);
+
 NewSelf (dir,
+  SubSelf (dir, walk) walk;
   dirlist_t *(*list) (char *, int);
   char *(*current) (void);
 );

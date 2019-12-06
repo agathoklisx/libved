@@ -5,6 +5,7 @@
 #include <pty.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <errno.h>
 
 #include "libved.h"
@@ -25,7 +26,7 @@
   #include "ext/if_has_regexp.c"
 #endif
 
-#if HAS_SHELL
+#if HAS_SHELL_COMMANDS
   #include "ext/if_has_shell.c"
 #endif
 
@@ -38,7 +39,7 @@ private void __init_ext__ (Class (ed) *e, Type (ed) *this) {
   Re.compile = ext_re_compile;
 #endif
 
-#if HAS_SHELL
+#if HAS_SHELL_COMMANDS
   e->self.sh.popen = ext_ed_sh_popen;
 #endif
 
