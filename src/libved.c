@@ -1725,11 +1725,12 @@ private int file_is_elf (const char *file) {
   if (-1 is fd) return 0;
   int retval = 0;
   char buf[8];
-  ssize_t bts = fd_read (fd, buf, 4);
-  if (bts < 4) goto theend;
+  ssize_t bts = fd_read (fd, buf, 7);
   buf[bts] = '\0';
-  retval = str_eq (buf + 1, "ELF");
-theend:
+  retval = str_eq_n (buf + 1, "ELF", 3);
+  ifnot (retval) // static .a files magic number !<arch> (for archive)
+    retval = str_eq_n (buf, "!<arch>", 7);
+
   close (fd);
   return retval;
 }
@@ -4640,7 +4641,6 @@ private void buf_set_video_first_row (buf_t *this, int idx) {
    }
 }
 
-
 private row_t *buf_current_prepend (buf_t *this, row_t *row) {
   return current_list_prepend (this, row);
 }
@@ -6414,7 +6414,8 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
     if (file_exists (fname))
       ifnot (is_directory (fname))
         if (file_is_readable (fname))
-          ved_search_file (this, fname, re);
+          ifnot (file_is_elf (fname))
+            ved_search_file (this, fname, re);
     it = it->next;
   }
 
@@ -12096,6 +12097,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
         }
 
         retval = ved_grep (thisp, pat->argval->bytes, fnames);
+
         ifnot (NULL is dlist)
           dlist->free (dlist);
         else
@@ -12104,7 +12106,6 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
 
         ifnot (NULL is dw)
           dir_walk_free (&dw);
-
       }
       goto theend;
 
