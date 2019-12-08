@@ -119,16 +119,14 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
 }
 
 private ftype_t *__mail_hdrs_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "mail_hdrs"), NULL);
-  ft->tabwidth = 1;
-  ft->on_emptyline[0] = '\0';
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx ($myed, "mail_hdrs"),
+    QUAL(FTYPE, .tabwidth = 1, .on_emptyline = String.new (1)));
   return ft;
 }
 
 private ftype_t *__mail_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "mail"), NULL);
-  ft->tabwidth = 4;
-  ft->on_emptyline[0] = '\0';
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx ($myed, "mail"), QUAL(FTYPE,
+    .tabwidth = 4, .on_emptyline = String.new (1)));
   return ft;
 }
 

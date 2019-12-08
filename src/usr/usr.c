@@ -407,20 +407,19 @@ private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *
 }
 
 private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
-  return Buf.ftype.autoindent (this, row);
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun ($myed, "autoindent_default");
+  return autoindent_fun (this, row);
 }
 
 private ftype_t *__u_make_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "make"), __u_ftype_autoindent);
-  ft->tabwidth = 4;
-  ft->tab_indents = 0;
+  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx ($myed, "make"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_sh_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.init (this, Ed.syn.get_ftype_idx ($myed, "sh"), __u_ftype_autoindent);
-  ft->tabwidth = 4;
-  ft->tab_indents = 0;
+  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx ($myed, "sh"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 

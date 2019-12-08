@@ -4028,30 +4028,105 @@ private string_t *buf_autoindent_c (buf_t *this, row_t *row) {
   return $my(shared_str);
 }
 
-private ftype_t *buf_ftype_init (buf_t *this, int ftype, Indent_cb indent_cb) {
-  $my(ftype) = AllocType (ftype);
+private ftype_t *__ftype_new__ (syn_t *syn) {
+  ftype_t *this = AllocType (ftype);
+  str_cp (this->name, MAXLEN_FTYPE_NAME, syn->filetype, MAXLEN_FTYPE_NAME - 1);
+  return this;
+}
 
+private void buf_free_ftype (buf_t *this) {
+  if (this is NULL or $myprop is NULL or $my(ftype) is NULL) return;
+  string_free ($my(ftype)->on_emptyline);
+  free ($my(ftype));
+  $my(ftype) = NULL;
+}
+
+private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
+  if (NULL is name) return FTYPE_DEFAULT;
+
+  for (int i = 0; i < $my(num_syntaxes); i++) {
+    if (str_eq ($my(syntaxes)[i].filetype, name))
+      return i;
+  }
+
+  return FTYPE_DEFAULT;
+}
+
+private ftype_t *__ftype_set__ (ftype_t *this, ftype_t q) {
+  this->autochdir = q.autochdir;
+  this->shiftwidth = q.shiftwidth;
+  this->tabwidth = q.tabwidth;
+  this->clear_blanklines = q.clear_blanklines;
+  this->tab_indents = q.tab_indents;
+  this->cr_on_normal_is_like_insert_mode = q.cr_on_normal_is_like_insert_mode;
+  this->backspace_on_normal_is_like_insert_mode = q.backspace_on_normal_is_like_insert_mode;
+  this->backspace_on_first_idx_remove_trailing_spaces = q.backspace_on_first_idx_remove_trailing_spaces;
+  this->small_e_on_normal_goes_insert_mode = q.small_e_on_normal_goes_insert_mode;
+  this->space_on_normal_is_like_insert_mode = q.space_on_normal_is_like_insert_mode;
+  this->read_from_shell = q.read_from_shell;
+
+  this->autoindent = (NULL is q.autoindent ? buf_ftype_autoindent : q.autoindent);
+  this->on_open_fname_under_cursor = q.on_open_fname_under_cursor;
+
+  if (NULL is q.on_emptyline) {
+    if (NULL is this->on_emptyline)
+      this->on_emptyline = string_new_with (DEFAULT_ON_EMPTY_LINE_STRING);
+  } else
+    this->on_emptyline = q.on_emptyline;
+
+  return this;
+}
+
+private ftype_t *buf_ftype_init (buf_t *this, int ftype, FtypeAutoIndent_cb indent_cb) {
   if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
-
   $my(syn) = &$myroots(syntaxes)[ftype];
-  str_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
-  $my(ftype)->autochdir = 1;
-  $my(ftype)->shiftwidth = 0;
-  $my(ftype)->tabwidth = TABWIDTH;
+  return __ftype_set__ (__ftype_new__ ($my(syn)),
+    QUAL (FTYPE, .autoindent = indent_cb));
+}
 
-  $my(ftype)->clear_blanklines = CLEAR_BLANKLINES;
-  $my(ftype)->tab_indents = TAB_ON_INSERT_MODE_INDENTS;
-  $my(ftype)->cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE;
-  $my(ftype)->backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE;
-  $my(ftype)->backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES;
-  $my(ftype)->small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE;
-  $my(ftype)->space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE;
-  $my(ftype)->read_from_shell = READ_FROM_SHELL;
+private ftype_t *buf_ftype_set (buf_t *this, int ftype, ftype_t q) {
+  if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
+  $my(syn) = &$myroots(syntaxes)[ftype];
+  if (NULL is $my(ftype))
+    $my(ftype) = __ftype_new__ ($my(syn));
 
-  $my(ftype)->autoindent = (NULL is indent_cb ? buf_ftype_autoindent : indent_cb);
-  $my(ftype)->on_emptyline[0] = DEFAULT_ON_EMPTY_LINE_CHAR;
-  $my(ftype)->on_emptyline[1] = '\0';
-  return $my(ftype);
+  return __ftype_set__ ($my(ftype), q);
+}
+
+private int ved_com_buf_set (buf_t *this, rline_t *rl) {
+  int found = 1;
+  string_t *arg = rline_get_anytype_arg (rl, "ftype");
+  ifnot (NULL is arg) {
+    int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
+    syn_t syn = $myroots(syntaxes)[idx];
+    if (str_eq (syn.filetype, $my(ftype)->name))
+      goto theend;
+
+    buf_free_ftype (this);
+    $my(ftype) = syn.init (this);
+    str_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
+    goto theend;
+  }
+
+  arg = rline_get_anytype_arg (rl, "tabwidth");
+  ifnot (NULL is arg) {
+    $my(ftype)->tabwidth = atoi (arg->bytes);
+    ved_normal_bol (this);
+    goto theend;
+  }
+
+  arg = rline_get_anytype_arg (rl, "shiftwidth");
+  ifnot (NULL is arg) {
+    $my(ftype)->shiftwidth = atoi (arg->bytes);
+    ved_normal_bol (this);
+    goto theend;
+  }
+
+  found = 0;
+
+theend:
+  if (found) self(draw);
+  return (found ? OK : NOTOK);
 }
 
 private char *ftype_on_open_fname_under_cursor_c (char *fname,
@@ -4072,24 +4147,14 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
   return fname;
 }
 
-private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
-  if (NULL is name) return FTYPE_DEFAULT;
-
-  for (int i = 0; i < $my(num_syntaxes); i++) {
-    if (str_eq ($my(syntaxes)[i].filetype, name))
-      return i;
-  }
-
-  return FTYPE_DEFAULT;
-}
-
 private ftype_t *buf_syn_init_c (buf_t *this) {
   int idx = ed_syn_get_ftype_idx ($my(root), "c");
-  ftype_t *ft = buf_ftype_init (this, idx, buf_autoindent_c);
-  ft->shiftwidth = 2;
-  ft->tab_indents = C_TAB_ON_INSERT_MODE_INDENTS;
-  ft->on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c;
-  return ft;
+  return buf_ftype_set (this, idx, QUAL(FTYPE,
+    .autoindent = buf_autoindent_c,
+    .shiftwidth = C_DEFAULT_SHIFTWIDTH,
+    .tab_indents = C_TAB_ON_INSERT_MODE_INDENTS,
+    .on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c
+    ));
 }
 
 private ftype_t *buf_syn_init (buf_t *this) {
@@ -4186,11 +4251,6 @@ private void buf_free_line (buf_t *this) {
   if (this is NULL or $myprop is NULL or $my(line) is NULL) return;
   ustring_free_members ($my(line));
   free ($my(line));
-}
-
-private void buf_free_ftype (buf_t *this) {
-  if (this is NULL or $myprop is NULL or $my(ftype) is NULL) return;
-  free ($my(ftype));
 }
 
 private void buf_free_jumps (buf_t *this) {
@@ -5589,7 +5649,7 @@ private buf_t *ved_search_buf (ed_t *root) {
   this->on_normal_beg = ved_grep_on_normal;
   $my(is_sticked) = 1;
   $myparents(cur_frame) = 1;
-  My(Win).set.current_buf ($my(parent), 0, DRAW);
+  My(Win).set.current_buf ($my(parent), 0, DONOT_DRAW);
   return this;
 }
 
@@ -6835,7 +6895,7 @@ private void buf_to_video (buf_t *this) {
   }
 
   while (i < $my(statusline_row) - 1)
-    My(Video).set_with ($my(video), i++, $my(ftype)->on_emptyline);
+    My(Video).set_with ($my(video), i++, $my(ftype)->on_emptyline->bytes);
 
   buf_set_statusline (this);
 }
@@ -11035,6 +11095,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_DELETE_ALIAS] = "bd",
     [VED_COM_BUF_CHANGE] = "buffer",
     [VED_COM_BUF_CHANGE_ALIAS] = "b",
+    [VED_COM_BUF_SET] = "set",
     [VED_COM_DIFF_BUF] = "diffbuf",
     [VED_COM_DIFF] = "diff",
     [VED_COM_EDIT_FORCE] = "edit!",
@@ -11124,6 +11185,10 @@ private void ved_init_commands (ed_t *this) {
 
   $my(commands)[i] = NULL;
   $my(num_commands) = VED_COM_END;
+
+  ved_append_command_arg (this, "set", "--shiftwidth=", 13);
+  ved_append_command_arg (this, "set", "--tabwidth=", 11);
+  ved_append_command_arg (this, "set", "--ftype=", 8);
 }
 
 private void rline_write_and_break (rline_t *rl){
@@ -12206,6 +12271,10 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       }
       goto theend;
 
+    case VED_COM_BUF_SET:
+      retval = ved_com_buf_set (*thisp, rl);
+      goto theend;
+
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV:
@@ -13034,6 +13103,13 @@ private term_t *ed_get_term (ed_t *this) {
   return $my(term);
 }
 
+private void *ed_get_callback_fun (ed_t *this, char *fun) {
+  (void) this;
+  if (str_eq (fun, "autoindent_c")) return buf_autoindent_c;
+  if (str_eq (fun, "autoindent_default")) return buf_ftype_autoindent;
+  return NULL;
+}
+
 private int ed_get_num_win (ed_t *this, int count_special) {
   if (count_special) return this->num_items;
   int num = 0;
@@ -13789,7 +13865,8 @@ private ed_T *editor_new (char *name) {
         .term = ed_get_term,
         .next = ed_get_next,
         .prev = ed_get_prev,
-        .num_rline_commands = ved_get_num_rline_commands
+        .num_rline_commands = ved_get_num_rline_commands,
+        .callback_fun = ed_get_callback_fun
       ),
       .syn = SubSelfInit (ed, syn,
         .append = ed_syn_append,
@@ -13922,7 +13999,7 @@ private ed_T *editor_new (char *name) {
         ),
         .ftype = SubSelfInit (buf, ftype,
           .init = buf_ftype_init,
-          .autoindent = buf_ftype_autoindent
+          .set = buf_ftype_set,
         ),
         .to = SubSelfInit (buf, to,
           .video = buf_to_video

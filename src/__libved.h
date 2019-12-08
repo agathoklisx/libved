@@ -91,6 +91,7 @@ enum {
   VED_COM_BUF_DELETE_ALIAS,
   VED_COM_BUF_CHANGE,
   VED_COM_BUF_CHANGE_ALIAS,
+  VED_COM_BUF_SET,
   VED_COM_DIFF_BUF,
   VED_COM_DIFF,
   VED_COM_EDIT_FORCE,
@@ -849,6 +850,7 @@ private void rline_free (rline_t *);
 private void rline_clear (rline_t *);
 private int  rline_break (rline_t **);
 private string_t *rline_get_string (rline_t *);
+private string_t *rline_get_anytype_arg (rline_t *, char *);
 private utf8 quest (buf_t *, char *, utf8 *, int);
 private action_t *vundo_pop (buf_t *);
 private void ed_suspend (ed_t *);

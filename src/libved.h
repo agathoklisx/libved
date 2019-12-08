@@ -2,9 +2,9 @@
 #define LIBVED_H
 
 #define MAX_FRAMES 3
-#define DEFAULT_SHIFTWIDTH 2
+#define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
-#define DEFAULT_ON_EMPTY_LINE_CHAR '~'
+#define DEFAULT_ON_EMPTY_LINE_STRING "~"
 
 #ifndef RLINE_HISTORY_NUM_ENTRIES
 #define RLINE_HISTORY_NUM_ENTRIES 20
@@ -20,6 +20,10 @@
 #define TABWIDTH 8
 #endif
 
+#ifndef AUTOCHDIR
+#define AUTOCHDIR 1
+#endif
+
 #ifndef CLEAR_BLANKLINES
 #define CLEAR_BLANKLINES 1
 #endif
@@ -30,6 +34,10 @@
 
 #ifndef C_TAB_ON_INSERT_MODE_INDENTS
 #define C_TAB_ON_INSERT_MODE_INDENTS 1
+#endif
+
+#ifndef C_DEFAULT_SHIFTWIDTH
+#define C_DEFAULT_SHIFTWIDTH 2
 #endif
 
 #ifndef CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE
@@ -539,7 +547,8 @@ typedef int  (*DirProcessDir_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirProcessFile_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirStatFile_cb) (const char *, struct stat *);
 
-typedef string_t *(Indent_cb) (buf_t *, row_t *);
+typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
+typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 
 #define NULL_REF NULL
@@ -591,8 +600,9 @@ NewType (syn,
 
 NewType (ftype,
   char
-    name[MAXLEN_FTYPE_NAME],
-    on_emptyline[2];
+    name[MAXLEN_FTYPE_NAME];
+
+  string_t *on_emptyline;
 
   int
     shiftwidth,
@@ -607,8 +617,8 @@ NewType (ftype,
     small_e_on_normal_goes_insert_mode,
     read_from_shell;
 
-  string_t *(*autoindent) (buf_t *, row_t *);
-      char *(*on_open_fname_under_cursor) (char *, size_t, size_t);
+  FtypeAutoIndent_cb autoindent;
+  FtypeOpenFnameUnderCursor_cb on_open_fname_under_cursor;
 );
 
 NewType (dirlist,
@@ -698,6 +708,24 @@ NewType (buf_init_opts,
 #define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {                             \
   .at_frame = 0, .at_linenr = 1, .at_column = 1, .ftype = FTYPE_DEFAULT, \
   .flags = 0, .fname = UNAMED, __VA_ARGS__}
+
+#define FTYPE_QUAL(...) (ftype_t) {  \
+  .name = "",  \
+  .on_emptyline = NULL,  \
+  .shiftwidth = DEFAULT_SHIFTWIDTH,  \
+  .tabwidth = TABWIDTH,  \
+  .autochdir = AUTOCHDIR,  \
+  .tab_indents = TAB_ON_INSERT_MODE_INDENTS,  \
+  .clear_blanklines = CLEAR_BLANKLINES,  \
+  .cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
+  .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
+  .read_from_shell = READ_FROM_SHELL,  \
+  .autoindent = NULL,  \
+  .on_open_fname_under_cursor = NULL,  \
+  __VA_ARGS__ }
 
 NewType (vchar,
   utf8 code;
@@ -1175,8 +1203,9 @@ NewSubSelf (buf, syn,
 );
 
 NewSubSelf (buf, ftype,
-  ftype_t *(*init) (buf_t *, int, Indent_cb);
-  string_t *(*autoindent) (buf_t *, row_t *);
+  ftype_t
+     *(*init) (buf_t *, int, FtypeAutoIndent_cb),
+     *(*set)  (buf_t *, int, ftype_t);
 );
 
 NewSubSelf (buf, to,
@@ -1354,6 +1383,8 @@ NewSubSelf (ed, get,
     *(*win_by_name) (ed_t *, char *, int *);
 
   term_t *(*term) (ed_t *);
+
+  void *(*callback_fun) (ed_t *, char *);
 
   ed_t *(*next) (ed_t *);
   ed_t *(*prev) (ed_t *);

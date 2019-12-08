@@ -638,6 +638,10 @@ Search:
    :searches              (change focus to the `search' window/buffer)
    :messages              (change focus to the message window/buffer)
    :testkey               (test keyboard keys)
+   :set options           (set options for current buffer
+                           --ftype=[string] set filetype
+                           --tabwidth=[int] set tabwidth
+                           --shiftwidth=[int] set shiftwidth)
    :q[!]                  (quit (if force, do not check for modified buffers))
 
    User defined (through an API mechanism):
@@ -882,6 +886,18 @@ Search:
      with the following signature:
 
           ftype_t *(*init) (buf_t *);
+
+     The default autoindent callback function does nothing and can be set during filetype
+     initialization with the following signature:
+
+          string_t *(*autoindent_fun) (buf_t *, char *);
+
+    In normal mode 'gf' (go to (or get) filename) can call a callback function, that
+    can be set during initialization with the following signature:
+
+          char *(*ftype_on_open_fname_under_cursor) (char *, size_t, size_t);
+
+    (note that the C filetype, implements the above two callbacks)
    */
 
   /* History Completion Semantics (command line and search)
@@ -1582,4 +1598,4 @@ Search:
    And if there is a way, we have to found it and describe it.
    So have a good research, as we go back (or forth anyway) to our only duty, which
    it is the way to our Re-Evolution.
-```
+``
