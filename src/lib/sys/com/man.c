@@ -51,6 +51,6 @@ theend:
   Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
       Buf.get.num_lines (this) - 1);
   Buf.normal.bof (this, DRAW);
-  return retval;
+  return (retval > 0 ? NOTOK : OK);
 }
 

@@ -5654,21 +5654,7 @@ private buf_t *ved_search_buf (ed_t *root) {
 }
 
 private buf_t *ved_scratch_buf (ed_t *this) {
-  int idx;
-  win_t *w = self(get.win_by_name, VED_SCRATCH_WIN, &idx);
-  if (NULL is w) {
-    w = self(win.new_special, VED_SCRATCH_WIN, 1);
-    self(append.win, w);
-  }
-
-  buf_t *buf = My(Win).get.buf_by_name (w, VED_SCRATCH_BUF, &idx);
-  if (NULL is buf) {
-    buf = My(Win).buf.new (w, QUAL(BUF_INIT,
-      .fname = VED_SCRATCH_BUF, .flags = BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
-    My(Win).append_buf (w, buf);
-  }
-
-  return buf;
+  return ved_special_buf (this, VED_SCRATCH_WIN, VED_SCRATCH_BUF, 1, 0);
 }
 
 private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
@@ -5702,9 +5688,13 @@ private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, .
 }
 
 private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
-  self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
-  ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF))
-   (*bufp) = ved_scratch_buf (this);
+  ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+    self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
+    ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+      ved_scratch_buf (this);
+      self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
+    }
+  }
 
   if (at_eof) ved_normal_eof (*bufp, DRAW);
   else My(Buf).draw (*bufp);
@@ -6496,7 +6486,11 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   $my(video)->row_pos = $my(cur_video_row);
   $my(video)->col_pos = $my(cur_video_col);
   ved_normal_down (this, 1, DONOT_ADJUST_COL, DONOT_DRAW);
-  ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
+  ifnot (str_eq ($from((*thisp), fname), VED_SEARCH_BUF))
+    ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
+  else
+    self(draw);
+
   return DONE;
 }
 
@@ -9644,7 +9638,6 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
     win_t *w = self(get.win_by_name, name, &idx);
     if (NULL is w) return NOTHING_TODO;
   } else {
-change_idx:
     switch (com) {
       case VED_COM_WIN_CHANGE_PREV:
         if (--idx is -1) { idx = this->num_items - 1; } break;
@@ -9658,13 +9651,17 @@ change_idx:
       ifnot (force) return NOTHING_TODO;
 
     ifnot (accept_rdonly) {
-      win_t *w = self(get.win_by_idx, idx);
-      if (NULL is w) return NOTHING_TODO;
-      if ($from(w, type) is VED_WIN_SPECIAL_TYPE) {
-        if (com is VED_COM_WIN_CHANGE_PREV_FOCUSED)
-          com = VED_COM_WIN_CHANGE_PREV;
+      int tmp_idx = (idx is this->num_items - 1 ? 0 : idx + 1);
+      for (;;) {
+        win_t *w = self(get.win_by_idx, idx);
+        if (NULL is w)
+          if (idx is tmp_idx)
+            return NOTHING_TODO;
 
-        goto change_idx;
+        if ($from(w, type) is VED_WIN_SPECIAL_TYPE) {
+          if (idx is 0) idx = this->num_items - 1;
+          else idx--;
+        } else break;
       }
     }
   }
@@ -13022,7 +13019,8 @@ exec_block:
         if (cmd_retv is BUF_QUIT) {
           retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
           if (retval is NOTHING_TODO) {
-            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, 0, NO_FORCE);
+            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+                NULL, 0, NO_FORCE);
             if (retval is NOTHING_TODO)
               cmd_retv = EXIT;
             else
