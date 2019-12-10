@@ -4093,14 +4093,46 @@ private ftype_t *buf_ftype_set (buf_t *this, int ftype, ftype_t q) {
   return __ftype_set__ ($my(ftype), q);
 }
 
-private int ved_com_buf_set (buf_t *this, rline_t *rl) {
-  int found = 1;
+/* this retval pointer provides information, since the callee presets retval at the
+ * beginning of its function. The early returns here is actuall a goto theend there */
+private int ved_com_buf_substitute (buf_t *this, rline_t *rl, int *retval) {
+  arg_t *pat = rline_get_arg (rl, RL_ARG_PATTERN);
+  arg_t *sub = rline_get_arg (rl, RL_ARG_SUB);
+  arg_t *global = rline_get_arg (rl, RL_ARG_GLOBAL);
+  arg_t *interactive = rline_get_arg (rl, RL_ARG_INTERACTIVE);
+  arg_t *range = rline_get_arg (rl, RL_ARG_RANGE);
+
+  if (NULL is range and rl->com is VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE) {
+    rl->range[0] = 0; rl->range[1] = this->num_items - 1;
+  } else
+    if (NOTOK is ved_rline_parse_range (this, rl, range))
+      return *retval;
+
+  if (rline_arg_exists (rl, "remove-tabs")) {
+    int shiftwidth = $my(ftype)->shiftwidth;
+    string_t *sw = rline_get_anytype_arg (rl, "shiftwidth");
+    ifnot (NULL is sw) shiftwidth = atoi (sw->bytes);
+    char subst[shiftwidth];
+    for (int i = 0; i < shiftwidth; i++) subst[i] = ' ';
+      subst[shiftwidth] = '\0';
+    return buf_substitute (this, "\t", subst, 1, interactive isnot NULL, rl->range[0], rl->range[1]);
+  }
+
+  if (pat is NULL or sub is NULL) return *retval;
+
+  *retval = buf_substitute (this, pat->argval->bytes, sub->argval->bytes,
+     global isnot NULL, interactive isnot NULL, rl->range[0], rl->range[1]);
+
+  return *retval;
+}
+
+private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
   string_t *arg = rline_get_anytype_arg (rl, "ftype");
   ifnot (NULL is arg) {
     int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
     syn_t syn = $myroots(syntaxes)[idx];
     if (str_eq (syn.filetype, $my(ftype)->name))
-      goto theend;
+      return *retval;
 
     buf_free_ftype (this);
     $my(ftype) = syn.init (this);
@@ -4122,11 +4154,11 @@ private int ved_com_buf_set (buf_t *this, rline_t *rl) {
     goto theend;
   }
 
-  found = 0;
+  return *retval;
 
 theend:
-  if (found) self(draw);
-  return (found ? OK : NOTOK);
+  self(draw);
+  return OK;
 }
 
 private char *ftype_on_open_fname_under_cursor_c (char *fname,
@@ -6496,6 +6528,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 
 private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 int interactive, int fidx, int lidx) {
+debug_append ("pat |%s| sub |%s| fidx %d lidx %d\n ", pat, sub, fidx, lidx);
   int retval = NOTHING_TODO;
   ifnot (this->num_items) return retval;
 
@@ -11186,6 +11219,10 @@ private void ved_init_commands (ed_t *this) {
   ved_append_command_arg (this, "set", "--shiftwidth=", 13);
   ved_append_command_arg (this, "set", "--tabwidth=", 11);
   ved_append_command_arg (this, "set", "--ftype=", 8);
+  ved_append_command_arg (this, "substitute", "--remove-tabs", 13);
+  ved_append_command_arg (this, "s%",         "--remove-tabs", 13);
+  ved_append_command_arg (this, "substitute", "--shiftwidth=", 13);
+  ved_append_command_arg (this, "s%",         "--shiftwidth=", 13);
 }
 
 private void rline_write_and_break (rline_t *rl){
@@ -12211,26 +12248,8 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_SUBSTITUTE:
     case VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE:
     case VED_COM_SUBSTITUTE_ALIAS:
-      {
-        arg_t *pat = rline_get_arg (rl, RL_ARG_PATTERN);
-        arg_t *sub = rline_get_arg (rl, RL_ARG_SUB);
-        arg_t *global = rline_get_arg (rl, RL_ARG_GLOBAL);
-        arg_t *interactive = rline_get_arg (rl, RL_ARG_INTERACTIVE);
-        arg_t *range = rline_get_arg (rl, RL_ARG_RANGE);
-
-        if (pat is NULL or sub is NULL) goto theend;
-
-        if (NULL is range and rl->com is VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE) {
-          rl->range[0] = 0; rl->range[1] = this->num_items - 1;
-        } else
-          if (NOTOK is ved_rline_parse_range (this, rl, range))
-            goto theend;
-
-        retval = buf_substitute (this, pat->argval->bytes, sub->argval->bytes,
-           global isnot NULL, interactive isnot NULL, rl->range[0], rl->range[1]);
-       }
-
-       goto theend;
+      retval = ved_com_buf_substitute (*thisp, rl, &retval);
+      goto theend;
 
     case VED_COM_BUF_CHANGE_PREV_ALIAS:
       rl->com = VED_COM_BUF_CHANGE_PREV; //__fallthrough__;
@@ -12269,7 +12288,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       goto theend;
 
     case VED_COM_BUF_SET:
-      retval = ved_com_buf_set (*thisp, rl);
+      retval = ved_com_buf_set (*thisp, rl, &retval);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
