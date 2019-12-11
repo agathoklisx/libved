@@ -2935,7 +2935,10 @@ init_list:;
   ifnot (maxlen) goto theend;
   maxlen++;
 
-  int avail_cols = menu->num_cols - menu->first_col;
+  while ((first_col + 1) and first_col + maxlen > menu->num_cols)
+     first_col--;
+
+  int avail_cols = menu->num_cols - first_col;
 
   if (maxlen < avail_cols) {
     num = avail_cols / maxlen;

@@ -273,7 +273,7 @@ private void __u_add_cw_mode_actions__ (ed_t *this) {
    "Spell selected\n"
 #endif
 #if HAS_EXPR
-  "math expression\n"
+  "math expression"
 #endif
    ;
 
