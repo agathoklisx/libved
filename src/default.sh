@@ -6,17 +6,39 @@
 
 # You may need first to `chmod' this unit to make it executable.
 
-if [ 0 = $# ]; then
-  make clean_shared
+if [ -z $VED_SYSDIR ]; then
+  SYSDIR=$PWD/sys
+else
+  SYSDIR=$VED_SYSDIR
 fi
 
-make clean_veda_shared
+if [ -z $VED_DATADIR ]; then
+  SYSDATADIR=$SYSDIR/data
+else
+  SYSDATADIR=$VED_DATADIR
+fi
+
+if [ -z $VED_TMPDIR ]; then
+  SYSTMPDIR=$SYSDIR/tmp
+else
+  SYSTMPDIR=$VED_TMPDIR
+fi
+
+if [ 0 = $# ]; then
+  make SYSDIR=$SYSDIR clean_shared
+fi
+
+make SYSDIR=$SYSDIR clean_veda_shared
+
 if [ -z $CC ]; then
   CC=gcc
 fi
 
 make                                                \
     CC=$CC                                          \
+    SYSDIR=$SYSDIR                                  \
+    SYSDATADIR=$SYSDATADIR                          \
+    SYSTMPDIR=$SYSTMPDIR                            \
     DEBUG=0                                         \
     HAS_REGEXP=0                                    \
     HAS_SHELL_COMMANDS=1                            \
@@ -26,8 +48,6 @@ make                                                \
     HAS_EXPR=0                                      \
     HAS_LOCAL_EXTENSIONS=0                          \
     HAS_HISTORY=0                                   \
-    VED_DATA_DIR="$PWD/sys/data"                    \
-    TMPDIR="$PWD/sys/tmp"                           \
     CLEAR_BLANKLINES=1                              \
     TAB_ON_INSERT_MODE_INDENTS=0                    \
     TABWIDTH=8                                      \

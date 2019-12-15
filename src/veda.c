@@ -63,7 +63,7 @@ int main (int argc, char **argv) {
   __init_ext__ (E, this);
 
 #ifdef HAS_HISTORY
-  Ed.history.read (this, VED_DATA_DIR);
+  Ed.history.read (this);
 #endif
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
@@ -117,7 +117,7 @@ int main (int argc, char **argv) {
   }
 
 #ifdef HAS_HISTORY
-  Ed.history.write (this, VED_DATA_DIR);
+  Ed.history.write (this);
 #endif
 
   __deinit_ext__ (this);

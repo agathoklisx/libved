@@ -4622,17 +4622,17 @@ private venv_t *venv_new () {
 #endif
   __env_check_directory__ (env->my_dir->bytes, "libved directory", 1, 0, 0);
 
-#ifndef TMPDIR
+#ifndef VED_TMPDIR
   env->tmp_dir = string_new_with_fmt ("%s/tmp", env->my_dir->bytes);
 #else
-  env->tmp_dir = string_new_with (TMPDIR);
+  env->tmp_dir = string_new_with (VED_TMPDIR);
 #endif
   __env_check_directory__ (env->tmp_dir->bytes, "temp directory", 1, 1, 0);
 
-#ifndef VED_DATA_DIR
+#ifndef VED_DATADIR
   env->data_dir = string_new_with_fmt ("%s/data", env->my_dir->bytes);
 #else
-  env->data_dir = string_new_with (VED_DATA_DIR);
+  env->data_dir = string_new_with (VED_DATADIR);
 #endif
   __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
 
@@ -13246,12 +13246,12 @@ private void ved_history_add (ed_t *this, vstr_t *hist, int what) {
   }
 }
 
-private void ved_history_write (ed_t *this, char *dir) {
-   if (-1 is access (dir, F_OK|R_OK)) return;
-   ifnot (is_directory (dir)) return;
-   size_t dirlen = bytelen (dir);
+private void ved_history_write (ed_t *this) {
+   if (-1 is access ($my(env)->data_dir->bytes, F_OK|R_OK)) return;
+   ifnot (is_directory ($my(env)->data_dir->bytes)) return;
+   size_t dirlen = $my(env)->data_dir->num_bytes;
    char fname[dirlen + 16];
-   snprintf (fname, dirlen + 16, "%s/.ved_h_search", dir);
+   snprintf (fname, dirlen + 16, "%s/.ved_h_search", $my(env)->data_dir->bytes);
    FILE *fp = fopen (fname, "w");
    if (NULL is fp) return;
    histitem_t *it = $my(history)->search->tail;
@@ -13261,7 +13261,7 @@ private void ved_history_write (ed_t *this, char *dir) {
    }
    fclose (fp);
 
-   snprintf (fname, dirlen + 16, "%s/.ved_h_rline", dir);
+   snprintf (fname, dirlen + 16, "%s/.ved_h_rline", $my(env)->data_dir->bytes);
    fp = fopen (fname, "w");
    if (NULL is fp) return;
 
@@ -13275,18 +13275,18 @@ private void ved_history_write (ed_t *this, char *dir) {
    fclose (fp);
 }
 
-private void ved_history_read (ed_t *this, char *dir) {
-   if (-1 is access (dir, F_OK|R_OK)) return;
-   ifnot (is_directory (dir)) return;
+private void ved_history_read (ed_t *this) {
+   if (-1 is access ($my(env)->data_dir->bytes, F_OK|R_OK)) return;
+   ifnot (is_directory ($my(env)->data_dir->bytes)) return;
 
-   size_t dirlen = bytelen (dir);
+   size_t dirlen = $my(env)->data_dir->num_bytes;
    char fname[dirlen + 16];
-   snprintf (fname, dirlen + 16, "%s/.ved_h_search", dir);
+   snprintf (fname, dirlen + 16, "%s/.ved_h_search",$my(env)->data_dir->bytes);
    vstr_t *lines = file_readlines (fname, NULL, NULL, NULL);
    self(history.add, lines, SEARCH_HISTORY);
    vstr_clear (lines);
 
-   snprintf (fname, dirlen + 16, "%s/.ved_h_rline", dir);
+   snprintf (fname, dirlen + 16, "%s/.ved_h_rline", $my(env)->data_dir->bytes);
    file_readlines (fname, lines, NULL, NULL);
    self(history.add, lines, RLINE_HISTORY);
 

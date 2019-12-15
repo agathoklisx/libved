@@ -1497,8 +1497,8 @@ NewSubSelf (ed, sh,
 NewSubSelf (ed, history,
   void
      (*add) (ed_t *, vstr_t *, int),
-     (*read) (ed_t *, char *),
-     (*write) (ed_t *, char *);
+     (*read) (ed_t *),
+     (*write) (ed_t *);
 );
 
 NewSubSelf (ed, draw,

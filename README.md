@@ -227,8 +227,8 @@
    HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
-   VED_DATA_DIR="dir"     this can be used for e.g., history (default $(SYSDIR)/data)
-   TMPDIR="dir"           this sets the temp directory (default $(SYSDIR)/tmp)
+   VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
+   VED_TMPDIR="dir"           this sets the temp directory (default $(SYSDIR)/tmp)
 
    /* the next option provides a way to extend the behavior and|or as an API
     * documentation, but is intended for development (safely ignore much of it) */
@@ -788,8 +788,8 @@ Search:
     is handled usually earlier.
     The thing is that the calculations are complex and quite possible there are
     conditions that are not handled or improperly handled and because i do not
-    work with files (except Makefiles) that have no tabs or chars which occupy
-    more than one cell, do not help to catch them.
+    work with files (except Makefiles) that have tabs or chars which occupy more
+    than one cell, do not help to catch them.
 
     The semantics.
     In normal mode operations, the cursor should be placed at the end of the width
@@ -1518,9 +1518,10 @@ Search:
             And it is wise and really smart for You, to feel the same for Us. As the
             outiside of You is equally important with You. Though the You - and this
             by default - will always prioritize the self, usually without even the
-            self realize it..., it is this magnificent undescrible structure that is
-            the real treasure (and this is for you and this is for me and this is for
-            all); so this is also (total) equally important with You.
+            self realize it..., it is this magnificent undescribable structure
+            that is the real treasure (and this is for you and this is for me
+            and this is for all); so this is also (total) equally important with
+            You.
 
             And it is unthinkable important. As this might? is a way to an eternal -
               (where eternal here might translated accurately as "aenaos - αέναος",

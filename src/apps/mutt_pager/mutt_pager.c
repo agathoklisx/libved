@@ -415,7 +415,7 @@ int main (int argc, char **argv) {
 
   int retval = 1;
 
-  Ed.history.read (this, VED_DATA_DIR);
+  Ed.history.read (this);
 
   win_t *w = __init_me__ (this, argv[0]);
 
@@ -438,7 +438,7 @@ int main (int argc, char **argv) {
     } else break;
   }
 
- Ed.history.write (this, VED_DATA_DIR);
+ Ed.history.write (this);
 
   __deinit_ext__ (this);
   __deinit_ed__ (E);
