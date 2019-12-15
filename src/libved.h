@@ -436,6 +436,39 @@ AllocErrorHandlerF AllocErrorHandler;
   ptr__;                                                              \
   })
 
+/* from man printf(3) Linux Programmer's Manual */
+#define VA_ARGS_FMT_SIZE(fmt_)                                        \
+({                                                                    \
+  int size = 0;                                                       \
+  va_list ap; va_start(ap, fmt_);                                     \
+  size = vsnprintf (NULL, size, fmt_, ap);                            \
+  va_end(ap);                                                         \
+  size;                                                               \
+})
+/*
+ * gcc complains on -Werror=alloc-size-larger-than= or -fsanitize=undefined,
+ *  with:
+ *  argument 1 range [18446744071562067968, 18446744073709551615]
+ *  exceeds maximum object size 9223372036854775807
+ *  in a call to built-in allocation function '__builtin_alloca_with_align'
+ */
+//#define VA_ARGS_FMT_SIZE (MAXLEN_LINE * 2)
+
+#define VA_ARGS_GET_FMT_STR(buf_, size_, fmt_)                        \
+({                                                                    \
+  va_list ap; va_start(ap, fmt_);                                     \
+  vsnprintf (buf_, size_ + 1, fmt_, ap);                              \
+  va_end(ap);                                                         \
+  buf_;                                                               \
+})
+
+#define STR_FMT(fmt_, ...)                                            \
+({                                                                    \
+  char buf_[MAXLEN_LINE];                                             \
+  snprintf (buf_, MAXLEN_LINE, fmt_, __VA_ARGS__);                    \
+  buf_;                                                               \
+})
+
 #define ___Me__  Me
 #define __this__ this
 #define __prop__ prop
@@ -935,7 +968,8 @@ NewClass (string,
 
 NewSubSelf (vstring, cur,
   void
-    (*append_with) (vstr_t *, char *);
+    (*append_with) (vstr_t *, char *),
+    (*append_with_len) (vstr_t *, char *, size_t);
 );
 
 NewSubSelf (vstring, add,
@@ -949,6 +983,7 @@ NewSelf (vstring,
   void
     (*free) (vstr_t *),
     (*clear) (vstr_t *),
+    (*append_with_len) (vstr_t *, char *, size_t),
     (*append_with_fmt) (vstr_t *, char *, ...);
 
   vstr_t *(*new) (void);
@@ -1550,8 +1585,4 @@ public void __deinit_ed__ (ed_T *);
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);
 
-#define CSTRING_OUT_OF_RANGE -1
-
- public mutable int byte_mv (char *str, size_t len, size_t from_idx, size_t to_idx,
-     size_t nelem);
 #endif /* LIBVED_H */

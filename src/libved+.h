@@ -1,3 +1,6 @@
+#ifndef LIBVED_PLUS_H
+#define LIBVED_PLUS_H
+
 public ed_T *E;
 
 #define Ed      E->self
@@ -111,3 +114,5 @@ int argparse_parse (struct argparse *, int, const char **);
 
 private void __init_ext__ (Class (ed) *, ed_t *);
 private void __deinit_ext__ (ed_t *);
+
+#endif

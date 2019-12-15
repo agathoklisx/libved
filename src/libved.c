@@ -118,11 +118,9 @@ private size_t str_cp (char *dest, size_t dest_len, const char *src, size_t nele
 }
 
 private size_t str_cp_fmt (char *dest, size_t dest_len, char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return str_cp (dest, dest_len, bytes, len);
 }
 
@@ -1163,11 +1161,9 @@ private string_t *string_new_with (const char *bytes) {
 }
 
 private string_t *string_new_with_fmt (const char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len+1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return string_new_with_len (bytes, len);
 }
 
@@ -1242,20 +1238,16 @@ private string_t *string_prepend (string_t *this, const char *bytes) {
 }
 
 private string_t *string_append_fmt (string_t *this, const char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return string_insert_at_with_len (this, bytes, this->num_bytes, len);
 }
 
 private string_t *string_prepend_fmt (string_t *this, const char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return string_insert_at_with_len (this, bytes, 0, len);
 }
 
@@ -1295,11 +1287,9 @@ private string_t *string_replace_with_len (string_t *this, const char *bytes,
 }
 
 private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return string_replace_with_len (this, bytes, len);
 }
 
@@ -1350,6 +1340,21 @@ private void vstr_append_current_with (vstr_t *this, char *bytes) {
   current_list_append (this, vstr);
 }
 
+private void vstr_append_current_with_len (vstr_t *this, char *bytes, size_t len) {
+  vstring_t *vstr = AllocType (vstring);
+  vstr->data = string_new_with_len (bytes, len);
+  current_list_append (this, vstr);
+}
+
+private void vstr_append_with_len (vstr_t *this, char *bytes, size_t len) {
+  int cur_idx = this->cur_idx;
+  if (cur_idx isnot this->num_items - 1)
+    current_list_set (this, -1);
+
+  vstr_append_current_with_len (this, bytes, len);
+  current_list_set(this, cur_idx);
+}
+
 private void vstr_append_with (vstr_t *this, char *bytes) {
   int cur_idx = this->cur_idx;
   if (cur_idx isnot this->num_items - 1)
@@ -1360,12 +1365,10 @@ private void vstr_append_with (vstr_t *this, char *bytes) {
 }
 
 private void vstr_append_with_fmt (vstr_t *this, char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
-  vstr_append_with (this, bytes);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
+  vstr_append_with_len (this, bytes, len);
 }
 
 private void vstr_prepend_current_with (vstr_t *this, char *bytes) {
@@ -1470,8 +1473,10 @@ public vstring_T __init_vstring__ (void) {
       .new = vstr_new,
       .join = vstr_join,
       .append_with_fmt = vstr_append_with_fmt,
+      .append_with_len = vstr_append_with_len,
       .cur = SubSelfInit (vstring, cur,
-        .append_with = vstr_append_current_with
+        .append_with = vstr_append_current_with,
+        .append_with_len = vstr_append_current_with_len
       ),
       .add = SubSelfInit (vstring, add,
         .sort_and_uniq = vstr_add_sort_and_uniq
@@ -5629,13 +5634,13 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
   }
 }
 
-private void ed_check_msg_status (buf_t *this) {
-  if ($myroots(msg_send) is 1)
-    $myroots(msg_send)++;
-  else if (2 is $myroots(msg_send)) {
-    My(Video).set_with ($my(video), *$my(msg_row_ptr) - 1, " ");
-    My(Video).Draw.row_at ($my(video), *$my(msg_row_ptr));
-    $myroots(msg_send) = 0;
+private void ed_check_msg_status (ed_t *this) {
+  if ($my(msg_send) is 1)
+    $my(msg_send)++;
+  else if (2 is $my(msg_send)) {
+    My(Video).set_with ($my(video), $my(msg_row) - 1, " ");
+    My(Video).Draw.row_at ($my(video), $my(msg_row));
+    $my(msg_send) = 0;
   }
 }
 
@@ -5714,11 +5719,9 @@ private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
 }
 
 private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, ...) {
-  char bytes[MAXLEN_LINE];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ved_append_toscratch (this, clear_first, bytes);
 }
 
@@ -5763,31 +5766,38 @@ private void ved_append_message (ed_t *this, char *msg) {
 }
 
 private void ved_append_message_fmt (ed_t *this, char *fmt, ...) {
-  char bytes[MAXLEN_LINE];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ved_append_message (this, bytes);
 }
 
 private char *ed_msg_fmt (ed_t *this, int msgid, ...) {
-  char fmt[MAXLEN_ERR_MSG]; fmt[0] = '%'; fmt[1] = 's'; fmt[2] = '\0';
+  char efmt[MAXLEN_ERR_MSG]; efmt[0] = '%'; efmt[1] = 's'; efmt[2] = '\0';
   char pat[16]; snprintf (pat, 16, "%d:", msgid);
   char *sp = strstr (ED_MSGS_FMT, pat);
   if (sp isnot NULL) {
     int i;
     for (i = 0; i < (int) bytelen (pat); i++) sp++;
-    for (i = 0; *sp and *sp isnot '.'; sp++) fmt[i++] = *sp;
-    fmt[i] = '\0';
+    for (i = 0; *sp and *sp isnot '.'; sp++) efmt[i++] = *sp;
+    efmt[i] = '\0';
   }
 
-  char bytes[MAXLEN_LINE];
+  size_t len = ({
+    int size = 0;
+    va_list ap; va_start(ap, msgid);
+    size = vsnprintf (NULL, size, efmt, ap);
+    va_end(ap);
+    size;
+  });
+
+  char bytes[len + 1];
   va_list ap;
   va_start(ap, msgid);
-  vsnprintf (bytes, sizeof (bytes), fmt, ap);
+  vsnprintf (bytes, sizeof (bytes), efmt, ap);
   va_end(ap);
-  My(String).replace_with ($my(ed_str), bytes);
+
+  My(String).replace_with_len ($my(ed_str), bytes, len);
   return $my(ed_str)->bytes;
 }
 
@@ -5881,11 +5891,9 @@ private void ed_msg_set (ed_t *this, int color, int msg_flags, char *msg,
 }
 
 private void ed_msg_set_fmt (ed_t *this, int color, int msg_flags, char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ed_msg_set (this, color, msg_flags, bytes, len);
 }
 
@@ -5894,20 +5902,16 @@ private void ed_msg_send (ed_t *this, int color, char *msg) {
 }
 
 private void ed_msg_error (ed_t *this, char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ed_msg_set (this, COLOR_ERROR, MSG_SET_DRAW|MSG_SET_COLOR, bytes, len);
 }
 
 private void ed_msg_send_fmt (ed_t *this, int color, char *fmt, ...) {
-  char bytes[(VA_ARGS_FMT_SIZE) + 1];
-  va_list ap;
-  va_start(ap, fmt);
-  size_t len = vsnprintf (bytes, sizeof (bytes), fmt, ap);
-  va_end(ap);
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ed_msg_set (this, color, MSG_SET_DRAW|MSG_SET_COLOR, bytes, len);
 }
 
@@ -5932,7 +5936,7 @@ private char *ed_error_string (ed_t *this, int err) {
   for (; *sp and *sp isnot ','; sp++) ebuf[i++] = *sp;
   ebuf[i] = '\0';
 
-  My(String).replace_with ($my(ed_str), ebuf);
+  My(String).replace_with_len ($my(ed_str), ebuf, i);
   return $my(ed_str)->bytes;
 }
 
@@ -11320,7 +11324,7 @@ private void rline_render (rline_t *rl) {
     }
   }
 
-  while (cidx++ < rl->num_cols) string_append_byte (rl->render, ' ');
+  while (cidx++ < rl->num_cols - 1) string_append_byte (rl->render, ' ');
 
   string_append_fmt (rl->render, "%s%s", TERM_COLOR_RESET,
     (rl->state & RL_CURSOR_HIDE) ? "" : TERM_CURSOR_SHOW);
@@ -11403,7 +11407,11 @@ private rline_t *rline_edit (rline_t *rl) {
   for (;;) {
 thecontinue:
     rl->state &= ~RL_CONTINUE;
-    if (rl->state & RL_IS_VISIBLE) rline_write (rl);
+
+    if (rl->state & RL_IS_VISIBLE) {
+      ed_check_msg_status (rl->ed);
+      rline_write (rl);
+    }
 
     rl->c = rl->getch (rl->term);
 
@@ -12513,7 +12521,7 @@ theloop:
   for (;;) {
 
 get_char:
-    ed_check_msg_status (this);
+    ed_check_msg_status ($my(root));
     c = My(Input).get ($my(term_ptr));
 
 handle_char:
@@ -12985,7 +12993,7 @@ private int ved_loop (ed_t *ed, buf_t *this) {
     range[0] = range[1] = -1;
 
 get_char:
-    ed_check_msg_status (this);
+    ed_check_msg_status (ed);
     c = My(Input).get ($my(term_ptr));
 
 handle_char:

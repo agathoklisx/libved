@@ -895,8 +895,8 @@ static const utf8 offsetsFromUTF8[6] = {
 
 #define str_fmt(fmt, ...)                                 \
 ({                                                        \
-  char buf_[MAXLEN_LINE];                                     \
-  snprintf (buf_, MAXLEN_LINE, fmt, __VA_ARGS__);             \
+  char buf_[MAXLEN_LINE];                                 \
+  snprintf (buf_, MAXLEN_LINE, fmt, __VA_ARGS__);         \
   buf_;                                                   \
 })
 
@@ -1198,23 +1198,3 @@ do {                                                                \
   } while (0);                                                      \
   node;                                                             \
 })
-
-/* from man printf(3) Linux Programmer's Manual */
-/*
-#define VA_ARGS_FMT_SIZE                                            \
-({                                                                  \
-  int size = 0;                                                     \
-  va_list ap; va_start(ap, fmt);                                    \
-  size = vsnprintf(NULL, size, fmt, ap);                            \
-  va_end(ap);                                                       \
-  size;                                                             \
-})
- *
- * gcc complains on -Werror=alloc-size-larger-than= or -fsanitize=undefined,
- *  with:
- *  argument 1 range [18446744071562067968, 18446744073709551615]
- *  exceeds maximum object size 9223372036854775807
- *  in a call to built-in allocation function '__builtin_alloca_with_align'
- */
-
-#define VA_ARGS_FMT_SIZE (MAXLEN_LINE * 2)

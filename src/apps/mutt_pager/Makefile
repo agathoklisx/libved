@@ -56,6 +56,11 @@ ifeq (-$(CC), -gcc)
   FLAGS += -Wimplicit-fallthrough=0
 endif
 
+DEBUG := 0
+
+ifneq ($(DEBUG), 0)
+  FLAGS += $(DEBUG_FLAGS)
+endif
 #----------------------------------------------------------#
 # libved
 LIBVED_NAME := libved

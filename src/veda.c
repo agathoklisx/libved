@@ -50,8 +50,10 @@ int main (int argc, char **argv) {
   };
 
   struct argparse argparse;
-  argparse_init(&argparse, options, usage, 0);
-  argc = argparse_parse(&argparse, argc, (const char **) argv);
+  argparse_init (&argparse, options, usage, 0);
+  argc = argparse_parse (&argparse, argc, (const char **) argv);
+
+  if (argc is -1) return 1;
 
   if (NULL is (E = __init_ed__ ()))
     return 1;

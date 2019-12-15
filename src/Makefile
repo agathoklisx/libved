@@ -35,10 +35,17 @@ THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
-DEBUG_FLAGS := -Wextra -Wno-override-init -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
+DEBUG_FLAGS := -Wextra -Wno-override-init -Wshadow -Wall -Wunused-function -Wunused-macros
 # -Wno-override-init: is for designated initializers and included in Wextra
 
-# -fsanitize=undefined
+ifneq (-$(CC), -tcc)
+  DEBUG_FLAGS += -Werror
+# while compiling tinyexpr tcc warns with: assigment discards qualifiers
+# from pointer target type
+# -Wno-error=discarded-qualifiers doesn't have effect
+endif
+
+# DEBUG_FLAGS += -fsanitize=undefined
 # -Wpedantic if turn on this gives: ISO C forbids braced-groups within expressions
 
 SHARED_CFLAGS := -shared -fPIC
