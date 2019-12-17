@@ -30,8 +30,53 @@
   #include "ext/if_has_shell.c"
 #endif
 
+private int __ex_com_info__ (buf_t **thisp, rline_t *rl) {
+  (void) thisp; (void) rl;
+  int buf = Rline.arg.exists (rl, "buf");
+  if (buf)
+    Ed.append.toscratch ($myed, CLEAR, "");
+
+  if (buf) {
+    Ed.append.toscratch ($myed, DONOT_CLEAR, Buf.get.info (*thisp));
+    // goto theend;
+  }
+
+//theend:
+  if (buf)
+    Ed.scratch ($myed, thisp, NOT_AT_EOF);
+
+  return OK;
+}
+
+private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
+  (void) thisp; (void) c;
+  int retval = RLINE_NO_COMMAND;
+  string_t *com = Rline.get.command (rl);
+
+  if (Cstring.eq (com->bytes, "@info")) {
+    retval = __ex_com_info__ (thisp, rl);
+    goto theend;
+  }
+
+theend:
+  String.free (com);
+  return retval;
+}
+
+private void __ex_add_rline_commands__ (ed_t *this) {
+  int num_commands = 1;
+  char *commands[] = {"@info", NULL};
+  int num_args[] = {0, 0};
+  int flags[] = {0, 0};
+  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
+  Ed.append.command_arg (this, "@info", "--buf", 10);
+  Ed.set.rline_cb (this, __ex_rline_cb__);
+}
+
 private void __init_ext__ (Class (ed) *e, Type (ed) *this) {
   (void) e; (void) this;
+
+  __ex_add_rline_commands__ (this);
 
 #if HAS_REGEXP
   Re.exec = ext_re_exec;

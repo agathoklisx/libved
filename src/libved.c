@@ -4162,6 +4162,9 @@ private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
     goto theend;
   }
 
+  if (rline_arg_exists (rl, "enable-writing"))
+    $myroots(enable_writing) = 1;
+
   return *retval;
 
 theend:
@@ -5066,9 +5069,9 @@ private ssize_t buf_read_fname (buf_t *this) {
   $my(flags) |= (FILE_EXISTS|FILE_IS_READABLE);
 
   if (OK is access ($my(fname), W_OK))
-    $my(flags) &= ~FILE_IS_WRITABLE;
-  else
     $my(flags) |= FILE_IS_WRITABLE;
+  else
+    $my(flags) &= ~FILE_IS_WRITABLE;
 
   $my(flags) |= S_ISREG ($my(st).st_mode);
 
@@ -5257,6 +5260,33 @@ private void buf_free (buf_t *this) {
 
   free ($myprop);
   free (this);
+}
+
+private size_t buf_get_size (buf_t *this) {
+  size_t size = 0;
+  row_t *it = this->head;
+  while (it) {
+    size += it->data->num_bytes + 1;
+    it = it->next;
+  }
+
+  return size;
+}
+
+private char *buf_get_info (buf_t *this) {
+  My(String).replace_with ($my(shared_str), "BUF_STRUCTURE_INFO\n");
+  My(String).append_fmt ($my(shared_str),
+    "fname       : \"%s\"\n"
+    "cwd         : \"%s\"\n"
+    "at_frame    : %d\n"
+    "num_bytes   : %zd\n"
+    "num_lines   : %zd\n"
+    "cur_idx     : %d\n"
+    "is_writable : %d\n",
+    $my(fname), $my(cwd), $my(at_frame), self(get.size), self(get.num_lines),
+    this->cur_idx, (($my(flags) & FILE_IS_WRITABLE) ? 1 : 0));
+
+  return $my(shared_str)->bytes;
 }
 
 private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
@@ -11226,6 +11256,7 @@ private void ved_init_commands (ed_t *this) {
   ved_append_command_arg (this, "set", "--shiftwidth=", 13);
   ved_append_command_arg (this, "set", "--tabwidth=", 11);
   ved_append_command_arg (this, "set", "--ftype=", 8);
+  ved_append_command_arg (this, "set", "--enable-writing", 16);
   ved_append_command_arg (this, "substitute", "--remove-tabs", 13);
   ved_append_command_arg (this, "s%",         "--remove-tabs", 13);
   ved_append_command_arg (this, "substitute", "--shiftwidth=", 13);
@@ -12078,8 +12109,7 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_WRITE_FORCE:
     case VED_COM_WRITE:
     case VED_COM_WRITE_ALIAS:
-#ifdef ENABLE_WRITING
-      {
+      if ($myroots(enable_writing)) {
         arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
         arg_t *range = rline_get_arg (rl, RL_ARG_RANGE);
         arg_t *append = rline_get_arg (rl, RL_ARG_APPEND);
@@ -12097,10 +12127,9 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
           retval = ved_write_to_fname (this, fname->argval->bytes, NULL isnot append,
             rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com, VERBOSE_ON);
         }
-      }
-#else
-  My(Msg).error ($my(root), "writing is disabled, to enable use ENABLE_WRITING=1 during compilation");
-#endif
+      } else
+        My(Msg).error ($my(root), "writing is disabled, use ENABLE_WRITING=1 during compilation or the set command");
+
       goto theend;
 
     case VED_COM_EDIT_FORCE_ALIAS:
@@ -13615,6 +13644,7 @@ private ed_t *ed_init (ed_T *E) {
   $my(rl_last_component) = My(Vstring).new ();
   $my(uline) = My(Ustring).new ();
 
+  $my(enable_writing) = ENABLE_WRITING;
   $my(msg_tabwidth) = 2;
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
@@ -13646,6 +13676,10 @@ private ed_t *ed_init (ed_T *E) {
 
   current_list_append (E, this);
 
+  $my(name)[0] = 'e'; $my(name)[1] = 'd';
+  size_t len = bytelen ($from(E->tail, name));
+  for (uidx_t i = 2; i < len + 1; i++) $my(name)[i] = '+';
+  $my(name)[len] = '\0';
   return this;
 }
 
@@ -13988,8 +14022,10 @@ private ed_T *editor_new (char *name) {
           .rows =buf_free_rows
         ),
         .get = SubSelfInit (buf, get,
+          .info = buf_get_info,
           .fname = buf_get_fname,
           .num_lines = buf_get_num_lines,
+          .size = buf_get_size,
           .current_video_row = buf_get_current_video_row,
           .current_video_col = buf_get_current_video_col,
           .prop = SubSelfInit (bufget, prop,
@@ -14124,7 +14160,7 @@ private ed_T *editor_new (char *name) {
 }
 
 public ed_T *__init_ed__ (void) {
-  ed_T *this = editor_new ("veda");
+  ed_T *this = editor_new (MYNAME);
 
   if (NOTOK is __init__ (this)) {
     this->error_state |= ED_INIT_ERROR;

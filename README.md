@@ -633,7 +633,7 @@ Search:
    :!cmd                  (execute command)
    :diff                  (shows a unified diff in a diff buffer, see Unified Diff)
    :diffbuf               (change focus to the `diff' window/buffer)
-   :vgrep --pat=`pat' fname[s] (search for `pat' to fname[s])
+   :vgrep --pat=`pat' [--recursive] fname[s] (search for `pat' to fname[s])
    :redraw                (redraw current window)
    :searches              (change focus to the `search' window/buffer)
    :messages              (change focus to the message window/buffer)
@@ -911,7 +911,7 @@ Search:
 
    The command :vgrep it takes a pattern and at least a filename as argument[s]:
 
-    :vgrep --pat=`pattern' file[s]
+    :vgrep --pat=`pattern' [-r|--recursive] file[s]
 
    This should open a unique window intended only for searches and re-accessible
    with:
@@ -926,6 +926,8 @@ Search:
 
    A `q' on the results frame (the last one), will quit the window and focus again
    to the previous state (as it acts like a pager).
+
+   This command can search recursively and skips (as a start) any object file.
   */
 
  /* Unified Diff

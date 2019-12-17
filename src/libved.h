@@ -1,6 +1,14 @@
 #ifndef LIBVED_H
 #define LIBVED_H
 
+#define MYNAME "veda"
+#define ED_INSTANCES 252
+
+#ifndef ENABLE_WRITING
+#define ENABLE_WRITING 0
+#endif
+
+
 #define MAX_FRAMES 3
 #define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
@@ -377,6 +385,10 @@
 typedef signed int utf8;
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef size_t uidx_t;
+
+#include <stddef.h>
+typedef ptrdiff_t idx_t;
 
 #define public __attribute__((visibility ("default")))
 #define private __attribute__((visibility ("hidden")))
@@ -1160,8 +1172,14 @@ NewSubSelf (buf, get,
   SubSelf (bufget, row) row;
   SubSelf (bufget, prop) prop;
 
-  char *(*fname) (buf_t *);
-  size_t (*num_lines) (buf_t *);
+  char
+     *(*fname) (buf_t *),
+     *(*info) (buf_t *);
+
+  size_t
+    (*size) (buf_t *),
+    (*num_lines) (buf_t *);
+
   row_t *(*line_at) (buf_t *, int);
 
   int
@@ -1317,6 +1335,9 @@ NewSelf (buf,
     (*flush) (buf_t *),
     (*draw_cur_row) (buf_t *),
     (*clear) (buf_t *);
+
+  char
+    *(*info) (buf_t *);
 
   int
     (*write) (buf_t *, int),

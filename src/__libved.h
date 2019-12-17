@@ -583,7 +583,6 @@ NewType (buf,
   BufNormalEnd_cb on_normal_end;
   BufNormalOng_cb on_normal_g;
 
-
   buf_t  *next;
   buf_t  *prev;
 );
@@ -744,7 +743,7 @@ NewType (venv,
 
 NewProp (ed,
   char
-     name[8],
+     name[ED_INSTANCES],
     *saved_cwd;
 
   MY_PROPERTIES;
@@ -767,7 +766,8 @@ NewProp (ed,
     msg_row,
     msg_send,
     msg_numchars,
-    msg_tabwidth;
+    msg_tabwidth,
+    enable_writing;
 
   string_t
     *last_insert,

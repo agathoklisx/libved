@@ -9,7 +9,7 @@ Implement:
       (on repetition: scroll to history)
     (this usually mapped also and as Alt('.') on shells (for sure bash and zsh))
     ( we don't have ALT here)
-     (but CTRL('/') is also 0x1f (decimal 31)
+     (but CTRL('/') is also 0x1f (decimal 31) - DONE
 
   :w[q]bd
     also:
