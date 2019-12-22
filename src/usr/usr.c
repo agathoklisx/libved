@@ -430,14 +430,14 @@ syn_t u_syn[] = {
     make_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_make_syn_init, 0, NULL, NULL,
+    __u_syn_parser, __u_make_syn_init, 0, 0, NULL, NULL,
   },
   {
     "sh", _u_NULL_ARRAY, sh_extensions, sh_shebangs,
     sh_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_sh_syn_init, 0, NULL, NULL,
+    __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL,
   },
 };
 
@@ -525,13 +525,15 @@ private void __init_usr__ (ed_t *this) {
   ExprClass = __init_expr__ ();
 #endif
 
-  Uenv = AllocType (uenv);
-  string_t *path = Venv.get (this, "path");
-  Uenv->man_exec = Vsys.which ("man", path->bytes);
-  Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
-
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);
+
+  if (NULL is Uenv) {
+    Uenv = AllocType (uenv);
+    string_t *path = Venv.get (this, "path");
+    Uenv->man_exec = Vsys.which ("man", path->bytes);
+    Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
+  }
 }
 
 private void __deinit_usr__ (ed_t *this) {

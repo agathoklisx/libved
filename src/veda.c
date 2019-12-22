@@ -19,8 +19,8 @@
 #include <libved+.h>
 
 static const char *const usage[] = {
-    "veda [options] [filename]",
-    NULL,
+  "veda [options] [filename]",
+  NULL,
 };
 
 int main (int argc, char **argv) {
@@ -39,12 +39,14 @@ int main (int argc, char **argv) {
   int filetype = FTYPE_DEFAULT;
   int linenr = 0;
   int column = 1;
+  int num_win = 1;
 
   struct argparse_option options[] = {
     OPT_HELP (),
     OPT_GROUP("Options:"),
     OPT_INTEGER('+', "line-nr", &linenr, "start at line number", NULL, 0, SHORT_OPT_HAS_NO_DASH),
     OPT_INTEGER(0, "column", &column, "set pointer at column", NULL, 0, 0),
+    OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
     OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
     OPT_END(),
   };
@@ -55,28 +57,26 @@ int main (int argc, char **argv) {
 
   if (argc is -1) return 1;
 
-  if (NULL is (E = __init_ed__ ()))
+  if (NULL is (__E__ = __init_ed__ (MYNAME)))
     return 1;
 
-  ed_t *this = Ed.new (E, 1);
+  num_win = (num_win < argc ? num_win : argc);
+  ed_t *this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
 
-  __init_ext__ (E, this);
-
-#ifdef HAS_HISTORY
-  Ed.history.read (this);
-#endif
+//  __init_ext__ (__E__, this);
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
 
-/* at the begining at least a win_t type is allocated */
-  win_t *w = Ed.get.current_win (this);
+  win_t *w = Ed.set.current_win (this, Ed.get.num_special_win (this));
 
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
     buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL());
     Win.append_buf (w, buf);
-  } else
+  } else {
+    int widx = Ed.get.num_special_win (this);
+    int l_num_win = num_win;
     /* else create a new buffer for every file in the argvlist */
     for (int i = 0; i < argc; i++) {
       buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
@@ -87,7 +87,13 @@ int main (int argc, char **argv) {
         .at_column = column));
 
       Win.append_buf (w, buf);
+
+      if (--l_num_win > 0)
+        w = Ed.set.current_win (this, ++widx);
     }
+
+    w = Ed.set.current_win (this, Ed.get.num_special_win (this));
+  }
 
   /* set the first indexed name in the argvlist, as current */
   Win.set.current_buf (w, 0, DRAW);
@@ -100,28 +106,39 @@ int main (int argc, char **argv) {
     /* main loop */
     retval = Ed.main (this, buf);
 
+    if ((Ed.get.state (this) & ED_QUIT_ALL))
+      break;
+
+    if ((Ed.get.state (this) & ED_QUIT)) {
+      if (E.get.num (__E__) is 1)
+        break;
+
+      E.delete (__E__, E.get.current_idx (__E__), 1);
+      this = E.get.current (__E__);
+      w = Ed.get.current_win (this);
+      continue;
+    }
+
     /* here the user suspended its editor instance, with CTRL-j */
     if (Ed.get.state (this) & ED_SUSPENDED) {
-      if (E->num_items is 1) {
+      if (E.get.num (__E__) is 1) {
         /* as an example, we simply create another independed instance */
-        this = Ed.new (E, 1);
+        this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
+
         w = Ed.get.current_win (this);
         buf = Win.buf.new (w, BUF_INIT_QUAL());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
         /* else jump to the next or prev */
-        this = Ed.get.prev (this);
+        this = E.set.current (__E__, E.get.prev_idx (__E__));
+        w = Ed.get.current_win (this);
       }
     } else break;
   }
 
-#ifdef HAS_HISTORY
-  Ed.history.write (this);
-#endif
-
   __deinit_ext__ (this);
-  __deinit_ed__ (E);
+  __deinit_ed__ (&__E__);
 
 /* the end */
   return retval;

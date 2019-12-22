@@ -1,28 +1,30 @@
 #ifndef LIBVED_PLUS_H
 #define LIBVED_PLUS_H
 
-public ed_T *E;
+public Class (Ed) *__E__;
 
-#define Ed      E->self
-#define Cstring E->Cstring.self
-#define Ustring E->Ustring.self
-#define Vstring E->Vstring.self
-#define String  E->String.self
-#define Rline   E->Rline.self
-#define Error   E->Error.self
-#define Vsys    E->Vsys.self
-#define Venv    E->Venv.self
-#define Term    E->Term.self
-#define Input   E->Input.self
-#define File    E->File.self
-#define Path    E->Path.self
-#define Buf     E->Buf.self
-#define Win     E->Win.self
-#define Msg     E->Msg.self
-#define Dir     E->Dir.self
-#define Re      E->Re.self
+#define E       __E__->self
+#define Ed      __E__->ed->self
 
-#define $myed E->current
+#define Cstring __E__->ed->Cstring.self
+#define Ustring __E__->ed->Ustring.self
+#define Vstring __E__->ed->Vstring.self
+#define String  __E__->ed->String.self
+#define Rline   __E__->ed->Rline.self
+#define Error   __E__->ed->Error.self
+#define Vsys    __E__->ed->Vsys.self
+#define Venv    __E__->ed->Venv.self
+#define Term    __E__->ed->Term.self
+#define Input   __E__->ed->Input.self
+#define File    __E__->ed->File.self
+#define Path    __E__->ed->Path.self
+#define Buf     __E__->ed->Buf.self
+#define Win     __E__->ed->Win.self
+#define Msg     __E__->ed->Msg.self
+#define Dir     __E__->ed->Dir.self
+#define Re      __E__->ed->Re.self
+
+#define $myed E.get.current (__E__)
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
@@ -112,7 +114,7 @@ int argparse_parse (struct argparse *, int, const char **);
   private void __deinit_local__ (ed_t *);
 #endif
 
-private void __init_ext__ (Class (ed) *, ed_t *);
+private void __init_ext__ (ed_t *);
 private void __deinit_ext__ (ed_t *);
 
 #endif

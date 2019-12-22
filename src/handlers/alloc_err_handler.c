@@ -12,7 +12,7 @@ mutable public void __alloc_error_handler__ (int err, size_t size,
   else
     fprintf (stderr, "Error: Not Enouch Memory\n");
 
-  ifnot (NULL is E) __deinit_ed__ (E);
+  ifnot (NULL is __E__) __deinit_ed__ (&__E__);
 
   exit (1);
 }

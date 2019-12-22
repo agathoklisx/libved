@@ -156,6 +156,109 @@ private char *str_substr (char *dest, size_t len, char *src, size_t src_len, siz
   return dest;
 }
 
+/* This is itoa version 0.4, written by Lukás Chmela and released under GPLv3,
+ * Original Source:  http://www.strudel.org.uk/itoa/
+ */
+
+/* this is for integers (i wonder maybe is better to use *printf(), but i hate to
+   do it, because of the short code and its focus to this specific functionality) */
+private char *itoa (int value, char *result, int base) {
+  if (base < 2 || base > 36) {
+    *result = '\0';
+    return result;
+  }
+
+  char *ptr = result, *ptr1 = result, tmp_char;
+  int tmp_value;
+
+  do {
+    tmp_value = value;
+    value /= base;
+    *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"
+        [35 + (tmp_value - (value * base))];
+  } while (value);
+
+  /* Apply negative sign */
+  if (0 > tmp_value) *ptr++ = '-';
+
+  *ptr-- = '\0';
+
+  while (ptr1 < ptr) {
+    tmp_char = *ptr;
+    *ptr--= *ptr1;
+    *ptr1++ = tmp_char;
+   }
+
+  return result;
+}
+
+private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t wsize,
+   char *Nwtype, size_t Nwsize, int cur_idx, int *fidx, int *lidx) {
+  if (NULL is bytes or 0 is bsize or (int) bsize <= cur_idx) {
+    *lidx = cur_idx;
+    return NULL;
+  }
+
+  if (IS_SPACE (bytes[cur_idx]) or
+      IS_CNTRL (bytes[cur_idx]) or
+      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)) {
+    *lidx = cur_idx;
+    return NULL;
+  }
+
+  while (cur_idx > 0 and
+      IS_SPACE (bytes[cur_idx]) is 0 and
+      IS_CNTRL (bytes[cur_idx]) is 0 and
+      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize))
+    cur_idx--;
+
+  if (cur_idx isnot 0 or (
+      IS_SPACE (bytes[cur_idx]) or
+      IS_CNTRL (bytes[cur_idx]) or
+      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)))
+    cur_idx++;
+
+  *fidx = cur_idx;
+
+  int widx = 0;
+  while (cur_idx < (int) bsize and
+      IS_SPACE (bytes[cur_idx]) is 0 and
+      IS_CNTRL (bytes[cur_idx]) is 0 and
+      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize) and
+      widx <= (int) wsize)
+    word[widx++] = bytes[cur_idx++];
+
+  *lidx = cur_idx - 1;
+
+  word[widx] = '\0';
+
+  return word;
+}
+
+public cstring_T __init_cstring__ (void) {
+  return ClassInit (cstring,
+    .self = SelfInit (cstring,
+      .cmp_n = str_cmp_n,
+      .dup = str_dup,
+      .eq = str_eq,
+      .eq_n = str_eq_n,
+      .chop = str_chop,
+      .itoa = itoa,
+      .extract_word_at = str_extract_word_at,
+      .substr = str_substr,
+      .byte_in_str = byte_in_str,
+      .cp = str_cp,
+      .cp_fmt = str_cp_fmt,
+      .trim = SubSelfInit (cstring, trim,
+        .end = str_trim_end,
+      ),
+      .byte = SubSelfInit (cstring, byte,
+        .mv = str_byte_mv
+      ),
+    )
+  );
+}
+
 private int ustring_charlen (uchar c) {
   if (c < 0x80) return 1;
   if ((c & 0xe0) is 0xc0) return 2;
@@ -1063,40 +1166,24 @@ private int ustring_change_case (char *dest, char *src, size_t src_len, int to_t
   return changed;
 }
 
-/* This is itoa version 0.4, written by Lukás Chmela and released under GPLv3,
- * Original Source:  http://www.strudel.org.uk/itoa/
- */
-
-/* this is for integers (i wonder maybe is better to use *printf(), but i hate to
-   do it, because of the short code and its focus to this specific functionality) */
-private char *itoa (int value, char *result, int base) {
-  if (base < 2 || base > 36) {
-    *result = '\0';
-    return result;
-  }
-
-  char *ptr = result, *ptr1 = result, tmp_char;
-  int tmp_value;
-
-  do {
-    tmp_value = value;
-    value /= base;
-    *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"
-        [35 + (tmp_value - (value * base))];
-  } while (value);
-
-  /* Apply negative sign */
-  if (0 > tmp_value) *ptr++ = '-';
-
-  *ptr-- = '\0';
-
-  while (ptr1 < ptr) {
-    tmp_char = *ptr;
-    *ptr--= *ptr1;
-    *ptr1++ = tmp_char;
-   }
-
-  return result;
+public ustring_T __init_ustring__ (void) {
+  return ClassInit (ustring,
+    .self = SelfInit (ustring,
+      .get = SubSelfInit (ustring, get,
+        .code_at = ustring_get_code_at
+      ),
+      .new = ustring_new,
+      .free = ustring_free,
+      .encode = ustring_encode,
+      .to_lower = ustring_to_lower,
+      .to_upper = ustring_to_upper,
+      .is_lower = ustring_is_lower,
+      .is_upper = ustring_is_upper,
+      .character = ustring_character,
+      .change_case = ustring_change_case,
+      .charlen = ustring_charlen
+    )
+  );
 }
 
 /* and here it starts */
@@ -1291,6 +1378,39 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
   char bytes[len + 1];
   VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   return string_replace_with_len (this, bytes, len);
+}
+
+public string_T __init_string__ (void) {
+  return ClassInit (string,
+    .self = SelfInit (string,
+      .free = string_free,
+      .new = string_new,
+      .reallocate = string_reallocate,
+      .new_with = string_new_with,
+      .new_with_len = string_new_with_len,
+      .new_with_fmt = string_new_with_fmt,
+      .insert_at = string_insert_at,
+      .insert_at_with_len  = string_insert_at_with_len,
+      .append = string_append,
+      .append_fmt = string_append_fmt,
+      .append_with_len = string_append_with_len,
+      .append_byte = string_append_byte,
+      .prepend = string_prepend,
+      .prepend_fmt = string_prepend_fmt,
+      .prepend_byte = string_prepend_byte,
+      .delete_numbytes_at = string_delete_numbytes_at,
+      .replace_numbytes_at_with = string_replace_numbytes_at_with,
+      .replace_with = string_replace_with,
+      .replace_with_len = string_replace_with_len,
+      .replace_with_fmt = string_replace_with_fmt,
+      .clear = string_clear,
+      .clear_at = string_clear_at,
+    )
+  );
+}
+
+public void __deinit_string__ (string_T *this) {
+  (void) this;
 }
 
 /* like an array semantics */
@@ -2804,6 +2924,62 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
   return this;
 }
 
+public term_T __init_term__ (void) {
+  return ClassInit (term,
+    .self = SelfInit (term,
+      .set_mode = term_set_mode,
+      .set = term_set,
+      .reset = term_reset,
+      .new = term_new,
+      .free  = term_free,
+      .set_name = term_set_name,
+      .init_size = term_init_size,
+      .get = SubSelfInit (term, get,
+        .dim = term_get_dim
+      ),
+      .Cursor = SubSelfInit (term, cursor,
+        .get_pos = term_cursor_get_ptr_pos,
+        .set_pos = term_cursor_set_ptr_pos,
+        .hide = term_cursor_hide,
+        .show = term_cursor_show,
+        .restore = term_cursor_restore
+      ),
+      .Screen = SubSelfInit (term, screen,
+        .restore = term_screen_restore,
+        .save = term_screen_save,
+        .clear = term_screen_clear,
+        .clear_eol = term_screen_clear_eol
+      ),
+      .Input = SubSelfInit (term, input,
+        .get = term_get_input
+      )
+    )
+  );
+}
+
+public void __deinit_term__ (term_T *this) {
+  (void) this;
+}
+
+public video_T __init_video__ (void) {
+  return ClassInit (video,
+    .self = SelfInit (video,
+      .free = video_free,
+      .flush = video_flush,
+      .new =  video_new,
+      .set_with = video_set_row_with,
+      .Draw = SubSelfInit (video, draw,
+        .row_at = video_draw_at,
+        .all = video_draw_all
+      )
+    )
+  );
+}
+
+public void __deinit_video__ (video_T *this) {
+  (void) this;
+}
+
 private void menu_free_list (menu_t *this) {
   if (this->state & MENU_LIST_IS_ALLOCATED) {
     vstr_free (this->list);
@@ -3729,7 +3905,7 @@ char *c_keywords[] = {
     "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
     "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
-    "$myroots V", "$myparents V", "public I", "mutable I", "loop I", "forever I",
+    "AllocClass T", "AllocProp T", "$myroots V", "$myparents V", "public I", "mutable I", "loop I", "forever I",
     "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
     "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
     NULL
@@ -3747,7 +3923,8 @@ syn_t HL_DB[] = {
      "txt", NULL_ARRAY, default_extensions, NULL_ARRAY,
      NULL, NULL,
      NULL, NULL, NULL, NULL,
-     HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init, 0, NULL, NULL,
+     HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init,
+     0, 0, NULL, NULL,
   },
   {
     "c", NULL_ARRAY, c_extensions, NULL_ARRAY,
@@ -3755,7 +3932,7 @@ syn_t HL_DB[] = {
     c_singleline_comment, c_multiline_comment_start, c_multiline_comment_end,
     c_multiline_comment_continuation,
     HL_STRINGS, HL_NUMBERS,
-    buf_syn_parser, buf_syn_init_c, 0, NULL, NULL,
+    buf_syn_parser, buf_syn_init_c, 0, 0, NULL, NULL,
   }
 };
 
@@ -3794,7 +3971,8 @@ private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
       }
 
     ifnot (NULL is $my(syn)->multiline_comment_continuation)
-      if (str_eq_n (it->data->bytes, $my(syn)->multiline_comment_continuation, bytelen ($my(syn)->multiline_comment_continuation))) {
+      if (str_eq_n (it->data->bytes, $my(syn)->multiline_comment_continuation,
+      	$my(syn)->multiline_comment_continuation_len)) {
         found = 1;
         break;
       }
@@ -5273,20 +5451,109 @@ private size_t buf_get_size (buf_t *this) {
   return size;
 }
 
-private char *buf_get_info (buf_t *this) {
-  My(String).replace_with ($my(shared_str), "BUF_STRUCTURE_INFO\n");
-  My(String).append_fmt ($my(shared_str),
-    "fname       : \"%s\"\n"
-    "cwd         : \"%s\"\n"
-    "at_frame    : %d\n"
-    "num_bytes   : %zd\n"
-    "num_lines   : %zd\n"
-    "cur_idx     : %d\n"
-    "is_writable : %d\n",
-    $my(fname), $my(cwd), $my(at_frame), self(get.size), self(get.num_lines),
-    this->cur_idx, (($my(flags) & FILE_IS_WRITABLE) ? 1 : 0));
+private void buf_free_info (buf_t *this, bufinfo_t **info) {
+  (void) this;
+  if (NULL is *info) return;
+  free ((*info)->fname);
+  free ((*info)->cwd);
+  free ((*info)->parents_name);
+  free (*info);
+  *info = NULL;
+}
 
-  return $my(shared_str)->bytes;
+private bufinfo_t *buf_get_info_as_type (buf_t *this) {
+  bufinfo_t *info = AllocType (bufinfo);
+  info->fname = My(Cstring).dup ($my(fname), bytelen ($my(fname)));
+  info->cwd = My(Cstring).dup ($my(cwd), bytelen ($my(cwd)));
+  info->parents_name = My(Cstring).dup ($myparents(name), bytelen ($myparents(name)));
+  info->at_frame = $my(at_frame);
+  info->cur_idx = this->cur_idx;
+  info->is_writable = (($my(flags) & FILE_IS_WRITABLE) ? 1 : 0);
+  info->num_bytes = self(get.size);
+  info->num_lines = self(get.num_lines);
+  return info;
+}
+
+private void win_free_info (win_t *this, wininfo_t **info) {
+  (void) this;
+  if (NULL is *info) return;
+  free ((*info)->name);
+  free ((*info)->parents_name);
+  free ((*info)->cur_buf);
+
+  for (size_t i = 0; i < (*info)->num_items; i++)
+    free ((*info)->buf_names[i]);
+  free ((*info)->buf_names);
+
+  free (*info);
+  *info = NULL;
+}
+
+private wininfo_t *win_get_info_as_type (win_t *this) {
+  wininfo_t *info = AllocType (wininfo);
+  info->name = My(Cstring).dup ($my(name), bytelen ($my(name)));
+  info->parents_name = My(Cstring).dup ($myparents(name), bytelen ($myparents(name)));
+  info->num_frames = $my(num_frames);
+  info->cur_idx = this->cur_idx;
+  info->num_items = this->num_items;
+  info->buf_names = Alloc (sizeof (char *) * (info->num_items));
+  buf_t *it = this->head;
+  int idx = 0;
+  while (it) {
+    size_t len = bytelen ($from(it, fname));
+    if (it is this->current)
+      info->cur_buf = My(Cstring).dup ($from(it, fname), len);
+
+    info->buf_names[idx++] = My(Cstring).dup ($from(it, fname), len);
+
+    it = it->next;
+  }
+
+  return info;
+}
+
+private void ed_free_info (ed_t *this, edinfo_t **info) {
+  (void) this;
+  if (NULL is *info) return;
+  free ((*info)->name);
+  free ((*info)->cur_win);
+  for (size_t i = 0; i < (*info)->num_items; i++)
+    free ((*info)->win_names[i]);
+  free ((*info)->win_names);
+
+  for (size_t i = 0; i < (*info)->num_special_win; i++)
+    free ((*info)->special_win_names[i]);
+  free ((*info)->special_win_names);
+
+  free (*info);
+  *info = NULL;
+}
+
+private edinfo_t *ed_get_info_as_type (ed_t *this) {
+  edinfo_t *info = AllocType (edinfo);
+  info->num_special_win = self(get.num_special_win);
+  info->name = My(Cstring).dup ($my(name), bytelen ($my(name)));
+  info->num_items = this->num_items - info->num_special_win;
+  info->win_names = Alloc (sizeof (char *) * (info->num_items));
+  info->special_win_names = Alloc (sizeof (char *) * (info->num_special_win));
+  win_t *it = this->head;
+  int idx = 0;
+  int sp_idx = 0;
+  while (it) {
+    size_t len = bytelen ($from(it, name));
+    if (it is this->current)
+      info->cur_win = My(Cstring).dup ($from(it, name), len);
+
+    if ($from(it, type) is VED_WIN_NORMAL_TYPE)
+      info->win_names[idx++] = My(Cstring).dup ($from(it, name), len);
+    else
+      info->special_win_names[sp_idx++] = My(Cstring).dup ($from(it, name), len);
+
+    it = it->next;
+  }
+
+  info->cur_idx = this->cur_idx;
+  return info;
 }
 
 private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
@@ -5510,7 +5777,7 @@ private void win_draw (win_t *w) {
   while (this) {
     if ($my(flags) & BUF_IS_VISIBLE) {
       if (this is w->current)
-        My(Ed).set.topline (this);
+        My(Ed).set.topline ($my(root), this);
 
       self(to.video);
     }
@@ -5564,14 +5831,22 @@ private dim_t **win_dim_calc (win_t *this) {
   return $my(frames_dim);
 }
 
+private char *ed_name_gen (int *name_gen, char *prefix, size_t prelen) {
+  size_t num = (*name_gen / 26) + prelen;
+  char *name = Alloc (num * sizeof (char *) + 1);
+  uidx_t i = 0;
+  for (; i < prelen; i++) name[i] = prefix[i];
+  for (; i < num; i++) name[i] = 'a' + ((*name_gen)++ % 26);
+  name[num] = '\0';
+  return name;
+}
+
 private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   win_t *this = AllocType (win);
   $myprop = AllocProp (win);
+
   if (NULL is name) {
-    int num = ed->name_gen / 26;
-    $my(name) = Alloc (num * sizeof (char *) + 1);
-    for (int i = 0; i < num; i++) $my(name)[i] = 'a' + (ed->name_gen++ % 26);
-    $my(name)[num] = '\0';
+    $my(name) = ed_name_gen (&ed->name_gen, "win:", 4);
   } else
     $my(name) = str_dup (name, bytelen (name));
 
@@ -5970,18 +6245,18 @@ private char *ed_error_string (ed_t *this, int err) {
   return $my(ed_str)->bytes;
 }
 
-private void buf_set_topline (buf_t *this) {
+private void ed_set_topline (ed_t *ed, buf_t *this) {
   time_t tim = time (NULL);
   struct tm *tm = localtime (&tim);
 
-  My(String).replace_with_fmt ($myroots(topline), "[%s] ftype (%s) [pid %d]",
-    $my(mode), $my(ftype)->name, $myroots(env)->pid);
+  My(String).replace_with_fmt ($from(ed, topline), "[%s] ftype (%s) [pid %d]",
+    $my(mode), $my(ftype)->name, $from(ed, env)->pid);
 
   char tmnow[32];
   strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
-  int pad = $my(dim->num_cols) - $myroots(topline)->num_bytes - bytelen (tmnow);
+  int pad = $my(dim->num_cols) - $from(ed, topline)->num_bytes - bytelen (tmnow);
   if (pad > 0)
-    loop (pad) My(String).append ($myroots(topline), " ");
+    loop (pad) My(String).append ($from(ed, topline), " ");
 
   My(String).append_fmt ($myroots(topline), "%s%s", tmnow, TERM_COLOR_RESET);
   My(String).prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT, COLOR_TOPLINE);
@@ -5989,7 +6264,7 @@ private void buf_set_topline (buf_t *this) {
 }
 
 private void buf_set_draw_topline (buf_t *this) {
-  My(Ed).set.topline (this);
+  My(Ed).set.topline ($my(root), this);
   My(Video).Draw.row_at ($my(video), 1);
 }
 
@@ -6132,49 +6407,6 @@ theend:
   if (issign) string_prepend_byte (nb, '-');
   string_prepend_byte (nb, type);
   return nb;
-}
-
-private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t wsize,
-   char *Nwtype, size_t Nwsize, int cur_idx, int *fidx, int *lidx) {
-  if (NULL is bytes or 0 is bsize or (int) bsize <= cur_idx) {
-    *lidx = cur_idx;
-    return NULL;
-  }
-
-  if (IS_SPACE (bytes[cur_idx]) or
-      IS_CNTRL (bytes[cur_idx]) or
-      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)) {
-    *lidx = cur_idx;
-    return NULL;
-  }
-
-  while (cur_idx > 0 and
-      IS_SPACE (bytes[cur_idx]) is 0 and
-      IS_CNTRL (bytes[cur_idx]) is 0 and
-      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize))
-    cur_idx--;
-
-  if (cur_idx isnot 0 or (
-      IS_SPACE (bytes[cur_idx]) or
-      IS_CNTRL (bytes[cur_idx]) or
-      NULL isnot memchr (Nwtype, bytes[cur_idx], Nwsize)))
-    cur_idx++;
-
-  *fidx = cur_idx;
-
-  int widx = 0;
-  while (cur_idx < (int) bsize and
-      IS_SPACE (bytes[cur_idx]) is 0 and
-      IS_CNTRL (bytes[cur_idx]) is 0 and
-      NULL is memchr (Nwtype, bytes[cur_idx], Nwsize) and
-      widx <= (int) wsize)
-    word[widx++] = bytes[cur_idx++];
-
-  *lidx = cur_idx - 1;
-
-  word[widx] = '\0';
-
-  return word;
 }
 
 private char *get_current_word (buf_t *this, char *word, char *Nwtype,
@@ -6474,8 +6706,9 @@ private int ved_grep_on_normal (buf_t **thisp, utf8 com, int *range, int regidx)
 
   if (com isnot '\r' and com isnot 'q') return 0;
   if (com is 'q') {
-    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE))
-      return EXIT;
+    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+       NULL, NO_OPTION, NO_FORCE))
+      return EXIT_THIS;
     return -1;
   }
 
@@ -6565,7 +6798,6 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
 
 private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 int interactive, int fidx, int lidx) {
-debug_append ("pat |%s| sub |%s| fidx %d lidx %d\n ", pat, sub, fidx, lidx);
   int retval = NOTHING_TODO;
   ifnot (this->num_items) return retval;
 
@@ -6973,7 +7205,7 @@ private void buf_flush (buf_t *this) {
 
 private void buf_draw (buf_t *this) {
   My(String).clear ($my(video)->render);
-  My(Ed).set.topline (this);
+  My(Ed).set.topline ($my(root), this);
   video_render_set_from_to ($my(video), 1, 1);
   self(to.video);
   self(flush);
@@ -7022,7 +7254,7 @@ private int ved_diff (buf_t **thisp, int to_stdout) {
 }
 
 private int ved_quit (ed_t *ed, int force) {
-  int retval = EXIT;
+  int retval = EXIT_THIS;
   if (force) return retval;
 
   win_t *w = ed->head;
@@ -8160,14 +8392,17 @@ private int ved_normal_handle_ctrl_w (buf_t **thisp) {
 
     case 'l':
     case ARROW_RIGHT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, NO_OPTION, NO_FORCE);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
+          NULL, NO_OPTION, NO_FORCE);
 
     case 'h':
     case ARROW_LEFT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV, NULL, NO_OPTION, NO_FORCE);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV,
+          NULL, NO_OPTION, NO_FORCE);
 
     case '`':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+          NULL, NO_OPTION, NO_FORCE);
 
     default:
       break;
@@ -8224,10 +8459,12 @@ private int ved_normal_handle_comma (buf_t **thisp) {
       return ved_buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
 
     case '.':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED, NULL, NO_OPTION, NO_FORCE);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+          NULL, NO_OPTION, NO_FORCE);
 
     case '/':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT, NULL, NO_OPTION, NO_FORCE);
+      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
+          NULL, NO_OPTION, NO_FORCE);
   }
 
   return NOTHING_TODO;
@@ -8860,11 +9097,6 @@ next:
   return $my(vis)[0].orig_syn_parser (this, line, len, idx, currow);
 }
 
-private int ed_lw_mode_cb (buf_t **thisp, int frow, int lrow, vstr_t *vstr, utf8 c, char *action) {
-  (void) thisp; (void) vstr; (void) c; (void) frow; (void) lrow; (void) action;
-  return 1;
-}
-
 private int ved_visual_token_cb (vstr_t *str, char *tok, void *menu_o) {
   menu_t *menu = (menu_t *) menu_o;
   if (menu->patlen)
@@ -9116,7 +9348,7 @@ handle_char:
 
             for (int j = 0; j < $myroots(num_lw_mode_cbs); j++) {
               int retval = $myroots(lw_mode_cbs)[j] (thisp,
-              	  $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c, vis_action);
+            	  $my(vis)[0].fidx, $my(vis)[0].lidx, rows, c, vis_action);
               if (retval isnot NO_CALLBACK_FUNCTION)
                 break;
             }
@@ -9196,11 +9428,6 @@ next:
 private char *ved_syn_parse_visual_cw (buf_t *this, char *line, int len, int idx, row_t *row) {
   (void) idx;
   return ved_syn_parse_visual_line (this, line, len, row);
-}
-
-private int ed_cw_mode_cb (buf_t **thisp, int fcol, int lcol, string_t *str, utf8 c, char *action) {
-  (void) thisp; (void) str; (void) c; (void) fcol; (void) lcol; (void) action;
-  return 1;
 }
 
 private int ved_normal_visual_cw (buf_t **thisp) {
@@ -9711,8 +9938,10 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
     switch (com) {
       case VED_COM_WIN_CHANGE_PREV:
         if (--idx is -1) { idx = this->num_items - 1; } break;
+
       case VED_COM_WIN_CHANGE_NEXT:
         if (++idx is this->num_items) { idx = 0; } break;
+
       case VED_COM_WIN_CHANGE_PREV_FOCUSED:
         idx = this->prev_idx;
     }
@@ -9721,16 +9950,20 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
       ifnot (force) return NOTHING_TODO;
 
     ifnot (accept_rdonly) {
-      int tmp_idx = (idx is this->num_items - 1 ? 0 : idx + 1);
+      int tmp_idx = cidx;
       for (;;) {
         win_t *w = self(get.win_by_idx, idx);
-        if (NULL is w)
-          if (idx is tmp_idx)
-            return NOTHING_TODO;
+        if (idx is tmp_idx)
+          return NOTHING_TODO;
 
         if ($from(w, type) is VED_WIN_SPECIAL_TYPE) {
-          if (idx is 0) idx = this->num_items - 1;
-          else idx--;
+          if (com is VED_COM_WIN_CHANGE_PREV) {
+            if (idx is 0) idx = this->num_items - 1;
+            else idx--;
+          } else {
+            if (idx is this->num_items - 1) idx = 0;
+            else idx++;
+          }
         } else break;
       }
     }
@@ -9749,7 +9982,7 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
 
 private int ved_win_delete (ed_t *this, buf_t **thisp, int count_special) {
   if (1 is self(get.num_win, count_special))
-    return EXIT;
+    return EXIT_THIS;
 
   win_t *parent = current_list_pop (this, win_t);
   win_free (parent);
@@ -12726,7 +12959,7 @@ theend:
   return DONE;
 }
 
-private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int regidx) {
+private int ed_exec_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int regidx) {
   int count = 1;
 
   buf_t *this = *thisp;
@@ -12745,15 +12978,15 @@ private int ved_buf_exec_cmd_handler (buf_t **thisp, utf8 com, int *range, int r
   switch (this->on_normal_beg (thisp, com, range, regidx)) {
     case -1: goto theend;
     case  1: goto atend;
-    case EXIT: return EXIT;
+    case EXIT_THIS: return EXIT_THIS;
     default: break;
   }
 
   if (com > 'z') {
-    if ($myroots(lmap)[0][0] isnot 0) {
+    if ($from(ed, lmap)[0][0] isnot 0) {
       for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 26; j++) {
-          if ($myroots(lmap)[i][j] is com) {
+        for (int j = 0; j < ('z' - 'a') + 1; j++) {
+          if ($from(ed, lmap)[i][j] is com) {
             com = (i is 1 ? 'a' : 'A') + j;
             goto handle_com;
           }
@@ -12770,7 +13003,7 @@ handle_com:
 
     case ':':
       {
-      rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+      rline_t *rl = ved_rline_new (ed, $my(term_ptr), My(Input).get,
           *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
       retval = ved_rline (thisp, rl);
       }
@@ -12967,12 +13200,12 @@ handle_com:
       retval = vundo (this, com); break;
 
     case CTRL('l'):
-      My(Win).draw ($my(root)->current);
+      My(Win).draw (ed->current);
       retval = DONE; break;
 
     case CTRL('j'):
-      My(Ed).suspend ($my(root));
-      return EXIT;
+      My(Ed).suspend (ed);
+      return EXIT_THIS;
 
     case 'W':
       retval = ved_normal_handle_W (thisp);
@@ -13070,7 +13303,7 @@ handle_char:
 exec_block:
         if (regidx is -1) regidx = REG_UNAMED;
 
-        cmd_retv = My(Ed).exec.cmd (&this, c, range, regidx);
+        cmd_retv = My(Ed).exec.cmd (ed, &this, c, range, regidx);
 
         if (cmd_retv is DONE || cmd_retv is NOTHING_TODO)
           goto new_state;
@@ -13081,20 +13314,28 @@ exec_block:
             retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
                 NULL, 0, NO_FORCE);
             if (retval is NOTHING_TODO)
-              cmd_retv = EXIT;
+              cmd_retv = EXIT_THIS;
             else
               goto new_state;
           } else
             goto new_state;
         }
 
-        if (cmd_retv is EXIT) {retval = OK; goto theend;}
+        if (cmd_retv is EXIT_THIS) {
+          if ($myroots(state) & ED_SUSPENDED)
+            $myroots(state) |= ED_EXIT;
+          else
+            $myroots(state) |= ED_QUIT;
+
+          retval = OK;
+          goto theend;
+        }
 
         if (cmd_retv is WIN_EXIT) {
                        /* at this point this (probably) is a null reference */
           retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
           if (retval is DONE) goto new_state;
-          if (retval is EXIT) {retval = OK; goto theend;}
+          if (retval is EXIT_THIS) {retval = OK; goto theend;}
           goto theend;
         }
     }
@@ -13145,7 +13386,7 @@ private win_t *ed_get_win_by_name (ed_t *this, char *name, int *idx) {
 }
 
 private win_t *ed_get_win_by_idx (ed_t *this, int idx) {
-  if (idx >= this->num_items) return NULL;
+  if (idx >= this->num_items or idx < 0) return NULL;
   int i = 0;
   win_t *it = this->head;
   while (it) {
@@ -13167,17 +13408,6 @@ private void *ed_get_callback_fun (ed_t *this, char *fun) {
   return NULL;
 }
 
-private int ed_get_num_win (ed_t *this, int count_special) {
-  if (count_special) return this->num_items;
-  int num = 0;
-  win_t *it = this->head;
-  while (it) {
-    ifnot ($from(it, type) is VED_WIN_SPECIAL_TYPE) num++;
-    it = it->next;
-  }
-  return num;
-}
-
 private int ed_get_state (ed_t *this) {
   return $my(state);
 }
@@ -13191,16 +13421,19 @@ private win_t *ed_get_win_next (ed_t *this, win_t *w) {
   return w->next;
 }
 
-private ed_t *ed_get_next (ed_t *this) {
-  ifnot (NULL is this->next)
-    return this->next;
-  return this->prev;
+private int ed_get_num_win (ed_t *this, int count_special) {
+  if (count_special) return this->num_items;
+  int num = 0;
+  win_t *it = this->head;
+  while (it) {
+    ifnot ($from(it, type) is VED_WIN_SPECIAL_TYPE) num++;
+    it = it->next;
+  }
+  return num;
 }
 
-private ed_t *ed_get_prev (ed_t *this) {
-  ifnot (NULL is this->prev)
-    return this->prev;
-  return this->next;
+private int ed_get_num_special_win (ed_t *this) {
+  return $my(num_special_win);
 }
 
 private buf_t *ed_get_bufname (ed_t *this, char *fname) {
@@ -13245,7 +13478,7 @@ private dim_t *ed_set_dim (ed_t *this, dim_t *dim, int f_row, int l_row,
   return dim_set (dim, f_row, l_row, f_col, l_col);
 }
 
-private int ved_append_win (ed_t *this, win_t *w) {
+private int ed_append_win (ed_t *this, win_t *w) {
   current_list_append (this, w);
   return this->cur_idx;
 }
@@ -13412,8 +13645,8 @@ private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,
   if (NULL is cb) return;
 
   $my(num_cw_mode_cbs)++;
-  ifnot ($my(num_cw_mode_cbs))
-    $my(cw_mode_cbs) = Alloc (sizeof (VisualCwMode_cb) * $my(num_cw_mode_cbs));
+  ifnot ($my(num_cw_mode_cbs) - 1)
+    $my(cw_mode_cbs) = Alloc (sizeof (VisualCwMode_cb));
   else
     $my(cw_mode_cbs) = Realloc ($my(cw_mode_cbs), sizeof (VisualCwMode_cb) * $my(num_cw_mode_cbs));
 
@@ -13435,7 +13668,7 @@ private void ed_set_cw_mode_actions_default (ed_t *this) {
     "+send selected area to XA_CLIPBOARD\n"
     "*send selected area to XA_PRIMARY";
 
- self(set.cw_mode_actions, chars, ARRLEN(chars), actions, ed_cw_mode_cb);
+ self(set.cw_mode_actions, chars, ARRLEN(chars), actions, NULL);
 }
 
 private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
@@ -13466,8 +13699,8 @@ private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
   if (NULL is cb) return;
 
   $my(num_lw_mode_cbs)++;
-  ifnot ($my(num_lw_mode_cbs))
-    $my(lw_mode_cbs) = Alloc (sizeof (VisualLwMode_cb) * $my(num_lw_mode_cbs));
+  ifnot ($my(num_lw_mode_cbs) - 1)
+    $my(lw_mode_cbs) = Alloc (sizeof (VisualLwMode_cb));
   else
     $my(lw_mode_cbs) = Realloc ($my(lw_mode_cbs), sizeof (VisualLwMode_cb) * $my(num_lw_mode_cbs));
 
@@ -13492,7 +13725,23 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     "+send selected lines to XA_CLIPBOARD\n"
     "*send selected lines to XA_PRIMARY";
 
-  self(set.lw_mode_actions, chars, ARRLEN(chars), actions, ed_lw_mode_cb);
+  self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
+}
+
+private void ed_free_at_exit_cbs (ed_t *this) {
+  ifnot ($my(num_at_exit_cbs)) return;
+  free ($my(at_exit_cbs));
+}
+
+private void ed_set_at_exit_cb (ed_t *this, EdAtExit_cb cb) {
+  if (NULL is cb) return;
+  $my(num_at_exit_cbs)++;
+  ifnot ($my(num_at_exit_cbs) - 1)
+    $my(at_exit_cbs) = Alloc (sizeof (EdAtExit_cb));
+  else
+    $my(at_exit_cbs) = Realloc ($my(at_exit_cbs), sizeof (EdAtExit_cb) * $my(num_at_exit_cbs));
+
+  $my(at_exit_cbs)[$my(num_at_exit_cbs) -1] = cb;
 }
 
 private void ed_syn_append (ed_t *this, syn_t syn) {
@@ -13524,6 +13773,10 @@ private void ed_syn_append (ed_t *this, syn_t syn) {
          keyword_colors[whereis_c(c)];
     }
   }
+
+  ifnot (NULL is $my(syntaxes)[$my(num_syntaxes)].multiline_comment_continuation)
+    $my(syntaxes)[$my(num_syntaxes)].multiline_comment_continuation_len =
+      bytelen ($my(syntaxes)[$my(num_syntaxes)].multiline_comment_continuation);
   $my(num_syntaxes)++;
 #undef whereis_c
 }
@@ -13546,6 +13799,12 @@ private void ed_free (ed_t *this) {
   }
 
   if ($myprop isnot NULL) {
+    for (int i = 0; i < $my(num_at_exit_cbs); i++)
+      $my(at_exit_cbs)[i] (this);
+
+    ed_free_at_exit_cbs (this);
+
+    free ($my(name));
     free ($my(dim));
     free ($my(saved_cwd));
 
@@ -13590,7 +13849,7 @@ private void ed_free (ed_t *this) {
 
 private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
   for (int i = 0; i < 2; i++)
-    for (int j = 0; j < 26; j++)
+    for (int j = 0; j < ('z' - 'a') + 1; j++)
       $my(lmap)[i][j] = lmap[i][j];
 }
 
@@ -13599,298 +13858,17 @@ private void ed_init_special_win (ed_t *this) {
   ved_msg_buf (this);
   ved_diff_buf (this);
   ved_search_buf (this);
+  $my(num_special_win) = 4;
 }
 
-private ed_t *ed_init (ed_T *E) {
-  ed_t *this = AllocType (ed);
-  this->prop = AllocProp (ed);
-
-  $my(dim) = ed_dim_new (this, 1, $from($from(E, term), lines), 1, $from($from(E, term), columns));
-  $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
-
-  $my(Me) = E;
-  $my(Cstring) = &E->Cstring;
-  $my(Vstring) = &E->Vstring;
-  $my(Ustring) = &E->Ustring;
-  $my(String) = &E->String;
-  $my(Re) = &E->Re;
-  $my(Term) = &E->Term;
-  $my(Input) = &E->Input;
-  $my(Screen) = &E->Screen;
-  $my(Cursor) = &E->Cursor;
-  $my(Video) = &E->Video;
-  $my(Win) = &E->Win;
-  $my(Buf) = &E->Buf;
-  $my(Msg) = &E->Msg;
-  $my(Error) = &E->Error;
-  $my(File) = &E->File;
-  $my(Path) = &E->Path;
-  $my(Dir) =  &E->Dir;
-  $my(Rline) = &E->Rline;
-  $my(Vsys) = &E->Vsys;
-  $my(Venv) = &E->Venv;
-
-  $my(env) = venv_new ();
-
-  $my(term) = $from(E, term);
-  $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
-      $from($my(term), columns), 1, 1);
-  My(Term).set ($my(term));
-
-  $my(topline) = My(String).new ($from($my(term), columns));
-  $my(msgline) = My(String).new ($from($my(term), columns));
-  $my(ed_str) =  My(String).new  ($from($my(term), columns));
-  $my(last_insert) = My(String).new ($from($my(term), columns));
-  $my(rl_last_component) = My(Vstring).new ();
-  $my(uline) = My(Ustring).new ();
-
-  $my(enable_writing) = ENABLE_WRITING;
-  $my(msg_tabwidth) = 2;
-  $my(msg_row) = $from($my(term), lines);
-  $my(prompt_row) = $my(msg_row) - 1;
-  $my(saved_cwd) = dir_current ();
-
-  $my(history) = AllocType (hist);
-  $my(history)->search = AllocType (h_search);
-  $my(history)->rline = AllocType (h_rline);
-  $my(history)->rline->history_idx = 0;
-  $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
-  $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
-
-  this->name_gen = 26;
-
-  ed_register_init_all (this);
-
-  ed_init_syntaxes (this);
-
-  ved_init_commands (this);
-
-  ed_init_special_win (this);
-
-  ed_set_cw_mode_actions_default (this);
-  ed_set_lw_mode_actions_default (this);
-  ed_set_word_actions_default (this);
-
-  $my(num_rline_cbs) = $my(num_on_normal_g_cbs) =
-  $my(num_lw_mode_cbs) = $my(num_cw_mode_cbs) = 0;
-
-  current_list_append (E, this);
-
-  $my(name)[0] = 'e'; $my(name)[1] = 'd';
-  size_t len = bytelen ($from(E->tail, name));
-  for (uidx_t i = 2; i < len + 1; i++) $my(name)[i] = '+';
-  $my(name)[len] = '\0';
-  return this;
-}
-
-private ed_t *ed_new (ed_T *E, int num_wins) {
-  ed_t *this = ed_init (E);
-
-  if (num_wins <= 0) num_wins = 1;
-
-  int num_frames = 1;
-
-  win_t *w;
-  loop (num_wins) {
-    w = self(win.new, NULL, num_frames);
-    self(append.win, w);
-  }
-
-  return this;
-}
-
-private ed_T *__allocate_prop__ (ed_T *this) {
-  $myprop = AllocProp (ed);
-  $my(Cstring) = &this->Cstring;
-  $my(String) = &this->String;
-  $my(Vstring) = &this->Vstring;
-  $my(Re) = &this->Re;
-  $my(Term) = &this->Term;
-  $my(Input) = &this->Input;
-  $my(Screen) = &this->Screen;
-  $my(Cursor) = &this->Cursor;
-  $my(Video) = &this->Video;
-  $my(Win) = &this->Win;
-  $my(Buf) = &this->Buf;
-  $my(Msg) = &this->Msg;
-  $my(Error) = &this->Error;
-  $my(File) = &this->File;
-  $my(Path) = &this->Path;
-  $my(Dir) = &this->Dir;
-  $my(Rline) = &this->Rline;
-  $my(Vsys) = &this->Vsys;
-  $my(Venv) = &this->Venv;
-
-  $my(Me) = this;
-  return this;
-}
-
-private void __deallocate_prop__ (ed_T *this) {
-  if ($myprop isnot NULL) {
-    My(Video).free ($my(video));
-    My(Term).free ($my(term));
-    free ($myprop); $myprop = NULL;
-  }
-}
-
-private int __init__ (ed_T *this) {
-  __allocate_prop__ (this);
-
-  $my(term) = My(Term).new ();
-  $from($my(term), Me) = &this->Term;
-  My(Term).set ($my(term));
-  My(Term).reset ($my(term));
-  setvbuf (stdin, 0, _IONBF, 0);
-  return OK;
-}
-
-private void __deinit__ (ed_T *this) {
-  My(Term).reset ($my(term));
-  __deallocate_prop__ (this);
-}
-
-public cstring_T __init_cstring__ (void) {
-  return ClassInit (cstring,
-    .self = SelfInit (cstring,
-      .cmp_n = str_cmp_n,
-      .dup = str_dup,
-      .eq = str_eq,
-      .eq_n = str_eq_n,
-      .chop = str_chop,
-      .itoa = itoa,
-      .extract_word_at = str_extract_word_at,
-      .substr = str_substr,
-      .byte_in_str = byte_in_str,
-      .cp = str_cp,
-      .cp_fmt = str_cp_fmt,
-      .trim = SubSelfInit (cstring, trim,
-        .end = str_trim_end,
-      ),
-      .byte = SubSelfInit (cstring, byte,
-        .mv = str_byte_mv
-      ),
-    )
-  );
-}
-
-public ustring_T __init_ustring__ (void) {
-  return ClassInit (ustring,
-    .self = SelfInit (ustring,
-      .get = SubSelfInit (ustring, get,
-        .code_at = ustring_get_code_at
-      ),
-      .new = ustring_new,
-      .free = ustring_free,
-      .encode = ustring_encode,
-      .to_lower = ustring_to_lower,
-      .to_upper = ustring_to_upper,
-      .is_lower = ustring_is_lower,
-      .is_upper = ustring_is_upper,
-      .character = ustring_character,
-      .change_case = ustring_change_case,
-      .charlen = ustring_charlen
-    )
-  );
-}
-
-public string_T __init_string__ (void) {
-  return ClassInit (string,
-    .self = SelfInit (string,
-      .free = string_free,
-      .new = string_new,
-      .reallocate = string_reallocate,
-      .new_with = string_new_with,
-      .new_with_len = string_new_with_len,
-      .new_with_fmt = string_new_with_fmt,
-      .insert_at = string_insert_at,
-      .insert_at_with_len  = string_insert_at_with_len,
-      .append = string_append,
-      .append_fmt = string_append_fmt,
-      .append_with_len = string_append_with_len,
-      .append_byte = string_append_byte,
-      .prepend = string_prepend,
-      .prepend_fmt = string_prepend_fmt,
-      .prepend_byte = string_prepend_byte,
-      .delete_numbytes_at = string_delete_numbytes_at,
-      .replace_numbytes_at_with = string_replace_numbytes_at_with,
-      .replace_with = string_replace_with,
-      .replace_with_len = string_replace_with_len,
-      .replace_with_fmt = string_replace_with_fmt,
-      .clear = string_clear,
-      .clear_at = string_clear_at,
-    )
-  );
-}
-
-public void __deinit_string__ (string_T *this) {
-  (void) this;
-}
-
-public term_T __init_term__ (void) {
-  return ClassInit (term,
-    .self = SelfInit (term,
-      .set_mode = term_set_mode,
-      .set = term_set,
-      .reset = term_reset,
-      .new = term_new,
-      .free  = term_free,
-      .set_name = term_set_name,
-      .init_size = term_init_size,
-      .get = SubSelfInit (term, get,
-        .dim = term_get_dim
-      ),
-      .Cursor = SubSelfInit (term, cursor,
-        .get_pos = term_cursor_get_ptr_pos,
-        .set_pos = term_cursor_set_ptr_pos,
-        .hide = term_cursor_hide,
-        .show = term_cursor_show,
-        .restore = term_cursor_restore
-      ),
-      .Screen = SubSelfInit (term, screen,
-        .restore = term_screen_restore,
-        .save = term_screen_save,
-        .clear = term_screen_clear,
-        .clear_eol = term_screen_clear_eol
-      ),
-      .Input = SubSelfInit (term, input,
-        .get = term_get_input
-      )
-    )
-  );
-}
-
-public void __deinit_term__ (term_T *this) {
-  (void) this;
-}
-
-public video_T __init_video__ (void) {
-  return ClassInit (video,
-    .self = SelfInit (video,
-      .free = video_free,
-      .flush = video_flush,
-      .new =  video_new,
-      .set_with = video_set_row_with,
-      .Draw = SubSelfInit (video, draw,
-        .row_at = video_draw_at,
-        .all = video_draw_all
-      )
-    )
-  );
-}
-
-public void __deinit_video__ (video_T *this) {
-  (void) this;
-}
-
-private ed_T *editor_new (char *name) {
-  ed_T *this = Alloc (sizeof (ed_T));
+private Class (ed) *editor_new (void) {
+  ed_T *this = AllocClass (ed);
   *this = ClassInit (ed,
+    .prop = this->prop,
     .self = SelfInit (ed,
-      .init = ed_init,
-      .new = ed_new,
-      .free = ed_free,
-      .quit = ved_quit,
       .free_reg = ed_register_free,
+      .free_info = ed_free_info,
+      .quit = ved_quit,
       .loop = ved_loop,
       .main = ved_main,
       .scratch = ved_scratch,
@@ -13904,15 +13882,19 @@ private ed_T *editor_new (char *name) {
         .dim = ed_set_dim,
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
-        .topline = buf_set_topline,
+        .topline = ed_set_topline,
         .rline_cb = ved_set_rline_cb,
         .lw_mode_actions = ed_set_lw_mode_actions,
         .cw_mode_actions = ed_set_cw_mode_actions,
+        .at_exit_cb = ed_set_at_exit_cb,
         .word_actions = ed_set_word_actions,
         .on_normal_g_cb = ved_set_normal_on_g_cb,
         .lang_map = ed_set_lang_map
       ),
       .get = SubSelfInit (ed, get,
+        .info = SubSelfInit (edget, info,
+          .as_type = ed_get_info_as_type
+        ),
         .bufname = ed_get_bufname,
         .current_buf = ed_get_current_buf,
         .scratch_buf = ved_scratch_buf,
@@ -13924,9 +13906,8 @@ private ed_T *editor_new (char *name) {
         .win_by_idx = ed_get_win_by_idx,
         .win_by_name = ed_get_win_by_name,
         .num_win = ed_get_num_win,
+        .num_special_win = ed_get_num_special_win,
         .term = ed_get_term,
-        .next = ed_get_next,
-        .prev = ed_get_prev,
         .num_rline_commands = ved_get_num_rline_commands,
         .callback_fun = ed_get_callback_fun
       ),
@@ -13938,7 +13919,7 @@ private ed_T *editor_new (char *name) {
         .set = ed_register_set_api
       ),
       .append = SubSelfInit (ed, append,
-        .win = ved_append_win,
+        .win = ed_append_win,
         .message = ved_append_message,
         .message_fmt = ved_append_message_fmt,
         .toscratch = ved_append_toscratch,
@@ -13951,7 +13932,7 @@ private ed_T *editor_new (char *name) {
         .win_size =ed_win_readjust_size
       ),
       .exec = SubSelfInit (ed, exec,
-        .cmd = ved_buf_exec_cmd_handler
+        .cmd = ed_exec_cmd
       ),
       .buf = SubSelfInit (ed, buf,
         .change = ed_change_buf,
@@ -13997,6 +13978,9 @@ private ed_T *editor_new (char *name) {
           .change = win_frame_change
         ),
         .get = SubSelfInit (win, get,
+          .info = SubSelfInit (winget, info,
+            .as_type = win_get_info_as_type
+          ),
           .current_buf = win_get_current_buf,
           .current_buf_idx = win_get_current_buf_idx,
           .buf_by_idx = win_get_buf_by_idx,
@@ -14011,6 +13995,7 @@ private ed_T *editor_new (char *name) {
           .buf_dim = win_adjust_buf_dim,
         ),
         .draw = win_draw,
+        .free_info = win_free_info,
         .append_buf = win_append_buf,
         .dim_calc = win_dim_calc
       ),
@@ -14019,15 +14004,13 @@ private ed_T *editor_new (char *name) {
       .self = SelfInit (buf,
         .free = SubSelfInit (buf, free,
           .row = buf_free_row,
-          .rows =buf_free_rows
+          .rows = buf_free_rows,
+          .info = buf_free_info
         ),
         .get = SubSelfInit (buf, get,
-          .info = buf_get_info,
-          .fname = buf_get_fname,
-          .num_lines = buf_get_num_lines,
-          .size = buf_get_size,
-          .current_video_row = buf_get_current_video_row,
-          .current_video_col = buf_get_current_video_col,
+          .info = SubSelfInit (bufget, info,
+            .as_type = buf_get_info_as_type,
+          ),
           .prop = SubSelfInit (bufget, prop,
             .tabwidth = buf_get_prop_tabwidth
           ),
@@ -14038,6 +14021,11 @@ private ed_T *editor_new (char *name) {
             .current_col_idx = buf_get_row_current_col_idx,
             .col_idx = buf_get_row_col_idx,
           ),
+          .fname = buf_get_fname,
+          .num_lines = buf_get_num_lines,
+          .size = buf_get_size,
+          .current_video_row = buf_get_current_video_row,
+          .current_video_col = buf_get_current_video_col,
         ),
         .set = SubSelfInit (buf, set,
           .fname = buf_set_fname,
@@ -14154,33 +14142,12 @@ private ed_T *editor_new (char *name) {
   this->Screen.self = this->Term.self.Screen;
   this->Input.self = this->Term.self.Input;
 
-  str_cp (this->name, 8, name, 8);
+  this->state = this->error_state = 0;
+
+  $my(video) = NULL;
+  $my(term) = NULL;
 
   return this;
-}
-
-public ed_T *__init_ed__ (void) {
-  ed_T *this = editor_new (MYNAME);
-
-  if (NOTOK is __init__ (this)) {
-    this->error_state |= ED_INIT_ERROR;
-    return NULL;
-  }
-
-  return this;
-}
-
-public void __deinit_ed__ (ed_T *Ed) {
-  __deinit__ (Ed);
-
-  ed_t *this = Ed->head;
-  while (this) {
-    ed_t *tmp = this->next;
-    self(free);
-    this = tmp;
-  }
-
-  free (Ed);
 }
 
 private int fp_tok_cb (vstr_t *unused, char *bytes, void *fp_type) {
@@ -14197,4 +14164,327 @@ public mutable size_t tostderr (char *bytes) {
   fp_t fpt = {.fp = stderr};
   str_chop (bytes, '\n', &unused, fp_tok_cb, &fpt);
   return fpt.num_bytes;
+}
+
+private ed_t *ed_init (Ed_T *E) {
+  ed_t *this = AllocType (ed);
+  $myprop = AllocProp (ed);
+
+  $my(Me) = E->ed;
+
+  $my(term) = $from($my(Me), term);
+
+  $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
+  $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
+
+  $my(Cstring) = &E->ed->Cstring;
+  $my(Vstring) = &E->ed->Vstring;
+  $my(Ustring) = &E->ed->Ustring;
+  $my(String) = &E->ed->String;
+  $my(Re) = &E->ed->Re;
+  $my(Term) = &E->ed->Term;
+  $my(Input) = &E->ed->Input;
+  $my(Screen) = &E->ed->Screen;
+  $my(Cursor) = &E->ed->Cursor;
+  $my(Video) = &E->ed->Video;
+  $my(Win) = &E->ed->Win;
+  $my(Buf) = &E->ed->Buf;
+  $my(Msg) = &E->ed->Msg;
+  $my(Error) = &E->ed->Error;
+  $my(File) = &E->ed->File;
+  $my(Path) = &E->ed->Path;
+  $my(Dir) =  &E->ed->Dir;
+  $my(Rline) = &E->ed->Rline;
+  $my(Vsys) = &E->ed->Vsys;
+  $my(Venv) = &E->ed->Venv;
+
+  $my(env) = venv_new ();
+
+  $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
+      $from($my(term), columns), 1, 1);
+  My(Term).set ($my(term));
+
+  $my(topline) = My(String).new ($from($my(term), columns));
+  $my(msgline) = My(String).new ($from($my(term), columns));
+  $my(ed_str) =  My(String).new  ($from($my(term), columns));
+  $my(last_insert) = My(String).new ($from($my(term), columns));
+  $my(rl_last_component) = My(Vstring).new ();
+  $my(uline) = My(Ustring).new ();
+
+  $my(enable_writing) = ENABLE_WRITING;
+  $my(msg_tabwidth) = 2;
+  $my(msg_row) = $from($my(term), lines);
+  $my(prompt_row) = $my(msg_row) - 1;
+  $my(saved_cwd) = dir_current ();
+
+  $my(history) = AllocType (hist);
+  $my(history)->search = AllocType (h_search);
+  $my(history)->rline = AllocType (h_rline);
+  $my(history)->rline->history_idx = 0;
+  $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
+  $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
+
+  this->name_gen = ('z' - 'a') + 1;
+
+  ed_register_init_all (this);
+
+  ed_init_syntaxes (this);
+
+  ved_init_commands (this);
+
+  ed_init_special_win (this);
+
+  $my(num_rline_cbs) = $my(num_on_normal_g_cbs) =
+  $my(num_lw_mode_cbs) = $my(num_cw_mode_cbs) =
+  $my(num_at_exit_cbs) = 0;
+
+  ed_set_cw_mode_actions_default (this);
+  ed_set_lw_mode_actions_default (this);
+  ed_set_word_actions_default (this);
+
+  $my(name) = ed_name_gen (&$from(E, name_gen), "ed:", 3);
+
+  return this;
+}
+
+private ed_t *__ed_init__ (Ed_T *this, EdAtInit_cb init_cb) {
+  ed_t *ed = ed_init (this);
+
+  int cur_idx = $my(cur_idx);
+
+  current_list_append ($myprop, ed);
+
+  if ($my(prev_idx) is -1)
+    $my(prev_idx) = 0;
+  else
+    $my(prev_idx) = cur_idx;
+
+  if (init_cb isnot NULL)
+    init_cb (ed);
+
+  return ed;
+}
+
+private ed_t *__ed_new__ (Class (Ed) *this, ED_INIT_OPTS opts) {
+  ed_t *ed = __ed_init__ (this, opts.init_cb);
+
+  int num_win = opts.num_win;
+  if (num_win <= 0) num_win = 1;
+
+  int num_frames = 1;
+
+  win_t *w;
+  loop (num_win) {
+    w = ed_win_new (ed, NULL, num_frames);
+    ed_append_win (ed, w);
+  }
+
+  return ed;
+}
+
+private void __ed_free__ (Class (Ed) *this, ed_t *ed) {
+  (void) this;
+  ed_free (ed);
+}
+
+private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
+  $my(error_state) = 0;
+
+  if (1 is $my(num_items)) {
+    $my(error_state) |= LAST_INSTANCE_ERROR_STATE;
+    return NOTOK;
+  }
+
+  if (idx < 0 or idx >= $my(num_items)) {
+    $my(error_state) |= IDX_OUT_OF_BOUNDS_ERROR_STATE;
+    return NOTOK;
+  }
+
+  if (idx is $my(cur_idx)) {
+    ifnot (force_current) {
+      $my(error_state) |= ARG_IDX_IS_CUR_IDX_ERROR_STATE;
+      return NOTOK;
+    } else
+      $my(prev_idx) = $my(cur_idx) + 1;
+  } else
+    $my(prev_idx) = $my(cur_idx);
+
+  ed_t *ed = list_pop_at ($myprop, ed_t, idx);
+
+  ifnot (NULL is ed) ed_free (ed);
+
+  if ($my(prev_idx) is $my(num_items))
+    $my(prev_idx)--;
+
+  return OK;
+}
+
+private ed_t *__ed_set_current__ (Ed_T *this, int idx) {
+  int cur_idx = $my(cur_idx);
+  if (cur_idx is idx) return $my(current);
+
+  if (INDEX_ERROR is current_list_set ($myprop, idx))
+    return NULL;
+
+  $my(prev_idx) = cur_idx;
+  return $my(current);
+}
+
+private ed_t *__ed_set_next__ (Ed_T *this) {
+  int idx = $my(cur_idx);
+  if (idx is $my(num_items) - 1)
+    idx = 0;
+  else
+    idx++;
+
+  return __ed_set_current__ (this, idx);
+}
+
+private ed_t *__ed_set_prev__ (Ed_T *this) {
+  int idx = $my(cur_idx);
+  if (idx is 0)
+    idx = $my(num_items) - 1;
+  else
+    idx--;
+
+  return __ed_set_current__ (this, idx);
+}
+
+private ed_t *__ed_get_current__ (Class (Ed) *this) {
+  return $my(current);
+}
+
+private ed_t *__ed_get_head__ (Class (Ed) *this) {
+  return $my(head);
+}
+
+private int __ed_get_num__ (Class (Ed) *this) {
+  return $my(num_items);
+}
+
+private int __ed_get_current_idx__ (Class (Ed) *this) {
+  return $my(cur_idx);
+}
+
+private int __ed_get_prev_idx__ (Class (Ed) *this) {
+  return $my(prev_idx);
+}
+
+private int __ed_get_error_state__ (Class (Ed) *this) {
+  return $my(error_state);
+}
+
+private ed_T *ed_init_prop (ed_T *this) {
+  $my(Cstring) = &this->Cstring;
+  $my(String) = &this->String;
+  $my(Vstring) = &this->Vstring;
+  $my(Re) = &this->Re;
+  $my(Term) = &this->Term;
+  $my(Input) = &this->Input;
+  $my(Screen) = &this->Screen;
+  $my(Cursor) = &this->Cursor;
+  $my(Video) = &this->Video;
+  $my(Win) = &this->Win;
+  $my(Buf) = &this->Buf;
+  $my(Msg) = &this->Msg;
+  $my(Error) = &this->Error;
+  $my(File) = &this->File;
+  $my(Path) = &this->Path;
+  $my(Dir) = &this->Dir;
+  $my(Rline) = &this->Rline;
+  $my(Vsys) = &this->Vsys;
+  $my(Venv) = &this->Venv;
+
+  $my(Me) = this;
+  $my(video) = NULL;
+
+  return this;
+}
+
+private int init_ed (ed_T *this) {
+  ed_init_prop (this);
+
+  $my(term) = My(Term).new ();
+
+  if (NOTOK is My(Term).set ($my(term)))
+    return NOTOK;
+
+  My(Term).reset ($my(term));
+
+  setvbuf (stdin, 0, _IONBF, 0);
+
+  return OK;
+}
+
+public Class (Ed) *__init_ed__ (char *name) {
+  Ed_T *this = AllocClass (Ed);
+
+  *this = ClassInit (Ed,
+    .self = SelfInit (Ed,
+      .init = __ed_init__,
+      .new = __ed_new__,
+      .free = __ed_free__,
+      .delete = __ed_delete__,
+      .get = SubSelfInit (Ed, get,
+       .current = __ed_get_current__,
+       .head = __ed_get_head__,
+       .current_idx = __ed_get_current_idx__,
+       .prev_idx = __ed_get_prev_idx__,
+       .num = __ed_get_num__,
+       .error_state = __ed_get_error_state__
+      ),
+      .set = SubSelfInit (Ed, set,
+       .next = __ed_set_next__,
+       .prev = __ed_set_prev__,
+       .current = __ed_set_current__
+      )
+    ),
+    .prop = $myprop,
+    .ed =  editor_new ()
+   );
+
+  $my(Me) = this;
+
+  if (NOTOK is init_ed (this->ed)) {
+    __deinit_ed__ (&this);
+    return NULL;
+  }
+
+  str_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
+  $my(name_gen) = ('z' - 'a') + 1;
+  $my(cur_idx) = $my(prev_idx) = -1;
+
+  return this;
+}
+
+private void ed_deallocate_prop (ed_T *this) {
+  if ($myprop is NULL) return;
+  My(Term).free ($my(term));
+  free ($myprop);
+  $myprop = NULL;
+}
+
+private void deinit_ed (ed_T *this) {
+  My(Term).reset ($my(term));
+  ed_deallocate_prop (this);
+}
+
+public void __deinit_ed__ (Class (Ed) **thisp) {
+  if (NULL is *thisp) return;
+
+  Class (Ed) *this = *thisp;
+
+  deinit_ed (this->ed);
+
+  ed_t *it = $my(head);
+  while (it) {
+    ed_t *tmp = it->next;
+    self(free, it);
+    it = tmp;
+  }
+
+  free (this->ed);
+  free ($myprop);
+  free (this);
+  *thisp = NULL;
 }

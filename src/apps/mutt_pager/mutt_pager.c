@@ -136,14 +136,15 @@ syn_t mail_syn[] = {
     mail_hdrs_keywords, NULL,
     NULL, NULL, NULL, NULL,
     HL_STRINGS_NO, HL_NUMBERS_NO,
-    __mail_hdrs_syn_parser, __mail_hdrs_syn_init, 0, NULL, NULL,
+    __mail_hdrs_syn_parser, __mail_hdrs_syn_init,
+    0, 0, NULL, NULL,
   },
   {
     "mail", __mail_NULL_ARRAY, __mail_NULL_ARRAY, __mail_NULL_ARRAY,
     NULL, NULL,
     NULL, NULL, NULL, NULL,
     HL_STRINGS_NO, HL_NUMBERS_NO,
-    __mail_syn_parser, __mail_syn_init, 0, NULL, NULL,
+    __mail_syn_parser, __mail_syn_init, 0, 0, NULL, NULL,
   }
 };
 
@@ -159,7 +160,7 @@ private int __on_normal_beg (buf_t **thisp, int com, int *range, int regidx) {
       // fallthrough
 
     case 'q':
-      return EXIT;
+      return EXIT_THIS;
 
     case ' ':
       Buf.normal.page_down (this, 1);
@@ -407,15 +408,11 @@ int main (int argc, char **argv) {
 
   argc--; argv++;
 
-  if (NULL is (E = __init_ed__ ())) return 1;
+  if (NULL is (__E__ = __init_ed__ (MYNAME))) return 1;
 
-  ed_t *this = Ed.init (E);
-
-  __init_ext__ (E, this);
+  ed_t *this = E.init (__E__, __init_ext__);
 
   int retval = 1;
-
-  Ed.history.read (this);
 
   win_t *w = __init_me__ (this, argv[0]);
 
@@ -425,23 +422,36 @@ int main (int argc, char **argv) {
     buf_t *buf = Ed.get.current_buf (this);
     retval = Ed.main (this, buf);
 
+    if ((Ed.get.state (this) & ED_QUIT_ALL))
+      break;
+
+    if ((Ed.get.state (this) & ED_QUIT)) {
+      if (E.get.num (__E__) is 1)
+        break;
+
+      E.delete (__E__, E.get.current_idx (__E__), 1);
+      this = E.get.current (__E__);
+      w = Ed.get.current_win (this);
+      continue;
+    }
+
     if (Ed.get.state (this) & ED_SUSPENDED) {
-      if (E->num_items is 1) {
-        this = Ed.new (E, 1);
+      if (E.get.num (__E__) is 1) {
+        this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
+
         w = Ed.get.current_win (this);
         buf = Win.buf.new (w, QUAL(BUF_INIT));
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
-        this = Ed.get.prev (this);
+        this = E.set.current (__E__, E.get.prev_idx (__E__));
+        w = Ed.get.current_win (this);
       }
     } else break;
   }
 
- Ed.history.write (this);
-
   __deinit_ext__ (this);
-  __deinit_ed__ (E);
+  __deinit_ed__ (&__E__);
 
   return retval;
 }

@@ -253,7 +253,6 @@ enum {
   My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
 
 NewProp (term,
-  term_T *Me;
   struct termios
     orig_mode,
     raw_mode;
@@ -743,9 +742,10 @@ NewType (venv,
 
 NewProp (ed,
   char
-     name[ED_INSTANCES],
+    *name,
     *saved_cwd;
 
+  Ed_T *root;
   MY_PROPERTIES;
   MY_CLASSES (ed);
   buf_T *Buf;
@@ -762,6 +762,7 @@ NewProp (ed,
     max_num_hist_entries,
     max_num_undo_entries,
     num_commands,
+    num_special_win,
     prompt_row,
     msg_row,
     msg_send,
@@ -817,6 +818,24 @@ NewProp (ed,
 
   int num_syntaxes;
   syn_t syntaxes[NUM_SYNTAXES];
+
+  int num_at_exit_cbs;
+  EdAtExit_cb *at_exit_cbs;
+);
+
+NewProp (Ed,
+  char name[MAXLEN_ED_NAME];
+  int
+    error_state,
+    name_gen;
+
+  Ed_T *Me;
+  ed_t *head;
+  ed_t *tail;
+  ed_t *current;
+   int  cur_idx;
+   int  num_items;
+   int  prev_idx;
 );
 
 #undef MY_CLASSES
@@ -865,6 +884,7 @@ private string_t *vsys_which (char *, char *);
 private void vundo_clear (buf_t *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
+private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {
@@ -1121,6 +1141,21 @@ do {                                                                \
   node;                                                             \
 })
 
+#define list_pop_at(list, type, idx_)                               \
+({                                                                  \
+  int cur_idx = (list)->cur_idx;                                    \
+  int __idx__ = current_list_set (list, idx_);                      \
+  type *cnode = NULL;                                               \
+  do {                                                              \
+    if (__idx__ is INDEX_ERROR) break;                              \
+    cnode = current_list_pop (list, type);                          \
+    if (cur_idx is __idx__) break;                                  \
+    if (cur_idx > __idx__) cur_idx--;                               \
+    current_list_set (list, cur_idx);                               \
+  } while (0);                                                      \
+  cnode;                                                            \
+})
+
 #define current_list_pop(list, type)                                \
 ({                                                                  \
 type *node = NULL;                                                  \
@@ -1154,45 +1189,45 @@ do {                                                                \
   node;                                                             \
 })
 
-#define current_list_set(list, idx)                                 \
+#define current_list_set(list, idx_)                                \
 ({                                                                  \
-  int idx_ = idx;                                                   \
+  int idx__ = idx_;                                                 \
   do {                                                              \
-    if (0 > idx_) idx_ += (list)->num_items;                        \
-    if (idx_ < 0 or idx_ >= (list)->num_items) {                    \
-      idx_ = INDEX_ERROR;                                           \
+    if (0 > idx__) idx__ += (list)->num_items;                      \
+    if (idx__ < 0 or idx__ >= (list)->num_items) {                  \
+      idx__ = INDEX_ERROR;                                          \
       break;                                                        \
     }                                                               \
-    if (idx_ is (list)->cur_idx) break;                             \
-    int idx__ = (list)->cur_idx;                                    \
-    (list)->cur_idx = idx_;                                         \
-    if (idx__ < idx_)                                               \
-      while (idx__++ < idx_)                                        \
+    if (idx__ is (list)->cur_idx) break;                            \
+    int idx___ = (list)->cur_idx;                                   \
+    (list)->cur_idx = idx__;                                        \
+    if (idx___ < idx__)                                             \
+      while (idx___++ < idx__)                                      \
         (list)->current = (list)->current->next;                    \
     else                                                            \
-      while (idx__-- > idx_)                                        \
+      while (idx___-- > idx__)                                      \
         (list)->current = (list)->current->prev;                    \
   } while (0);                                                      \
-  idx_;                                                             \
+  idx__;                                                            \
 })
 
-#define list_get_at(list, type, idx)                                \
+#define list_get_at(list_, type_, idx_)                             \
 ({                                                                  \
-  type *node = NULL;                                                \
-  int idx_ = idx;                                                   \
+  type_ *node = NULL;                                               \
+  int idx__ = idx_;                                                 \
   do {                                                              \
-    if (0 > idx_) idx_ += (list)->num_items;                        \
-    if (idx_ < 0 or idx_ >= (list)->num_items) {                    \
-      idx_ = INDEX_ERROR;                                           \
+    if (0 > idx__) idx__ += (list_)->num_items;                     \
+    if (idx__ < 0 or idx__ >= (list_)->num_items) {                 \
+      idx__ = INDEX_ERROR;                                          \
       break;                                                        \
     }                                                               \
-    if ((list)->num_items / 2 < idx_) {                             \
-      node = (list)->head;                                          \
-      while (idx_--)                                                \
+    if ((list_)->num_items / 2 < idx__) {                           \
+      node = (list_)->head;                                         \
+      while (idx__--)                                               \
         node = node->next;                                          \
     } else {                                                        \
-      node =  (list)->tail;                                         \
-      while (idx++ < (list)->num_items - 1)                         \
+      node = (list_)->tail;                                         \
+      while (idx__++ < (list_)->num_items - 1)                      \
         node = node->prev;                                          \
     }                                                               \
   } while (0);                                                      \

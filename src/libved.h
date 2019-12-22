@@ -8,7 +8,6 @@
 #define ENABLE_WRITING 0
 #endif
 
-
 #define MAX_FRAMES 3
 #define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
@@ -93,6 +92,7 @@
 #define MAXLEN_WORD        256
 #define MAXLEN_ERR_MSG     256
 #define MAXLEN_PAT         PATH_MAX
+#define MAXLEN_NAME        16
 #define MAXLEN_MODE        16
 #define MAXLEN_FTYPE_NAME  16
 #define MAXLEN_WORD_ACTION 512
@@ -100,6 +100,7 @@
 #define MAXLEN_COM         32
 #define DIRWALK_MAX_DEPTH 1024
 
+#define MAXLEN_ED_NAME MAXLEN_NAME
 #define OUTPUT_FD STDOUT_FILENO
 
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
@@ -216,9 +217,14 @@
 #define MSG_SET_TO_MSG_BUF  (1 << 6)
 #define MSG_SET_TO_MSG_LINE (1 << 7)
 
-#define ED_INIT_ERROR   (1 << 0)
+#define ED_QUIT             (1 << 0)
+#define ED_EXIT             (1 << 1)
+#define ED_SUSPENDED        (1 << 2)
+#define ED_QUIT_ALL         (1 << 3)
 
-#define ED_SUSPENDED    (1 << 0)
+#define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
+#define LAST_INSTANCE_ERROR_STATE      (1 << 0)
+#define ARG_IDX_IS_CUR_IDX_ERROR_STATE (1 << 1)
 
 #define FTYPE_DEFAULT 0
 
@@ -492,7 +498,7 @@ AllocErrorHandlerF AllocErrorHandler;
 #define DeclareType(__t__) typedef struct Type(__t__) Type(__t__)
 #define AllocType(__t__) Alloc (sizeof (Type(__t__)))
 #define NewType(__t__, ...) DeclareType(__t__); struct Type(__t__) {__VA_ARGS__}
-#define Prop(__prop__) __prop__ ## prop_t
+#define Prop(__p__) __p__ ## prop_t
 #define DeclareProp(__p__) typedef struct Prop(__p__) Prop(__p__)
 #define AllocProp(__p__) Alloc (sizeof (Prop(__p__)))
 #define NewProp(__p__, ...) DeclareProp(__p__); struct Prop(__p__) {__VA_ARGS__}
@@ -516,9 +522,14 @@ AllocErrorHandlerF AllocErrorHandler;
 #define SelfInit(__name__, ...) (Self (__name__)) {__VA_ARGS__}
 #define SubSelfInit(__super__, __name__, ...) SelfInit (__super__ ## __name__, __VA_ARGS__)
 #define Class(__Type__) __Type__ ## _T
-#define DeclareClass(__T__) typedef struct Class(__T__) Class(__T__)
-#define NewClass(__T__, ...) DeclareClass(__T__); struct Class(__T__) {__VA_ARGS__}
-#define ClassInit(__T__, ...) (Class (__T__)) {__VA_ARGS__}
+#define DeclareClass(__C__) typedef struct Class(__C__) Class(__C__)
+#define NewClass(__C__, ...) DeclareClass(__C__); struct Class(__C__) {__VA_ARGS__}
+#define ClassInit(__C__, ...) (Class (__C__)) {__VA_ARGS__}
+#define AllocClass(__C__) ({                           \
+  Class(__C__) *__c__ = Alloc (sizeof (Class(__C__))); \
+  __c__->__prop__ = AllocProp(__C__);                  \
+  __c__;                                               \
+})
 
 DeclareType (term);
 DeclareType (string);
@@ -565,6 +576,10 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
+DeclareClass (Ed);
+DeclareProp (Ed);
+DeclareSelf (Ed);
+
 typedef vchar_t u8char_t;
 typedef line_t u8_t;
 
@@ -591,10 +606,11 @@ typedef int  (*ReCompile_cb) (regexp_t *);
 typedef int  (*DirProcessDir_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirProcessFile_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirStatFile_cb) (const char *, struct stat *);
-
-typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
+typedef void (*EdAtExit_cb) (ed_t *);
+typedef void (*EdAtInit_cb) (ed_t *);
 typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
+typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
 
 #define NULL_REF NULL
 
@@ -636,11 +652,15 @@ NewType (syn,
     hl_strings,
     hl_numbers;
 
-  char  *(*parse) (buf_t *, char *, int, int, row_t *);
+  char *(*parse) (buf_t *, char *, int, int, row_t *);
   ftype_t *(*init) (buf_t *);
+
   int state;
-  size_t *keywords_len;
-  size_t *keywords_colors;
+
+  size_t
+     multiline_comment_continuation_len,
+    *keywords_len,
+    *keywords_colors;
 );
 
 NewType (ftype,
@@ -734,44 +754,6 @@ NewType (bufiter,
   string_t *line;
 );
 
-NewType (buf_init_opts,
-   win_t *win;
-
-   char *fname;
-   int
-     flags,
-     ftype,
-     at_frame,
-     at_linenr,
-     at_column;
-);
-
-/* QUALIFIERS (quite ala S_Lang (in C they have to be declared though)) */
-#define QUAL(__qual, ...) __qual##_QUAL (__VA_ARGS__)
-
-#define BUF_INIT_OPTS Type (buf_init_opts)
-#define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {                             \
-  .at_frame = 0, .at_linenr = 1, .at_column = 1, .ftype = FTYPE_DEFAULT, \
-  .flags = 0, .fname = UNAMED, __VA_ARGS__}
-
-#define FTYPE_QUAL(...) (ftype_t) {  \
-  .name = "",  \
-  .on_emptyline = NULL,  \
-  .shiftwidth = DEFAULT_SHIFTWIDTH,  \
-  .tabwidth = TABWIDTH,  \
-  .autochdir = AUTOCHDIR,  \
-  .tab_indents = TAB_ON_INSERT_MODE_INDENTS,  \
-  .clear_blanklines = CLEAR_BLANKLINES,  \
-  .cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
-  .backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
-  .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
-  .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
-  .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
-  .read_from_shell = READ_FROM_SHELL,  \
-  .autoindent = NULL,  \
-  .on_open_fname_under_cursor = NULL,  \
-  __VA_ARGS__ }
-
 NewType (vchar,
   utf8 code;
   char buf[5];
@@ -792,6 +774,102 @@ NewType (line,
       int  num_items;
       int  len;
 );
+
+NewType (bufinfo,
+  char
+    *fname,
+    *cwd,
+    *parents_name;
+
+  int
+    at_frame,
+    cur_idx,
+    is_writable;
+
+  size_t
+    num_bytes,
+    num_lines;
+);
+
+NewType (wininfo,
+  char
+    *name,
+    *parents_name,
+    *cur_buf,
+    **buf_names;
+
+  int
+    num_frames,
+    cur_idx;
+
+  size_t
+    num_items;
+);
+
+NewType (edinfo,
+  char
+    *name,
+    *cur_win,
+    **win_names,
+    **special_win_names;
+
+  int
+    cur_idx;
+
+  size_t
+    num_special_win,
+    num_items;
+);
+
+/* QUALIFIERS (quite ala S_Lang (in C they have to be declared though)) */
+NewType (buf_init_opts,
+   win_t *win;
+
+   char *fname;
+   int
+     flags,
+     ftype,
+     at_frame,
+     at_linenr,
+     at_column;
+);
+
+NewType (ed_init_opts,
+  int num_win;
+  EdAtInit_cb init_cb;
+);
+
+#define QUAL(__qual, ...) __qual##_QUAL (__VA_ARGS__)
+
+#define ED_INIT_OPTS  Type (ed_init_opts)
+#define ED_INIT_QUAL(...) (ED_INIT_OPTS) {       \
+  .num_win = 1,                                  \
+  .init_cb = NULL,                               \
+  __VA_ARGS__}
+
+#define BUF_INIT_OPTS Type (buf_init_opts)
+#define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {     \
+  .at_frame = 0, .at_linenr = 1, .at_column = 1, \
+  .ftype = FTYPE_DEFAULT,                        \
+  .flags = 0, .fname = UNAMED, __VA_ARGS__}
+
+#define FTYPE_QUAL(...) (ftype_t) {              \
+  .name = "",                                    \
+  .on_emptyline = NULL,                          \
+  .shiftwidth = DEFAULT_SHIFTWIDTH,              \
+  .tabwidth = TABWIDTH,                          \
+  .autochdir = AUTOCHDIR,                        \
+  .tab_indents = TAB_ON_INSERT_MODE_INDENTS,     \
+  .clear_blanklines = CLEAR_BLANKLINES,          \
+  .cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
+  .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
+  .read_from_shell = READ_FROM_SHELL,            \
+  .autoindent = NULL,                            \
+  .on_open_fname_under_cursor = NULL,            \
+  __VA_ARGS__ }
 
 NewSubSelf (video, draw,
   void
@@ -1168,13 +1246,18 @@ NewSubSelf (bufget, prop,
   int (*tabwidth) (buf_t *);
 );
 
+NewSubSelf (bufget, info,
+  bufinfo_t *(*as_type) (buf_t *);
+);
+
 NewSubSelf (buf, get,
   SubSelf (bufget, row) row;
   SubSelf (bufget, prop) prop;
+  SubSelf (bufget, info) info;
 
   char
      *(*fname) (buf_t *),
-     *(*info) (buf_t *);
+     *(*info_string) (buf_t *);
 
   size_t
     (*size) (buf_t *),
@@ -1208,7 +1291,7 @@ enum {
   NOTHING_TODO = -1,
   DONE = 0,
   NEWCHAR,
-  EXIT,
+  EXIT_THIS,
   WIN_EXIT,
   BUF_EXIT,
   BUF_QUIT,
@@ -1282,6 +1365,7 @@ NewSubSelf (buf, cur,
 
 NewSubSelf (buf, free,
   void
+     (*info) (buf_t *, bufinfo_t **),
      (*row) (buf_t *, row_t *),
      (*rows) (buf_t *);
 );
@@ -1368,7 +1452,13 @@ NewSubSelf (win, set,
   buf_t *(*current_buf) (win_t*, int, int);
 );
 
+NewSubSelf (winget, info,
+  wininfo_t *(*as_type) (win_t *);
+);
+
 NewSubSelf (win, get,
+  SubSelf (winget, info) info;
+
   buf_t
     *(*current_buf) (win_t *),
     *(*buf_by_idx) (win_t *, int),
@@ -1404,7 +1494,9 @@ NewSelf (win,
   SubSelf (win, buf) buf;
   SubSelf (win, frame) frame;
 
-  void (*draw) (win_t *);
+  void
+    (*free_info) (win_t *, wininfo_t **),
+    (*draw) (win_t *);
 
   int
     (*append_buf)    (win_t *, buf_t *),
@@ -1419,7 +1511,15 @@ NewClass (win,
   Self (win) self;
 );
 
+NewSubSelf (edget, info,
+  edinfo_t *(*as_type) (ed_t *);
+);
+
 NewSubSelf (ed, get,
+  ed_t *(*self) (ed_t *);
+
+  SubSelf (edget, info) info;
+
   buf_t
     *(*bufname) (ed_t *, char *),
     *(*current_buf) (ed_t *),
@@ -1429,6 +1529,7 @@ NewSubSelf (ed, get,
     (*num_rline_commands) (ed_t *),
     (*num_win) (ed_t *, int),
     (*current_win_idx) (ed_t *),
+    (*num_special_win) (ed_t *),
     (*state) (ed_t *);
 
   win_t
@@ -1441,20 +1542,18 @@ NewSubSelf (ed, get,
   term_t *(*term) (ed_t *);
 
   void *(*callback_fun) (ed_t *, char *);
-
-  ed_t *(*next) (ed_t *);
-  ed_t *(*prev) (ed_t *);
 );
 
 NewSubSelf (ed, set,
    void
      (*screen_size) (ed_t *),
-     (*topline) (buf_t *),
+     (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
-     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
+     (*on_normal_g_cb) (ed_t *, BufNormalOng_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
-     (*word_actions)    (ed_t *, utf8 *, int, char *, WordActions_cb),
+     (*at_exit_cb) (ed_t *, EdAtExit_cb),
+     (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
      (*lang_map) (ed_t *, int[][26]);
 
   win_t *(*current_win) (ed_t *, int);
@@ -1489,7 +1588,7 @@ NewSubSelf (ed, readjust,
 );
 
 NewSubSelf (ed, exec,
-  int (*cmd) (buf_t **, utf8, int *, int);
+  int (*cmd) (ed_t *, buf_t **, utf8, int *, int);
 );
 
 NewSubSelf (ed, buf,
@@ -1527,10 +1626,6 @@ NewSubSelf (ed, draw,
 );
 
 NewSelf (ed,
-  ed_t
-    *(*init) (Class (ed) *),
-    *(*new) (Class (ed) *, int);
-
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
   SubSelf (ed, syn) syn;
@@ -1548,6 +1643,7 @@ NewSelf (ed,
   void
     (*free) (ed_t *),
     (*free_reg) (ed_t *, rg_t *),
+    (*free_info) (ed_t *, edinfo_t **),
     (*suspend) (ed_t *),
     (*resume) (ed_t *);
 
@@ -1556,7 +1652,8 @@ NewSelf (ed,
     (*messages) (ed_t *, buf_t **, int),
     (*quit) (ed_t *, int),
     (*loop) (ed_t *, buf_t *),
-    (*main) (ed_t *, buf_t *);
+    (*main) (ed_t *, buf_t *),
+    (*delete) (ed_t *, ed_T *, int, int);
 
   utf8 (*question) (ed_t *, char *, utf8 *, int);
 
@@ -1566,7 +1663,6 @@ NewSelf (ed,
 );
 
 NewClass (ed,
-  char name[8];
    int error_state;
    int state;
 
@@ -1592,16 +1688,48 @@ NewClass (ed,
   Class (rline) Rline;
   Class (vsys) Vsys;
   Class (venv) Venv;
-
-  ed_t *head;
-  ed_t *tail;
-  ed_t *current;
-   int  cur_idx;
-   int  num_items;
 );
 
-public ed_T *__init_ed__ (void);
-public void __deinit_ed__ (ed_T *);
+NewSubSelf (Ed, set,
+  ed_t
+    *(*next) (Ed_T *),
+    *(*prev) (Ed_T *),
+    *(*current) (Ed_T *, int);
+);
+
+NewSubSelf (Ed, get,
+  ed_t
+    *(*current) (Ed_T *),
+    *(*head) (Ed_T *);
+
+  int
+     (*error_state) (Ed_T *),
+     (*current_idx) (Ed_T *),
+     (*prev_idx) (Ed_T *),
+     (*num) (Ed_T *);
+);
+
+NewSelf (Ed,
+  ed_t
+    *(*init) (Ed_T *, EdAtInit_cb),
+    *(*new) (Ed_T *, ED_INIT_OPTS);
+
+  void (*free) (Ed_T *, ed_t *);
+
+  int (*delete) (Ed_T *, int, int);
+
+  SubSelf (Ed, get) get;
+  SubSelf (Ed, set) set;
+);
+
+NewClass (Ed,
+  Self (Ed) self;
+  Prop (Ed) *prop;
+  Class (ed) *ed;
+);
+
+public Class (Ed) *__init_ed__ (char *);
+public void __deinit_ed__ (Class (Ed) **);
 
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);
