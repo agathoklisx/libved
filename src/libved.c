@@ -1166,6 +1166,25 @@ private int ustring_change_case (char *dest, char *src, size_t src_len, int to_t
   return changed;
 }
 
+private int ustring_swap_case (char *dest, char *src, size_t src_len) {
+  size_t idx = 0;
+  while (idx < src_len) {
+    int len = 0;
+    utf8 c = ustring_get_code_at (src, src_len, idx, &len);
+    int is_upper = ustring_is_upper (c);
+    char buf[len];  // this might called dispatch in programming (not sure though)
+    ustring_character ((is_upper ? ustring_to_lower : ustring_to_upper) (c),
+        buf, &len);
+    for (int i = 0; i < len; i++)
+      dest[idx] = buf[i];
+
+    idx += len;
+  }
+
+  dest[idx] = '\0';
+  return OK;
+}
+
 public ustring_T __init_ustring__ (void) {
   return ClassInit (ustring,
     .self = SelfInit (ustring,
@@ -1180,6 +1199,7 @@ public ustring_T __init_ustring__ (void) {
       .is_lower = ustring_is_lower,
       .is_upper = ustring_is_upper,
       .character = ustring_character,
+      .swap_case = ustring_swap_case,
       .change_case = ustring_change_case,
       .charlen = ustring_charlen
     )
@@ -13593,6 +13613,17 @@ private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
     case '*':
       return ed_selection_to_X_word_actions_cb (thisp, fidx, lidx, it, word, c, action);
 
+   case '~': {
+       size_t len = lidx - fidx + 1;
+       char buf[len+1]; // though it alwars returns ok, this might change in future
+       if (OK isnot My(Ustring).swap_case (buf, word, len)) // to support malformed wstrings
+         return NOTHING_TODO;
+
+       buf[len] = '\0';
+       ved_delete_word (this, REG_UNAMED);
+       return ved_insert (thisp, 0, buf);
+     }
+
    case 'L':
      type = TO_LOWER;
    case 'U': {
@@ -13637,10 +13668,11 @@ private void ed_set_word_actions_default (ed_t *this) {
   $my(word_actions) = vstr_new ();
   $my(word_actions_chars) = NULL;
   $my(word_actions_chars_len) = 0;
-  utf8 chars[] = {'+', '*', 'L', 'U', ESCAPE_KEY};
+  utf8 chars[] = {'+', '*', '~', 'L', 'U', ESCAPE_KEY};
   char actions[] =
     "+send selected area to XA_CLIPBOARD\n"
     "*send selected area to XA_PRIMARY\n"
+    "~swap case\n"
     "Lower (convert word to lower case)\n"
     "Upper (convert word to upper case)";
 

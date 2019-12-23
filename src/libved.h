@@ -970,6 +970,7 @@ NewSelf (ustring,
   char *(*character) (utf8, char *, int *);
 
   int
+    (*swap_case) (char *, char *, size_t len),
     (*change_case) (char *, char *, size_t len, int),
     (*charlen) (uchar),
     (*is_lower) (utf8),
