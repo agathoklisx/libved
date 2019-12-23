@@ -64,6 +64,7 @@
      nor ever intented as a general purpose editor; it strives to achieve this level of
      the functionality that can be considered productive but with quite few lines of code;
      as such is full of hand written calculations, which, yes, are compact but fragile)
+     (but see CONCENTRATION section for details).
 
    - there are no tests to guarantee correctness and probably never will (it just follows,
      and as an excuse, the waterfall model).
@@ -1438,6 +1439,16 @@ Search:
   And with a little bit help of our friends.
  */
 
+ /* CONCENTRATION
+   Clearly this was designed from C for C with C to C (or close to C anyway,
+   though not As Is C: maybe even an even more spartan C (in obvious places:
+   where discipline should be practiced with obvious expectations, from both
+   sides (programmer - compiler)), but with a concentration to expressionism
+   (i could put it even fairlier and|or even a bit voicly (if it was allowed)
+    a "tremendous concentration" to expressionism (as an uncontrollable desire
+   ))). I mean that was the thought.
+
+
  /* THE FAR AWAY FUTURE
     - Self Sufficiency, so to be the easiest thing ever to integrate
 
@@ -1459,6 +1470,37 @@ Search:
 
     These warnings can not and should not be hided, but the application at runtime,
     should work/behave correctly, as long this prerequisite/condition is true.
+    [update: Last days of December 2019: The above is not quite correct. The static
+    targets can produce (like in one case with getaddrinfo()) segfaults.
+    So probable (they are not trustable). Plus they are not flexible (though there
+    is a noticeable difference in memory usage that is reported by htop(1) and an
+    unoticable (almost) better performance). So i lost a bit the desire to put the
+    mind to think this case when facing with the code: (this is where things should
+    be improved. The programmer mind shouldn't be feel free and the flow is quite
+    important when expressing (probably much of the buggish code was written in some
+    of those times). So yes, probably it is time for C to start thinking to offer
+    for free a more abstract communication for the human being mind who follows a
+    thought and dont have time to learn about those little details (which yes this
+    is a property of C and where C shines as  the golden peak of the Macha-Puchare
+    in a glorious morning in a bathe of light, but perhaps (and this is emphasized:
+    i do not how but C has to be settle and offer a couple of warrante's for common
+    requests (like type convertions or a string reprecentation of a double (for this
+    i've read today in zsh mailing list)) or: is the size_t suitable? some argue for
+    ptrdiff_t) of which many of them, still (in 2019?) fail in the quite big bucket of
+    undefined behaviors which is what make people to say that C is unsafe) but and
+    other common in 2019 expectations. But what i'm sure is that this will bring an
+    instant satisfaction (and a huge relief) if there were none of these backthoughts
+    to hold the mind and through it into the well of "second thoughts world" instead
+    of walking happily the code path (well is a millisecond win actually (as we never
+    live (by default) the present in full conscience), as this gives first the self
+    what he wants to take (but it shouldn't be more than that)) and then let us free
+    to choose). It is this millisecond what maybe we're searching (probably)).
+    (but see at CONCENTRATION section for related details)).
+
+    So as a resume i think that shared targets release a burden when developing or
+    the code should handle with #ifdef the case for static targets and exclude code.
+    This is ugly though plus it can still have unpredictable results if there is no
+    care or prior experience.
 
     C strings:
     All the generated strings in the library for the library, are and should be '\0'

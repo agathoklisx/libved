@@ -7512,7 +7512,7 @@ private int ved_normal_end_word (buf_t **thisp, int count, int run_insert_mode, 
   if (retval is DONE) ved_normal_left (this, 1, DONOT_DRAW);
   if (run_insert_mode) {
     self(draw);
-    return ved_insert (&this, 'i');
+    return ved_insert (&this, 'i', NULL);
   }
 
   if (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))
@@ -7880,7 +7880,7 @@ private int ved_insert_new_line (buf_t **thisp, utf8 com) {
 
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw);
-  return ved_insert (thisp, com);
+  return ved_insert (thisp, com, NULL);
 }
 
 private int ved_join (buf_t *this) {
@@ -8823,13 +8823,14 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
   return DONE;
 }
 
-private int ved_normal_handle_c (buf_t *this, int count, int regidx) {
+private int ved_normal_handle_c (buf_t **thisp, int count, int regidx) {
   (void) count;
+  buf_t *this = *thisp;
   utf8 c = My(Input).get ($my(term_ptr));
   switch (c) {
     case 'w':
       ved_delete_word (this, regidx);
-      return ved_insert (&this, 'c');
+      return ved_insert (thisp, 'c', NULL);
   }
 
   return NOTHING_TODO;
@@ -12719,7 +12720,7 @@ private int ved_insert_reg (buf_t **thisp, string_t *cur_insert) {
   return DONE;
 }
 
-private int ved_insert (buf_t **thisp, utf8 com) {
+private int ved_insert (buf_t **thisp, utf8 com, char *bytes) {
   buf_t *this = *thisp;
   utf8 c = 0;
   if (com is '\n') {
@@ -12769,6 +12770,16 @@ private int ved_insert (buf_t **thisp, utf8 com) {
           $my(cur_video_col) - width + 1;
       self(draw_cur_row);
     }
+  }
+
+  if (bytes isnot NULL) {
+    size_t blen = bytelen (bytes);
+    for (size_t i = 0; i < blen; i++)
+      this = ved_insert_char_rout (this, bytes[i], $my(cur_insert));
+
+    $my(flags) |= BUF_IS_MODIFIED;
+    self(draw_cur_row);
+    goto theend;
   }
 
   str_cp ($my(mode), MAXLEN_MODE, INSERT_MODE, MAXLEN_MODE - 1);
@@ -13175,11 +13186,11 @@ handle_com:
       retval = ved_normal_replace_char (this); break;
 
     case 'c':
-      retval = ved_normal_handle_c (this, count, regidx); break;
+      retval = ved_normal_handle_c (thisp, count, regidx); break;
 
     case 'C':
        ved_normal_delete_eol (this, regidx);
-       retval = ved_insert (thisp, com); break;
+       retval = ved_insert (thisp, com, NULL); break;
 
     case 'o':
     case 'O':
@@ -13193,7 +13204,7 @@ handle_com:
     case 'i':
     case 'a':
     case 'A':
-      retval = ved_insert (thisp, com); break;
+      retval = ved_insert (thisp, com, NULL); break;
 
     case CTRL('r'):
     case 'u':
@@ -13573,10 +13584,28 @@ private void ed_resume (ed_t *this) {
 }
 
 private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
-                                bufiter_t *it, char *word, utf8 c, char *action) {
-  (void) thisp; (void) word; (void) c; (void) fidx; (void) lidx; (void) it;
-  (void) action;
-  return 1;
+                  bufiter_t *it, char *word, utf8 c, char *action) {
+  buf_t *this = *thisp;
+  int type = TO_UPPER; (void) type;
+
+  switch (c) {
+    case '+':
+    case '*':
+      return ed_selection_to_X_word_actions_cb (thisp, fidx, lidx, it, word, c, action);
+
+   case 'L':
+     type = TO_LOWER;
+   case 'U': {
+      size_t len = lidx - fidx + 1;
+      char buf[len+1];
+      ifnot (My(Ustring).change_case (buf, word, len, type))
+        return NOTHING_TODO;
+      buf[len] = '\0';
+      ved_delete_word (this, REG_UNAMED);
+      return ved_insert (thisp, 0, buf);
+    }
+  }
+  return NOTHING_TODO;
 }
 
 private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
@@ -13593,8 +13622,7 @@ private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
     $my(word_actions_cb) = Realloc ($my(word_actions_cb), sizeof (WordActions_cb) * tlen);
   }
 
-  if (NULL is cb)
-    cb = ed_word_actions_cb;
+  if (NULL is cb) cb = ed_word_actions_cb;
 
   for (int i = $my(word_actions_chars_len), j = 0; i < tlen; i++, j++) {
     $my(word_actions_chars)[i] = chars[j];
@@ -13609,12 +13637,14 @@ private void ed_set_word_actions_default (ed_t *this) {
   $my(word_actions) = vstr_new ();
   $my(word_actions_chars) = NULL;
   $my(word_actions_chars_len) = 0;
-  utf8 chars[] = {'+', '*', ESCAPE_KEY};
+  utf8 chars[] = {'+', '*', 'L', 'U', ESCAPE_KEY};
   char actions[] =
     "+send selected area to XA_CLIPBOARD\n"
-    "*send selected area to XA_PRIMARY";
+    "*send selected area to XA_PRIMARY\n"
+    "Lower (convert word to lower case)\n"
+    "Upper (convert word to upper case)";
 
-  self(set.word_actions, chars, ARRLEN(chars), actions, ed_selection_to_X_word_actions_cb);
+  self(set.word_actions, chars, ARRLEN(chars), actions, ed_word_actions_cb);
 }
 
 private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,

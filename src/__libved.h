@@ -849,7 +849,7 @@ private int ved_normal_down (buf_t *, int, int, int);
 private int ved_normal_bol (buf_t *);
 private int ved_normal_eol (buf_t *);
 private int ved_normal_eof (buf_t *, int);
-private int ved_insert (buf_t **, utf8);
+private int ved_insert (buf_t **, utf8, char *);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_enew_fname (buf_t **, char *);

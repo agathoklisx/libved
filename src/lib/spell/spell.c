@@ -188,7 +188,7 @@ private void spell_insertion (spell_t *spell) {
 }
 
 private int spell_case (spell_t *spell) {
-  char buf[spell->word_len];
+  char buf[spell->word_len + 1];
   int retval = Ustring.change_case (buf, spell->word, spell->word_len, TO_LOWER);
   ifnot (retval) return SPELL_WORD_ISNOT_CORRECT;
   if (Imap.key_exists (spell->dic, buf)) return SPELL_WORD_IS_CORRECT;
