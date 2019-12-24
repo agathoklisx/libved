@@ -5441,7 +5441,7 @@ private void buf_free (buf_t *this) {
   if (this is NULL) return;
   buf_free_rows (this);
 
-  if (this is NULL or $myprop is NULL) return;
+  if ($myprop is NULL) return;
 
   if ($my(fname) isnot NULL) free ($my(fname));
 
@@ -7273,8 +7273,8 @@ private int ved_diff (buf_t **thisp, int to_stdout) {
   return retval;
 }
 
-private int ved_quit (ed_t *ed, int force) {
-  int retval = EXIT_THIS;
+private int ved_quit (ed_t *ed, int force, int global) {
+  int retval = (global ? (force ? EXIT_ALL_FORCE : EXIT_ALL) : EXIT_THIS);
   if (force) return retval;
 
   win_t *w = ed->head;
@@ -11463,10 +11463,12 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = 1,
     [VED_COM_EDIT ... VED_COM_ENEW] = 1,
     [VED_COM_GREP] = 3,
+    [VED_COM_QUIT_FORCE ... VED_COM_QUIT_ALIAS] = 1,
     [VED_COM_READ ... VED_COM_READ_ALIAS] = 1,
     [VED_COM_SPLIT] = 1,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] = 5,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] = 4,
+    [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = 1
   };
 
   int flags[VED_COM_END + 1] = {
@@ -11474,12 +11476,14 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = RL_ARG_BUFNAME,
     [VED_COM_EDIT ... VED_COM_ENEW] = RL_ARG_FILENAME,
     [VED_COM_GREP] = RL_ARG_FILENAME|RL_ARG_PATTERN|RL_ARG_RECURSIVE,
+    [VED_COM_QUIT_FORCE ... VED_COM_QUIT_ALIAS] = RL_ARG_GLOBAL,
     [VED_COM_READ ... VED_COM_READ_ALIAS] = RL_ARG_FILENAME,
     [VED_COM_SPLIT] = RL_ARG_FILENAME,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] =
       RL_ARG_RANGE|RL_ARG_GLOBAL|RL_ARG_PATTERN|RL_ARG_SUB|RL_ARG_INTERACTIVE,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] =
       RL_ARG_FILENAME|RL_ARG_RANGE|RL_ARG_BUFNAME|RL_ARG_APPEND,
+    [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = RL_ARG_GLOBAL
   };
 
   $my(commands) = Alloc (sizeof (rlcom_t) * (VED_COM_END + 1));
@@ -12410,13 +12414,15 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
     case VED_COM_QUIT_FORCE:
     case VED_COM_QUIT:
     case VED_COM_QUIT_ALIAS:
-      retval = ved_quit ($my(root), VED_COM_QUIT_FORCE is rl->com);
+      retval = ved_quit ($my(root), VED_COM_QUIT_FORCE is rl->com,
+          rline_arg_exists (rl, "global"));
       goto theend;
 
     case VED_COM_WRITE_QUIT:
     case VED_COM_WRITE_QUIT_FORCE:
       self(write, NO_FORCE);
-      retval = ved_quit ($my(root), VED_COM_WRITE_QUIT_FORCE is rl->com);
+      retval = ved_quit ($my(root), VED_COM_WRITE_QUIT_FORCE is rl->com,
+          rline_arg_exists (rl, "global"));
       goto theend;
 
     case VED_COM_ENEW:
@@ -13352,11 +13358,15 @@ exec_block:
             goto new_state;
         }
 
-        if (cmd_retv is EXIT_THIS) {
-          if ($myroots(state) & ED_SUSPENDED)
-            $myroots(state) |= ED_EXIT;
-          else
-            $myroots(state) |= ED_QUIT;
+        if (cmd_retv is EXIT_THIS or cmd_retv is EXIT_ALL or cmd_retv is EXIT_ALL_FORCE) {
+          ifnot (($myroots(state) & ED_SUSPENDED)) {
+            if (cmd_retv is EXIT_THIS)
+              $myroots(state) |= ED_EXIT;
+            else if (cmd_retv is EXIT_ALL)
+              $myroots(state) |= ED_EXIT_ALL;
+            else
+              $myroots(state) |= ED_EXIT_ALL_FORCE;
+          }
 
           retval = OK;
           goto theend;
@@ -13365,8 +13375,11 @@ exec_block:
         if (cmd_retv is WIN_EXIT) {
                        /* at this point this (probably) is a null reference */
           retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
+
           if (retval is DONE) goto new_state;
-          if (retval is EXIT_THIS) {retval = OK; goto theend;}
+
+          ed->prop->state |= ED_EXIT;
+          retval = OK;
           goto theend;
         }
     }
@@ -13382,7 +13395,8 @@ private int ved_main (ed_t *this, buf_t *buf) {
   } else
     My(Win).draw (this->current);
 
- // My(Msg).send(this, COLOR_NORMAL, " ");
+ $my(state) = 0;
+
 /*
   My(Msg).send (this, COLOR_CYAN,
       "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
@@ -14344,15 +14358,10 @@ private ed_t *__ed_new__ (Class (Ed) *this, ED_INIT_OPTS opts) {
   return ed;
 }
 
-private void __ed_free__ (Class (Ed) *this, ed_t *ed) {
-  (void) this;
-  ed_free (ed);
-}
-
 private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
   $my(error_state) = 0;
 
-  if (1 is $my(num_items)) {
+  if (1 is $my(num_items) and 0 is force_current) {
     $my(error_state) |= LAST_INSTANCE_ERROR_STATE;
     return NOTOK;
   }
@@ -14412,6 +14421,14 @@ private ed_t *__ed_set_prev__ (Ed_T *this) {
   return __ed_set_current__ (this, idx);
 }
 
+private void __ed_set_state__ (Ed_T *this, int state) {
+  $my(state) = state;
+}
+
+private int __ed_get_state__ (Ed_T *this) {
+  return $my(state);
+}
+
 private ed_t *__ed_get_current__ (Class (Ed) *this) {
   return $my(current);
 }
@@ -14434,6 +14451,17 @@ private int __ed_get_prev_idx__ (Class (Ed) *this) {
 
 private int __ed_get_error_state__ (Class (Ed) *this) {
   return $my(error_state);
+}
+
+private void __ed_set_at_exit_cb__ (Class (Ed) *this, __EdAtExit_cb cb) {
+  if (NULL is cb) return;
+  $my(num_at_exit_cbs)++;
+  ifnot ($my(num_at_exit_cbs) - 1)
+    $my(at_exit_cbs) = Alloc (sizeof (__EdAtExit_cb));
+  else
+    $my(at_exit_cbs) = Realloc ($my(at_exit_cbs), sizeof (__EdAtExit_cb) * $my(num_at_exit_cbs));
+
+  $my(at_exit_cbs)[$my(num_at_exit_cbs) -1] = cb;
 }
 
 private ed_T *ed_init_prop (ed_T *this) {
@@ -14459,7 +14487,8 @@ private ed_T *ed_init_prop (ed_T *this) {
 
   $my(Me) = this;
   $my(video) = NULL;
-
+  $my(num_at_exit_cbs) = 0;
+  $my(at_exit_cbs) = NULL;
   return this;
 }
 
@@ -14478,6 +14507,25 @@ private int init_ed (ed_T *this) {
   return OK;
 }
 
+private int __ed_exit_all__ (Class (Ed) *this) {
+  int force = ($my(state) & ED_EXIT_ALL_FORCE);
+
+  for (;;) {
+    ed_t *ed = self(set.current, 0);
+    if (NULL is ed) return OK;
+
+    ifnot (force)
+      if (NOTHING_TODO is ved_quit (ed, force, 1)) {
+        self(set.current, $my(cur_idx));
+        return NOTOK;
+      }
+
+    self(delete, $my(cur_idx), FORCE);
+  }
+
+  return OK;
+}
+
 public Class (Ed) *__init_ed__ (char *name) {
   Ed_T *this = AllocClass (Ed);
 
@@ -14485,20 +14533,23 @@ public Class (Ed) *__init_ed__ (char *name) {
     .self = SelfInit (Ed,
       .init = __ed_init__,
       .new = __ed_new__,
-      .free = __ed_free__,
       .delete = __ed_delete__,
+      .exit_all = __ed_exit_all__,
       .get = SubSelfInit (Ed, get,
-       .current = __ed_get_current__,
-       .head = __ed_get_head__,
-       .current_idx = __ed_get_current_idx__,
-       .prev_idx = __ed_get_prev_idx__,
-       .num = __ed_get_num__,
-       .error_state = __ed_get_error_state__
+        .current = __ed_get_current__,
+        .head = __ed_get_head__,
+        .current_idx = __ed_get_current_idx__,
+        .prev_idx = __ed_get_prev_idx__,
+        .num = __ed_get_num__,
+        .error_state = __ed_get_error_state__,
+        .state = __ed_get_state__
       ),
       .set = SubSelfInit (Ed, set,
-       .next = __ed_set_next__,
-       .prev = __ed_set_prev__,
-       .current = __ed_set_current__
+        .state = __ed_set_state__,
+        .at_exit_cb = __ed_set_at_exit_cb__,
+        .next = __ed_set_next__,
+        .prev = __ed_set_prev__,
+        .current = __ed_set_current__
       )
     ),
     .prop = $myprop,
@@ -14515,6 +14566,7 @@ public Class (Ed) *__init_ed__ (char *name) {
   str_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
   $my(name_gen) = ('z' - 'a') + 1;
   $my(cur_idx) = $my(prev_idx) = -1;
+  $my(state) = 0;
 
   return this;
 }
@@ -14536,16 +14588,17 @@ public void __deinit_ed__ (Class (Ed) **thisp) {
 
   Class (Ed) *this = *thisp;
 
+  __ed_exit_all__ (this);
+
+  for (int i = 0; i < $my(num_at_exit_cbs); i++)
+    $my(at_exit_cbs)[i] ();
+
   deinit_ed (this->ed);
 
-  ed_t *it = $my(head);
-  while (it) {
-    ed_t *tmp = it->next;
-    self(free, it);
-    it = tmp;
-  }
-
   free (this->ed);
+
+  if ($my(num_at_exit_cbs)) free ($my(at_exit_cbs));
+
   free ($myprop);
   free (this);
   *thisp = NULL;

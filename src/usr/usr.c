@@ -536,8 +536,7 @@ private void __init_usr__ (ed_t *this) {
   }
 }
 
-private void __deinit_usr__ (ed_t *this) {
-  (void) this;
+private void __deinit_usr__ (void) {
   String.free (Uenv->man_exec);
   String.free (Uenv->elinks_exec);
   free (Uenv);

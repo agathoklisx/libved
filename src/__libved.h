@@ -826,6 +826,7 @@ NewProp (ed,
 NewProp (Ed,
   char name[MAXLEN_ED_NAME];
   int
+    state,
     error_state,
     name_gen;
 
@@ -836,12 +837,15 @@ NewProp (Ed,
    int  cur_idx;
    int  num_items;
    int  prev_idx;
+
+  int num_at_exit_cbs;
+  __EdAtExit_cb *at_exit_cbs;
 );
 
 #undef MY_CLASSES
 #undef MY_PROPERTIES
 
-private int ved_quit (ed_t *, int);
+private int ved_quit (ed_t *, int, int);
 private int ved_normal_goto_linenr (buf_t *, int, int);
 private int ved_normal_left (buf_t *, int, int);
 private int ved_normal_right (buf_t *, int, int);

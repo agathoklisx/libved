@@ -106,15 +106,15 @@ int argparse_parse (struct argparse *, int, const char **);
 
 #if HAS_USER_EXTENSIONS
   private void __init_usr__ (ed_t *);
-  private void __deinit_usr__ (ed_t *);
+  private void __deinit_usr__ (void);
 #endif
 
 #if HAS_LOCAL_EXTENSIONS
   private void __init_local__ (ed_t *);
-  private void __deinit_local__ (ed_t *);
+  private void __deinit_local__ (void);
 #endif
 
 private void __init_ext__ (ed_t *);
-private void __deinit_ext__ (ed_t *);
+private void __deinit_ext__ (void);
 
 #endif

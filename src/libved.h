@@ -217,10 +217,10 @@
 #define MSG_SET_TO_MSG_BUF  (1 << 6)
 #define MSG_SET_TO_MSG_LINE (1 << 7)
 
-#define ED_QUIT             (1 << 0)
+#define ED_SUSPENDED        (1 << 0)
 #define ED_EXIT             (1 << 1)
-#define ED_SUSPENDED        (1 << 2)
-#define ED_QUIT_ALL         (1 << 3)
+#define ED_EXIT_ALL         (1 << 2)
+#define ED_EXIT_ALL_FORCE   (1 << 3)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
 #define LAST_INSTANCE_ERROR_STATE      (1 << 0)
@@ -606,11 +606,12 @@ typedef int  (*ReCompile_cb) (regexp_t *);
 typedef int  (*DirProcessDir_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirProcessFile_cb) (dirwalk_t *, char *, struct stat *);
 typedef int  (*DirStatFile_cb) (const char *, struct stat *);
-typedef void (*EdAtExit_cb) (ed_t *);
-typedef void (*EdAtInit_cb) (ed_t *);
 typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
+typedef void (*__EdAtExit_cb) (void);
+typedef void (*EdAtExit_cb) (ed_t *);
+typedef void (*EdAtInit_cb) (ed_t *);
 
 #define NULL_REF NULL
 
@@ -1293,6 +1294,8 @@ enum {
   DONE = 0,
   NEWCHAR,
   EXIT_THIS,
+  EXIT_ALL,
+  EXIT_ALL_FORCE,
   WIN_EXIT,
   BUF_EXIT,
   BUF_QUIT,
@@ -1651,7 +1654,7 @@ NewSelf (ed,
   int
     (*scratch) (ed_t *, buf_t **, int),
     (*messages) (ed_t *, buf_t **, int),
-    (*quit) (ed_t *, int),
+    (*quit) (ed_t *, int, int),
     (*loop) (ed_t *, buf_t *),
     (*main) (ed_t *, buf_t *),
     (*delete) (ed_t *, ed_T *, int, int);
@@ -1692,6 +1695,10 @@ NewClass (ed,
 );
 
 NewSubSelf (Ed, set,
+  void
+     (*state) (Ed_T *, int),
+     (*at_exit_cb) (Ed_T *, __EdAtExit_cb);
+
   ed_t
     *(*next) (Ed_T *),
     *(*prev) (Ed_T *),
@@ -1704,6 +1711,7 @@ NewSubSelf (Ed, get,
     *(*head) (Ed_T *);
 
   int
+     (*state) (Ed_T *),
      (*error_state) (Ed_T *),
      (*current_idx) (Ed_T *),
      (*prev_idx) (Ed_T *),
@@ -1715,9 +1723,9 @@ NewSelf (Ed,
     *(*init) (Ed_T *, EdAtInit_cb),
     *(*new) (Ed_T *, ED_INIT_OPTS);
 
-  void (*free) (Ed_T *, ed_t *);
-
-  int (*delete) (Ed_T *, int, int);
+  int
+    (*exit_all) (Ed_T *),
+    (*delete) (Ed_T *, int, int);
 
   SubSelf (Ed, get) get;
   SubSelf (Ed, set) set;

@@ -647,8 +647,6 @@ Search:
                            --tabwidth=[int] set tabwidth
                            --shiftwidth=[int] set shiftwidth)
    :q[!]                  (quit (if force, do not check for modified buffers))
-
-   User defined (through an API mechanism):
    */
 
    /* Old Comment Stays as a Reference
@@ -1477,35 +1475,69 @@ Search:
     should work/behave correctly, as long this prerequisite/condition is true.
     [update: Last days of December 2019: The above is not quite correct. The static
     targets can produce (like in one case with getaddrinfo()) segfaults.
+
     So probable (they are not trustable). Plus they are not flexible (though there
     is a noticeable difference in memory usage that is reported by htop(1) and an
     unoticable (almost) better performance). So i lost a bit the desire to put the
-    mind to think this case when facing with the code: (this is where things should
-    be improved. The programmer mind shouldn't be feel free and the flow is quite
-    important when expressing (probably much of the buggish code was written in some
-    of those times). So yes, probably it is time for C to start thinking to offer
-    for free a more abstract communication for the human being mind who follows a
-    thought and dont have time to learn about those little details (which yes this
-    is a property of C and where C shines as  the golden peak of the Macha-Puchare
-    in a glorious morning in a bathe of light, but perhaps (and this is emphasized:
-    i do not how but C has to be settle and offer a couple of warrante's for common
-    requests (like type convertions or a string reprecentation of a double (for this
-    i've read today in zsh mailing list)) or: is the size_t suitable? some argue for
-    ptrdiff_t) of which many of them, still (in 2019?) fail in the quite big bucket of
-    undefined behaviors which is what make people to say that C is unsafe) but and
-    other common in 2019 expectations. But what i'm sure is that this will bring an
-    instant satisfaction (and a huge relief) if there were none of these backthoughts
-    to hold the mind and through it into the well of "second thoughts world" instead
-    of walking happily the code path (well is a millisecond win actually (as we never
-    live (by default) the present in full conscience), as this gives first the self
-    what he wants to take (but it shouldn't be more than that)) and then let us free
-    to choose). It is this millisecond what maybe we're searching (probably)).
-    (but see at CONCENTRATION section for related details)).
+    mind to think this case when facing with the code.
 
-    So as a resume i think that shared targets release a burden when developing or
-    the code should handle with #ifdef the case for static targets and exclude code.
-    This is ugly though plus it can still have unpredictable results if there is no
-    care or prior experience.
+    This is where things could be improved a bit.
+
+    The flow is quite important for the programming mind when expressing (probably
+    much of the buggish code was written in some of those times).
+    So yes, probably it is time for C to start thinking to offer (which could be for
+    free), a more abstract communication for the human being mind, who while follows
+    a thought (which probably are complicated thoughts about conditions that can be
+    met and need handling), do not have to be penaltized about conditions that do not
+    have relation with the actual code, but has to do with details such: is size_t
+    enough suitable? Some argue for ptrdiff_t instead, as it helps the compiler to
+    detect overflows as size_t is unsigned and ssize_t could be not as big as size_t,
+    plus ssize_t (not sure though) is not standard.
+
+    I realize that this is a property of C and where C shines (as the golden peak of
+    the Macha-Puchare mountain in a glorious morning in a bathe of light), but perhaps
+    and this is emphasized:
+    I do not how but C has to be settle and offer a couple of warrantee's for common
+    requests like a string reprecentation of a double: i do not use double and such
+    code i would never write probably, but for this i've read today in zsh mailing
+    list with people that are experts in that domain and found that there is no an
+    established standard way. They are different approaches and languages are free
+    to do whatever they like. I guess is not totally C faults here. C++17 added a
+    to_chars() function so probably C can follow.
+
+    But in anycase there quite many of cases that, still today (in 2019?), fail in
+    the quite big bucket of undefined behaviors, which is what make people to say
+    that C is unsafe, but and other common in 2019 expectations. So i do not how,
+    but what i know (mostly be feeling) that some of those warrantee's will bring
+    an instant satisfaction (and a huge relief) to the programmer, if there were
+    none of these backthoughts to hold the mind, and instead of coding the actual
+    program, fights with the language. I'm not totally in the position to prove it
+    (like many other things that holds trueth but can not be proved), but since we
+    can never live the moment (probably there is not such a thing as the now, since
+    the now is always past), the one and only thing we actually searching for, is a
+    fraction of time that is not countable (it's like a micro-nanosecond but less).
+    This is enough to work the life procedure (as we offer something by living, as
+    quite possible we have been created for a reason (to produce a thing)), so this
+    might give the self what it he needs to take, but after that, we are probably
+    free to use then the mechanics. So do not have to destroy our only chance from
+    the delibaration or at very least the only chance for an explanation.
+    (but see at CONCENTRATION section for related details or see the movie which in
+    my lang was translated as "The cycle of the lost poets").
+
+    So as a resume, i think that shared targets release a burden when developing or
+    the code should handle with #ifdef the case for static targets and exclude code,
+    thus loosing functionality. This is both ugly and it can still have unpredictable
+    results if there is no care or prior experience. If you don't do that, then you
+    still need the same shared libraries that been used during compilation. But then
+    you loose the basic advantage of static targets, which is portability, as it is
+    supposed indepentable. Unless i'm missing something obvious or the message from
+    the linker is misleading.
+
+    But the main disadvantage is (at least when developing) that you can't use quite
+    important tools for C, like valgrind, which do not work with static executables.
+    If C was created now, valgrind's functionality should definitely considered to
+    be (somehow) a built in the language, or at least to the compiler as a special
+    mode.
 
     C strings:
     All the generated strings in the library for the library, are and should be '\0'

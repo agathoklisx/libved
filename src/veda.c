@@ -60,14 +60,16 @@ int main (int argc, char **argv) {
   if (NULL is (__E__ = __init_ed__ (MYNAME)))
     return 1;
 
-  num_win = (num_win < argc ? num_win : argc);
-  ed_t *this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
+  E.set.at_exit_cb (__E__, __deinit_ext__);
 
-//  __init_ext__ (__E__, this);
+  num_win = (num_win < argc ? num_win : argc);
+
+  ed_t *this = E.new (__E__, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
 
-  win_t *w = Ed.set.current_win (this, Ed.get.num_special_win (this));
+  int first_widx = Ed.get.num_special_win (this);
+  win_t *w = Ed.set.current_win (this, first_widx);
 
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
@@ -92,7 +94,7 @@ int main (int argc, char **argv) {
         w = Ed.set.current_win (this, ++widx);
     }
 
-    w = Ed.set.current_win (this, Ed.get.num_special_win (this));
+    w = Ed.set.current_win (this, first_widx);
   }
 
   /* set the first indexed name in the argvlist, as current */
@@ -103,24 +105,41 @@ int main (int argc, char **argv) {
 
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
-    /* main loop */
+
     retval = Ed.main (this, buf);
 
-    if ((Ed.get.state (this) & ED_QUIT_ALL))
-      break;
+    int state = Ed.get.state (this);
 
-    if ((Ed.get.state (this) & ED_QUIT)) {
+    if ((state & ED_EXIT_ALL_FORCE) or (state & ED_EXIT_ALL)) {
+      if ((state & ED_EXIT_ALL_FORCE)) {
+        int estate = E.get.state (__E__);
+        estate &= ED_EXIT_ALL_FORCE;
+        E.set.state (__E__, state);
+      }
+
+      if (NOTOK is E.exit_all (__E__)) {  // canselled
+        E.set.state (__E__, 0);
+        this = E.get.current (__E__);
+        w = Ed.get.current_win (this);
+        continue;
+      }
+
+      break;
+    }
+
+    if ((state & ED_EXIT)) {
       if (E.get.num (__E__) is 1)
         break;
 
       E.delete (__E__, E.get.current_idx (__E__), 1);
+
       this = E.get.current (__E__);
       w = Ed.get.current_win (this);
       continue;
     }
 
     /* here the user suspended its editor instance, with CTRL-j */
-    if (Ed.get.state (this) & ED_SUSPENDED) {
+    if ((state & ED_SUSPENDED)) {
       if (E.get.num (__E__) is 1) {
         /* as an example, we simply create another independed instance */
         this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
@@ -137,7 +156,6 @@ int main (int argc, char **argv) {
     } else break;
   }
 
-  __deinit_ext__ (this);
   __deinit_ed__ (&__E__);
 
 /* the end */

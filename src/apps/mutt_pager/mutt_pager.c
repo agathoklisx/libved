@@ -408,7 +408,10 @@ int main (int argc, char **argv) {
 
   argc--; argv++;
 
-  if (NULL is (__E__ = __init_ed__ (MYNAME))) return 1;
+  if (NULL is (__E__ = __init_ed__ (MYNAME)))
+    return 1;
+
+  E.set.at_exit_cb (__E__, __deinit_ext__);
 
   ed_t *this = E.init (__E__, __init_ext__);
 
@@ -422,14 +425,31 @@ int main (int argc, char **argv) {
     buf_t *buf = Ed.get.current_buf (this);
     retval = Ed.main (this, buf);
 
-    if ((Ed.get.state (this) & ED_QUIT_ALL))
-      break;
+    int state = Ed.get.state (this);
 
-    if ((Ed.get.state (this) & ED_QUIT)) {
+    if ((state & ED_EXIT_ALL_FORCE) or (state & ED_EXIT_ALL)) {
+      if ((state & ED_EXIT_ALL_FORCE)) {
+        int estate = E.get.state (__E__);
+        estate &= ED_EXIT_ALL_FORCE;
+        E.set.state (__E__, state);
+      }
+
+      if (NOTOK is E.exit_all (__E__)) {  // canselled
+        E.set.state (__E__, 0);
+        this = E.get.current (__E__);
+        w = Ed.get.current_win (this);
+        continue;
+      }
+
+      break;
+    }
+
+    if ((state & ED_EXIT)) {
       if (E.get.num (__E__) is 1)
         break;
 
       E.delete (__E__, E.get.current_idx (__E__), 1);
+
       this = E.get.current (__E__);
       w = Ed.get.current_win (this);
       continue;
@@ -450,7 +470,6 @@ int main (int argc, char **argv) {
     } else break;
   }
 
-  __deinit_ext__ (this);
   __deinit_ed__ (&__E__);
 
   return retval;

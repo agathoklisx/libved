@@ -176,15 +176,14 @@ private void __init_ext__ (Type (ed) *this) {
   Ed.history.read (this);
   Ed.set.at_exit_cb (this, Ed.history.write);
 #endif
-
 }
 
-private void __deinit_ext__ (ed_t *this) {
+private void __deinit_ext__ (void) {
 #if HAS_USER_EXTENSIONS
-  __deinit_usr__ (this);
+  __deinit_usr__ ();
 #endif
 
 #if HAS_LOCAL_EXTENSIONS
-  __deinit_local__ (this);
+  __deinit_local__ ();
 #endif
 }
