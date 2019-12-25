@@ -6009,8 +6009,8 @@ private buf_t *ved_diff_buf (ed_t *this) {
   return ved_special_buf (this, VED_DIFF_WIN, VED_DIFF_BUF, 1, 0);
 }
 
-private buf_t *ved_search_buf (ed_t *root) {
-  buf_t *this = ved_special_buf (root, VED_SEARCH_WIN, VED_SEARCH_BUF, 2, 1);
+private buf_t *ved_search_buf (ed_t *ed) {
+  buf_t *this = ved_special_buf (ed, VED_SEARCH_WIN, VED_SEARCH_BUF, 2, 1);
   this->on_normal_beg = ved_grep_on_normal;
   $my(is_sticked) = 1;
   $myparents(cur_frame) = 1;
@@ -9942,6 +9942,14 @@ private int ved_enew_fname (buf_t **thisp, char *fname) {
   return DONE;
 }
 
+/* buggy */
+private int ed_new_fname (Ed_T *this, buf_t **thisp, char *fname) {
+  ed_t *ed = self(new, QUAL(ED_INIT));
+  win_t *w = $my(Ed).get.current_win (ed);
+  ved_edit_fname (w, thisp, fname, 0, 1, 1, 1);
+  return DONE;
+}
+
 private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
                                             int accept_rdonly, int force) {
   if (this->num_items is 1)
@@ -11423,6 +11431,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_EDIT_FORCE_ALIAS] = "e!",
     [VED_COM_EDIT] = "edit",
     [VED_COM_EDIT_ALIAS] = "e",
+    [VED_COM_EDNEW] = "ednew",
     [VED_COM_ENEW] = "enew",
     [VED_COM_ETAIL] = "etail",
     [VED_COM_GREP] = "vgrep",
@@ -12424,6 +12433,16 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       retval = ved_quit ($my(root), VED_COM_WRITE_QUIT_FORCE is rl->com,
           rline_arg_exists (rl, "global"));
       goto theend;
+
+    case VED_COM_EDNEW:
+       {
+         arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
+         if (NULL isnot fname)
+           retval = ed_new_fname ($myroots(root), thisp, fname->argval->bytes);
+         else
+           retval = ed_new_fname ($myroots(root), thisp, UNAMED);
+        }
+        goto theend;
 
     case VED_COM_ENEW:
        {
@@ -14335,9 +14354,18 @@ private ed_t *__ed_init__ (Ed_T *this, EdAtInit_cb init_cb) {
   else
     $my(prev_idx) = cur_idx;
 
-  if (init_cb isnot NULL)
+  if (init_cb isnot NULL) {
     init_cb (ed);
 
+    if (NULL is $my(at_init_cb))
+      $my(at_init_cb) = init_cb;
+  } else {
+    ifnot (NULL is $my(at_init_cb))
+      $my(at_init_cb) (ed);
+  }
+
+  $from(ed, root) = this;
+  $from(ed, E) = this->self;
   return ed;
 }
 
@@ -14398,6 +14426,7 @@ private ed_t *__ed_set_current__ (Ed_T *this, int idx) {
     return NULL;
 
   $my(prev_idx) = cur_idx;
+
   return $my(current);
 }
 
@@ -14562,6 +14591,8 @@ public Class (Ed) *__init_ed__ (char *name) {
     __deinit_ed__ (&this);
     return NULL;
   }
+
+  $my(Ed) = this->ed->self;
 
   str_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
   $my(name_gen) = ('z' - 'a') + 1;

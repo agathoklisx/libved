@@ -98,6 +98,7 @@ enum {
   VED_COM_EDIT_FORCE_ALIAS,
   VED_COM_EDIT,
   VED_COM_EDIT_ALIAS,
+  VED_COM_EDNEW,
   VED_COM_ENEW,
   VED_COM_ETAIL,
   VED_COM_GREP,
@@ -746,6 +747,8 @@ NewProp (ed,
     *saved_cwd;
 
   Ed_T *root;
+  Self (Ed) E;
+
   MY_PROPERTIES;
   MY_CLASSES (ed);
   buf_T *Buf;
@@ -838,8 +841,12 @@ NewProp (Ed,
    int  num_items;
    int  prev_idx;
 
+  Self (ed) Ed;
+
   int num_at_exit_cbs;
   __EdAtExit_cb *at_exit_cbs;
+
+  EdAtInit_cb at_init_cb;
 );
 
 #undef MY_CLASSES

@@ -345,7 +345,8 @@ C_TAB_ON_INSERT_MODE_INDENTS (1|0) the wrong indentation here is by purpose (def
 
      - insert/normal/visual/cline modes
 
-   The structure:
+   The structure in short:
+
    - Every buffer belongs to a window.
 
    - A window can have unlimited buffers.
@@ -355,6 +356,8 @@ C_TAB_ON_INSERT_MODE_INDENTS (1|0) the wrong indentation here is by purpose (def
    - An Editor instance can have unlimited in-depended windows.
 
    - There can be unlimited independent editor instances that can be (de|rea)tached¹.
+
+   and a little more detailed at the STRUCTURE section.
 
    Modes.
 
@@ -1075,26 +1078,74 @@ Search:
       It could be a wise future path for C, if it will concentrate just to implement
       algorithms or standard interfaces.
 
-   The main structure is the editor structure type, and contains other nested
-   relative structures (that contain others too):
+   STRUCTURE:
 
-   (the basic three)
-   - editor type
-   - win type
-   - buf type
-   and the most significant
-   - string type
-   - terminal type
-   - and quite a lot of many others (equally important though)
+   A buffer instance is a child of a window instance and is responsible to manipulate
+   a double linked list that hold the contents. It's structure has references to the
+   next and previous buffer (if any), to the window instance where belongs (parent)
+   and to the editor instance where it's parent belongs (root).
 
-   Many of the algorithms are based on a (usually) double linked list with
-   a head and a tail and in many cases a current pointer, that can act (at
-   the minimum) as an iterator;  but there is no specific list type (just
-   abstracted macros that act on structures. Those structs, and based on the
-   context (specific type), can contain (some or all) of those (everybody's
-   C favorites) pointers.
+   A window instance is a child of a editor instance and is responsible to manipulate
+   a double linked list that hold it's buffers. That means holds the number of buffer
+   instances and the current buffer, and has methods to create/delete/change/position
+   those buffers. It has also references to the next and previous (window if any) and
+   to it's parent (the editor instance where belongs).
 
-   A couple of notes regarding the inner code.
+   An editor instance is a child of the root instance and is responsible to manipulate
+   a double linked list that hold it's windows. That means holds the number of window
+   instances and has methods to create/delete/change those windows.
+
+   A root instance of the root class "Ed" provides two public functions to initialize
+   and deinitialize the library. It has methods that manipulates editor instances with
+   a similar way that others do. It has one reference that holds an instance  of the
+   class "ed", that is being used as a prototype that all the other editor instances
+   inherit methods or|and some of it's properties (like the term property, which should
+   be one).
+   This "ed" instance initialize all the required structures (like String, Cstring,
+   Ustring, Term, Video, File, Path, Re, ...), but also the basic three classes
+   and their instances.
+
+   Since those three basic ones have references to it's other, that means everyone
+   can use the others and all the domain specific sub-structures.
+
+   The macro My([class]).method (...) works uniform, as long there is a pointer which
+   is declared as: [buf_t|win_t|ed_t] *this.
+
+   Only one "this", can exist in a function, either when is declared in the body of
+   the function or usually as the first function argument.
+
+   The "this" pointer can also provide easy access to it's type properties, by using
+   the $my([property]) macro. Also the self([method]) macro can call any other method
+   of it's class as:  self(method, [...]).
+
+   But also with "this", anyone can have direct access to any of it's parent or the parent
+   of it's parent, by using the $myparents([property]) or $myroots([property]) macros.
+
+   However the above is true only for the buf_t type since is this type that usually
+   is doing the actual job. The other two they don't do neither a single involvment
+   to any other job out of their domain. The actual code would be much less, if it
+   wasn't for the interface which should be practical anyway.
+
+   The actual manipulation, even if they are for rows, or for buffers or for windows
+   or for editor instances, is done through double linked list (with a head, a tail
+   and a current pointer) manipulation macros.
+
+   This might be not the best method as it concerns optimization in cases, but is by
+   itself enough to simplify the code a lot, but basically allows quick and accurate
+   development and probably better parsing when reading the code (as it is based on
+   the intentions) and makes the code looks the same wherever is being used.
+
+   But and many other of the algorithms are based on those macros or similar macros
+   to act on structures that donot have a tail or a current pointer.
+   Speaking for the current pointer, this can act (at the minimum) as an iterator;
+   but (for instance) can speed a lot of the buffer operations, even in huge files
+   where jumping around lines is simple arithmetic and so might bring some balance
+   since a linked list might not be the best type for it's job. But insertion and
+   deletion is superior to most of other methods.
+
+
+   A couple of notes regarding the inner code. [OLD NOTES THAT STAYING FOR REFERENCE]
+
    The inner code it uses a couple of macros to ease the development, like:
 
     self(method, [arg,...])
@@ -1139,16 +1190,14 @@ Search:
    as well the others too, works everywhere the same, if there is a proper
    declared "this".
 
-   In the sample executable that uses the library, the "My" macro, has the same
-   semantics, but for the others macros should be no need (though it is too early
-   maybe even talk about an API), as they should be covered with the following ways:
+   In the sample executable that uses the library, none of those macros should be
+   used anymore. All the Classes are accessed uniformily without the My or self
+   macro with the name (first letter capitalized) of the class, like:
 
     Ed.[subclass or method] ([args, ...])
-      or
-   Class.method ([args, ...])
 
-   this code has access to the root structure, but it should use the get/set
-   specific to types methods to access the underlying properties.
+   The underlying properties of the types are accesible through [gs]etters as none
+   of the types exposes their data.
  */
 
 /* Sample Application
