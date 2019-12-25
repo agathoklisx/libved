@@ -221,6 +221,10 @@
 #define ED_EXIT             (1 << 1)
 #define ED_EXIT_ALL         (1 << 2)
 #define ED_EXIT_ALL_FORCE   (1 << 3)
+#define ED_NEW              (1 << 4)
+#define ED_NEXT             (1 << 5)
+#define ED_PREV             (1 << 6)
+#define ED_PREV_FOCUSED     (1 << 7)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
 #define LAST_INSTANCE_ERROR_STATE      (1 << 0)
@@ -1550,6 +1554,7 @@ NewSubSelf (ed, get,
 
 NewSubSelf (ed, set,
    void
+     (*state) (ed_t *, int),
      (*screen_size) (ed_t *),
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
@@ -1589,10 +1594,6 @@ NewSubSelf (ed, append,
 
 NewSubSelf (ed, readjust,
   void (*win_size) (ed_t *, win_t *);
-);
-
-NewSubSelf (ed, exec,
-  int (*cmd) (ed_t *, buf_t **, utf8, int *, int);
 );
 
 NewSubSelf (ed, buf,
@@ -1635,7 +1636,6 @@ NewSelf (ed,
   SubSelf (ed, syn) syn;
   SubSelf (ed, reg) reg;
   SubSelf (ed, append) append;
-  SubSelf (ed, exec) exec;
   SubSelf (ed, readjust) readjust;
   SubSelf (ed, buf) buf;
   SubSelf (ed, win) win;
@@ -1655,8 +1655,6 @@ NewSelf (ed,
     (*scratch) (ed_t *, buf_t **, int),
     (*messages) (ed_t *, buf_t **, int),
     (*quit) (ed_t *, int, int),
-    (*loop) (ed_t *, buf_t *),
-    (*main) (ed_t *, buf_t *),
     (*delete) (ed_t *, ed_T *, int, int);
 
   utf8 (*question) (ed_t *, char *, utf8 *, int);
@@ -1724,6 +1722,7 @@ NewSelf (Ed,
     *(*new) (Ed_T *, ED_INIT_OPTS);
 
   int
+    (*main) (Ed_T *, buf_t *),
     (*exit_all) (Ed_T *),
     (*delete) (Ed_T *, int, int);
 

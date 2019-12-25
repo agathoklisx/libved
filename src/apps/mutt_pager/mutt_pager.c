@@ -423,51 +423,33 @@ int main (int argc, char **argv) {
 
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
-    retval = Ed.main (this, buf);
 
-    int state = Ed.get.state (this);
+    retval = E.main (__E__, buf);
 
-    if ((state & ED_EXIT_ALL_FORCE) or (state & ED_EXIT_ALL)) {
-      if ((state & ED_EXIT_ALL_FORCE)) {
-        int estate = E.get.state (__E__);
-        estate &= ED_EXIT_ALL_FORCE;
-        E.set.state (__E__, state);
-      }
+    int state = E.get.state (__E__);
 
-      if (NOTOK is E.exit_all (__E__)) {  // canselled
-        E.set.state (__E__, 0);
-        this = E.get.current (__E__);
-        w = Ed.get.current_win (this);
-        continue;
-      }
-
+    if ((state & ED_EXIT))
       break;
-    }
 
-    if ((state & ED_EXIT)) {
-      if (E.get.num (__E__) is 1)
-        break;
-
-      E.delete (__E__, E.get.current_idx (__E__), 1);
-
-      this = E.get.current (__E__);
-      w = Ed.get.current_win (this);
-      continue;
-    }
-
-    if (Ed.get.state (this) & ED_SUSPENDED) {
+    if ((state & ED_SUSPENDED)) {
       if (E.get.num (__E__) is 1) {
+        /* as an example, we simply create another independed instance */
         this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
-        buf = Win.buf.new (w, QUAL(BUF_INIT));
+        buf = Win.buf.new (w, BUF_INIT_QUAL());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
+        /* else jump to the next or prev */
         this = E.set.current (__E__, E.get.prev_idx (__E__));
         w = Ed.get.current_win (this);
       }
-    } else break;
+
+      continue;
+    }
+
+    break;
   }
 
   __deinit_ed__ (&__E__);

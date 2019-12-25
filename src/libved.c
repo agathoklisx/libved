@@ -9942,14 +9942,6 @@ private int ved_enew_fname (buf_t **thisp, char *fname) {
   return DONE;
 }
 
-/* buggy */
-private int ed_new_fname (Ed_T *this, buf_t **thisp, char *fname) {
-  ed_t *ed = self(new, QUAL(ED_INIT));
-  win_t *w = $my(Ed).get.current_win (ed);
-  ved_edit_fname (w, thisp, fname, 0, 1, 1, 1);
-  return DONE;
-}
-
 private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
                                             int accept_rdonly, int force) {
   if (this->num_items is 1)
@@ -11433,6 +11425,9 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_EDIT_ALIAS] = "e",
     [VED_COM_EDNEW] = "ednew",
     [VED_COM_ENEW] = "enew",
+    [VED_COM_EDNEXT] = "ednext",
+    [VED_COM_EDPREV] = "edprev",
+    [VED_COM_EDPREV_FOCUSED] = "edprevfocused",
     [VED_COM_ETAIL] = "etail",
     [VED_COM_GREP] = "vgrep",
     [VED_COM_MESSAGES] = "messages",
@@ -12438,11 +12433,30 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        {
          arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
          if (NULL isnot fname)
-           retval = ed_new_fname ($myroots(root), thisp, fname->argval->bytes);
+           My(String).replace_with ($myroots(ed_str), fname->argval->bytes);
          else
-           retval = ed_new_fname ($myroots(root), thisp, UNAMED);
+           My(String).replace_with ($myroots(ed_str), UNAMED);
+
+          retval = EXIT_THIS;
+          $myroots(state) |= ED_NEW;
         }
+
         goto theend;
+
+    case VED_COM_EDNEXT:
+      retval = EXIT_THIS;
+      $myroots(state) |= ED_NEXT;
+      goto theend;
+
+    case VED_COM_EDPREV:
+      retval = EXIT_THIS;
+      $myroots(state) |= ED_PREV;
+      goto theend;
+
+    case VED_COM_EDPREV_FOCUSED:
+      retval = EXIT_THIS;
+      $myroots(state) |= ED_PREV_FOCUSED;
+      goto theend;
 
     case VED_COM_ENEW:
        {
@@ -13015,415 +13029,6 @@ theend:
   return DONE;
 }
 
-private int ed_exec_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int regidx) {
-  int count = 1;
-
-  buf_t *this = *thisp;
-
-  if (range[0] <= 0) {
-    if (range[0] is 0)
-      return INDEX_ERROR;
-  } else {
-    if (range[0] > this->num_items)
-      if (range[1] >= 0)
-        return INDEX_ERROR;
-    count = range[0];
-  }
-
-  int retval = NOTHING_TODO;
-  switch (this->on_normal_beg (thisp, com, range, regidx)) {
-    case -1: goto theend;
-    case  1: goto atend;
-    case EXIT_THIS: return EXIT_THIS;
-    default: break;
-  }
-
-  if (com > 'z') {
-    if ($from(ed, lmap)[0][0] isnot 0) {
-      for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < ('z' - 'a') + 1; j++) {
-          if ($from(ed, lmap)[i][j] is com) {
-            com = (i is 1 ? 'a' : 'A') + j;
-            goto handle_com;
-          }
-        }
-      }
-    }
-  }
-
-handle_com:
-  switch (com) {
-    case 'q':
-      if ($my(flags) & BUF_IS_PAGER) return BUF_QUIT;
-      break;
-
-    case ':':
-      {
-      rline_t *rl = ved_rline_new (ed, $my(term_ptr), My(Input).get,
-          *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
-      retval = ved_rline (thisp, rl);
-      }
-
-      goto theend;
-
-    case '/':
-    case '?':
-    case '*':
-    case '#':
-    case 'n':
-    case 'N':
-      retval = ved_search (this, com); break;
-
-    case 'm':
-      retval = mark_set (this, -1); break;
-
-    case '`':
-      retval = mark_goto (this); break;
-
-    case CTRL('o'):
-      retval = buf_jump (this, RIGHT_DIRECTION); break;
-
-    case CTRL('i'):
-      retval = buf_jump (this, LEFT_DIRECTION); break;
-
-    case '~':
-      retval = ved_normal_change_case (this); break;
-
-    case CTRL('a'):
-    case CTRL('x'):
-      retval = ved_word_math (this, count, com); break;
-
-    case '^':
-      retval = ved_normal_noblnk (this); break;
-
-    case '>':
-    case '<':
-      retval = ved_indent (this, count, com); break;
-
-    case 'y':
-      retval = ved_normal_yank (this, count, regidx); break;
-
-    case 'Y':
-      retval = ved_normal_Yank (this, count, regidx); break;
-
-    case ' ':
-      ifnot ($my(ftype)->space_on_normal_is_like_insert_mode) break;
-
-      (&$my(regs)[REG_RDONLY])->type = CHARWISE;
-      (&$my(regs)[REG_RDONLY])->head->data->bytes[0] = ' ';
-      (&$my(regs)[REG_RDONLY])->head->data->bytes[1] = '\0';
-      (&$my(regs)[REG_RDONLY])->head->data->num_bytes = 1;
-      (&$my(regs)[REG_RDONLY])->head->next = NULL;
-      (&$my(regs)[REG_RDONLY])->head->prev = NULL;
-      retval = ved_normal_put (this, REG_RDONLY, 'P'); break;
-
-    case 'p':
-    case 'P':
-      retval = ved_normal_put (this, regidx, com); break;
-
-    case 'd':
-      retval = ved_normal_handle_d (this, count, regidx); break;
-
-    case 'x':
-    case DELETE_KEY:
-      retval = ved_normal_delete (this, count, regidx); break;
-
-    case BACKSPACE_KEY:
-      ifnot ($mycur(cur_col_idx)) {
-        if ($my(ftype)->backspace_on_first_idx_remove_trailing_spaces) {
-          size_t len = $mycur(data)->num_bytes;
-          for (int i = $mycur(data)->num_bytes - 1; i > 0; i--)
-            if ($mycur(data)->bytes[i] is ' ')
-              My(String).clear_at ($mycur(data), i);
-            else
-              break;
-
-          if (len isnot $mycur(data)->num_bytes) {
-            $my(flags) |= BUF_IS_MODIFIED;
-            self(draw_cur_row);
-          }
-          retval = DONE;
-        }
-
-        break;
-      }
-
-      ifnot ($my(ftype)->backspace_on_normal_is_like_insert_mode) break;
-
-      //__fallthrough__;
-
-    case 'X':
-       if (DONE is ved_normal_left (this, 1, DONOT_DRAW))
-         if (NOTHING_TODO is (retval = ved_normal_delete (this, count, regidx)))
-          self(draw_cur_row);
-       break;
-
-    case 'J':
-      retval = ved_join (this); break;
-
-    case '$':
-      retval = ved_normal_eol (this); break;
-
-    case CTRL('w'):
-      retval = ved_normal_handle_ctrl_w (thisp); break;
-
-    case 'g':
-      retval = ved_normal_handle_g (thisp, count); break;
-
-    case 'G':
-      retval = ved_normal_handle_G (this, count); break;
-
-    case ',':
-      retval = ved_normal_handle_comma (thisp); break;
-
-    case '0':
-      retval = ved_normal_bol (this); break;
-
-    case 'E':
-    case 'e':
-      retval = ved_normal_end_word (thisp, count,
-        ($my(ftype)->small_e_on_normal_goes_insert_mode is 1 and 'e' is com), DRAW);
-      break;
-
-    case ARROW_RIGHT_KEY:
-    case 'l':
-      retval = ved_normal_right (this, count, DRAW); break;
-
-    case ARROW_LEFT_KEY:
-    case 'h':
-      retval = ved_normal_left (this, count, DRAW); break;
-
-    case ARROW_UP_KEY:
-    case 'k':
-      retval = ved_normal_up (this, count, ADJUST_COL, DRAW); break;
-
-    case ARROW_DOWN_KEY:
-    case 'j':
-      retval = ved_normal_down (this, count, ADJUST_COL, DRAW); break;
-
-    case PAGE_DOWN_KEY:
-    case CTRL('f'):
-      retval = ved_normal_page_down (this, count); break;
-
-    case PAGE_UP_KEY:
-    case CTRL('b'):
-      retval = ved_normal_page_up (this, count); break;
-
-    case HOME_KEY:
-      retval = ved_normal_bof (this, DRAW); break;
-
-    case END_KEY:
-      retval = ved_normal_eof (this, DONOT_DRAW); break;
-
-    case CTRL('v'):
-      retval = ved_normal_visual_bw (this); break;
-
-    case 'V':
-      retval = ved_normal_visual_lw (thisp); break;
-
-    case 'v':
-      retval = ved_normal_visual_cw (thisp); break;
-
-    case 'D':
-      retval = ved_normal_delete_eol (this, regidx); break;
-
-    case 'r':
-      retval = ved_normal_replace_char (this); break;
-
-    case 'c':
-      retval = ved_normal_handle_c (thisp, count, regidx); break;
-
-    case 'C':
-       ved_normal_delete_eol (this, regidx);
-       retval = ved_insert (thisp, com, NULL); break;
-
-    case 'o':
-    case 'O':
-      retval = ved_insert_new_line (thisp, com); break;
-
-    case '\r':
-      ifnot ($my(ftype)->cr_on_normal_is_like_insert_mode) break;
-
-      com = '\n';
-//      __fallthrough__;
-    case 'i':
-    case 'a':
-    case 'A':
-      retval = ved_insert (thisp, com, NULL); break;
-
-    case CTRL('r'):
-    case 'u':
-      retval = vundo (this, com); break;
-
-    case CTRL('l'):
-      My(Win).draw (ed->current);
-      retval = DONE; break;
-
-    case CTRL('j'):
-      My(Ed).suspend (ed);
-      return EXIT_THIS;
-
-    case 'W':
-      retval = ved_normal_handle_W (thisp);
-      break;
-
-    default:
-      break;
-  }
-
-atend:
-  this->on_normal_end (thisp, com, range, regidx);
-
-theend:
-  return retval;
-}
-
-#define ADD_RANGE(n) range[IS_FIRST_RANGE_OK] = n
-#define IS_FIRST_RANGE_OK range[0] != -1
-#define IS_SECOND_RANGE_OK range[1] != -1
-#define ARE_BOTH_RANGES_OK (IS_FIRST_RANGE_OK && IS_SECOND_RANGE_OK)
-
-#define NORMAL_GET_NUMBER                 \
-  c = ({                                  \
-    int i = 0;                            \
-    char intbuf[8];                       \
-    intbuf[i++] = c;                      \
-    utf8 cc = BUF_GET_NUMBER (intbuf, i); \
-                                          \
-    if (i is MAX_COUNT_DIGITS)            \
-      goto new_state;                     \
-                                          \
-    intbuf[i] = '\0';                     \
-    ADD_RANGE (atoi (intbuf));            \
-    cc;                                   \
-    })
-
-private int ved_loop (ed_t *ed, buf_t *this) {
-  int retval = NOTOK;
-  int range[2];
-  utf8 c;
-  int cmd_retv;
-  int regidx = -1;
-
-  for (;;) {
- new_state:
-    regidx = -1;
-    range[0] = range[1] = -1;
-
-get_char:
-    ed_check_msg_status (ed);
-    c = My(Input).get ($my(term_ptr));
-
-handle_char:
-    switch (c) {
-      case NOTOK: goto theend;
-
-      case '"':
-        if (-1 isnot regidx) goto exec_block;
-        regidx = ed_register_get_idx (ed, My(Input).get ($my(term_ptr)));
-        goto get_char;
-
-     case '0':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        //__fallthrough__;
-
-      case '1'...'9':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        NORMAL_GET_NUMBER;
-        goto handle_char;
-
-      case '.':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ADD_RANGE (this->cur_idx + 1);
-        goto get_char;
-
-      case '$':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ADD_RANGE (this->num_items);
-        goto get_char;
-
-      case ',':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ifnot (IS_FIRST_RANGE_OK) range[0] = this->cur_idx + 1;
-          goto get_char;
-
-      case '%':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        if (IS_FIRST_RANGE_OK) goto exec_block;
-        range[0] = 1; range[1] = this->num_items;
-        goto get_char;
-
-      default:
-exec_block:
-        if (regidx is -1) regidx = REG_UNAMED;
-
-        cmd_retv = My(Ed).exec.cmd (ed, &this, c, range, regidx);
-
-        if (cmd_retv is DONE || cmd_retv is NOTHING_TODO)
-          goto new_state;
-
-        if (cmd_retv is BUF_QUIT) {
-          retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
-          if (retval is NOTHING_TODO) {
-            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
-                NULL, 0, NO_FORCE);
-            if (retval is NOTHING_TODO)
-              cmd_retv = EXIT_THIS;
-            else
-              goto new_state;
-          } else
-            goto new_state;
-        }
-
-        if (cmd_retv is EXIT_THIS or cmd_retv is EXIT_ALL or cmd_retv is EXIT_ALL_FORCE) {
-          ifnot (($myroots(state) & ED_SUSPENDED)) {
-            if (cmd_retv is EXIT_THIS)
-              $myroots(state) |= ED_EXIT;
-            else if (cmd_retv is EXIT_ALL)
-              $myroots(state) |= ED_EXIT_ALL;
-            else
-              $myroots(state) |= ED_EXIT_ALL_FORCE;
-          }
-
-          retval = OK;
-          goto theend;
-        }
-
-        if (cmd_retv is WIN_EXIT) {
-                       /* at this point this (probably) is a null reference */
-          retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
-
-          if (retval is DONE) goto new_state;
-
-          ed->prop->state |= ED_EXIT;
-          retval = OK;
-          goto theend;
-        }
-    }
-  }
-
-theend:
-  return retval;
-}
-
-private int ved_main (ed_t *this, buf_t *buf) {
-  if ($my(state) & ED_SUSPENDED) {
-    self(resume);
-  } else
-    My(Win).draw (this->current);
-
- $my(state) = 0;
-
-/*
-  My(Msg).send (this, COLOR_CYAN,
-      "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
- */
-
-  return ved_loop (this, buf);
-}
-
 private buf_t *ed_get_current_buf (ed_t *this) {
   return this->current->current;
 }
@@ -13511,6 +13116,10 @@ private buf_t *ed_get_bufname (ed_t *this, char *fname) {
   }
 
   return buf;
+}
+
+private void ed_set_state (ed_t *this, int state) {
+  $my(state) = state;
 }
 
 private win_t *ed_set_current_win (ed_t *this, int idx) {
@@ -13617,23 +13226,6 @@ private void ved_history_read (ed_t *this) {
    self(history.add, lines, RLINE_HISTORY);
 
    vstr_free (lines);
-}
-
-private void ed_suspend (ed_t *this) {
-  if ($my(state) & ED_SUSPENDED) return;
-  $my(state) |= ED_SUSPENDED;
-  My(Screen).clear ($my(term));
-  My(Term).reset ($my(term));
-  // My(Term).restore ($my(term));
-}
-
-private void ed_resume (ed_t *this) {
-  ifnot ($my(state) & ED_SUSPENDED) return;
-  $my(state) &= ~ED_SUSPENDED;
-  My(Term).set ($my(term));
-  // My(Term).raw ($my(term));
-  My(Win).set.current_buf (this->current, this->current->cur_idx, DONOT_DRAW);
-  My(Win).draw (this->current);
 }
 
 private int ed_word_actions_cb (buf_t **thisp, int fidx, int lidx,
@@ -13956,6 +13548,414 @@ private void ed_init_special_win (ed_t *this) {
   $my(num_special_win) = 4;
 }
 
+private int ved_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int regidx) {
+  int count = 1;
+
+  buf_t *this = *thisp;
+
+  if (range[0] <= 0) {
+    if (range[0] is 0)
+      return INDEX_ERROR;
+  } else {
+    if (range[0] > this->num_items)
+      if (range[1] >= 0)
+        return INDEX_ERROR;
+    count = range[0];
+  }
+
+  int retval = NOTHING_TODO;
+  switch (this->on_normal_beg (thisp, com, range, regidx)) {
+    case -1: goto theend;
+    case  1: goto atend;
+    case EXIT_THIS: return EXIT_THIS;
+    default: break;
+  }
+
+  if (com > 'z') {
+    if ($from(ed, lmap)[0][0] isnot 0) {
+      for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < ('z' - 'a') + 1; j++) {
+          if ($from(ed, lmap)[i][j] is com) {
+            com = (i is 1 ? 'a' : 'A') + j;
+            goto handle_com;
+          }
+        }
+      }
+    }
+  }
+
+handle_com:
+  switch (com) {
+    case 'q':
+      if ($my(flags) & BUF_IS_PAGER) return BUF_QUIT;
+      break;
+
+    case ':':
+      {
+      rline_t *rl = ved_rline_new (ed, $my(term_ptr), My(Input).get,
+          *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
+      retval = ved_rline (thisp, rl);
+      this = *thisp;
+      }
+
+      goto theend;
+
+    case '/':
+    case '?':
+    case '*':
+    case '#':
+    case 'n':
+    case 'N':
+      retval = ved_search (this, com); break;
+
+    case 'm':
+      retval = mark_set (this, -1); break;
+
+    case '`':
+      retval = mark_goto (this); break;
+
+    case CTRL('o'):
+      retval = buf_jump (this, RIGHT_DIRECTION); break;
+
+    case CTRL('i'):
+      retval = buf_jump (this, LEFT_DIRECTION); break;
+
+    case '~':
+      retval = ved_normal_change_case (this); break;
+
+    case CTRL('a'):
+    case CTRL('x'):
+      retval = ved_word_math (this, count, com); break;
+
+    case '^':
+      retval = ved_normal_noblnk (this); break;
+
+    case '>':
+    case '<':
+      retval = ved_indent (this, count, com); break;
+
+    case 'y':
+      retval = ved_normal_yank (this, count, regidx); break;
+
+    case 'Y':
+      retval = ved_normal_Yank (this, count, regidx); break;
+
+    case ' ':
+      ifnot ($my(ftype)->space_on_normal_is_like_insert_mode) break;
+
+      (&$my(regs)[REG_RDONLY])->type = CHARWISE;
+      (&$my(regs)[REG_RDONLY])->head->data->bytes[0] = ' ';
+      (&$my(regs)[REG_RDONLY])->head->data->bytes[1] = '\0';
+      (&$my(regs)[REG_RDONLY])->head->data->num_bytes = 1;
+      (&$my(regs)[REG_RDONLY])->head->next = NULL;
+      (&$my(regs)[REG_RDONLY])->head->prev = NULL;
+      retval = ved_normal_put (this, REG_RDONLY, 'P'); break;
+
+    case 'p':
+    case 'P':
+      retval = ved_normal_put (this, regidx, com); break;
+
+    case 'd':
+      retval = ved_normal_handle_d (this, count, regidx); break;
+
+    case 'x':
+    case DELETE_KEY:
+      retval = ved_normal_delete (this, count, regidx); break;
+
+    case BACKSPACE_KEY:
+      ifnot ($mycur(cur_col_idx)) {
+        if ($my(ftype)->backspace_on_first_idx_remove_trailing_spaces) {
+          size_t len = $mycur(data)->num_bytes;
+          for (int i = $mycur(data)->num_bytes - 1; i > 0; i--)
+            if ($mycur(data)->bytes[i] is ' ')
+              My(String).clear_at ($mycur(data), i);
+            else
+              break;
+
+          if (len isnot $mycur(data)->num_bytes) {
+            $my(flags) |= BUF_IS_MODIFIED;
+            self(draw_cur_row);
+          }
+          retval = DONE;
+        }
+
+        break;
+      }
+
+      ifnot ($my(ftype)->backspace_on_normal_is_like_insert_mode) break;
+
+      //__fallthrough__;
+
+    case 'X':
+       if (DONE is ved_normal_left (this, 1, DONOT_DRAW))
+         if (NOTHING_TODO is (retval = ved_normal_delete (this, count, regidx)))
+          self(draw_cur_row);
+       break;
+
+    case 'J':
+      retval = ved_join (this); break;
+
+    case '$':
+      retval = ved_normal_eol (this); break;
+
+    case CTRL('w'):
+      retval = ved_normal_handle_ctrl_w (thisp); break;
+
+    case 'g':
+      retval = ved_normal_handle_g (thisp, count); break;
+
+    case 'G':
+      retval = ved_normal_handle_G (this, count); break;
+
+    case ',':
+      retval = ved_normal_handle_comma (thisp); break;
+
+    case '0':
+      retval = ved_normal_bol (this); break;
+
+    case 'E':
+    case 'e':
+      retval = ved_normal_end_word (thisp, count,
+        ($my(ftype)->small_e_on_normal_goes_insert_mode is 1 and 'e' is com), DRAW);
+      break;
+
+    case ARROW_RIGHT_KEY:
+    case 'l':
+      retval = ved_normal_right (this, count, DRAW); break;
+
+    case ARROW_LEFT_KEY:
+    case 'h':
+      retval = ved_normal_left (this, count, DRAW); break;
+
+    case ARROW_UP_KEY:
+    case 'k':
+      retval = ved_normal_up (this, count, ADJUST_COL, DRAW); break;
+
+    case ARROW_DOWN_KEY:
+    case 'j':
+      retval = ved_normal_down (this, count, ADJUST_COL, DRAW); break;
+
+    case PAGE_DOWN_KEY:
+    case CTRL('f'):
+      retval = ved_normal_page_down (this, count); break;
+
+    case PAGE_UP_KEY:
+    case CTRL('b'):
+      retval = ved_normal_page_up (this, count); break;
+
+    case HOME_KEY:
+      retval = ved_normal_bof (this, DRAW); break;
+
+    case END_KEY:
+      retval = ved_normal_eof (this, DONOT_DRAW); break;
+
+    case CTRL('v'):
+      retval = ved_normal_visual_bw (this); break;
+
+    case 'V':
+      retval = ved_normal_visual_lw (thisp); break;
+
+    case 'v':
+      retval = ved_normal_visual_cw (thisp); break;
+
+    case 'D':
+      retval = ved_normal_delete_eol (this, regidx); break;
+
+    case 'r':
+      retval = ved_normal_replace_char (this); break;
+
+    case 'c':
+      retval = ved_normal_handle_c (thisp, count, regidx); break;
+
+    case 'C':
+       ved_normal_delete_eol (this, regidx);
+       retval = ved_insert (thisp, com, NULL); break;
+
+    case 'o':
+    case 'O':
+      retval = ved_insert_new_line (thisp, com); break;
+
+    case '\r':
+      ifnot ($my(ftype)->cr_on_normal_is_like_insert_mode) break;
+
+      com = '\n';
+//      __fallthrough__;
+    case 'i':
+    case 'a':
+    case 'A':
+      retval = ved_insert (thisp, com, NULL); break;
+
+    case CTRL('r'):
+    case 'u':
+      retval = vundo (this, com); break;
+
+    case CTRL('l'):
+      My(Win).draw (ed->current);
+      retval = DONE; break;
+
+    case CTRL('j'):
+      $myroots(state) |= ED_SUSPENDED;
+      return EXIT_THIS;
+
+    case 'W':
+      retval = ved_normal_handle_W (thisp);
+      break;
+
+    default:
+      break;
+  }
+
+atend:
+  this->on_normal_end (thisp, com, range, regidx);
+
+theend:
+  return retval;
+}
+
+#define ADD_RANGE(n) range[IS_FIRST_RANGE_OK] = n
+#define IS_FIRST_RANGE_OK range[0] != -1
+#define IS_SECOND_RANGE_OK range[1] != -1
+#define ARE_BOTH_RANGES_OK (IS_FIRST_RANGE_OK && IS_SECOND_RANGE_OK)
+
+#define NORMAL_GET_NUMBER                 \
+  c = ({                                  \
+    int i = 0;                            \
+    char intbuf[8];                       \
+    intbuf[i++] = c;                      \
+    utf8 cc = BUF_GET_NUMBER (intbuf, i); \
+                                          \
+    if (i is MAX_COUNT_DIGITS)            \
+      goto new_state;                     \
+                                          \
+    intbuf[i] = '\0';                     \
+    ADD_RANGE (atoi (intbuf));            \
+    cc;                                   \
+    })
+
+private int ved_loop (ed_t *ed, buf_t *this) {
+  int retval = NOTOK;
+  int range[2];
+  utf8 c;
+  int cmd_retv;
+  int regidx = -1;
+
+  for (;;) {
+ new_state:
+    regidx = -1;
+    range[0] = range[1] = -1;
+
+get_char:
+    ed_check_msg_status (ed);
+    c = My(Input).get ($my(term_ptr));
+
+handle_char:
+    switch (c) {
+      case NOTOK: goto theend;
+
+      case '"':
+        if (-1 isnot regidx) goto exec_block;
+        regidx = ed_register_get_idx (ed, My(Input).get ($my(term_ptr)));
+        goto get_char;
+
+     case '0':
+        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
+        //__fallthrough__;
+
+      case '1'...'9':
+        if (ARE_BOTH_RANGES_OK) goto exec_block;
+        NORMAL_GET_NUMBER;
+        goto handle_char;
+
+      case '.':
+        if (ARE_BOTH_RANGES_OK) goto exec_block;
+        ADD_RANGE (this->cur_idx + 1);
+        goto get_char;
+
+      case '$':
+        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
+        if (ARE_BOTH_RANGES_OK) goto exec_block;
+        ADD_RANGE (this->num_items);
+        goto get_char;
+
+      case ',':
+        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
+        if (ARE_BOTH_RANGES_OK) goto exec_block;
+        ifnot (IS_FIRST_RANGE_OK) range[0] = this->cur_idx + 1;
+          goto get_char;
+
+      case '%':
+        if (ARE_BOTH_RANGES_OK) goto exec_block;
+        if (IS_FIRST_RANGE_OK) goto exec_block;
+        range[0] = 1; range[1] = this->num_items;
+        goto get_char;
+
+      default:
+exec_block:
+        if (regidx is -1) regidx = REG_UNAMED;
+        cmd_retv = ved_normal_cmd (ed, &this, c, range, regidx);
+
+        if (cmd_retv is DONE or cmd_retv is NOTHING_TODO)
+          goto new_state;
+
+        if (cmd_retv is BUF_QUIT) {
+          retval = ved_buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
+          if (retval is NOTHING_TODO) {
+            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+                NULL, 0, NO_FORCE);
+            if (retval is NOTHING_TODO)
+              cmd_retv = EXIT_THIS;
+            else
+              goto new_state;
+          } else
+            goto new_state;
+        }
+
+        if (cmd_retv is EXIT_THIS or cmd_retv is EXIT_ALL or cmd_retv is EXIT_ALL_FORCE) {
+          ifnot (($myroots(state) & ED_SUSPENDED)) {
+            if (cmd_retv is EXIT_THIS)
+              $myroots(state) |= ED_EXIT;
+            else if (cmd_retv is EXIT_ALL)
+              $myroots(state) |= ED_EXIT_ALL;
+            else
+              $myroots(state) |= ED_EXIT_ALL_FORCE;
+          }
+
+          retval = OK;
+          goto theend;
+        }
+
+        if (cmd_retv is WIN_EXIT) {
+                       /* at this point this (probably) is a null reference */
+          retval = ved_win_delete (ed, &this, NO_COUNT_SPECIAL);
+
+          if (retval is DONE) goto new_state;
+
+          ed->prop->state |= ED_EXIT;
+          retval = OK;
+          goto theend;
+        }
+    }
+  }
+
+theend:
+  return retval;
+}
+
+private void ed_suspend (ed_t *this) {
+  if ($my(state) & ED_SUSPENDED) return;
+  $my(state) |= ED_SUSPENDED;
+  My(Screen).clear ($my(term));
+  My(Term).reset ($my(term));
+}
+
+private void ed_resume (ed_t *this) {
+  ifnot ($my(state) & ED_SUSPENDED) return;
+  $my(state) &= ~ED_SUSPENDED;
+  My(Term).set ($my(term));
+  My(Win).set.current_buf (this->current, this->current->cur_idx, DONOT_DRAW);
+  My(Win).draw (this->current);
+}
+
 private Class (ed) *editor_new (void) {
   ed_T *this = AllocClass (ed);
   *this = ClassInit (ed,
@@ -13964,8 +13964,6 @@ private Class (ed) *editor_new (void) {
       .free_reg = ed_register_free,
       .free_info = ed_free_info,
       .quit = ved_quit,
-      .loop = ved_loop,
-      .main = ved_main,
       .scratch = ved_scratch,
       .messages = ved_messages,
       .resume = ed_resume,
@@ -14025,9 +14023,6 @@ private Class (ed) *editor_new (void) {
       ),
       .readjust = SubSelfInit (ed, readjust,
         .win_size =ed_win_readjust_size
-      ),
-      .exec = SubSelfInit (ed, exec,
-        .cmd = ed_exec_cmd
       ),
       .buf = SubSelfInit (ed, buf,
         .change = ed_change_buf,
@@ -14261,6 +14256,22 @@ public mutable size_t tostderr (char *bytes) {
   return fpt.num_bytes;
 }
 
+private int ed_main (ed_t *this, buf_t *buf) {
+  if ($my(state) & ED_SUSPENDED)
+    self(resume);
+  else
+    My(Win).draw (this->current);
+
+  $my(state) = 0;
+
+/*
+  My(Msg).send (this, COLOR_CYAN,
+      "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
+ */
+
+  return ved_loop (this, buf);
+}
+
 private ed_t *ed_init (Ed_T *E) {
   ed_t *this = AllocType (ed);
   $myprop = AllocProp (ed);
@@ -14383,6 +14394,8 @@ private ed_t *__ed_new__ (Class (Ed) *this, ED_INIT_OPTS opts) {
     ed_append_win (ed, w);
   }
 
+  ed_set_current_win (ed, $from(ed, num_special_win));
+
   return ed;
 }
 
@@ -14404,7 +14417,7 @@ private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
       $my(error_state) |= ARG_IDX_IS_CUR_IDX_ERROR_STATE;
       return NOTOK;
     } else
-      $my(prev_idx) = $my(cur_idx) + 1;
+      $my(prev_idx) = $my(cur_idx) - 1;
   } else
     $my(prev_idx) = $my(cur_idx);
 
@@ -14412,8 +14425,9 @@ private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
 
   ifnot (NULL is ed) ed_free (ed);
 
-  if ($my(prev_idx) is $my(num_items))
-    $my(prev_idx)--;
+  if ($my(prev_idx) is -1)
+    if ($my(num_items))
+      $my(prev_idx) = 0;
 
   return OK;
 }
@@ -14493,6 +14507,127 @@ private void __ed_set_at_exit_cb__ (Class (Ed) *this, __EdAtExit_cb cb) {
   $my(at_exit_cbs)[$my(num_at_exit_cbs) -1] = cb;
 }
 
+private ed_t *__ed_next_editor__ (Ed_T *this, buf_t **thisp) {
+  ifnot ($my(num_items)) return $my(current);
+  ed_t *ed = __ed_set_next__ (this);
+  win_t * w = ed_get_current_win (ed);
+  *thisp = win_get_current_buf (w);
+  win_draw (w);
+  return ed;
+}
+
+private ed_t *__ed_prev_editor__ (Ed_T *this, buf_t **thisp) {
+  ifnot ($my(num_items)) return $my(current);
+  ed_t *ed = __ed_set_prev__ (this);
+  win_t * w = ed_get_current_win (ed);
+  *thisp = win_get_current_buf (w);
+  win_draw (w);
+  return ed;
+}
+
+private ed_t *__ed_prev_focused_editor__ (Ed_T *this, buf_t **thisp) {
+  ifnot ($my(num_items)) return $my(current);
+  ed_t *ed = __ed_set_current__ (this, $my(prev_idx));
+  win_t * w = ed_get_current_win (ed);
+  *thisp = win_get_current_buf (w);
+  win_draw (w);
+  return ed;
+}
+
+private ed_t *__ed_new_editor__ (Ed_T *this, buf_t **thisp, char *fname) {
+  ed_t *ed = self(new, QUAL(ED_INIT));
+  win_t *w = ed_get_current_win (ed);
+
+  *thisp = win_buf_new (w, QUAL(BUF_INIT, .fname = fname));
+
+  current_list_set (*thisp, 0);
+
+  win_append_buf (w, *thisp);
+  win_set_current_buf (w, 0, DRAW);
+  return ed;
+}
+
+private int __ed_exit_all__ (Class (Ed) *this) {
+  int force = ($my(state) & ED_EXIT_ALL_FORCE);
+
+  for (;;) {
+    ed_t *ed = self(set.current, 0);
+    if (NULL is ed) return OK;
+
+    ifnot (force)
+      if (NOTHING_TODO is ved_quit (ed, force, 1)) {
+        self(set.current, $my(cur_idx));
+        return NOTOK;
+      }
+
+    self(delete, $my(cur_idx), FORCE);
+  }
+
+  return OK;
+}
+
+private int __ed_main__ (Ed_T *this, buf_t *buf) {
+  ed_t *ed = $from(buf, root);
+
+  ed_set_state (ed, $my(state));
+
+  int retval = 0;
+
+main:
+  retval = ed_main (ed, buf);
+
+  $my(state) = ed_get_state (ed);
+
+  if ($my(state) & ED_SUSPENDED) {
+    ed_set_state (ed, 0);
+    ed_suspend (ed);
+    return retval;
+  }
+
+  if ($my(state) & ED_NEW) {
+    ed = __ed_new_editor__ (this, &buf, $from(ed, ed_str)->bytes);
+    goto main;
+  }
+
+  if ($my(state) & ED_NEXT) {
+    ed = __ed_next_editor__ (this, &buf);
+    goto main;
+  }
+
+  if ($my(state) & ED_PREV) {
+    ed = __ed_prev_editor__ (this, &buf);
+    goto main;
+  }
+
+  if ($my(state) & ED_PREV_FOCUSED) {
+    ed = __ed_prev_focused_editor__ (this, &buf);
+    goto main;
+  }
+
+  if (($my(state) & ED_EXIT_ALL) or ($my(state) & ED_EXIT_ALL_FORCE)) {
+    if (NOTOK is self(exit_all)) {
+      ed = self(get.current);
+      buf = win_get_current_buf (ed_get_current_win (ed));
+      goto main;
+    }
+
+    $my(state) |= ED_EXIT;
+    return retval;
+  }
+
+  if (($my(state) & ED_EXIT)) {
+    self(delete, $my(cur_idx), FORCE);
+
+    if ($my(num_items)) {
+      ed = self(get.current);
+      buf = win_get_current_buf (ed_get_current_win (ed));
+      goto main;
+    }
+  }
+
+  return retval;
+}
+
 private ed_T *ed_init_prop (ed_T *this) {
   $my(Cstring) = &this->Cstring;
   $my(String) = &this->String;
@@ -14536,25 +14671,6 @@ private int init_ed (ed_T *this) {
   return OK;
 }
 
-private int __ed_exit_all__ (Class (Ed) *this) {
-  int force = ($my(state) & ED_EXIT_ALL_FORCE);
-
-  for (;;) {
-    ed_t *ed = self(set.current, 0);
-    if (NULL is ed) return OK;
-
-    ifnot (force)
-      if (NOTHING_TODO is ved_quit (ed, force, 1)) {
-        self(set.current, $my(cur_idx));
-        return NOTOK;
-      }
-
-    self(delete, $my(cur_idx), FORCE);
-  }
-
-  return OK;
-}
-
 public Class (Ed) *__init_ed__ (char *name) {
   Ed_T *this = AllocClass (Ed);
 
@@ -14564,6 +14680,7 @@ public Class (Ed) *__init_ed__ (char *name) {
       .new = __ed_new__,
       .delete = __ed_delete__,
       .exit_all = __ed_exit_all__,
+      .main = __ed_main__,
       .get = SubSelfInit (Ed, get,
         .current = __ed_get_current__,
         .head = __ed_get_head__,

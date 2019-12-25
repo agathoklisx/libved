@@ -635,6 +635,9 @@ Search:
    :w[in]p[rev]           (window previous)
    :w[in]n[ext]           (window next)
    :w[in][`|prevfocused]  (window previously focused)
+   :ednew|ednext|edprev|edprevfocused
+                          (likewise but those are for manipulating editor instances,
+                           ednew can use a filename as argument)
    :r[ead] filename       (read filename into current buffer)
    :r! cmd                (read into buffer cmd's standard output)
    :!cmd                  (execute command)
@@ -649,7 +652,8 @@ Search:
                            --ftype=[string] set filetype
                            --tabwidth=[int] set tabwidth
                            --shiftwidth=[int] set shiftwidth)
-   :q[!]                  (quit (if force, do not check for modified buffers))
+   :q[!] [--global]       (quit (if force, do not check for modified buffers),
+                                (if global exit all editor instances))
    */
 
    /* Old Comment Stays as a Reference
@@ -1083,16 +1087,16 @@ Search:
    A buffer instance is a child of a window instance and is responsible to manipulate
    a double linked list that hold the contents. It's structure has references to the
    next and previous buffer (if any), to the window instance where belongs (parent)
-   and to the editor instance where it's parent belongs (root).
+   and to the editor instance where it's parent belongs (an editor instance).
 
-   A window instance is a child of a editor instance and is responsible to manipulate
-   a double linked list that hold it's buffers. That means holds the number of buffer
+   A window instance is a child of an editor instance and is responsible to manipulate
+   a double linked list that holds the buffers. That means holds the number of buffer
    instances and the current buffer, and has methods to create/delete/change/position
-   those buffers. It has also references to the next and previous (window if any) and
+   those buffers. It has also references to the next and previous window (if any) and
    to it's parent (the editor instance where belongs).
 
    An editor instance is a child of the root instance and is responsible to manipulate
-   a double linked list that hold it's windows. That means holds the number of window
+   a double linked list that hold the windows. That means holds the number of window
    instances and has methods to create/delete/change those windows.
 
    A root instance of the root class "Ed" provides two public functions to initialize
@@ -1102,8 +1106,7 @@ Search:
    inherit methods or|and some of it's properties (like the term property, which should
    be one).
    This "ed" instance initialize all the required structures (like String, Cstring,
-   Ustring, Term, Video, File, Path, Re, ...), but also the basic three classes
-   and their instances.
+   Ustring, Term, Video, File, Path, Re, ...), but also the basic three classes.
 
    Since those three basic ones have references to it's other, that means everyone
    can use the others and all the domain specific sub-structures.
@@ -1115,37 +1118,45 @@ Search:
    the function or usually as the first function argument.
 
    The "this" pointer can also provide easy access to it's type properties, by using
-   the $my([property]) macro. Also the self([method]) macro can call any other method
-   of it's class as:  self(method, [...]).
+   the $my([property]) macro.
 
-   But also with "this", anyone can have direct access to any of it's parent or the parent
-   of it's parent, by using the $myparents([property]) or $myroots([property]) macros.
+   Also the self([method]) macro can call any other method of it's class as:
+   self(method, [...]).
 
-   However the above is true only for the buf_t type since is this type that usually
-   is doing the actual job. The other two they don't do neither a single involvment
-   to any other job out of their domain. The actual code would be much less, if it
-   wasn't for the interface which should be practical anyway.
+   But also with "this", anyone can have direct access to any of it's parent or the
+   parent of it's parent, by using the $myparents([property]) or $myroots([property])
+   macros (where this has a meaning).
+
+   However the above is mostly true only for the buf_t type since is this type that
+   usually is doing the actual underlying job throughout the library. The other two
+   they are actually present for the interface and do not get involved to it's other
+   buisness. The actual editor code would be much less, if it wasn't for the interface
+   which should be practical anyway.
+
+   Note that an editor instance can have multiply buffers of the same filename, but
+   only one (the first opened) is writable.
 
    The actual manipulation, even if they are for rows, or for buffers or for windows
-   or for editor instances, is done through double linked list (with a head, a tail
-   and a current pointer) manipulation macros.
+   or for editor instances, is done through a double linked list (with a head, a tail
+   and a current pointer).
 
    This might be not the best method as it concerns optimization in cases, but is by
    itself enough to simplify the code a lot, but basically allows quick and accurate
    development and probably better parsing when reading the code (as it is based on
    the intentions) and makes the code looks the same wherever is being used.
 
-   But and many other of the algorithms are based on those macros or similar macros
-   to act on structures that donot have a tail or a current pointer.
+   But and many other of the algorithms are based on those list type macros or similar
+   macros which act on structures that do not have a tail or a current pointer (like
+   stack operations like push/pop).
+
    Speaking for the current pointer, this can act (at the minimum) as an iterator;
    but (for instance) can speed a lot of the buffer operations, even in huge files
    where jumping around lines is simple arithmetic and so might bring some balance
    since a linked list might not be the best type for it's job. But insertion and
-   deletion is superior to most of other methods.
+   deletion is superior to most of other containers.
 
 
-   A couple of notes regarding the inner code. [OLD NOTES THAT STAYING FOR REFERENCE]
-
+   [OLD NOTES THAT STAYING FOR REFERENCE]
    The inner code it uses a couple of macros to ease the development, like:
 
     self(method, [arg,...])
