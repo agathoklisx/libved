@@ -290,6 +290,7 @@ private void __u_add_rline_user_commands__ (ed_t *this) {
 
 #if HAS_SPELL
   Ed.append.rline_command (this, "~spell", 1, RL_ARG_RANGE);
+  Ed.append.command_arg (this, "~spell", "--edit", 6);
 #endif
 
 #ifdef WORD_LEXICON_FILE

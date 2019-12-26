@@ -5044,6 +5044,10 @@ private row_t *buf_current_pop_next (buf_t *this) {
   return row;
 }
 
+private win_t *buf_get_parent (buf_t *this) {
+  return $my(parent);
+}
+
 private char *buf_get_fname (buf_t *this) {
   return $my(fname);
 }
@@ -5664,6 +5668,11 @@ private void win_set_min_rows (win_t *this, int rows) {
 private void win_set_num_frames (win_t *this, int num_frames) {
   if (num_frames > $my(max_frames)) return;
   $my(num_frames) = num_frames;
+}
+
+private void win_set_previous_idx (win_t *this, int idx) {
+  if (idx < 0 or idx > this->num_items - 1) return;
+  this->prev_idx = idx;
 }
 
 private buf_t *win_set_current_buf (win_t *w, int idx, int draw) {
@@ -9504,7 +9513,7 @@ handle_char:
           char fname[len + 1];
           str_cp (fname, len + 1, $mycur(data)->bytes + $my(vis)[0].fidx, len);
           ifnot (file_exists (fname)) goto theend;
-          ved_edit_fname ($my(parent), thisp, fname, $myparents(cur_frame), 0, 0, 0);
+          win_edit_fname ($my(parent), thisp, fname, $myparents(cur_frame), 0, 0, 0);
         }
 
         goto theend;
@@ -9782,7 +9791,7 @@ theend:
   return DONE;
 }
 
-private int ved_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
+private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
                                              int reload, int draw, int reopen) {
   buf_t *this = *thisp;
   if (fname is NULL and 0 is reload) return NOTHING_TODO;
@@ -9905,7 +9914,7 @@ private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
     } while (0);
 
   if (frame is AT_CURRENT_FRAME) frame = $myparents(cur_frame);
-  if (NOTHING_TODO is ved_edit_fname ($my(parent), thisp, fname, frame, 0,
+  if (NOTHING_TODO is win_edit_fname ($my(parent), thisp, fname, frame, 0,
   	DONOT_DRAW, 1))
     return NOTHING_TODO;
 
@@ -9923,7 +9932,7 @@ private int ved_split (buf_t **thisp, char *fname) {
   if (win_add_frame ($my(parent)) is NOTHING_TODO)
     return NOTHING_TODO;
 
-  ved_edit_fname ($my(parent), thisp, fname, $myparents(num_frames) - 1, 1, 0, 1);
+  win_edit_fname ($my(parent), thisp, fname, $myparents(num_frames) - 1, 1, 0, 1);
 
   $myparents(cur_frame) = $myparents(num_frames) - 1;
 
@@ -9938,7 +9947,7 @@ private int ved_enew_fname (buf_t **thisp, char *fname) {
   win_t *w = My(Ed).win.new ($my(root), NULL, 1);
   $my(root)->prev_idx = $my(root)->cur_idx;
   My(Ed).append.win ($my(root), w);
-  ved_edit_fname (w, thisp, fname, 0, 1, 1, 1);
+  win_edit_fname (w, thisp, fname, 0, 1, 1, 1);
   return DONE;
 }
 
@@ -12403,13 +12412,13 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
       if ($my(is_sticked)) goto theend;
       {
         arg_t *fname = rline_get_arg (rl, RL_ARG_FILENAME);
-        retval = ved_edit_fname ($my(parent), thisp, (NULL is fname ? NULL: fname->argval->bytes),
+        retval = win_edit_fname ($my(parent), thisp, (NULL is fname ? NULL: fname->argval->bytes),
            $myparents(cur_frame), VED_COM_EDIT_FORCE is rl->com, 1, 1);
       }
       goto theend;
 
     case VED_COM_ETAIL:
-      retval = ved_edit_fname ($my(parent), thisp, NULL, $myparents(cur_frame), 1, 0, 1);
+      retval = win_edit_fname ($my(parent), thisp, NULL, $myparents(cur_frame), 1, 0, 1);
       ved_normal_eof (*thisp, DONOT_DRAW);
       goto theend;
 
@@ -14055,6 +14064,7 @@ private Class (ed) *editor_new (void) {
       .self = SelfInit (win,
         .set = SubSelfInit (win, set,
           .current_buf = win_set_current_buf,
+          .previous_idx = win_set_previous_idx,
           .has_dividers = win_set_has_dividers,
           .video_dividers = win_set_video_dividers,
           .min_rows = win_set_min_rows,
@@ -14084,6 +14094,7 @@ private Class (ed) *editor_new (void) {
         .adjust = SubSelfInit (win, adjust,
           .buf_dim = win_adjust_buf_dim,
         ),
+        .edit_fname = win_edit_fname,
         .draw = win_draw,
         .free_info = win_free_info,
         .append_buf = win_append_buf,
@@ -14111,6 +14122,7 @@ private Class (ed) *editor_new (void) {
             .current_col_idx = buf_get_row_current_col_idx,
             .col_idx = buf_get_row_col_idx,
           ),
+          .parent = buf_get_parent,
           .fname = buf_get_fname,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,

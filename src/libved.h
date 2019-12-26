@@ -1274,6 +1274,8 @@ NewSubSelf (buf, get,
   int
     (*current_video_row) (buf_t *),
     (*current_video_col) (buf_t *);
+
+  win_t *(*parent) (buf_t *);
 );
 
 NewSubSelf (bufset, as,
@@ -1451,6 +1453,7 @@ NewSubSelf (win, adjust,
 
 NewSubSelf (win, set,
   void
+    (*previous_idx) (win_t *,  int),
     (*dim) (win_t *, dim_t *, int, int, int, int),
     (*num_frames) (win_t *, int),
     (*min_rows) (win_t *, int),
@@ -1507,6 +1510,7 @@ NewSelf (win,
     (*draw) (win_t *);
 
   int
+    (*edit_fname)    (win_t *, buf_t **, char *, int, int, int, int),
     (*append_buf)    (win_t *, buf_t *),
     (*prepend_buf)   (win_t *, buf_t *),
     (*insert_buf_at) (win_t *, buf_t *, int);

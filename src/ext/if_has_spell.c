@@ -164,6 +164,13 @@ theend:
 
 private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
   int range[2];
+  int edit = Rline.arg.exists (rl, "edit");
+  if (edit) {
+    win_t *w = Buf.get.parent (*thisp);
+    Win.edit_fname (w, thisp, SPELL_DICTIONARY, 0, 0, 1, 0);
+    return OK;
+  }
+
   int retval = Rline.get.range (rl, *thisp, range);
   if (NOTOK is retval) {
     range[0] = Buf.get.row.current_col_idx (*thisp);
@@ -173,12 +180,12 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
   int count = range[1] - range[0] + 1;
 
   spell_t *spell = Spell.new ();
-  if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES, NO_FORCE))
-    {
+  if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES,
+      NO_FORCE)) {
     Msg.send ($myed, COLOR_RED, spell->messages->head->data->bytes);
     Spell.free (spell, SPELL_CLEAR_DICTIONARY);
     return NOTOK;
-    }
+  }
 
   action_t *action = Buf.action.new (*thisp);
   Buf.action.set_current (*thisp, action, REPLACE_LINE);
@@ -235,6 +242,6 @@ theend:
     Buf.action.free (*thisp, action);
 
   Buf.iter.free (*thisp, iter);
-  spell_free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
+  Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
   return retval;
 }

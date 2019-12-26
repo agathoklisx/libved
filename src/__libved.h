@@ -855,6 +855,7 @@ NewProp (Ed,
 #undef MY_CLASSES
 #undef MY_PROPERTIES
 
+private int win_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
 private int ved_quit (ed_t *, int, int);
 private int ved_normal_goto_linenr (buf_t *, int, int);
 private int ved_normal_left (buf_t *, int, int);
@@ -867,7 +868,6 @@ private int ved_insert (buf_t **, utf8, char *);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
 private int ved_enew_fname (buf_t **, char *);
-private int ved_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
 private int ved_write_to_fname (buf_t *, char *, int, int, int, int, int);
 private int ved_open_fname_under_cursor (buf_t **, int, int, int);
 private int ved_buf_change_bufname (buf_t **, char *);
@@ -887,15 +887,15 @@ private int       rline_arg_exists (rline_t *, char *);
 private arg_t    *rline_get_arg (rline_t *, int);
 private string_t *rline_get_string (rline_t *);
 private string_t *rline_get_anytype_arg (rline_t *, char *);
+private void      ed_suspend (ed_t *);
+private void      ed_resume (ed_t *);
+private int       ed_win_change (ed_t *, buf_t **, int, char *, int, int);
+private int       buf_substitute (buf_t *, char *, char *, int, int, int, int);
+private utf8      quest (buf_t *, char *, utf8 *, int);
+private void      vundo_clear (buf_t *);
 private action_t *vundo_pop (buf_t *);
-private void ed_suspend (ed_t *);
-private void ed_resume (ed_t *);
-private int  ed_win_change (ed_t *, buf_t **, int, char *, int, int);
-private int buf_substitute (buf_t *, char *, char *, int, int, int, int);
-private utf8 quest (buf_t *, char *, utf8 *, int);
-private int fd_read (int, char *, size_t);
+private int       fd_read (int, char *, size_t);
 private string_t *vsys_which (char *, char *);
-private void vundo_clear (buf_t *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
 private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);

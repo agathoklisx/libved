@@ -256,6 +256,7 @@ private int spell_init_dictionary (spell_t *spell, char *dic, int num_words, int
 
   if (CURRENT_DIC isnot NULL and 0 is force) {
     spell->dic = CURRENT_DIC;
+    spell->dictionary = Cstring.dup (dic, bytelen (dic));
     return SPELL_OK;
   }
 
@@ -302,5 +303,5 @@ public spell_T __init_spell__ (void) {
 
 public void __deinit_spell__ (spell_T *spell) {
   (void) spell;
-  ifnot (NULL is CURRENT_DIC) Imap.free (CURRENT_DIC);
+    ifnot (NULL is CURRENT_DIC) Imap.free (CURRENT_DIC);
 }
