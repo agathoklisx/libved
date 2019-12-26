@@ -750,8 +750,8 @@ NewProp (ed,
     *name,
     *saved_cwd;
 
-  Ed_T *root;
-  Self (Ed) E;
+  E_T *root;
+  Self (E) E;
 
   MY_PROPERTIES;
   MY_CLASSES (ed);
@@ -830,14 +830,14 @@ NewProp (ed,
   EdAtExit_cb *at_exit_cbs;
 );
 
-NewProp (Ed,
+NewProp (E,
   char name[MAXLEN_ED_NAME];
   int
     state,
     error_state,
     name_gen;
 
-  Ed_T *Me;
+  E_T *Me;
   ed_t *head;
   ed_t *tail;
   ed_t *current;
@@ -848,7 +848,7 @@ NewProp (Ed,
   Self (ed) Ed;
 
   int num_at_exit_cbs;
-  __EdAtExit_cb *at_exit_cbs;
+  EAtExit_cb *at_exit_cbs;
 
   EdAtInit_cb at_init_cb;
 );

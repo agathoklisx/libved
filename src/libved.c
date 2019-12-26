@@ -14307,7 +14307,7 @@ private int ed_main (ed_t *this, buf_t *buf) {
   return ved_loop (this, buf);
 }
 
-private ed_t *ed_init (Ed_T *E) {
+private ed_t *ed_init (E_T *E) {
   ed_t *this = AllocType (ed);
   $myprop = AllocProp (ed);
 
@@ -14388,7 +14388,7 @@ private ed_t *ed_init (Ed_T *E) {
   return this;
 }
 
-private ed_t *__ed_init__ (Ed_T *this, EdAtInit_cb init_cb) {
+private ed_t *__ed_init__ (E_T *this, EdAtInit_cb init_cb) {
   ed_t *ed = ed_init (this);
 
   int cur_idx = $my(cur_idx);
@@ -14415,7 +14415,7 @@ private ed_t *__ed_init__ (Ed_T *this, EdAtInit_cb init_cb) {
   return ed;
 }
 
-private ed_t *__ed_new__ (Class (Ed) *this, ED_INIT_OPTS opts) {
+private ed_t *__ed_new__ (Class (E) *this, ED_INIT_OPTS opts) {
   ed_t *ed = __ed_init__ (this, opts.init_cb);
 
   int num_win = opts.num_win;
@@ -14434,7 +14434,7 @@ private ed_t *__ed_new__ (Class (Ed) *this, ED_INIT_OPTS opts) {
   return ed;
 }
 
-private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
+private int __ed_delete__ (E_T *this, int idx, int force_current) {
   $my(error_state) = 0;
 
   if (1 is $my(num_items) and 0 is force_current) {
@@ -14467,7 +14467,7 @@ private int __ed_delete__ (Ed_T *this, int idx, int force_current) {
   return OK;
 }
 
-private ed_t *__ed_set_current__ (Ed_T *this, int idx) {
+private ed_t *__ed_set_current__ (E_T *this, int idx) {
   int cur_idx = $my(cur_idx);
   if (cur_idx is idx) return $my(current);
 
@@ -14479,7 +14479,7 @@ private ed_t *__ed_set_current__ (Ed_T *this, int idx) {
   return $my(current);
 }
 
-private ed_t *__ed_set_next__ (Ed_T *this) {
+private ed_t *__ed_set_next__ (E_T *this) {
   int idx = $my(cur_idx);
   if (idx is $my(num_items) - 1)
     idx = 0;
@@ -14489,7 +14489,7 @@ private ed_t *__ed_set_next__ (Ed_T *this) {
   return __ed_set_current__ (this, idx);
 }
 
-private ed_t *__ed_set_prev__ (Ed_T *this) {
+private ed_t *__ed_set_prev__ (E_T *this) {
   int idx = $my(cur_idx);
   if (idx is 0)
     idx = $my(num_items) - 1;
@@ -14499,50 +14499,50 @@ private ed_t *__ed_set_prev__ (Ed_T *this) {
   return __ed_set_current__ (this, idx);
 }
 
-private void __ed_set_state__ (Ed_T *this, int state) {
+private void __ed_set_state__ (E_T *this, int state) {
   $my(state) = state;
 }
 
-private int __ed_get_state__ (Ed_T *this) {
+private int __ed_get_state__ (E_T *this) {
   return $my(state);
 }
 
-private ed_t *__ed_get_current__ (Class (Ed) *this) {
+private ed_t *__ed_get_current__ (Class (E) *this) {
   return $my(current);
 }
 
-private ed_t *__ed_get_head__ (Class (Ed) *this) {
+private ed_t *__ed_get_head__ (Class (E) *this) {
   return $my(head);
 }
 
-private int __ed_get_num__ (Class (Ed) *this) {
+private int __ed_get_num__ (Class (E) *this) {
   return $my(num_items);
 }
 
-private int __ed_get_current_idx__ (Class (Ed) *this) {
+private int __ed_get_current_idx__ (Class (E) *this) {
   return $my(cur_idx);
 }
 
-private int __ed_get_prev_idx__ (Class (Ed) *this) {
+private int __ed_get_prev_idx__ (Class (E) *this) {
   return $my(prev_idx);
 }
 
-private int __ed_get_error_state__ (Class (Ed) *this) {
+private int __ed_get_error_state__ (Class (E) *this) {
   return $my(error_state);
 }
 
-private void __ed_set_at_exit_cb__ (Class (Ed) *this, __EdAtExit_cb cb) {
+private void __ed_set_at_exit_cb__ (Class (E) *this, EAtExit_cb cb) {
   if (NULL is cb) return;
   $my(num_at_exit_cbs)++;
   ifnot ($my(num_at_exit_cbs) - 1)
-    $my(at_exit_cbs) = Alloc (sizeof (__EdAtExit_cb));
+    $my(at_exit_cbs) = Alloc (sizeof (EAtExit_cb));
   else
-    $my(at_exit_cbs) = Realloc ($my(at_exit_cbs), sizeof (__EdAtExit_cb) * $my(num_at_exit_cbs));
+    $my(at_exit_cbs) = Realloc ($my(at_exit_cbs), sizeof (EAtExit_cb) * $my(num_at_exit_cbs));
 
   $my(at_exit_cbs)[$my(num_at_exit_cbs) -1] = cb;
 }
 
-private ed_t *__ed_next_editor__ (Ed_T *this, buf_t **thisp) {
+private ed_t *__ed_next_editor__ (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
   ed_t *ed = __ed_set_next__ (this);
   win_t * w = ed_get_current_win (ed);
@@ -14551,7 +14551,7 @@ private ed_t *__ed_next_editor__ (Ed_T *this, buf_t **thisp) {
   return ed;
 }
 
-private ed_t *__ed_prev_editor__ (Ed_T *this, buf_t **thisp) {
+private ed_t *__ed_prev_editor__ (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
   ed_t *ed = __ed_set_prev__ (this);
   win_t * w = ed_get_current_win (ed);
@@ -14560,7 +14560,7 @@ private ed_t *__ed_prev_editor__ (Ed_T *this, buf_t **thisp) {
   return ed;
 }
 
-private ed_t *__ed_prev_focused_editor__ (Ed_T *this, buf_t **thisp) {
+private ed_t *__ed_prev_focused_editor__ (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
   ed_t *ed = __ed_set_current__ (this, $my(prev_idx));
   win_t * w = ed_get_current_win (ed);
@@ -14569,7 +14569,7 @@ private ed_t *__ed_prev_focused_editor__ (Ed_T *this, buf_t **thisp) {
   return ed;
 }
 
-private ed_t *__ed_new_editor__ (Ed_T *this, buf_t **thisp, char *fname) {
+private ed_t *__ed_new_editor__ (E_T *this, buf_t **thisp, char *fname) {
   ed_t *ed = self(new, QUAL(ED_INIT));
   win_t *w = ed_get_current_win (ed);
 
@@ -14582,7 +14582,7 @@ private ed_t *__ed_new_editor__ (Ed_T *this, buf_t **thisp, char *fname) {
   return ed;
 }
 
-private int __ed_exit_all__ (Class (Ed) *this) {
+private int __ed_exit_all__ (Class (E) *this) {
   int force = ($my(state) & ED_EXIT_ALL_FORCE);
 
   for (;;) {
@@ -14601,7 +14601,7 @@ private int __ed_exit_all__ (Class (Ed) *this) {
   return OK;
 }
 
-private int __ed_main__ (Ed_T *this, buf_t *buf) {
+private int __ed_main__ (E_T *this, buf_t *buf) {
   ed_t *ed = $from(buf, root);
 
   ed_set_state (ed, $my(state));
@@ -14706,17 +14706,17 @@ private int init_ed (ed_T *this) {
   return OK;
 }
 
-public Class (Ed) *__init_ed__ (char *name) {
-  Ed_T *this = AllocClass (Ed);
+public Class (E) *__init_ed__ (char *name) {
+  E_T *this = AllocClass (E);
 
-  *this = ClassInit (Ed,
-    .self = SelfInit (Ed,
+  *this = ClassInit (E,
+    .self = SelfInit (E,
       .init = __ed_init__,
       .new = __ed_new__,
       .delete = __ed_delete__,
       .exit_all = __ed_exit_all__,
       .main = __ed_main__,
-      .get = SubSelfInit (Ed, get,
+      .get = SubSelfInit (E, get,
         .current = __ed_get_current__,
         .head = __ed_get_head__,
         .current_idx = __ed_get_current_idx__,
@@ -14725,7 +14725,7 @@ public Class (Ed) *__init_ed__ (char *name) {
         .error_state = __ed_get_error_state__,
         .state = __ed_get_state__
       ),
-      .set = SubSelfInit (Ed, set,
+      .set = SubSelfInit (E, set,
         .state = __ed_set_state__,
         .at_exit_cb = __ed_set_at_exit_cb__,
         .next = __ed_set_next__,
@@ -14766,10 +14766,10 @@ private void deinit_ed (ed_T *this) {
   ed_deallocate_prop (this);
 }
 
-public void __deinit_ed__ (Class (Ed) **thisp) {
+public void __deinit_ed__ (Class (E) **thisp) {
   if (NULL is *thisp) return;
 
-  Class (Ed) *this = *thisp;
+  Class (E) *this = *thisp;
 
   __ed_exit_all__ (this);
 

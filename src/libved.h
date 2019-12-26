@@ -580,9 +580,9 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
-DeclareClass (Ed);
-DeclareProp (Ed);
-DeclareSelf (Ed);
+DeclareClass (E);
+DeclareProp (E);
+DeclareSelf (E);
 
 typedef vchar_t u8char_t;
 typedef line_t u8_t;
@@ -613,7 +613,7 @@ typedef int  (*DirStatFile_cb) (const char *, struct stat *);
 typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
-typedef void (*__EdAtExit_cb) (void);
+typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
 
@@ -1696,52 +1696,60 @@ NewClass (ed,
   Class (venv) Venv;
 );
 
-NewSubSelf (Ed, set,
+NewSubSelf (E, set,
   void
-     (*state) (Ed_T *, int),
-     (*at_exit_cb) (Ed_T *, __EdAtExit_cb);
+     (*state) (E_T *, int),
+     (*at_exit_cb) (E_T *, EAtExit_cb);
 
   ed_t
-    *(*next) (Ed_T *),
-    *(*prev) (Ed_T *),
-    *(*current) (Ed_T *, int);
+    *(*next) (E_T *),
+    *(*prev) (E_T *),
+    *(*current) (E_T *, int);
 );
 
-NewSubSelf (Ed, get,
+NewSubSelf (E, get,
   ed_t
-    *(*current) (Ed_T *),
-    *(*head) (Ed_T *);
+    *(*current) (E_T *),
+    *(*head) (E_T *);
 
   int
-     (*state) (Ed_T *),
-     (*error_state) (Ed_T *),
-     (*current_idx) (Ed_T *),
-     (*prev_idx) (Ed_T *),
-     (*num) (Ed_T *);
+     (*state) (E_T *),
+     (*error_state) (E_T *),
+     (*current_idx) (E_T *),
+     (*prev_idx) (E_T *),
+     (*num) (E_T *);
 );
 
-NewSelf (Ed,
+NewSelf (E,
   ed_t
-    *(*init) (Ed_T *, EdAtInit_cb),
-    *(*new) (Ed_T *, ED_INIT_OPTS);
+    *(*init) (E_T *, EdAtInit_cb),
+    *(*new) (E_T *, ED_INIT_OPTS);
 
   int
-    (*main) (Ed_T *, buf_t *),
-    (*exit_all) (Ed_T *),
-    (*delete) (Ed_T *, int, int);
+    (*main) (E_T *, buf_t *),
+    (*exit_all) (E_T *),
+    (*delete) (E_T *, int, int);
 
-  SubSelf (Ed, get) get;
-  SubSelf (Ed, set) set;
+  SubSelf (E, get) get;
+  SubSelf (E, set) set;
 );
 
-NewClass (Ed,
-  Self (Ed) self;
-  Prop (Ed) *prop;
+NewClass (I,
+  void *self;
+  void *prop;
+  Class (E) *E;
+);
+
+NewClass (E,
+  Self (E) self;
+  Prop (E) *prop;
   Class (ed) *ed;
+
+  Class (I) *I;
 );
 
-public Class (Ed) *__init_ed__ (char *);
-public void __deinit_ed__ (Class (Ed) **);
+public Class (E) *__init_ed__ (char *);
+public void __deinit_ed__ (Class (E) **);
 
 public mutable size_t tostderr (char *);
 public mutable size_t tostdout (char *);

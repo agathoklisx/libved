@@ -1,7 +1,7 @@
 #ifndef LIBVED_PLUS_H
 #define LIBVED_PLUS_H
 
-public Class (Ed) *__E__;
+public Class (E) *__E__;
 
 #define E       __E__->self
 #define Ed      __E__->ed->self
