@@ -365,6 +365,7 @@ NewType (rline,
 NewType (menu,
   int
     fd,
+    next_key,
     num_cols,
     num_rows,
     first_row,

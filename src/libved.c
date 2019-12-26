@@ -3017,6 +3017,7 @@ private menu_t *menu_new (ed_t *this, int first_row, int last_row, int first_col
                                  MenuProcessList_cb cb, char *pat, size_t patlen) {
   menu_t *menu = AllocType (menu);
   menu->fd = $my(video)->fd;
+  menu->next_key = 0;
   menu->first_row = first_row;
   menu->orig_first_row = first_row;
   menu->min_first_row = 3;
@@ -3223,6 +3224,10 @@ init_list:;
     if (menu->state & MENU_QUIT) goto theend;
 
 handle_char:
+
+    if (menu->c is menu->next_key)
+      menu->c = ARROW_RIGHT_KEY;
+
     switch (menu->c) {
       case ESCAPE_KEY: goto theend;
 
@@ -6278,8 +6283,8 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
   time_t tim = time (NULL);
   struct tm *tm = localtime (&tim);
 
-  My(String).replace_with_fmt ($from(ed, topline), "[%s] ftype (%s) [pid %d]",
-    $my(mode), $my(ftype)->name, $from(ed, env)->pid);
+  My(String).replace_with_fmt ($from(ed, topline), "[%s] [pid %d]",
+    $my(mode), $from(ed, env)->pid);
 
   char tmnow[32];
   strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
@@ -6311,9 +6316,10 @@ private void buf_set_statusline (buf_t *this) {
   }
 
   My(String).replace_with_fmt ($my(statusline),
-    TERM_SET_COLOR_FMT "%s (line: %d/%d idx: %d len: %d chr: %d)",
-    COLOR_STATUSLINE, $my(basename), this->cur_idx + 1, this->num_items,
-    $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code);
+    TERM_SET_COLOR_FMT "%s [%s] (line: %d/%d idx: %d len: %d chr: %d) %s",
+    COLOR_STATUSLINE, $my(basename), $my(ftype)->name, this->cur_idx + 1,
+    this->num_items, $mycur(cur_col_idx), $mycur(data)->num_bytes, cur_code,
+    ($my(flags) & FILE_IS_WRITABLE) ? "" : "[RDONLY]");
 
   My(String).clear_at ($my(statusline), $my(dim)->num_cols + TERM_SET_COLOR_FMT_LEN);
   My(String).append_fmt ($my(statusline), "%s", TERM_COLOR_RESET);
@@ -8174,6 +8180,7 @@ private int ved_complete_word (buf_t **thisp) {
   int retval = DONE;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2, $my(video)->col_pos,
   ved_complete_word_callback, NULL, 0);
+  menu->next_key = CTRL('n');
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
   //menu->space_selects = 0;
 
@@ -8263,6 +8270,7 @@ private int ved_complete_line (buf_t *this) {
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2, $my(video)->col_pos,
       ved_complete_line_callback, NULL, 0);
   //menu->space_selects = 0;
+  menu->next_key = CTRL('l');
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
 
   char *line = menu_create ($my(root), menu);
@@ -8337,6 +8345,7 @@ private utf8 ved_complete_word_actions (buf_t *this, char *action) {
   utf8 c = ESCAPE_KEY;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
     $my(video)->col_pos, ved_complete_word_actions_cb, NULL, 0);
+  menu->next_key = 'W';
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
   menu->this = this;
   menu->return_if_one_item = 1;
@@ -8494,6 +8503,18 @@ private int ved_normal_handle_comma (buf_t **thisp) {
     case '/':
       return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
           NULL, NO_OPTION, NO_FORCE);
+
+    case ';':
+      $myroots(state) |= ED_NEXT;
+      return EXIT_THIS;
+
+    case '\'':
+      $myroots(state) |= ED_PREV;
+      return EXIT_THIS;
+
+    case 'l':
+      $myroots(state) |= ED_PREV_FOCUSED;
+      return EXIT_THIS;
   }
 
   return NOTHING_TODO;
@@ -10506,6 +10527,7 @@ private int ved_complete_digraph (buf_t *this, utf8 *c) {
   int retval = DONE;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
     $my(video)->col_pos, ved_complete_digraph_callback, NULL, 0);
+  menu->next_key = CTRL('k');
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
 
   char *item = menu_create ($my(root), menu);
@@ -10782,6 +10804,7 @@ redo:;
   menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
       $my(video)->col_pos,  ved_complete_filename, word, len);
 
+  menu->next_key = CTRL('f');
   if ((retval = menu->retval) is NOTHING_TODO) goto theend;
 
   for (;;) {
