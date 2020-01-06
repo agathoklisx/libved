@@ -681,9 +681,13 @@ NewProp (buf,
     *msg_row_ptr,
     *prompt_row_ptr;
 
-  line_t *line;
+  long
+    saved_sec,
+    autosave;
+
   size_t num_bytes;
 
+  line_t *line;
   jumps_t *jumps;
 
   string_t
@@ -896,6 +900,7 @@ private utf8      quest (buf_t *, char *, utf8 *, int);
 private void      vundo_clear (buf_t *);
 private action_t *vundo_pop (buf_t *);
 private int       fd_read (int, char *, size_t);
+private long      vsys_get_clock_sec (clockid_t clock_id);
 private string_t *vsys_which (char *, char *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
@@ -1141,6 +1146,23 @@ do {                                                                \
                                                                     \
   (list)->num_items++;                                              \
   (list)->current;                                                  \
+})
+
+#define list_append(list, node)                                     \
+({                                                                  \
+  if ((list)->head is NULL) {                                       \
+    (list)->head = (node);                                          \
+    (list)->tail = (node);                                          \
+    (list)->cur_idx = 0;                                            \
+    (list)->current = (list)->head;                                 \
+  } else {                                                          \
+    (list)->tail->next = (node);                                    \
+    (node)->prev = (list)->tail;                                    \
+    (node)->next = NULL;                                            \
+    (list)->tail = (node);                                          \
+  }                                                                 \
+                                                                    \
+  (list)->num_items++;                                              \
 })
 
 #define list_pop_tail(list, type)                                   \

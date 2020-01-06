@@ -37,6 +37,7 @@ int main (int argc, char **argv) {
 
   char *ftype = NULL;
   int filetype = FTYPE_DEFAULT;
+  int autosave = 0;
   int linenr = 0;
   int column = 1;
   int num_win = 1;
@@ -48,8 +49,10 @@ int main (int argc, char **argv) {
     OPT_INTEGER(0, "column", &column, "set pointer at column", NULL, 0, 0),
     OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
     OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
+    OPT_INTEGER(0, "autosave", &autosave, "interval time in minutes to autosave buffer", NULL, 0, 0),
     OPT_END(),
   };
+
 
   struct argparse argparse;
   argparse_init (&argparse, options, usage, 0);
@@ -73,7 +76,7 @@ int main (int argc, char **argv) {
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL(.ftype = filetype));
+    buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL(.ftype = filetype, .autosave = autosave));
     Win.append_buf (w, buf);
   } else {
     int first_idx = Ed.get.current_win_idx (this);
@@ -86,7 +89,8 @@ int main (int argc, char **argv) {
         .ftype = filetype,
         .at_frame = FIRST_FRAME,
         .at_linenr = linenr,
-        .at_column = column));
+        .at_column = column,
+        .autosave = autosave));
 
       Win.append_buf (w, buf);
 

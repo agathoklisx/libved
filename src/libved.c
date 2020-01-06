@@ -1474,6 +1474,13 @@ private string_t *vstr_join (vstr_t *this, char *sep) {
   return bytes;
 }
 
+private void vstr_append (vstr_t *this, vstring_t *new) {
+  int cur_idx = this->cur_idx;
+  current_list_set (this, -1);
+  current_list_append (this, new);
+  current_list_set(this, cur_idx);
+}
+
 private void vstr_append_current_with (vstr_t *this, char *bytes) {
   vstring_t *vstr = AllocType (vstring);
   vstr->data = string_new_with (bytes);
@@ -1604,6 +1611,34 @@ theend:
   return this;
 }
 
+private void vstr_append_uniq (vstr_t *this, char *bytes) {
+  vstring_t *it = this->head;
+  while (it) {
+    if (str_eq (it->data->bytes, bytes)) return;
+    it = it->next;
+  }
+
+  vstring_t *vs = AllocType (vstring);
+  vs->data = string_new_with (bytes);
+
+  list_append (this, vs);
+}
+
+private char **vstr_shallow_copy (vstr_t *vstr, char **array) {
+  vstring_t *it = vstr->head;
+  int idx = 0;
+  while (it) {
+    array[idx++] = it->data->bytes;
+    it = it->next;
+  }
+
+  return array;
+}
+
+private vstring_t *vstr_pop_at (vstr_t *vstr, int idx) {
+  vstring_t *t = list_pop_at (vstr, vstring_t, idx);
+  return t;
+}
 
 public vstring_T __init_vstring__ (void) {
   return ClassInit (vstring,
@@ -1612,8 +1647,12 @@ public vstring_T __init_vstring__ (void) {
       .clear = vstr_clear,
       .new = vstr_new,
       .join = vstr_join,
+      .append = vstr_append,
+      .append_uniq = vstr_append_uniq,
       .append_with_fmt = vstr_append_with_fmt,
       .append_with_len = vstr_append_with_len,
+      .shallow_copy = vstr_shallow_copy,
+      .pop_at = vstr_pop_at,
       .cur = SubSelfInit (vstring, cur,
         .append_with = vstr_append_current_with,
         .append_with_len = vstr_append_current_with_len
@@ -1865,6 +1904,10 @@ private int file_is_readable (const char *fname) {
   return (0 is access (fname, R_OK));
 }
 
+private int file_is_writable (const char *fname) {
+  return (0 is access (fname, R_OK));
+}
+
 private int file_is_elf (const char *file) {
   int fd = open (file, O_RDONLY);
   if (-1 is fd) return 0;
@@ -2026,6 +2069,7 @@ public file_T __init_file__ (void) {
     .self = SelfInit (file,
       .exists = file_exists,
       .is_readable = file_is_readable,
+      .is_writable = file_is_writable,
       .is_executable = file_is_executable,
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
@@ -2153,7 +2197,7 @@ private dirwalk_t *dir_walk_new (DirProcessDir_cb process_dir, DirProcessFile_cb
   dirwalk_t *this = AllocType (dirwalk);
   this->orig_depth = this->depth = 0;
   this->dir = string_new (PATH_MAX);
-  this->files = vstr_new ();
+  this->files = NULL;
   this->process_dir = (NULL is process_dir ? dir_walk_process_dir_def : process_dir);
   this->process_file = (NULL is process_file ? dir_walk_process_file_def : process_file);
   this->stat_file = stat;
@@ -2229,6 +2273,9 @@ theend:
 }
 
 private int dir_walk_run (dirwalk_t *this, char *dir) {
+  if (NULL is this->files)
+    this->files = vstr_new ();
+
   string_replace_with (this->dir, dir);
   char *sp = dir;
   size_t len = 0;
@@ -2252,6 +2299,7 @@ public dir_T __init_dir__ (void) {
     .self = SelfInit (dir,
       .list = dirlist,
       .current = dir_current,
+      .is_directory = is_directory,
       .walk = SubSelfInit (dir, walk,
         .free = dir_walk_free,
         .new = dir_walk_new,
@@ -3880,6 +3928,7 @@ private int vundo (buf_t *this, utf8 com) {
   }
 
   free (action);
+  $my(flags) |= BUF_IS_MODIFIED;
   self(draw);
   return DONE;
 }
@@ -4365,6 +4414,14 @@ private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
     goto theend;
   }
 
+  arg = rline_get_anytype_arg (rl, "autosave");
+  ifnot (NULL is arg) {
+    long minutes = atol (arg->bytes);
+    ifnot (minutes) return *retval;
+    self(set.autosave, minutes);
+    return *retval;
+  }
+
   if (rline_arg_exists (rl, "enable-writing"))
     $myroots(enable_writing) = 1;
 
@@ -4709,10 +4766,20 @@ private char *vsys_stat_mode_to_string (char *mode_string, mode_t mode) {
   return mode_string;
 }
 
+private long vsys_get_clock_sec (clockid_t clock_id) {
+  if (clock_id is -1) clock_id = DEFAULT_CLOCK;
+  struct timespec cspec;
+  clock_gettime (clock_id, &cspec);
+  return cspec.tv_sec;
+}
+
 public vsys_T __init_vsys__ (void) {
   return ClassInit (vsys,
     .self = SelfInit (vsys,
       .which = vsys_which,
+      .get = SubSelfInit (vsys, get,
+        .clock_sec = vsys_get_clock_sec
+      ),
       .stat = SubSelfInit (vsys, stat,
         .mode_to_string = vsys_stat_mode_to_string
       )
@@ -5105,6 +5172,18 @@ private int buf_current_set (buf_t *this, int idx) {
 
 private void buf_set_mode (buf_t *this, char *mode) {
   str_cp ($my(mode), MAXLEN_MODE, mode, MAXLEN_MODE - 1);
+}
+
+private void buf_set_autosave (buf_t *this, long minutes) {
+  if (minutes <= 0) {
+    $my(autosave) = $my(saved_sec) = 0;
+    return;
+  }
+
+  if (minutes > (60 * 24)) minutes = (60 * 24);
+  $my(autosave) = minutes * 60;
+  ifnot ($my(saved_sec))
+    vsys_get_clock_sec (DEFAULT_CLOCK);
 }
 
 private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
@@ -5647,6 +5726,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(statusline_row) = $my(dim->last_row);
   $my(show_statusline) = 1;
 
+  $my(autosave) = 0;
+
   this->on_normal_beg = ved_buf_on_normal_beg;
   this->on_normal_end = ved_buf_on_normal_end;
 
@@ -5659,6 +5740,7 @@ private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
   self(init_fname, opts.fname);
   self(set.ftype, opts.ftype);
   self(set.row.idx, 0, NO_OFFSET, 1);
+  self(set.autosave, opts.autosave);
 
   ved_normal_goto_linenr (this, opts.at_linenr, DONOT_DRAW);
   ved_normal_right (this, opts.at_column - 1, DONOT_DRAW);
@@ -6192,6 +6274,13 @@ private void ed_msg_write (ed_t *this, char *msg) {
   self(append.message, msg);
 }
 
+private void ed_msg_write_fmt (ed_t *this, char *fmt, ...) {
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
+  ed_msg_write (this, bytes);
+}
+
 private void ed_msg_set (ed_t *this, int color, int msg_flags, char *msg,
                                                         size_t maybe_len) {
   int wt_msg = (msg_flags & MSG_SET_TO_MSG_BUF or
@@ -6236,8 +6325,12 @@ private void ed_msg_set_fmt (ed_t *this, int color, int msg_flags, char *fmt, ..
   ed_msg_set (this, color, msg_flags, bytes, len);
 }
 
-private void ed_msg_send (ed_t *this, int color, char *msg) {
-  ed_msg_set (this, color, MSG_SET_DRAW|MSG_SET_COLOR, msg, -1);
+private void ed_msg_line (ed_t *this, int color, char *fmt, ...) {
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len + 1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
+  int flags = MSG_SET_DRAW|MSG_SET_COLOR|MSG_SET_TO_MSG_LINE;
+  ed_msg_set (this, color, flags, bytes, len);
 }
 
 private void ed_msg_error (ed_t *this, char *fmt, ...) {
@@ -6245,6 +6338,10 @@ private void ed_msg_error (ed_t *this, char *fmt, ...) {
   char bytes[len + 1];
   VA_ARGS_GET_FMT_STR(bytes, len, fmt);
   ed_msg_set (this, COLOR_ERROR, MSG_SET_DRAW|MSG_SET_COLOR, bytes, len);
+}
+
+private void ed_msg_send (ed_t *this, int color, char *msg) {
+  ed_msg_set (this, color, MSG_SET_DRAW|MSG_SET_COLOR, msg, -1);
 }
 
 private void ed_msg_send_fmt (ed_t *this, int color, char *fmt, ...) {
@@ -11547,10 +11644,11 @@ private void ved_init_commands (ed_t *this) {
   $my(commands)[i] = NULL;
   $my(num_commands) = VED_COM_END;
 
+  ved_append_command_arg (this, "set", "--enable-writing", 16);
   ved_append_command_arg (this, "set", "--shiftwidth=", 13);
   ved_append_command_arg (this, "set", "--tabwidth=", 11);
+  ved_append_command_arg (this, "set", "--autosave=", 11);
   ved_append_command_arg (this, "set", "--ftype=", 8);
-  ved_append_command_arg (this, "set", "--enable-writing", 16);
   ved_append_command_arg (this, "substitute", "--remove-tabs", 13);
   ved_append_command_arg (this, "s%",         "--remove-tabs", 13);
   ved_append_command_arg (this, "substitute", "--shiftwidth=", 13);
@@ -12146,14 +12244,14 @@ theend:
 
 private vstr_t *rline_get_arg_fnames (rline_t *rl, int num) {
   vstr_t *fnames = vstr_new ();
-  arg_t *arg = rl->tail;
-  if (num < 0) num = 64000;
+  arg_t *arg = rl->head;
+  if (num < 0) num = 256000;
   while (arg and num) {
     if (arg->type & RL_ARG_FILENAME) {
-      vstr_add_sort_and_uniq (fnames, arg->argval->bytes);
+      vstr_append_uniq (fnames, arg->argval->bytes);
       num--;
     }
-    arg = arg->prev;
+    arg = arg->next;
   }
 
   ifnot (fnames->num_items) {
@@ -12161,6 +12259,8 @@ private vstr_t *rline_get_arg_fnames (rline_t *rl, int num) {
     return NULL;
   }
 
+  fnames->current = fnames->head;
+  fnames->cur_idx = 0;
   return fnames;
 }
 
@@ -13057,6 +13157,18 @@ theend:
     vundo_push (this, action);
   else
     free (action);
+
+  if ($my(flags) & BUF_IS_MODIFIED)
+    if ($my(autosave) > 0) {
+      long cur_sec = $my(saved_sec);
+      $my(saved_sec) = vsys_get_clock_sec (DEFAULT_CLOCK);
+      if (cur_sec > 0) {
+        if ($my(saved_sec) - cur_sec > $my(autosave))
+          buf_write (this, FORCE);
+        else
+          $my(saved_sec) = cur_sec;
+      }
+    }
 
   return DONE;
 }
@@ -14157,6 +14269,7 @@ private Class (ed) *editor_new (void) {
           .video_first_row = buf_set_video_first_row,
           .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .autosave = buf_set_autosave,
           .show_statusline = buf_set_show_statusline,
           .modified = buf_set_modified,
           .as = SubSelfInit (bufset, as,
@@ -14235,12 +14348,14 @@ private Class (ed) *editor_new (void) {
       .self = SelfInit (msg,
         .set = ed_msg_set,
         .set_fmt = ed_msg_set_fmt,
+        .line = ed_msg_line,
         .send = ed_msg_send,
         .send_fmt = ed_msg_send_fmt,
         .error = ed_msg_error,
         //.error_fmt = ed_msg_error_fmt,
         .fmt = ed_msg_fmt,
-        .write = ed_msg_write
+        .write = ed_msg_write,
+        .write_fmt = ed_msg_write_fmt
       ),
     ),
     .Error = ClassInit (error,

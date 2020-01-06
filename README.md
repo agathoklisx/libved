@@ -651,7 +651,9 @@ Search:
    :set options           (set options for current buffer
                            --ftype=[string] set filetype
                            --tabwidth=[int] set tabwidth
-                           --shiftwidth=[int] set shiftwidth)
+                           --shiftwidth=[int] set shiftwidth
+                           --autosave=[int] set in minutes the interval, used
+                             at the end of insert mode to autosave buffer)
    :q[!] [--global]       (quit (if force, do not check for modified buffers),
                                 (if global exit all editor instances))
    */
@@ -705,6 +707,19 @@ Search:
    Also the @prefix can not be associated with anything known, but is intented to
    group functions, that either can manage/control the application behavior, or for
    low level functions that have relation with the data/bytes.
+
+  Command line invocation:
+    Usage: veda [options] [filename]
+
+      -h, --help            show this help message and exit
+
+    Options:
+      +, --line-nr=<int>    start at line number
+      --column=<int>        set pointer at column
+      --num-win=<int>       create new [num] windows
+      --ftype=<str>         set the file type
+      --autosave=<int>      interval time in minutes to autosave buffer
+
  */
 
  /* Spelling
@@ -1602,6 +1617,8 @@ Search:
     C strings:
     All the generated strings in the library for the library, are and should be '\0'
     terminated, else is an error.
+
+    Cast'ing from size_t -> int (needs handling)
 
     API:
       Functions:

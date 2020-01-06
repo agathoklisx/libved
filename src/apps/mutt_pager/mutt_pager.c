@@ -379,6 +379,7 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
   Buf.set.fname (bbody, fname);
   Buf.set.ftype (bbody, Ed.syn.get_ftype_idx ($myed, "mail"));
   Buf.set.normal.at_beg_cb (bbody, __on_normal_beg);
+  Buf.set.autosave (bbody, 5);
   Win.append_buf (w, bbody);
   buffers.body = bbody;
 
@@ -433,7 +434,6 @@ int main (int argc, char **argv) {
 
     if ((state & ED_SUSPENDED)) {
       if (E.get.num (__E__) is 1) {
-        /* as an example, we simply create another independed instance */
         this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
@@ -441,7 +441,6 @@ int main (int argc, char **argv) {
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
-        /* else jump to the next or prev */
         this = E.set.current (__E__, E.get.prev_idx (__E__));
         w = Ed.get.current_win (this);
       }

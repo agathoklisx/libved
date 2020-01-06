@@ -94,8 +94,6 @@ struct argparse {
     const char *description;    // a description after usage
     const char *epilog;         // a description at the end
 
-    void *obj;
-
     // internal context
     int argc;
     const char **argv;

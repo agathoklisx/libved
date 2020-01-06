@@ -13,6 +13,8 @@
 #define DEFAULT_PROMPT_CHAR ':'
 #define DEFAULT_ON_EMPTY_LINE_STRING "~"
 
+#define DEFAULT_CLOCK CLOCK_REALTIME
+
 #ifndef RLINE_HISTORY_NUM_ENTRIES
 #define RLINE_HISTORY_NUM_ENTRIES 20
 #endif
@@ -399,6 +401,7 @@ typedef size_t uidx_t;
 
 #include <stddef.h>
 typedef ptrdiff_t idx_t;
+typedef ptrdiff_t msize_t;
 
 #define public __attribute__((visibility ("default")))
 #define private __attribute__((visibility ("hidden")))
@@ -837,6 +840,7 @@ NewType (buf_init_opts,
      at_frame,
      at_linenr,
      at_column;
+   long autosave;
 );
 
 NewType (ed_init_opts,
@@ -856,6 +860,7 @@ NewType (ed_init_opts,
 #define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {     \
   .at_frame = 0, .at_linenr = 1, .at_column = 1, \
   .ftype = FTYPE_DEFAULT,                        \
+  .autosave = 0,                                 \
   .flags = 0, .fname = UNAMED, __VA_ARGS__}
 
 #define FTYPE_QUAL(...) (ftype_t) {              \
@@ -1076,13 +1081,18 @@ NewSelf (vstring,
   SubSelf (vstring, cur) cur;
   SubSelf (vstring, add) add;
 
+  vstr_t *(*new) (void);
   void
     (*free) (vstr_t *),
     (*clear) (vstr_t *),
+    (*append) (vstr_t *, vstring_t *),
+    (*append_uniq) (vstr_t *, char *),
     (*append_with_len) (vstr_t *, char *, size_t),
     (*append_with_fmt) (vstr_t *, char *, ...);
 
-  vstr_t *(*new) (void);
+  char **(*shallow_copy) (vstr_t *, char **);
+
+  vstring_t *(*pop_at) (vstr_t *, int);
   string_t *(*join) (vstr_t *, char *sep);
 );
 
@@ -1152,8 +1162,10 @@ NewClass (re,
 NewSelf (msg,
   void
     (*write) (ed_t *, char *),
+    (*write_fmt) (ed_t *, char *, ...),
     (*set) (ed_t *, int, int, char *, size_t),
     (*set_fmt) (ed_t *, int, int, char *, ...),
+    (*line) (ed_t *, int, char *, ...),
     (*send) (ed_t *, int, char *),
     (*send_fmt) (ed_t *, int, char *, ...),
     (*error) (ed_t *, char *, ...);
@@ -1184,6 +1196,7 @@ NewSelf (file,
   int
     (*exists) (const char *),
     (*is_readable) (const char *),
+    (*is_writable) (const char *),
     (*is_executable) (const char *),
     (*is_reg) (const char *),
     (*is_elf) (const char *);
@@ -1222,6 +1235,7 @@ NewSelf (dir,
   SubSelf (dir, walk) walk;
   dirlist_t *(*list) (char *, int);
   char *(*current) (void);
+  int (*is_directory) (char *);
 );
 
 NewClass (dir,
@@ -1311,8 +1325,13 @@ NewSubSelf (vsys, stat,
   char *(*mode_to_string) (char *, mode_t);
 );
 
+NewSubSelf (vsys, get,
+  long (*clock_sec) (clockid_t);
+);
+
 NewSelf (vsys,
   SubSelf (vsys, stat) stat;
+  SubSelf (vsys, get) get;
   string_t *(*which) (char *, char *);
 );
 
@@ -1336,6 +1355,7 @@ NewSubSelf (buf, set,
   int (*fname) (buf_t *, char *);
 
   void
+    (*autosave) (buf_t *, long),
     (*modified) (buf_t *),
     (*video_first_row) (buf_t *, int),
     (*mode) (buf_t *, char *),
