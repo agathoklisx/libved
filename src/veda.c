@@ -38,6 +38,8 @@ int main (int argc, char **argv) {
   char *ftype = NULL;
   int filetype = FTYPE_DEFAULT;
   int autosave = 0;
+  int backupfile = 0;
+  char *backup_suffix = NULL;
   int linenr = 0;
   int column = 1;
   int num_win = 1;
@@ -50,6 +52,8 @@ int main (int argc, char **argv) {
     OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
     OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
     OPT_INTEGER(0, "autosave", &autosave, "interval time in minutes to autosave buffer", NULL, 0, 0),
+    OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
+    OPT_STRING(0, "backup-suffix", &backup_suffix, "backup suffix (default: ~)", NULL, 0, 0),
     OPT_END(),
   };
 
@@ -90,6 +94,8 @@ int main (int argc, char **argv) {
         .at_frame = FIRST_FRAME,
         .at_linenr = linenr,
         .at_column = column,
+        .backupfile = backupfile,
+        .backup_suffix = backup_suffix,
         .autosave = autosave));
 
       Win.append_buf (w, buf);

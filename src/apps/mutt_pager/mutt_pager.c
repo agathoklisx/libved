@@ -84,6 +84,7 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(HL_QUOTE),
         line, TERM_COLOR_RESET);
       break;
+
     case 2:
       snprintf (lline, len + 16, "%s%s%s", TERM_MAKE_COLOR(HL_QUOTE_1),
         line, TERM_COLOR_RESET);
@@ -268,7 +269,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   int num_iterations = 0;
 
   while (it) {
-    if (num_iterations) j = numchars = 0 ;
+    if (num_iterations) j = numchars = 0;
     sp[0] = '\0';
 
     if (cur_buf is bufs->body) {

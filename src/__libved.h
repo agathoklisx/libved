@@ -79,7 +79,8 @@
 #define VUNDO_RESET (1 << 0)
 
 enum {
-  VED_COM_BUF_CHANGE_NEXT = 0,
+  VED_COM_BUF_BACKUP = 0,
+  VED_COM_BUF_CHANGE_NEXT,
   VED_COM_BUF_CHANGE_NEXT_ALIAS,
   VED_COM_BUF_CHANGE_PREV_FOCUSED,
   VED_COM_BUF_CHANGE_PREV_FOCUSED_ALIAS,
@@ -657,6 +658,7 @@ NewProp (buf,
     *redo;
 
   char
+    backup_suffix[8],
     *fname,
     *basename,
     *extname,
@@ -676,7 +678,8 @@ NewProp (buf,
     cur_video_row,
     cur_video_col,
     statusline_row,
-    show_statusline;
+    show_statusline,
+    backupfile;
 
   int
     *msg_row_ptr,

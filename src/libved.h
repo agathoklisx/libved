@@ -844,13 +844,18 @@ NewType (edinfo,
 NewType (buf_init_opts,
    win_t *win;
 
-   char *fname;
+   char
+     *fname,
+     *backup_suffix;
+
    int
      flags,
      ftype,
      at_frame,
      at_linenr,
-     at_column;
+     at_column,
+     backupfile;
+
    long autosave;
 );
 
@@ -872,6 +877,8 @@ NewType (ed_init_opts,
   .at_frame = 0, .at_linenr = 1, .at_column = 1, \
   .ftype = FTYPE_DEFAULT,                        \
   .autosave = 0,                                 \
+  .backupfile = 0,                               \
+  .backup_suffix = "~",                          \
   .flags = 0, .fname = UNAMED, __VA_ARGS__}
 
 #define FTYPE_QUAL(...) (ftype_t) {              \
@@ -1371,6 +1378,7 @@ NewSubSelf (buf, set,
   int (*fname) (buf_t *, char *);
 
   void
+    (*backup) (buf_t *, int, char *),
     (*autosave) (buf_t *, long),
     (*modified) (buf_t *),
     (*video_first_row) (buf_t *, int),
@@ -1471,7 +1479,8 @@ NewSelf (buf,
 
   int
     (*write) (buf_t *, int),
-    (*substitute) (buf_t *, char *, char *, int, int, int, int);
+    (*substitute) (buf_t *, char *, char *, int, int, int, int),
+    (*backupfile) (buf_t *);
 
   ssize_t (*init_fname) (buf_t *, char *);
 

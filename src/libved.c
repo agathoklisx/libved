@@ -4325,7 +4325,7 @@ theloop:
 
         if (balanced.last_idx is -1) {
           My(Msg).write_fmt ($my(root), "no opening objects to match close object |%c| at: "
-                                "%d line number", c, idx);
+              "%d line number", c, idx);
           retval = NOTOK;
           goto theend;
         }
@@ -4539,7 +4539,18 @@ private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
     long minutes = atol (arg->bytes);
     ifnot (minutes) return *retval;
     self(set.autosave, minutes);
-    return *retval;
+    return OK;
+  }
+
+  if (rline_arg_exists (rl, "backupfile")) {
+    arg = rline_get_anytype_arg (rl, "backup-suffix");
+    self(set.backup, 1, (NULL is arg ? "" : arg->bytes));
+    return OK;
+  }
+
+  if (rline_arg_exists (rl, "no-backupfile")) {
+    self(set.backup, 0, NULL);
+    return OK;
   }
 
   if (rline_arg_exists (rl, "enable-writing"))
@@ -5313,6 +5324,17 @@ private void buf_set_autosave (buf_t *this, long minutes) {
     vsys_get_clock_sec (DEFAULT_CLOCK);
 }
 
+private void buf_set_backup (buf_t *this, int backupfile, char *suffix) {
+  if (backupfile <= 0) return;
+  $my(backupfile) = 1;
+  if (NULL is suffix) return;
+  size_t len = bytelen (suffix);
+  ifnot (len) return;
+  if (len > 7) len = 7;
+  for (size_t i = 0; i < len; i++) $my(backup_suffix)[i] = suffix[i];
+  $my(backup_suffix)[len] = '\0';
+}
+
 private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
   this->on_normal_beg = cb;
 }
@@ -5457,6 +5479,25 @@ private ssize_t ed_readline_from_fp (char **line, size_t *len, FILE *fp) {
   return nread;
 }
 
+private int buf_backupfile (buf_t *this) {
+  if ($my(backupfile) <= 0) return NOTHING_TODO;
+
+  size_t cwdlen = bytelen ($my(cwd));
+  size_t baselen = bytelen ($my(basename));
+  size_t suffixlen = bytelen ($my(backup_suffix));
+  size_t backuplen = 2 + cwdlen + baselen + suffixlen;
+  char backupfile[backuplen + 1];
+  size_t i = 0;
+  for (; i < cwdlen; i++) backupfile[i] = $my(cwd)[i];
+  backupfile[i++] = '/'; backupfile[i++] = '.';
+  for (size_t j = 0; j < baselen; j++, i++) backupfile[i] = $my(basename)[j];
+  for (size_t j = 0; j < suffixlen; i++, j++) backupfile[i] = $my(backup_suffix)[j];
+  backupfile[backuplen] = '\0';
+
+  return ved_write_to_fname (this, backupfile, DONOT_APPEND, 0, this->num_items - 1,
+      NO_FORCE, VERBOSE_OFF);
+}
+
 private ssize_t buf_read_fname (buf_t *this) {
   if ($my(fname) is NULL or str_eq ($my(fname), UNAMED)) return NOTOK;
 
@@ -5505,6 +5546,8 @@ private ssize_t buf_read_fname (buf_t *this) {
   }
 
   if (line isnot NULL) free (line);
+
+  self(backupfile);
 
 theend:
   fclose (fp);
@@ -5857,7 +5900,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(statusline_row) = $my(dim->last_row);
   $my(show_statusline) = 1;
 
-  $my(autosave) = 0;
+  $my(autosave) = $my(backupfile) = 0;
+  $my(backup_suffix)[0] = '~'; $my(backup_suffix)[1] = '\0';
 
   this->on_normal_beg = ved_buf_on_normal_beg;
   this->on_normal_end = ved_buf_on_normal_end;
@@ -5872,6 +5916,8 @@ private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
   self(set.ftype, opts.ftype);
   self(set.row.idx, 0, NO_OFFSET, 1);
   self(set.autosave, opts.autosave);
+  self(set.backup, opts.backupfile, opts.backup_suffix);
+  self(backupfile);
 
   ved_normal_goto_linenr (this, opts.at_linenr, DONOT_DRAW);
   ved_normal_right (this, opts.at_column - 1, DONOT_DRAW);
@@ -11664,6 +11710,7 @@ private void ved_init_commands (ed_t *this) {
   ifnot (NULL is $my(commands)) return;
 
   char *ved_commands[VED_COM_END + 1] = {
+    [VED_COM_BUF_BACKUP] = "@bufbackup",
     [VED_COM_BUF_CHANGE_NEXT] = "bufnext",
     [VED_COM_BUF_CHANGE_NEXT_ALIAS] = "bn",
     [VED_COM_BUF_CHANGE_PREV_FOCUSED] = "bufprevfocused",
@@ -11779,7 +11826,10 @@ private void ved_init_commands (ed_t *this) {
   $my(num_commands) = VED_COM_END;
 
   ved_append_command_arg (this, "set", "--enable-writing", 16);
+  ved_append_command_arg (this, "set", "--backup-suffix=", 16);
+  ved_append_command_arg (this, "set", "--no-backupfile", 15);
   ved_append_command_arg (this, "set", "--shiftwidth=", 13);
+  ved_append_command_arg (this, "set", "--backupfile", 12);
   ved_append_command_arg (this, "set", "--tabwidth=", 11);
   ved_append_command_arg (this, "set", "--autosave=", 11);
   ved_append_command_arg (this, "set", "--ftype=", 8);
@@ -12900,6 +12950,10 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
 
     case VED_COM_BUF_SET:
       retval = ved_com_buf_set (*thisp, rl, &retval);
+      goto theend;
+
+    case VED_COM_BUF_BACKUP:
+      retval = buf_backupfile (*thisp);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
@@ -14419,6 +14473,7 @@ private Class (ed) *editor_new (void) {
           .video_first_row = buf_set_video_first_row,
           .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .backup = buf_set_backup,
           .autosave = buf_set_autosave,
           .show_statusline = buf_set_show_statusline,
           .modified = buf_set_modified,
@@ -14491,7 +14546,8 @@ private Class (ed) *editor_new (void) {
         .write = buf_write,
         .substitute = buf_substitute,
         .input_box = buf_input_box,
-        .init_fname = buf_init_fname
+        .init_fname = buf_init_fname,
+        .backupfile = buf_backupfile
       ),
     ),
     .Msg = ClassInit (msg,

@@ -655,6 +655,9 @@ Search:
                            --ftype=[string] set filetype
                            --tabwidth=[int] set tabwidth
                            --shiftwidth=[int] set shiftwidth
+                           --backupfile set backup
+                           --backup-suffix=[string] set backup suffix (default: ~)
+                           --no-backupfile unset the backup option
                            --autosave=[int] set in minutes the interval, used
                              at the end of insert mode to autosave buffer)
    :q[!] [--global]       (quit (if force, do not check for modified buffers),
@@ -722,7 +725,8 @@ Search:
       --num-win=<int>       create new [num] windows
       --ftype=<str>         set the file type
       --autosave=<int>      interval time in minutes to autosave buffer
-
+      --backupfile          backup file on initial reading
+      --backup-suffix=<str> backup suffix (default: ~)
  */
 
  /* Spelling
