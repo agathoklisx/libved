@@ -137,14 +137,14 @@ syn_t mail_syn[] = {
     NULL, NULL, NULL, NULL,
     HL_STRINGS_NO, HL_NUMBERS_NO,
     __mail_hdrs_syn_parser, __mail_hdrs_syn_init,
-    0, 0, NULL, NULL,
+    0, 0, NULL, NULL, NULL,
   },
   {
     "mail", __mail_NULL_ARRAY, __mail_NULL_ARRAY, __mail_NULL_ARRAY,
     NULL, NULL,
     NULL, NULL, NULL, NULL,
     HL_STRINGS_NO, HL_NUMBERS_NO,
-    __mail_syn_parser, __mail_syn_init, 0, 0, NULL, NULL,
+    __mail_syn_parser, __mail_syn_init, 0, 0, NULL, NULL, NULL,
   }
 };
 

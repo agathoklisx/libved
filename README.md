@@ -502,6 +502,7 @@ Visual mode:
  | +                 | send selected to XA_CLIPBOARD [(char|line)wise|
  | *                 | send selected to XA_PRIMARY   [(char|line)wise|
  | e                 | edit as filename [charwise]    |
+ | b                 | check for unbalanced pair of objects [linewise]|
  | v                 | check line[s] for invalid UTF-8 byte sequences [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|
  | S                 | Spell line[s] [(char|line)wise]
@@ -648,6 +649,8 @@ Search:
    :searches              (change focus to the `search' window/buffer)
    :messages              (change focus to the message window/buffer)
    :testkey               (test keyboard keys)
+   :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
+                          whole file is assumed)
    :set options           (set options for current buffer
                            --ftype=[string] set filetype
                            --tabwidth=[int] set tabwidth

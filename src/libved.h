@@ -616,6 +616,7 @@ typedef int  (*DirStatFile_cb) (const char *, struct stat *);
 typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
+typedef int (*Balanced_cb) (buf_t **, int, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
@@ -669,6 +670,8 @@ NewType (syn,
      multiline_comment_continuation_len,
     *keywords_len,
     *keywords_colors;
+
+  char *balanced_pairs;
 );
 
 NewType (ftype,
@@ -692,6 +695,7 @@ NewType (ftype,
 
   FtypeAutoIndent_cb autoindent;
   FtypeOpenFnameUnderCursor_cb on_open_fname_under_cursor;
+  Balanced_cb balanced;
 );
 
 NewType (dirlist,
@@ -781,6 +785,13 @@ NewType (line,
       int  cur_idx;
       int  num_items;
       int  len;
+);
+
+NewType (balanced,
+  char bytes[512];
+  int  linenr[512];
+  int  last_idx;
+  int  has_opening_string;
 );
 
 NewType (bufinfo,
@@ -879,6 +890,7 @@ NewType (ed_init_opts,
   .read_from_shell = READ_FROM_SHELL,            \
   .autoindent = NULL,                            \
   .on_open_fname_under_cursor = NULL,            \
+  .balanced = NULL,                              \
   __VA_ARGS__ }
 
 NewSubSelf (video, draw,
@@ -1253,9 +1265,11 @@ NewSubSelf (buf, iter,
 NewSubSelf (bufget, row,
   row_t
     *(*current) (buf_t *),
-    *(*at) (buf_t *, int idx);
+    *(*at) (buf_t *, int);
 
-  string_t *(*current_bytes) (buf_t *);
+  string_t
+     *(*current_bytes) (buf_t *),
+     *(*bytes_at) (buf_t *, int);
 
   int
     (*current_col_idx) (buf_t *),
@@ -1282,6 +1296,8 @@ NewSubSelf (buf, get,
   size_t
     (*size) (buf_t *),
     (*num_lines) (buf_t *);
+
+  int (*cur_idx) (buf_t *);
 
   row_t *(*line_at) (buf_t *, int);
 

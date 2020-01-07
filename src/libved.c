@@ -3990,6 +3990,7 @@ char c_multiline_comment_start[] = "/*";
 char c_multiline_comment_end[] = "*/";
 char c_multiline_comment_continuation[] = " * ";
 char c_operators[] = "+:?-%*^><=|&~.()[]{}!";
+char c_balanced_pairs[] = "[](){}";
 char *NULL_ARRAY[] = {NULL};
 
 syn_t HL_DB[] = {
@@ -3998,7 +3999,7 @@ syn_t HL_DB[] = {
      NULL, NULL,
      NULL, NULL, NULL, NULL,
      HL_STRINGS_NO, HL_NUMBERS_NO, buf_syn_parser, buf_syn_init,
-     0, 0, NULL, NULL,
+     0, 0, NULL, NULL, c_balanced_pairs,
   },
   {
     "c", NULL_ARRAY, c_extensions, NULL_ARRAY,
@@ -4006,7 +4007,7 @@ syn_t HL_DB[] = {
     c_singleline_comment, c_multiline_comment_start, c_multiline_comment_end,
     c_multiline_comment_continuation,
     HL_STRINGS, HL_NUMBERS,
-    buf_syn_parser, buf_syn_init_c, 0, 0, NULL, NULL,
+    buf_syn_parser, buf_syn_init_c, 0, 0, NULL, NULL, c_balanced_pairs,
   }
 };
 
@@ -4247,6 +4248,124 @@ theend:
   return line;
 }
 
+private void balanced_push (balanced_t *this, char obj, int idx) {
+  this->bytes[++this->last_idx] = obj;
+  this->linenr[this->last_idx] = idx;
+}
+
+private char balanced_pop (balanced_t *this) {
+  char c = this->bytes[this->last_idx];
+  this->bytes[this->last_idx--] = '\0';
+  return c;
+}
+
+private int balanced_check_obj (char *pair, char ca, char cb) {
+  if (ca is *pair) return (cb is *(pair + 1) ? OK : NOTOK);
+  return NOTOK;
+}
+
+private int balanced_obj (buf_t **thisp, int first_idx, int last_idx) {
+  int retval = NOTOK;
+  buf_t *this = *thisp;
+
+  if ($my(syn)->balanced_pairs is NULL) return NOTOK;
+
+  balanced_t balanced = (balanced_t) {
+    .last_idx = -1,
+    .has_opening_string = 0
+  };
+
+  int idx = first_idx;
+
+theloop:
+  while (idx <= last_idx) {
+    string_t *data = self(get.row.bytes_at, idx++);
+    if (data is NULL) break;
+
+    for (size_t i = 0; i < data->num_bytes; i++) {
+      char c = data->bytes[i];
+
+      ifnot (balanced.has_opening_string) {
+        ifnot (NULL is $my(syn)->singleline_comment) {
+          if (c is $my(syn)->singleline_comment[0]) {
+            if ((bytelen ($my(syn)->singleline_comment) is 1) or
+                ((data->num_bytes - 1 > i and data->bytes[i+1] is
+                 $my(syn)->singleline_comment[1]))) {
+              goto theloop;
+            }
+          }
+        }
+      }  
+ 
+      if (c is '"') {
+        if ((i isnot 0 and data->bytes[i-1] is '\\' and balanced.has_opening_string)
+          or ((i isnot 0 and data->bytes[i-1] is '\'') and
+           ((data->num_bytes - 1 > i and data->bytes[i+1] is '\''))))
+         continue;
+
+          if (balanced.has_opening_string)
+            balanced.has_opening_string = 0;
+          else
+            balanced.has_opening_string = 1;
+
+        continue;
+      }
+
+      if (balanced.has_opening_string) continue;
+
+      char *sp = byte_in_str ($my(syn)->balanced_pairs, c);
+      ifnot (NULL is sp) {
+        if (i isnot 0 and data->bytes[i-1] is '\'' and
+          (data->num_bytes - 1 > i and data->bytes[i+1] is '\'')) continue;
+
+        ifnot ((sp - $my(syn)->balanced_pairs) % 2) {
+          balanced_push (&balanced, c, idx);
+          continue;
+        }
+
+        if (balanced.last_idx is -1) {
+          My(Msg).write_fmt ($my(root), "no opening objects to match close object |%c| at: "
+                                "%d line number", c, idx);
+          retval = NOTOK;
+          goto theend;
+        }
+
+        char last_p = balanced_pop (&balanced);
+
+        if (NOTOK is balanced_check_obj (sp - 1, last_p, c)) {
+          My(Msg).write_fmt ($my(root), "%c opened at %d but closed object is %c at %d",
+             last_p, balanced.linenr[balanced.last_idx + 1], c, idx + 1);
+          goto theend;
+        }
+      }
+
+      continue;
+    }
+  }
+
+  if (balanced.last_idx isnot -1) {
+     char last_p = balanced_pop (&balanced);
+
+     My(Msg).write_fmt ($my(root), "%c opened at %d and didn't found it's closed pair", last_p,
+         balanced.linenr[balanced.last_idx + 1]);
+     retval = NOTOK;
+  } else
+    retval = OK;
+
+theend:
+  if (NOTOK is retval)
+    My(Ed).messages ($my(root), thisp, NOT_AT_EOF);
+  else
+    My(Msg).line ($my(root), COLOR_NORMAL, "pair objects looks symmetrical");
+
+  return retval;
+}
+
+private int balanced_lw_mode_cb (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
+  (void) vstr; (void) c; (void) action;
+  return balanced_obj (thisp, fidx, lidx);
+}
+
 private string_t *buf_ftype_autoindent (buf_t *this, row_t *row) {
   (void) row;
   $my(shared_int) = 0; // needed by the caller
@@ -4327,6 +4446,7 @@ private ftype_t *__ftype_set__ (ftype_t *this, ftype_t q) {
 
   this->autoindent = (NULL is q.autoindent ? buf_ftype_autoindent : q.autoindent);
   this->on_open_fname_under_cursor = q.on_open_fname_under_cursor;
+  this->balanced = q.balanced;
 
   if (NULL is q.on_emptyline) {
     if (NULL is this->on_emptyline)
@@ -4456,7 +4576,8 @@ private ftype_t *buf_syn_init_c (buf_t *this) {
     .autoindent = buf_autoindent_c,
     .shiftwidth = C_DEFAULT_SHIFTWIDTH,
     .tab_indents = C_TAB_ON_INSERT_MODE_INDENTS,
-    .on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c
+    .on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c,
+    .balanced = balanced_obj
     ));
 }
 
@@ -4542,6 +4663,12 @@ private int buf_get_row_current_col_idx (buf_t *this) {
 
 private string_t *buf_get_row_current_bytes (buf_t *this) {
   return $mycur(data);
+}
+
+private string_t *buf_get_row_bytes_at (buf_t *this, int idx) {
+  row_t *row = self(get.row.at, idx);
+  if (NULL is row) return NULL;
+  return row->data;
 }
 
 private void buf_free_row (buf_t *this, row_t *row) {
@@ -5557,6 +5684,10 @@ private size_t buf_get_size (buf_t *this) {
   }
 
   return size;
+}
+
+private int buf_get_cur_idx (buf_t *this) {
+  return this->cur_idx;
 }
 
 private void buf_free_info (buf_t *this, bufinfo_t **info) {
@@ -7201,8 +7332,8 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         size_t len = 0;
         char *line = NULL;
 
-        /* while (-1 isnot ed_readline_from_fp (&line, &len, fp)) { */
-        /* do it by hand to look for new lines and proper set the type */
+        // while (-1 isnot ed_readline_from_fp (&line, &len, fp)) {
+        // do it by hand to look for new lines and proper set the type
         ssize_t nread;
         int type = CHARWISE;
         while (-1 isnot (nread = getline (&line, &len, fp))) {
@@ -11545,6 +11676,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_BUF_DELETE_ALIAS] = "bd",
     [VED_COM_BUF_CHANGE] = "buffer",
     [VED_COM_BUF_CHANGE_ALIAS] = "b",
+    [VED_COM_BUF_CHECK_BALANCED] = "@balanced_check",
     [VED_COM_BUF_SET] = "set",
     [VED_COM_DIFF_BUF] = "diffbuf",
     [VED_COM_DIFF] = "diff",
@@ -11594,6 +11726,7 @@ private void ved_init_commands (ed_t *this) {
   int num_args[VED_COM_END + 1] = {
     [VED_COM_BUF_DELETE_FORCE ... VED_COM_BUF_DELETE_ALIAS] = 1,
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = 1,
+    [VED_COM_BUF_CHECK_BALANCED] = 1,
     [VED_COM_EDIT ... VED_COM_ENEW] = 1,
     [VED_COM_GREP] = 3,
     [VED_COM_QUIT_FORCE ... VED_COM_QUIT_ALIAS] = 1,
@@ -11607,6 +11740,7 @@ private void ved_init_commands (ed_t *this) {
   int flags[VED_COM_END + 1] = {
     [VED_COM_BUF_DELETE_FORCE ... VED_COM_BUF_DELETE_ALIAS] = RL_ARG_BUFNAME,
     [VED_COM_BUF_CHANGE ... VED_COM_BUF_CHANGE_ALIAS] = RL_ARG_BUFNAME,
+    [VED_COM_BUF_CHECK_BALANCED] = RL_ARG_RANGE,
     [VED_COM_EDIT ... VED_COM_ENEW] = RL_ARG_FILENAME,
     [VED_COM_GREP] = RL_ARG_FILENAME|RL_ARG_PATTERN|RL_ARG_RECURSIVE,
     [VED_COM_QUIT_FORCE ... VED_COM_QUIT_ALIAS] = RL_ARG_GLOBAL,
@@ -12605,6 +12739,18 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
        retval = DONE;
        goto theend;
 
+    case VED_COM_BUF_CHECK_BALANCED:
+      if ($my(ftype)->balanced isnot NULL) {
+        int range[2];
+        if (NOTOK is rline_get_range (rl, this, range)) {
+          range[0] = 0;
+          range[1] = this->num_items - 1;
+        }
+
+        retval = $my(ftype)->balanced (thisp, range[0], range[1]);
+      }
+      goto theend;
+
     case VED_COM_MESSAGES:
       retval = ved_messages ($my(root), thisp, AT_EOF);
       goto theend;
@@ -13557,6 +13703,8 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     "*send selected lines to XA_PRIMARY";
 
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
+  utf8 bc[] = {'b'}; char bact[] = "balanced objects";
+  self(set.lw_mode_actions, bc, 1, bact, balanced_lw_mode_cb);
 }
 
 private void ed_free_at_exit_cbs (ed_t *this) {
@@ -14254,6 +14402,7 @@ private Class (ed) *editor_new (void) {
             .at = buf_get_row_at,
             .current = buf_get_row_current,
             .current_bytes = buf_get_row_current_bytes,
+            .bytes_at = buf_get_row_bytes_at,
             .current_col_idx = buf_get_row_current_col_idx,
             .col_idx = buf_get_row_col_idx,
           ),
@@ -14261,6 +14410,7 @@ private Class (ed) *editor_new (void) {
           .fname = buf_get_fname,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,
+          .cur_idx = buf_get_cur_idx,
           .current_video_row = buf_get_current_video_row,
           .current_video_col = buf_get_current_video_col,
         ),

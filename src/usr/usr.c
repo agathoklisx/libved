@@ -400,7 +400,8 @@ char  sh_operators[] = "+:-%*><=|&()[]{}!$/`?";
 char *sh_keywords[] = {
     "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
     "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
-char  sh_singleline_comment[] = "#";
+char sh_singleline_comment[] = "#";
+char sh_balanced_pairs[] = "()[]{}";
 char *_u_NULL_ARRAY[] = {NULL};
 
 private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
@@ -431,14 +432,14 @@ syn_t u_syn[] = {
     make_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_make_syn_init, 0, 0, NULL, NULL,
+    __u_syn_parser, __u_make_syn_init, 0, 0, NULL, NULL, NULL,
   },
   {
     "sh", _u_NULL_ARRAY, sh_extensions, sh_shebangs,
     sh_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL,
+    __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL, sh_balanced_pairs,
   },
 };
 
