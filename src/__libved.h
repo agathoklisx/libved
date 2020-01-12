@@ -46,6 +46,7 @@
 #define RL_CLEAR_FREE_LINE (1 << 9)
 #define RL_POST_PROCESS (1 << 10)
 #define RL_SET_POS (1 << 11)
+#define RL_EXEC (1 << 12)
 
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)

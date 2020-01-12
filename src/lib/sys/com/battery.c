@@ -2,11 +2,13 @@
  * this prints to the message line (through an over simplistic way and only
  * on Linux systems) the battery status and capacity */
 private int sys_battery_info (char *buf, int should_print) {
+  ed_t *ed = E(get.current);
+
   int retval = NOTOK;
 
   /* use the SYS_NAME defined in the Makefile and avoid uname() for now */
   ifnot (Cstring.eq ("Linux", SYS_NAME)) {
-    Msg.error ($myed, "battery function implemented for Linux");
+    Msg.error (ed, "battery function implemented for Linux");
     return NOTOK;
   }
 
@@ -62,7 +64,7 @@ foundbat:;
   retval = OK;
 
   if (should_print)
-    Msg.send_fmt ($myed, COLOR_YELLOW, "[Battery is %s, remaining %s%%]",
+    Msg.send_fmt (ed, COLOR_YELLOW, "[Battery is %s, remaining %s%%]",
         status, cap);
 
   ifnot (NULL is buf) snprintf (buf, 64, "[Battery is %s, remaining %s%%]",

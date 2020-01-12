@@ -73,9 +73,9 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
     case 't':
       retval = __translate_word__ (thisp, word);
       if (0 is retval)
-        Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]", word);
+        Msg.send_fmt (E(get.current), COLOR_RED, "Nothing matched the pattern [%s]", word);
       else if (0 < retval)
-        Ed.scratch ($myed, thisp, NOT_AT_EOF);
+        Ed.scratch (E(get.current), thisp, NOT_AT_EOF);
       retval = (retval > 0 ? OK : NOTOK);
       break;
 #endif
@@ -110,6 +110,7 @@ private void __u_add_word_actions__ (ed_t *this) {
 private int __u_math_expr_interp__ (expr_t *expr) {
   int err = 0;
 
+  ed_t *ed = E(get.current);
   expr->ff_obj = (te_expr *) te_compile (expr->data->bytes, 0, 0, &err);
 
   ifnot (expr->ff_obj) {
@@ -117,18 +118,18 @@ private int __u_math_expr_interp__ (expr_t *expr) {
     Expr.strerror (expr, EXPR_COMPILE_ERROR);
     String.append_fmt (expr->error_string, "\n%s\n%*s^\nError near here",
         expr->data->bytes, err-1, "");
-    Ed.append.message_fmt ($myed, expr->error_string->bytes);
-    Ed.messages ($myed, thisp, NOT_AT_EOF);
+    Ed.append.message_fmt (ed, expr->error_string->bytes);
+    Ed.messages (ed, thisp, NOT_AT_EOF);
     expr->retval = EXPR_NOTOK;
     return NOTOK;
   }
 
   expr->val.double_v = te_eval (expr->ff_obj);
-  Ed.append.message_fmt ($myed, "Result:\n%f\n", expr->val.double_v);
+  Ed.append.message_fmt (ed, "Result:\n%f\n", expr->val.double_v);
   char buf[256]; buf[0] = '\0';
   snprintf (buf, 256, "%f", expr->val.double_v);
-  Ed.reg.set ($myed, 'M', CHARWISE, buf, NORMAL_ORDER);
-  Msg.send_fmt ($myed, COLOR_NORMAL, "Result =  %f (stored to 'M' register)", expr->val.double_v);
+  Ed.reg.set (ed, 'M', CHARWISE, buf, NORMAL_ORDER);
+  Msg.send_fmt (ed, COLOR_NORMAL, "Result =  %f (stored to 'M' register)", expr->val.double_v);
   te_free (expr->ff_obj);
 
   return OK;
@@ -151,7 +152,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
   switch (c) {
 #if HAS_SPELL
     case 'S': {
-      rline_t *rl = Rline.new ($myed);
+      rline_t *rl = Rline.new (E(get.current));
       string_t *str = String.new_with_fmt ("~spell --range=%d,%d",
          fidx + 1, lidx + 1);
       Rline.set.line (rl, str->bytes, str->num_bytes);
@@ -174,7 +175,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
 #endif
 
     case 'v': {
-      rline_t *rl = Rline.new ($myed);
+      rline_t *rl = Rline.new (E(get.current));
       string_t *str = String.new_with_fmt ("ignore --range=%d,%d",
          fidx + 1, lidx + 1);
       Rline.set.line (rl, str->bytes, str->num_bytes);
@@ -363,10 +364,10 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     retval = __translate_word__ (thisp, words->head->data->bytes);
     if (0 is retval)
-       Msg.send_fmt ($myed, COLOR_RED, "Nothing matched the pattern [%s]",
+       Msg.send_fmt (E(get.current), COLOR_RED, "Nothing matched the pattern [%s]",
            words->head->data->bytes);
       else if (0 < retval)
-        Ed.scratch ($myed, thisp, NOT_AT_EOF);
+        Ed.scratch (E(get.current), thisp, NOT_AT_EOF);
     Vstring.free (words);
     retval = (retval > 0 ? OK : NOTOK);
 #endif
@@ -409,18 +410,18 @@ private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *
 }
 
 private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
-  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun ($myed, "autoindent_default");
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_default");
   return autoindent_fun (this, row);
 }
 
 private ftype_t *__u_make_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx ($myed, "make"),
+  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "make"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_sh_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx ($myed, "sh"),
+  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "sh"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
@@ -480,7 +481,7 @@ private int __u_open_link_on_browser (buf_t *this) {
    com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
       Uenv->elinks_exec->bytes, link);
 
-   retval = Ed.sh.popen ($myed, this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+   retval = Ed.sh.popen (E(get.current), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
    goto theend;
 
 theerror:

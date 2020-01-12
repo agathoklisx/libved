@@ -537,6 +537,10 @@ AllocErrorHandlerF AllocErrorHandler;
   __c__->__prop__ = AllocProp(__C__);                  \
   __c__;                                               \
 })
+#define AllocSelf(__S__) ({                            \
+  Self (__S__) *__s__ = Alloc (sizeof (Self(__S__)));  \
+  __s__;                                               \
+})
 
 DeclareType (term);
 DeclareType (string);
@@ -974,7 +978,7 @@ NewSelf (term,
   term_t *(*new) (void);
 
   void
-    (*free) (term_t *),
+    (*free) (term_t **),
     (*restore) (term_t *),
     (*set_name) (term_t *),
     (*init_size) (term_t *, int *, int *);
@@ -1150,9 +1154,14 @@ NewSelf (rline,
   SubSelf (rline, arg) arg;
   SubSelf (rline, history) history;
 
-  rline_t *(*new) (ed_t *);
+  rline_t
+     *(*new) (ed_t *),
+     *(*new_with) (ed_t *, char *);
+
   void (*free) (rline_t *);
-  int (*exec) (buf_t **, rline_t *);
+
+  int (*exec) (rline_t *, buf_t **);
+
   rline_t *(*parse) (buf_t *, rline_t *);
 );
 
@@ -1779,10 +1788,10 @@ NewSelf (E,
   SubSelf (E, set) set;
 );
 
-NewClass (I,
+NewClass (This,
   void *self;
   void *prop;
-  Class (E) *E;
+  Class (E) *__E__;
 );
 
 NewClass (E,
@@ -1790,7 +1799,7 @@ NewClass (E,
   Prop (E) *prop;
   Class (ed) *ed;
 
-  Class (I) *I;
+  Class (This) *__THIS__;
 );
 
 public Class (E) *__init_ed__ (char *);

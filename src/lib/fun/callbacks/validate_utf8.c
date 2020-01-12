@@ -14,7 +14,7 @@ check_utf8:
 
   ifnot (index) return OK;
 
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR,
+  Ed.append.toscratch_fmt (E(get.current), DONOT_CLEAR,
       "--== Invalid UTF8 sequence ==-\n"
       "message: %s\n"
       "%s\nat line number %d, at index %zd, num invalid bytes %d\n",

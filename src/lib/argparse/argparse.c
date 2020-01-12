@@ -33,7 +33,7 @@ prefix_cmp(const char *str, const char *prefix)
         }
 }
 
-static void
+static int
 argparse_error(struct argparse *self, const struct argparse_option *opt,
                const char *reason, int flags)
 {
@@ -43,7 +43,7 @@ argparse_error(struct argparse *self, const struct argparse_option *opt,
     } else {
         fprintf(stderr, "error: option `-%c` %s\n", opt->short_name, reason);
     }
-    exit(1);
+    return -1;
 }
 
 static int
@@ -79,7 +79,7 @@ argparse_getvalue(struct argparse *self, const struct argparse_option *opt,
             self->argc--;
             *(const char **)opt->value = *++self->argv;
         } else {
-            argparse_error(self, opt, "requires a value", flags);
+            return argparse_error(self, opt, "requires a value", flags);
         }
         break;
     case ARGPARSE_OPT_INTEGER:
@@ -91,12 +91,12 @@ argparse_getvalue(struct argparse *self, const struct argparse_option *opt,
             self->argc--;
             *(int *)opt->value = strtol(*++self->argv, (char **)&s, 0);
         } else {
-            argparse_error(self, opt, "requires a value", flags);
+            return argparse_error(self, opt, "requires a value", flags);
         }
         if (errno)
-            argparse_error(self, opt, strerror(errno), flags);
+            return argparse_error(self, opt, strerror(errno), flags);
         if (s[0] != '\0')
-            argparse_error(self, opt, "expects an integer value", flags);
+            return argparse_error(self, opt, "expects an integer value", flags);
         break;
     case ARGPARSE_OPT_FLOAT:
         errno = 0;
@@ -107,12 +107,12 @@ argparse_getvalue(struct argparse *self, const struct argparse_option *opt,
             self->argc--;
             *(float *)opt->value = strtof(*++self->argv, (char **)&s);
         } else {
-            argparse_error(self, opt, "requires a value", flags);
+            return argparse_error(self, opt, "requires a value", flags);
         }
         if (errno)
-            argparse_error(self, opt, strerror(errno), flags);
+            return argparse_error(self, opt, strerror(errno), flags);
         if (s[0] != '\0')
-            argparse_error(self, opt, "expects a numerical value", flags);
+            return argparse_error(self, opt, "expects a numerical value", flags);
         break;
     default:
         assert(0);
@@ -289,7 +289,7 @@ argparse_parse(struct argparse *self, int argc, const char **argv)
 unknown:
         fprintf(stderr, "error: unknown option `%s`\n", self->argv[0]);
         argparse_usage(self);
-        exit(1);
+        return -1;
     }
 
 end:

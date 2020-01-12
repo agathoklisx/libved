@@ -11,24 +11,25 @@
 private int __translate_word__ (buf_t **thisp, char *word) {
   (void) thisp;
   char *lex = NULL;
+  ed_t *ed = E(get.current);
 
 #ifndef WORD_LEXICON_FILE
-  Msg.error ($myed, "%s(): lexikon has not been defined", __func__);
+  Msg.error (ed, "%s(): lexikon has not been defined", __func__);
   return NOTOK;
 #else
   lex = WORD_LEXICON_FILE;
 #endif
 
-  Msg.send_fmt ($myed, COLOR_YELLOW, "translating [%s]", word);
+  Msg.send_fmt (ed, COLOR_YELLOW, "translating [%s]", word);
 
   ifnot (File.exists (lex)) {
-    Msg.error ($myed, "%s(): lexicon has not been found", __func__);
+    Msg.error (ed, "%s(): lexicon has not been found", __func__);
     return NOTOK;
   }
 
   FILE *fp = fopen (lex, "r");
   if (NULL is fp) {
-    Msg.error ($myed, Error.string ($myed, errno));
+    Msg.error (ed, Error.string (ed, errno));
     return NOTOK;
   }
 
@@ -41,14 +42,14 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   int nread;
   int match = 0;
 
-  Ed.append.toscratch ($myed, CLEAR, word);
-  Ed.append.toscratch ($myed, DONOT_CLEAR, "=================");
+  Ed.append.toscratch (ed, CLEAR, word);
+  Ed.append.toscratch (ed, DONOT_CLEAR, "=================");
 
   len = 0;
   while (-1 isnot (nread = getline (&line, &len, fp)))
     if (0 <= Re.exec (re, line, nread)) {
       match++;
-      Ed.append.toscratch ($myed, DONOT_CLEAR, Cstring.trim.end (line, '\n'));
+      Ed.append.toscratch (ed, DONOT_CLEAR, Cstring.trim.end (line, '\n'));
       Re.reset_captures (re);
     }
 

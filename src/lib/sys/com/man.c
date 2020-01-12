@@ -2,10 +2,12 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   if (NULL is Uenv->man_exec) return NOTOK;
   if (NULL is word) return NOTOK;
 
+  ed_t *ed = E(get.current);
+
   int retval = NOTOK;
   string_t *com;
 
-  buf_t *this = Ed.get.scratch_buf ($myed);
+  buf_t *this = Ed.get.scratch_buf (ed);
   Buf.clear (this);
 
   if (File.exists (word)) {
@@ -17,7 +19,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
       free (cwdir);
     }
 
-    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
     goto theend;
   }
 
@@ -32,7 +34,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   for (int i = 1; i < 9; i++) {
     sections[section] = 1;
     total_sections++;
-    retval = Ed.sh.popen ($myed, this, com->bytes, 1, 1, NULL);
+    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
     ifnot (retval) break;
 
     while (sections[section] and total_sections < 8) {
@@ -47,7 +49,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
 theend:
   String.free (com);
 
-  Ed.scratch ($myed, bufp, 0);
+  Ed.scratch (ed, bufp, 0);
   Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
       Buf.get.num_lines (this) - 1);
   Buf.normal.bof (this, DRAW);

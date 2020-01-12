@@ -4,8 +4,8 @@
  */
 private void sigwinch_handler (int sig) {
   (void) sig;
-  ed_t *ed = E.get.head (__E__);
-  int cur_idx = E.get.current_idx (__E__);
+  ed_t *ed = E(get.head);
+  int cur_idx = E(get.current_idx);
 
   while (ed) {
     Ed.set.screen_size (ed);
@@ -15,9 +15,9 @@ private void sigwinch_handler (int sig) {
       w = Ed.get.win_next (ed, w);
     }
 
-    ed = E.set.next (__E__);
+    ed = E(set.next);
   }
 
-  E.set.current (__E__, cur_idx);
+  E(set.current, cur_idx);
 }
 

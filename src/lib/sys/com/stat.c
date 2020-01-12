@@ -17,13 +17,15 @@ readthelink:
 }
 
 private int sys_stat (buf_t **thisp, char *obj) {
+  ed_t *ed = E(get.current);
+
   struct stat st;
   if (NOTOK is lstat (obj, &st)) {
-    Msg.error ($myed, "failed to lstat() file, %s", Error.string ($myed, errno));
+    Msg.error (ed, "failed to lstat() file, %s", Error.string (ed, errno));
     return NOTOK;
   }
 
-  Ed.append.toscratch ($myed, CLEAR, "==- stat output -==");
+  Ed.append.toscratch (ed, CLEAR, "==- stat output -==");
 
   int islink = S_ISLNK (st.st_mode);
   string_t *link = NULL;
@@ -31,17 +33,17 @@ private int sys_stat (buf_t **thisp, char *obj) {
   if (islink) {
     link = __readlink__ (obj);
     if (NOTOK is (ssize_t) link->num_bytes) {
-      Msg.error ($myed, "readlink(): %s", Error.string ($myed, errno));
-      Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
+      Msg.error (ed, "readlink(): %s", Error.string (ed, errno));
+      Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
     } else
-      Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s -> %s", obj, link->bytes);
+      Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s -> %s", obj, link->bytes);
   } else
-    Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
+    Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
 
 theoutput:
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  Size: %ld,  Blocks: %ld,  I/O Block: %ld",
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  Size: %ld,  Blocks: %ld,  I/O Block: %ld",
       st.st_size, st.st_blocks, st.st_blksize);
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "Device: %ld,  Inode: %ld,  Links: %d",
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "Device: %ld,  Inode: %ld,  Links: %d",
       st.st_dev, st.st_ino, st.st_nlink);
 
   char mode_string[16];
@@ -49,17 +51,17 @@ theoutput:
   char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
   struct passwd *pswd = getpwuid (st.st_uid);
   struct group *grp = getgrgid (st.st_gid);
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR,
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR,
   	"Access: (%s/%s), Uid: (%ld / %s), Gid: (%d / %s)\n",
      mode_oct+2, mode_string, st.st_uid,
     (NULL is pswd ? "NONE" : pswd->pw_name), st.st_gid,
     (NULL is grp  ? "NONE" : grp->gr_name));
   time_t atm = (long int) st.st_atime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "       Last Access: %s", Cstring.trim.end (ctime (&atm), '\n'));
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "       Last Access: %s", Cstring.trim.end (ctime (&atm), '\n'));
   time_t mtm = (long int) st.st_mtime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, " Last Modification: %s", Cstring.trim.end (ctime (&mtm), '\n'));
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, " Last Modification: %s", Cstring.trim.end (ctime (&mtm), '\n'));
   time_t ctm = (long int) st.st_ctime;
-  Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "Last Status Change: %s\n", Cstring.trim.end (ctime (&ctm), '\n'));
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "Last Status Change: %s\n", Cstring.trim.end (ctime (&ctm), '\n'));
 
   if (islink and NULL isnot link) {
     islink = 0;
@@ -69,12 +71,12 @@ theoutput:
       free (dname);
     }
     obj = link->bytes;
-    Ed.append.toscratch ($myed, DONOT_CLEAR, "==- Link info -==");
-    Ed.append.toscratch_fmt ($myed, DONOT_CLEAR, "  File: %s", obj);
+    Ed.append.toscratch (ed, DONOT_CLEAR, "==- Link info -==");
+    Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
     if (OK is stat (link->bytes, &st)) goto theoutput;
   }
   String.free (link);
-  Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  Ed.scratch (ed, thisp, NOT_AT_EOF);
   return OK;
 }
 

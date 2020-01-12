@@ -226,6 +226,9 @@ app-static: Env libved-static
 	@$(INSTALL) -v $(APPSTATIC) $(SYSBINDIR)
 	@$(RM) $(APPSTATIC)
 
+app-shared-preproc:
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -E
+
 #----------------------------------------------------------#
 LD_LIBRARY_PATH := $(SYSLIBDIR)
 #----------------------------------------------------------#

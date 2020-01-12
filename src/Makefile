@@ -265,6 +265,9 @@ $(SYSEDSTATIC):
 	@$(INSTALL) -v $(EDSTATIC) $(SYSBINDIR)
 	@$(RM) $(EDSTATIC)
 
+veda-shared-preproc:
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -E
+
 #----------------------------------------------------------#
 LD_LIBRARY_PATH := $(SYSLIBDIR)
 #----------------------------------------------------------#

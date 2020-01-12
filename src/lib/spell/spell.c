@@ -264,7 +264,7 @@ private int spell_init_dictionary (spell_t *spell, char *dic, int num_words, int
     spell->retval = SPELL_ERROR;
     Vstring.append_with_fmt (spell->messages,
         "dictionary is not readable: |%s|\n" "errno: %d, error: %s",
-        dic, errno, Error.string ($myed, errno));
+        dic, errno, Error.string (E(get.current), errno));
     return spell->retval;
   }
 

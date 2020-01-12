@@ -11,6 +11,7 @@ static   spell_T SpellClass;
 
 private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
         action_t **action, int fidx, int lidx, bufiter_t *iter) {
+  ed_t *ed = E(get.current);
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
 
@@ -47,7 +48,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
       "i[nput]  correct word by getting input\n"
       "q[uit]   quit operation\n");
 
-  utf8 c = Ed.question ($myed, quest->bytes, chars, charslen);
+  utf8 c = Ed.question (ed, quest->bytes, chars, charslen);
   String.free (quest);
 
   it = spell->guesses->head;
@@ -97,10 +98,11 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
 private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
                                   bufiter_t *iter, char *word) {
   int retval = NOTOK;
+  ed_t *ed = E(get.current);
 
   spell_t *spell = Spell.new ();
   if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES, NO_FORCE)) {
-    Msg.send ($myed, COLOR_RED, spell->messages->head->data->bytes);
+    Msg.send (ed, COLOR_RED, spell->messages->head->data->bytes);
     Spell.free (spell, SPELL_CLEAR_DICTIONARY);
     return NOTOK;
   }
@@ -171,6 +173,8 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     return OK;
   }
 
+  ed_t *ed = E(get.current);
+
   int retval = Rline.get.range (rl, *thisp, range);
   if (NOTOK is retval) {
     range[0] = Buf.get.row.current_col_idx (*thisp);
@@ -182,7 +186,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
   spell_t *spell = Spell.new ();
   if (SPELL_ERROR is Spell.init_dictionary (spell, SPELL_DICTIONARY, SPELL_DICTIONARY_NUM_ENTRIES,
       NO_FORCE)) {
-    Msg.send ($myed, COLOR_RED, spell->messages->head->data->bytes);
+    Msg.send (ed, COLOR_RED, spell->messages->head->data->bytes);
     Spell.free (spell, SPELL_CLEAR_DICTIONARY);
     return NOTOK;
   }

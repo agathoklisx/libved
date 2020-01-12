@@ -2500,8 +2500,10 @@ private void term_cursor_set_ptr_pos (term_t *this, int row, int col) {
   fd_write ($my(out_fd), ptr, bytelen (ptr));
 }
 
-private void term_free (term_t *this) {
-  if (NULL is this) return;
+private void term_free (term_t **thisp) {
+  if (NULL is *thisp) return;
+
+  term_t *this = *thisp;
 
   ifnot (NULL is $myprop) {
     ifnot (NULL is $my(name)) {
@@ -2511,7 +2513,7 @@ private void term_free (term_t *this) {
     free ($myprop);
     $myprop = NULL;
   }
-  free (this); this = NULL;
+  free (this); *thisp = NULL;
 }
 
 private term_t *term_new (void) {
@@ -3979,9 +3981,10 @@ char *c_keywords[] = {
     "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
     "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
-    "AllocClass T", "AllocProp T", "$myroots V", "$myparents V", "public I", "mutable I", "loop I", "forever I",
-    "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
-    "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
+    "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V", "public I",
+    "mutable I", "loop I", "forever I", "static I", "enum T", "bool T","long T",
+    "double T", "float T", "unsigned T", "extern I", "signed T", "volatile T",
+    "register T", "union T", "const T", "auto T",
     NULL
 };
 
@@ -12605,6 +12608,17 @@ private int ved_test_key (buf_t *this) {
   return DONE;
 }
 
+private int ed_rline_exec (rline_t *this, buf_t **thisp) {
+  this->state |= RL_EXEC;
+  return ved_rline (thisp, this);
+}
+
+private rline_t *ed_rline_new_with (ed_t *this, char *bytes) {
+  rline_t *rl = My(Rline).new (this);
+  My(Rline).set.line (rl, bytes, bytelen (bytes));
+  return rl;
+}
+
 public rline_T __init_rline__ (void) {
   return ClassInit (rline,
     .self = SelfInit (rline,
@@ -12626,8 +12640,9 @@ public rline_T __init_rline__ (void) {
         .push = ved_rline_history_push
       ),
       .new = ved_rline_new_api,
+      .new_with = ed_rline_new_with,
       .free = rline_free_api,
-      .exec = ved_rline,
+      .exec = ed_rline_exec,
       .parse = ved_rline_parse
     )
   );
@@ -12673,9 +12688,15 @@ private int ved_rline (buf_t **thisp, rline_t *rl) {
   buf_t *this = *thisp;
   int is_special_win = $myparents(type) is VED_WIN_SPECIAL_TYPE;
 
+  if (rl->state & RL_EXEC) goto exec;
+
   rl = rline_edit (rl);
 
   if (rl->c isnot '\r') goto theend;
+
+exec:
+  rl->state &= ~RL_EXEC;
+
   if (rl->line->head is NULL or rl->line->head->data->bytes[0] is ' ')
     goto theend;
 
@@ -15077,7 +15098,7 @@ public Class (E) *__init_ed__ (char *name) {
 
 private void ed_deallocate_prop (ed_T *this) {
   if ($myprop is NULL) return;
-  My(Term).free ($my(term));
+  My(Term).free (&$my(term));
   free ($myprop);
   $myprop = NULL;
 }

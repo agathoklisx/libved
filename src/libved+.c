@@ -6,10 +6,15 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <locale.h>
 #include <errno.h>
 
 #include "libved.h"
 #include "libved+.h"
+
+public Class (This) *__THIS__ = NULL;
+public Self (This) *__SELF__ = NULL;
+public Class (E) *__E__ = NULL;
 
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"
@@ -85,6 +90,8 @@ private string_t *__ex_ed_serial_info__ (edinfo_t *info) {
 
 private int __ex_com_info__ (buf_t **thisp, rline_t *rl) {
   (void) thisp; (void) rl;
+  ed_t *ced = E(get.current);
+
   int
     buf = Rline.arg.exists (rl, "buf"),
     win = Rline.arg.exists (rl, "win"),
@@ -92,34 +99,34 @@ private int __ex_com_info__ (buf_t **thisp, rline_t *rl) {
 
   ifnot (buf + win + ed) buf = 1;
 
-  Ed.append.toscratch ($myed, CLEAR, "");
+  Ed.append.toscratch (ced, CLEAR, "");
 
   if (buf) {
     bufinfo_t *binfo = Buf.get.info.as_type (*thisp);
     string_t *sbinfo = __ex_buf_serial_info__ (binfo);
-    Ed.append.toscratch ($myed, DONOT_CLEAR, sbinfo->bytes);
+    Ed.append.toscratch (ced, DONOT_CLEAR, sbinfo->bytes);
     String.free (sbinfo);
     Buf.free.info (*thisp, &binfo);
   }
 
   if (win) {
-    win_t *cw = Ed.get.current_win ($myed);
+    win_t *cw = Ed.get.current_win (ced);
     wininfo_t *winfo = Win.get.info.as_type (cw);
     string_t *swinfo = __ex_win_serial_info__ (winfo);
-    Ed.append.toscratch ($myed, DONOT_CLEAR, swinfo->bytes);
+    Ed.append.toscratch (ced, DONOT_CLEAR, swinfo->bytes);
     String.free (swinfo);
     Win.free_info (cw, &winfo);
   }
 
   if (ed) {
-    edinfo_t *einfo = Ed.get.info.as_type ($myed);
+    edinfo_t *einfo = Ed.get.info.as_type (ced);
     string_t *seinfo = __ex_ed_serial_info__ (einfo);
-    Ed.append.toscratch ($myed, DONOT_CLEAR, seinfo->bytes);
+    Ed.append.toscratch (ced, DONOT_CLEAR, seinfo->bytes);
     String.free (seinfo);
-    Ed.free_info ($myed, &einfo);
+    Ed.free_info (ced, &einfo);
   }
 
-  Ed.scratch ($myed, thisp, NOT_AT_EOF);
+  Ed.scratch (ced, thisp, NOT_AT_EOF);
 
   return OK;
 }
@@ -186,4 +193,161 @@ private void __deinit_ext__ (void) {
 #if HAS_LOCAL_EXTENSIONS
   __deinit_local__ ();
 #endif
+}
+
+private string_t *this_parse_command (Class (This) *this, char *bytes) {
+  (void) this;
+  string_t *com = String.new (256);
+  char *sp = bytes;
+  while (*sp) {
+    if (*sp isnot ':')
+      String.append_byte (com, *sp);
+    else {
+      if (*(sp+1) isnot ':')
+        String.append_byte (com, *sp);
+      else {
+        String.append_byte (com, ' ');
+        sp++;
+      }
+    }
+    sp++;
+  }
+
+  return com;
+}
+
+private int parse_arg_init (Class (This) *this, argparse_t *argparser,
+   argparse_option_t *argparser_options, const char *const *usage_cb, int flags) {
+  (void) this;
+  return argparse_init (argparser, argparser_options, usage_cb, flags);
+}
+
+private int parse_arg_run (Class (This) *this, argparse_t *argparser, int argc,
+                                                             const char **argv) {
+  (void) this;
+  return argparse_parse (argparser, argc, argv);
+}
+
+private void e_set_at_exit_cb (Class (This) *this, EAtExit_cb cb) {
+  __E.set.at_exit_cb (this->__E__, cb);
+}
+
+private int e_get_num (Class (This) *this) {
+  return __E.get.num (this->__E__);
+}
+
+private int e_get_prev_idx (Class (This) *this) {
+  return __E.get.prev_idx (this->__E__);
+}
+
+private int e_get_current_idx (Class (This) *this) {
+  return __E.get.current_idx (this->__E__);
+}
+
+private ed_t *e_get_current (Class (This) *this) {
+  return __E.get.current (this->__E__);
+}
+
+private ed_t *e_get_head (Class (This) *this) {
+  return __E.get.head (this->__E__);
+}
+
+private int e_get_state (Class (This) *this) {
+  return __E.get.state (this->__E__);
+}
+
+private ed_t * e_set_current (Class (This) *this, int idx) {
+  return __E.set.current (this->__E__, idx);
+}
+
+private ed_t *e_set_next (Class (This) *this) {
+   return __E.set.next (this->__E__);
+}
+
+private ed_t *e_init (Class (This) *this, EdAtInit_cb cb) {
+  return __E.init (this->__E__, cb);
+}
+
+private ed_t* e_new (Class (This) *this, ED_INIT_OPTS opts) {
+  return __E.new (this->__E__, opts);
+}
+
+private int e_main (Class (This) *this, buf_t *buf) {
+  return __E.main (this->__E__, buf);
+}
+
+private void __init_self__ (Class (This) *this) {
+  this->self = AllocSelf (This);
+
+  SubSelf (This, parse) parse = SubSelfInit (This, parse,
+    .command = this_parse_command,
+    .arg = SubSelfInit (Thisparse, arg,
+      .init = parse_arg_init,
+      .run =  parse_arg_run
+    )
+  );
+  ((Self (This) *) this->self)->parse = parse;
+
+  SubSelf (This, e) e = SubSelfInit (This, e,
+    .init = e_init,
+    .new = e_new,
+    .main = e_main,
+    .set = SubSelfInit (Thise, set,
+      .at_exit_cb = e_set_at_exit_cb,
+      .current = e_set_current,
+      .next = e_set_next
+    ),
+    .get = SubSelfInit (Thise, get,
+      .num = e_get_num,
+      .prev_idx = e_get_prev_idx,
+      .state = e_get_state,
+      .current = e_get_current,
+      .current_idx = e_get_current_idx,
+      .head = e_get_head
+    )
+  );
+  ((Self (This) *) this->self)->e = e;
+}
+
+private int __initialize__ (void) {
+  /* I do not know the way to read from stdin and at the same time to
+   * initialize and use the terminal state, when we are the end of the pipe */
+  if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
+    tostderr ("Not a controlled terminal\n");
+    return NOTOK;
+  }
+
+  setlocale (LC_ALL, "");
+  AllocErrorHandler = __alloc_error_handler__;
+  return OK;
+}
+
+public Class (This) *__init_this__ (void) {
+  E_T *__e__;
+  if (NOTOK is __initialize__ () or
+      NULL is (__e__ = __init_ed__ (MYNAME)))
+    return NULL;
+
+  __THIS__ = AllocClass (This);
+  __THIS__->__E__ = __e__;
+  __THIS__->__E__->__THIS__ =  __THIS__;
+
+  __init_self__ (__THIS__);
+  __SELF__ = __THIS__->self;
+
+  return __THIS__;
+}
+
+public void __deinit_this__ (Class (This) **thisp) {
+  if (*thisp is NULL) return;
+
+  Class (This) *this = *thisp;
+
+  __deinit_ed__ (&this->__E__);
+
+  free (__SELF__);
+  free (this->prop);
+  free (this);
+
+  *thisp = NULL;
 }

@@ -1,7 +1,8 @@
 /* A pager for mutt email client, that is being used mainly for testing.
- * The idea is that since this is C, it can be easily extended or modified to
+ * 
+ * The idea for this, is that since this is C, it can be easily extended or modified to
  * suit the needs, plus it receives the libved features and any future development.
- * This "includes" all the editor capabilities including capabilities out of the
+ * This"includes" all the editor capabilities including capabilities out of the
  * main machine.
 
  * By default this splits the window in two frames, with the upper frame to hold
@@ -26,7 +27,7 @@
  * following:
  * macro index <f3>  '<enter-command>set pager=builtin'
 
- * This builds both a static executable and or an executable which links against
+ * Thisbuilds both a static executable and or an executable which links against
  * the shared library. In the latter case LD_LIBRARY_PATH should point to the lib
  * directory (by default src/sys/library).
  * Both executables are installed in src/sys/bin.
@@ -120,13 +121,15 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
 }
 
 private ftype_t *__mail_hdrs_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx ($myed, "mail_hdrs"),
+  ed_t *ed = E(get.current);
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail_hdrs"),
     QUAL(FTYPE, .tabwidth = 1, .on_emptyline = String.new (1)));
   return ft;
 }
 
 private ftype_t *__mail_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx ($myed, "mail"), QUAL(FTYPE,
+  ed_t *ed = E(get.current);
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail"), QUAL(FTYPE,
     .tabwidth = 4, .on_emptyline = String.new (1)));
   return ft;
 }
@@ -341,12 +344,14 @@ private dim_t **__win_dim_calc_cb (win_t *this, int num_rows, int num_frames, in
 
   if (num_rows < rows) return NULL;
 
+  ed_t *ed = E(get.current);
+
   rows = num_rows - reserved;
   int num_cols = Win.get.num_cols (this);
-  dim_t **dims = Ed.dims_init ($myed, num_frames);
+  dim_t **dims = Ed.dims_init (ed, num_frames);
 
-  dims[0] = Ed.set.dim ($myed, dims[0], 2, 8, 1, num_cols);
-  dims[1] = Ed.set.dim ($myed, dims[1], 9, 9 + (rows - 8), 1, num_cols);
+  dims[0] = Ed.set.dim (ed, dims[0], 2, 8, 1, num_cols);
+  dims[1] = Ed.set.dim (ed, dims[1], 9, 9 + (rows - 8), 1, num_cols);
   return dims;
 }
 
@@ -370,7 +375,7 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
   buf_t *buf = Win.buf.init (w, FIRST_FRAME, ZERO_FLAGS);
   Buf.set.show_statusline (buf, UNSET);
   Buf.set.fname (buf, UNAMED);
-  Buf.set.ftype (buf, Ed.syn.get_ftype_idx ($myed, "mail_hdrs"));
+  Buf.set.ftype (buf, Ed.syn.get_ftype_idx (this, "mail_hdrs"));
   Buf.set.normal.at_beg_cb (buf, __on_normal_beg);
   Win.append_buf (w, buf);
   buffers.headers = buf;
@@ -378,7 +383,7 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
   buf_t *bbody = Win.buf.init (w, SECOND_FRAME, ZERO_FLAGS);
   Buf.set.show_statusline (bbody, UNSET);
   Buf.set.fname (bbody, fname);
-  Buf.set.ftype (bbody, Ed.syn.get_ftype_idx ($myed, "mail"));
+  Buf.set.ftype (bbody, Ed.syn.get_ftype_idx (this, "mail"));
   Buf.set.normal.at_beg_cb (bbody, __on_normal_beg);
   Buf.set.autosave (bbody, 5);
   Win.append_buf (w, bbody);
@@ -397,25 +402,13 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
 }
 
 int main (int argc, char **argv) {
-  if (1 is argc) return 1;
-
-  if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
-    tostderr ("Not a controlled terminal\n");
-    exit (1);
-  }
-
-  setlocale (LC_ALL, "");
-
-  AllocErrorHandler = __alloc_error_handler__;
+  if (1 is argc or NULL is __init_this__ ()) return 1;
 
   argc--; argv++;
 
-  if (NULL is (__E__ = __init_ed__ (MYNAME)))
-    return 1;
+  E(set.at_exit_cb, __deinit_ext__);
 
-  E.set.at_exit_cb (__E__, __deinit_ext__);
-
-  ed_t *this = E.init (__E__, __init_ext__);
+  ed_t *this = E(init, __init_ext__);
 
   int retval = 1;
 
@@ -426,23 +419,24 @@ int main (int argc, char **argv) {
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
 
-    retval = E.main (__E__, buf);
+    retval = E(main, buf);
 
-    int state = E.get.state (__E__);
+    int state = E(get.state);
 
     if ((state & ED_EXIT))
       break;
 
     if ((state & ED_SUSPENDED)) {
-      if (E.get.num (__E__) is 1) {
-        this = E.new (__E__, QUAL(ED_INIT, .init_cb = __init_ext__));
+      if (E(get.num) is 1) {
+        this = E(new, QUAL(ED_INIT, .init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
         buf = Win.buf.new (w, BUF_INIT_QUAL());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
-        this = E.set.current (__E__, E.get.prev_idx (__E__));
+        int prev_idx = E(get.prev_idx);
+        this = E(set.current, prev_idx);
         w = Ed.get.current_win (this);
       }
 
@@ -452,7 +446,7 @@ int main (int argc, char **argv) {
     break;
   }
 
-  __deinit_ed__ (&__E__);
+  __deinit_this__ (&__THIS__);
 
   return retval;
 }

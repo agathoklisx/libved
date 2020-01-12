@@ -727,6 +727,26 @@ Search:
       --autosave=<int>      interval time in minutes to autosave buffer
       --backupfile          backup file on initial reading
       --backup-suffix=<str> backup suffix (default: ~)
+      --ex-com="command"    run an editor command at the startup (see Utilities)
+      --exit                exit quickly (called after --ex-com)
+ */
+
+ /* Utilities
+  The introduction of the --ex-com="command" will/can allow to create utilities
+  by using the machine, e.g.,
+
+  vedas --ex-com="s%::--pat=some_pattern::--sub=replaced::--interactive" --exit file
+
+  This is like a sed functionality, though do not understand a new line in patterns,
+  and patterns are limited by the minimal perl compatible regexp machine.
+  Nevertheless can work perfectly as search and replace utility.
+
+  The "::" in the command line is being used as a delimeter, otherwise the arg parser,
+  will be confused by the whitespace. See also Spelling for another usage, but other
+  usefull functions exists and can be developed.
+
+  In this case and at the very least, the machine is being used as a free of charge
+  UI (user interface).
  */
 
  /* Spelling

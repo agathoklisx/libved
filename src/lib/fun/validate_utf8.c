@@ -1,17 +1,19 @@
 private int __file_validate_utf8__ (buf_t **thisp, char *fname) {
   (void) thisp;
   int retval = NOTOK;
+  ed_t *ed = E(get.current);
+
   ifnot (File.exists (fname)) {
-    Msg.send_fmt ($myed, COLOR_RED, "%s doesn't exists", fname);
+    Msg.send_fmt (ed, COLOR_RED, "%s doesn't exists", fname);
     return retval;
   }
 
   ifnot (File.is_readable (fname)) {
-    Msg.send_fmt ($myed, COLOR_RED, "%s is not readable", fname);
+    Msg.send_fmt (ed, COLOR_RED, "%s is not readable", fname);
     return retval;
   }
 
-  buf_t *this = Ed.get.scratch_buf ($myed);
+  buf_t *this = Ed.get.scratch_buf (ed);
   Buf.clear (this);
 
   vstr_t unused;
@@ -19,14 +21,16 @@ private int __file_validate_utf8__ (buf_t **thisp, char *fname) {
   File.readlines (fname, &unused, __validate_utf8_cb__, &retval);
 
   if (retval is NOTOK)
-    Ed.scratch ($myed, thisp, NOT_AT_EOF);
+    Ed.scratch (ed, thisp, NOT_AT_EOF);
   else
-    Msg.send_fmt ($myed, COLOR_SUCCESS, "Validating %s ... OK", fname);
+    Msg.send_fmt (ed, COLOR_SUCCESS, "Validating %s ... OK", fname);
 
   return OK;
 }
 
 private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
+  ed_t *ed = E(get.current);
+
   int range[2];
   int retval = Rline.get.range (rl, *thisp, range);
   if (NOTOK is retval) {
@@ -36,7 +40,7 @@ private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
 
   int count = range[1] - range[0] + 1;
 
-  buf_t *this = Ed.get.scratch_buf ($myed);
+  buf_t *this = Ed.get.scratch_buf (ed);
   Buf.clear (this);
 
   vstr_t unused;
@@ -53,9 +57,9 @@ private int __validate_utf8__ (buf_t **thisp, rline_t *rl) {
 
   Buf.iter.free (*thisp, iter);
   if (retval is NOTOK)
-    Ed.scratch ($myed, thisp, NOT_AT_EOF);
+    Ed.scratch (ed, thisp, NOT_AT_EOF);
   else
-    Msg.send ($myed, COLOR_SUCCESS, "Validating text ... OK");
+    Msg.send (ed, COLOR_SUCCESS, "Validating text ... OK");
 
   return retval;
 }
