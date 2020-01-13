@@ -14,7 +14,6 @@
 
 public Class (This) *__THIS__ = NULL;
 public Self (This) *__SELF__ = NULL;
-public Class (E) *__E__ = NULL;
 
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"

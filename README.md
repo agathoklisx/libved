@@ -448,8 +448,7 @@ Normal mode:
  | CTRL-O|CTRL-I     | jump to the previus|next location |
  |             to the jump list, (this differs from vim, |
  |             as this is like scrolling to the history) |
- | W                 | word operations (via a selection  |
- |                     menu)                             |
+ | W                 | word operations mode (via a selection menu)|                            |
  | (implemented in the library)                          |
  |   - send `word' on XCLIPBOARD                         |
  |   - send `word' on XPRIMARY                           |
@@ -461,6 +460,7 @@ Normal mode:
  |     the scratch buffer (requires the man utility)     |
  |   - translate `word' (a personal function for demonstration)|
  |   - spell `word' (check if '`word' is mispelled)      |
+ | F                 | file operations mode (via a selection menu)|
  | ,                 |                                   |
  |   - n             | like :bn (next buffer)            |  see Command mode
  |   - m             | like :bp (previous buffer)        |      -||-
@@ -727,11 +727,11 @@ Search:
       --autosave=<int>      interval time in minutes to autosave buffer
       --backupfile          backup file on initial reading
       --backup-suffix=<str> backup suffix (default: ~)
-      --ex-com="command"    run an editor command at the startup (see Utilities)
+      --ex-com="command"    run an editor command at the startup (see Utility)
       --exit                exit quickly (called after --ex-com)
  */
 
- /* Utilities
+ /* As Utility
   The introduction of the --ex-com="command" will/can allow to create utilities
   by using the machine, e.g.,
 

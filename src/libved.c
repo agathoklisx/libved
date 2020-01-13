@@ -5265,6 +5265,14 @@ private char *buf_get_fname (buf_t *this) {
   return $my(fname);
 }
 
+private char *buf_get_basename (buf_t *this) {
+  return $my(basename);
+}
+
+private int buf_get_flags (buf_t *this) {
+  return $my(flags);
+}
+
 private int buf_get_current_video_row (buf_t *this) {
   return $my(cur_video_row);
 }
@@ -8663,6 +8671,78 @@ private int ved_normal_handle_W (buf_t **thisp) {
   return retval;
 }
 
+private int ved_actions_token_cb (vstr_t *str, char *tok, void *menu_o) {
+  menu_t *menu = (menu_t *) menu_o;
+  if (menu->patlen)
+    ifnot (str_eq_n (tok, menu->pat, menu->patlen)) return OK;
+
+  vstr_append_current_with (str, tok);
+  return OK;
+}
+
+private int ved_complete_file_actions_cb (menu_t *menu) {
+  if (menu->state & MENU_INIT) {
+    menu->state &= ~MENU_INIT;
+  } else
+    menu_free_list (menu);
+
+  buf_t *this = menu->this;
+
+  vstr_t *items;
+  items = str_chop ($myroots(file_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
+  menu->list = items;
+  menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
+  return DONE;
+}
+
+private utf8 ved_complete_file_actions (buf_t *this, char *action) {
+  int retval = DONE;
+  utf8 c = ESCAPE_KEY;
+
+  menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
+    $my(video)->col_pos, ved_complete_file_actions_cb, NULL, 0);
+  menu->this = this;
+  menu->return_if_one_item = ($myroots(file_mode_chars_len) isnot 1);
+
+  if ((retval = menu->retval) is NOTHING_TODO) goto theend;
+
+  char *item = menu_create ($my(root), menu);
+
+  if (item isnot NULL) {
+    c = *item;
+    char *tmp = item;
+    int i = 0;
+    for (; i < MAXLEN_WORD_ACTION - 1 and *tmp; i++)
+      action[i] = *tmp++;
+    action[i] = '\0';
+  }
+
+theend:
+  menu_free (menu);
+  return c;
+}
+
+private int ved_normal_handle_F (buf_t **thisp) {
+  buf_t *this = *thisp;
+
+  ifnot ($myroots(file_mode_chars_len)) return NOTHING_TODO;
+  char action[MAXLEN_WORD_ACTION];
+  utf8 c = ved_complete_file_actions (this, action);
+
+  if (c is ESCAPE_KEY) return NOTHING_TODO;
+
+  int retval = NOTHING_TODO;
+
+  for (int i = 0; i < $myroots(file_mode_chars_len); i++) {
+    if (NULL is $myroots(file_mode_cbs)[i]) continue;
+    retval = $myroots(file_mode_cbs)[i] (thisp, c, action);
+    if (retval isnot NO_CALLBACK_FUNCTION) break;
+  }
+
+  retval = (retval is NO_CALLBACK_FUNCTION ? NOTHING_TODO : retval);
+  return retval;
+}
+
 private int ved_normal_handle_ctrl_w (buf_t **thisp) {
   buf_t *this = *thisp;
 
@@ -9425,15 +9505,6 @@ next:
   return $my(vis)[0].orig_syn_parser (this, line, len, idx, currow);
 }
 
-private int ved_visual_token_cb (vstr_t *str, char *tok, void *menu_o) {
-  menu_t *menu = (menu_t *) menu_o;
-  if (menu->patlen)
-    ifnot (str_eq_n (tok, menu->pat, menu->patlen)) return OK;
-
-  vstr_append_current_with (str, tok);
-  return OK;
-}
-
 private int ved_visual_complete_actions_cb (menu_t *menu) {
   if (menu->state & MENU_INIT) {
     menu->state &= ~MENU_INIT;
@@ -9444,15 +9515,15 @@ private int ved_visual_complete_actions_cb (menu_t *menu) {
 
   vstr_t *items;
   if (IS_MODE(VISUAL_MODE_CW))
-    items = str_chop ($myroots(cw_mode_actions), '\n', NULL, ved_visual_token_cb, menu);
+    items = str_chop ($myroots(cw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
   else if (IS_MODE(VISUAL_MODE_LW))
-    items = str_chop ($myroots(lw_mode_actions), '\n', NULL, ved_visual_token_cb, menu);
+    items = str_chop ($myroots(lw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
   else
     items = str_chop (
       "insert text in front of the selected block\n"
       "change/replace selected block\n"
       "delete selected block\n", '\n', NULL,
-      ved_visual_token_cb, menu);
+      ved_actions_token_cb, menu);
 
   menu->list = items;
   menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
@@ -13782,6 +13853,72 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
   self(set.lw_mode_actions, bc, 1, bact, balanced_lw_mode_cb);
 }
 
+private void ved_free_file_mode_cbs (ed_t *this) {
+  ifnot ($my(num_file_mode_cbs)) return;
+  free ($my(file_mode_cbs));
+  free ($my(file_mode_actions));
+  free ($my(file_mode_chars));
+}
+
+private void ed_set_file_mode_actions (ed_t *this, utf8 *chars, int len,
+                                       char *actions, FileActions_cb cb) {
+  ifnot (len) return;
+  int tlen = $my(file_mode_chars_len) + len;
+
+  ifnot ($my(file_mode_chars_len)) {
+    $my(file_mode_chars) = Alloc (sizeof (int *) * len);
+    $my(file_mode_actions) = str_dup (actions, bytelen (actions));
+  } else {
+    $my(file_mode_chars) = Realloc ($my(file_mode_chars), sizeof (int *) * tlen);
+    size_t alen = bytelen (actions);
+    size_t plen = bytelen ($my(file_mode_actions));
+    $my(file_mode_actions) = Realloc ($my(file_mode_actions), alen + plen + 2);
+    $my(file_mode_actions)[plen] = '\n';
+    for (size_t i = plen + 1, j = 0; i < alen + plen + 2; i++, j++) {
+      $my(file_mode_actions)[i] = actions[j];
+    }
+
+    $my(file_mode_actions)[alen + plen + 1] = '\0';
+  }
+
+  for (int i = $my(file_mode_chars_len), j = 0; i < tlen; i++, j++)
+    $my(file_mode_chars)[i] = chars[j];
+  $my(file_mode_chars_len) = tlen;
+
+  if (NULL is cb) return;
+
+  $my(num_file_mode_cbs)++;
+  ifnot ($my(num_file_mode_cbs) - 1)
+    $my(file_mode_cbs) = Alloc (sizeof (VisualLwMode_cb));
+  else
+    $my(file_mode_cbs) = Realloc ($my(file_mode_cbs), sizeof (VisualLwMode_cb) * $my(num_file_mode_cbs));
+
+  $my(file_mode_cbs)[$my(num_file_mode_cbs) -1] = cb;
+}
+
+private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
+  (void) action;
+  buf_t *this = *thisp;
+
+  int retval = NO_CALLBACK_FUNCTION;
+  switch (c) {
+    case 'w':
+      retval = self(write, VED_COM_WRITE_FORCE);
+    break;
+
+    default:
+      break;
+  }
+
+  return retval;
+}
+
+private void ed_set_file_mode_actions_default (ed_t *this) {
+  utf8 chars[] = {'w'};
+  char actions[] = "write buffer";
+  self(set.file_mode_actions, chars, ARRLEN(chars), actions, buf_file_mode_actions_cb);
+}
+
 private void ed_free_at_exit_cbs (ed_t *this) {
   ifnot ($my(num_at_exit_cbs)) return;
   free ($my(at_exit_cbs));
@@ -13890,6 +14027,7 @@ private void ed_free (ed_t *this) {
     ved_free_on_normal_g_cbs (this);
     ved_free_lw_mode_cbs (this);
     ved_free_cw_mode_cbs (this);
+    ved_free_file_mode_cbs (this);
 
     vstr_free ($my(word_actions));
 
@@ -14168,6 +14306,10 @@ handle_com:
       retval = ved_normal_handle_W (thisp);
       break;
 
+    case 'F':
+      retval = ved_normal_handle_F (thisp);
+      break;
+
     default:
       break;
   }
@@ -14348,6 +14490,7 @@ private Class (ed) *editor_new (void) {
         .cw_mode_actions = ed_set_cw_mode_actions,
         .at_exit_cb = ed_set_at_exit_cb,
         .word_actions = ed_set_word_actions,
+        .file_mode_actions = ed_set_file_mode_actions,
         .on_normal_g_cb = ved_set_normal_on_g_cb,
         .lang_map = ed_set_lang_map
       ),
@@ -14482,7 +14625,9 @@ private Class (ed) *editor_new (void) {
             .col_idx = buf_get_row_col_idx,
           ),
           .parent = buf_get_parent,
+          .basename = buf_get_basename,
           .fname = buf_get_fname,
+          .flags = buf_get_flags,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,
           .cur_idx = buf_get_cur_idx,
@@ -14724,6 +14869,7 @@ private ed_t *ed_init (E_T *E) {
   ed_set_cw_mode_actions_default (this);
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
+  ed_set_file_mode_actions_default (this);
 
   $my(name) = ed_name_gen (&$from(E, name_gen), "ed:", 3);
 

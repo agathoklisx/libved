@@ -145,6 +145,48 @@ private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
 }
 #endif // HAS_EXPR
 
+private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
+  (void) this; (void) fp;
+  return 0;
+}
+
+private int __u_open_link_on_browser__ (buf_t *this, char *link) {
+   /* this seems unnecessary and might give troubles */
+   // com = String.new_with_fmt ("%s -remote \"ping()\"", Uenv->elinks_exec->bytes);
+
+  string_t *com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
+      Uenv->elinks_exec->bytes, link);
+
+  int retval = Ed.sh.popen (E(get.current), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+  String.free (com);
+  return retval;
+}
+
+private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
+  (void) action;
+  int retval = NO_CALLBACK_FUNCTION;
+  switch (c) {
+    case 'B': {
+      int flags = Buf.get.flags (*thisp);
+      if (0 is (flags & BUF_IS_SPECIAL) and
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED))
+        retval = __u_open_link_on_browser__ (*thisp, Buf.get.fname (*thisp));
+      }
+      break;
+
+    default:
+      retval = NO_CALLBACK_FUNCTION;
+  }
+  return retval;
+}
+
+private void __u_add_file_mode_actions__ (ed_t *this) {
+  int num_actions = 1;
+  utf8 chars[] = {'B'};
+  char actions[] = "Browser: Open file in the text browser (elinks)";
+  Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
+}
+
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
   (void) vstr; (void) action;
 
@@ -312,7 +354,7 @@ private void __u_add_rline_sys_commands__ (ed_t *this) {
 
 /* this is the callback function that is called on the extended commands */
 private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
-  (void) thisp; (void) c;
+  (void) c;
   int retval = NOTOK;
   string_t *com = Rline.get.command (rl);
 
@@ -444,16 +486,10 @@ syn_t u_syn[] = {
   },
 };
 
-private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
-  (void) this; (void) fp;
-  return 0;
-}
-
 private int __u_open_link_on_browser (buf_t *this) {
   if (NULL is Uenv->elinks_exec) return NOTOK;
 
   string_t *str = NULL;
-  string_t *com = NULL;
   regexp_t *re = NULL;
 
   str =  Buf.get.row.current_bytes (this);
@@ -475,20 +511,13 @@ private int __u_open_link_on_browser (buf_t *this) {
 
    link[re->match_len] = '\0';
 
-   /* this seems unneccecary and might give troubles */
-   // com = String.new_with_fmt ("%s -remote \"ping()\"", Uenv->elinks_exec->bytes);
-
-   com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
-      Uenv->elinks_exec->bytes, link);
-
-   retval = Ed.sh.popen (E(get.current), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+   retval = __u_open_link_on_browser__ (this, link);
    goto theend;
 
 theerror:
   retval = NOTOK;
 
 theend:
-  String.free (com);
   Re.free (re);
   return (retval isnot 0 ? NOTOK : OK);
 }
@@ -505,6 +534,13 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
 }
 
 private void __init_usr__ (ed_t *this) {
+  if (NULL is Uenv) {
+    Uenv = AllocType (uenv);
+    string_t *path = Venv.get (this, "path");
+    Uenv->man_exec = Vsys.which ("man", path->bytes);
+    Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
+  }
+
   /* as a first sample, extend the actions on current word, triggered by 'W' */
   __u_add_word_actions__ (this);
   /* extend commands */
@@ -512,6 +548,8 @@ private void __init_usr__ (ed_t *this) {
   /* extend visual [lc]wise mode */
   __u_add_lw_mode_actions__ (this);
   __u_add_cw_mode_actions__ (this);
+
+  __u_add_file_mode_actions__ (this);
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
 
@@ -530,13 +568,6 @@ private void __init_usr__ (ed_t *this) {
 
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);
-
-  if (NULL is Uenv) {
-    Uenv = AllocType (uenv);
-    string_t *path = Venv.get (this, "path");
-    Uenv->man_exec = Vsys.which ("man", path->bytes);
-    Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
-  }
 }
 
 private void __deinit_usr__ (void) {

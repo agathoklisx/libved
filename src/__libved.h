@@ -57,19 +57,6 @@
 
 #define ACCEPT_TAB_WHEN_INSERT (1 << 0)
 
-#define FILE_IS_REGULAR  (1 << 0)
-#define FILE_IS_RDONLY   (1 << 1)
-#define FILE_EXISTS      (1 << 2)
-#define FILE_IS_READABLE (1 << 3)
-#define FILE_IS_WRITABLE (1 << 4)
-#define BUF_IS_MODIFIED  (1 << 5)
-#define BUF_IS_VISIBLE   (1 << 6)
-#define BUF_IS_RDONLY    (1 << 7)
-#define BUF_IS_PAGER     (1 << 8)
-#define BUF_IS_SPECIAL   (1 << 9)
-#define BUF_FORCE_REOPEN (1 << 10)
-#define PTR_IS_AT_EOL    (1 << 12)
-
 #define WIN_NUM_FRAMES(w_) w_->prop->num_frames
 #define WIN_LAST_FRAME(w_) WIN_NUM_FRAMES(w_) - 1
 #define WIN_CUR_FRAME(w_) w_->prop->cur_frame
@@ -801,11 +788,13 @@ NewProp (ed,
   char
     *lw_mode_actions,
     *cw_mode_actions,
-    *bw_mode_actions;
+    *bw_mode_actions,
+    *file_mode_actions;
 
   utf8
     *lw_mode_chars,
     *cw_mode_chars,
+    *file_mode_chars,
     *word_actions_chars;
 
   u8_t *uline;
@@ -815,10 +804,14 @@ NewProp (ed,
   int
     lw_mode_chars_len,
     cw_mode_chars_len,
+    file_mode_chars_len,
     word_actions_chars_len;
 
   vstr_t *word_actions;
   WordActions_cb *word_actions_cb;
+
+  int num_file_mode_cbs;
+  FileActions_cb *file_mode_cbs;
 
   int num_lw_mode_cbs;
   VisualLwMode_cb *lw_mode_cbs;

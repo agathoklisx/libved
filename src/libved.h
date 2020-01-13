@@ -219,6 +219,19 @@
 #define MSG_SET_TO_MSG_BUF  (1 << 6)
 #define MSG_SET_TO_MSG_LINE (1 << 7)
 
+#define FILE_IS_REGULAR     (1 << 0)
+#define FILE_IS_RDONLY      (1 << 1)
+#define FILE_EXISTS         (1 << 2)
+#define FILE_IS_READABLE    (1 << 3)
+#define FILE_IS_WRITABLE    (1 << 4)
+#define BUF_IS_MODIFIED     (1 << 5)
+#define BUF_IS_VISIBLE      (1 << 6)
+#define BUF_IS_RDONLY       (1 << 7)
+#define BUF_IS_PAGER        (1 << 8)
+#define BUF_IS_SPECIAL      (1 << 9)
+#define BUF_FORCE_REOPEN    (1 << 10)
+#define PTR_IS_AT_EOL       (1 << 12)
+
 #define ED_SUSPENDED        (1 << 0)
 #define ED_EXIT             (1 << 1)
 #define ED_EXIT_ALL         (1 << 2)
@@ -609,7 +622,8 @@ typedef int  (*PopenRead_cb) (buf_t *, fp_t *);
 typedef int  (*MenuProcessList_cb) (menu_t *);
 typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
-typedef int  (*WordActions_cb) (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
+typedef int  (*WordActions_cb)  (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
+typedef int  (*FileActions_cb)  (buf_t **, utf8, char *);
 typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
 typedef int  (*BufNormalOng_cb) (buf_t **, int);
@@ -1306,6 +1320,7 @@ NewSubSelf (buf, get,
   SubSelf (bufget, info) info;
 
   char
+     *(*basename) (buf_t *),
      *(*fname) (buf_t *),
      *(*info_string) (buf_t *);
 
@@ -1313,11 +1328,12 @@ NewSubSelf (buf, get,
     (*size) (buf_t *),
     (*num_lines) (buf_t *);
 
-  int (*cur_idx) (buf_t *);
 
   row_t *(*line_at) (buf_t *, int);
 
   int
+    (*flags) (buf_t *),
+    (*cur_idx) (buf_t *),
     (*current_video_row) (buf_t *),
     (*current_video_col) (buf_t *);
 
@@ -1616,9 +1632,10 @@ NewSubSelf (ed, set,
      (*screen_size) (ed_t *),
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
-     (*on_normal_g_cb) (ed_t *, BufNormalOng_cb),
+     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
+     (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),
      (*at_exit_cb) (ed_t *, EdAtExit_cb),
      (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
      (*lang_map) (ed_t *, int[][26]);
