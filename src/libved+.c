@@ -11,6 +11,7 @@
 
 #include "libved.h"
 #include "libved+.h"
+#include "lib/lib+.h"
 
 public Class (This) *__THIS__ = NULL;
 public Self (This) *__SELF__ = NULL;

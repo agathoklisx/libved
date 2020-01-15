@@ -5908,7 +5908,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
 
   $my(at_frame) = at_frame;
   $my(dim) = $myparents(frames_dim)[$my(at_frame)];
-  $my(statusline_row) = $my(dim->last_row);
+  $my(statusline_row) = $my(dim)->last_row;
   $my(show_statusline) = 1;
 
   $my(autosave) = $my(backupfile) = 0;

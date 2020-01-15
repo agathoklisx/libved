@@ -15,13 +15,6 @@
 
 #include "../lib/utf8/is_utf8.c"
 
-#if HAS_JSON
-#include "../lib/json/json.c"
-
-static json_T JsonClass;
-#define  Json JsonClass.self
-#endif
-
 #if HAS_EXPR
 #include "../modules/tinyexpr/tinyexpr.c"
 #include "../ext/if_has_expr.c"
@@ -553,8 +546,9 @@ private void __init_usr__ (ed_t *this) {
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
 
+  ImapClass = __init_int_map__ ();
+
 #if HAS_SPELL
-  Intmap = __init_int_map__ ();
   SpellClass = __init_spell__ ();
 #endif
 

@@ -1,7 +1,3 @@
-#include "../lib/map/int_map.h"
-static   intmap_T Intmap;
-#define  Imap Intmap.self
-
 #include "../lib/spell/spell.c"
 static   spell_T SpellClass;
 #define  Spell SpellClass.self

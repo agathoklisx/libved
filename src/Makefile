@@ -179,7 +179,15 @@ SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
 SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
-APPFLAGS = lib/argparse/argparse.c libved+.c
+REQOBJS    =  libved+.c
+REQOBJS   +=  lib/argparse/argparse.c
+REQOBJS   +=  lib/map/int_map.c
+
+ifneq ($(HAS_JSON), 0)
+  REQOBJS += lib/json/json.c
+endif
+
+APPFLAGS  =  $(REQOBJS)
 APPFLAGS += -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
 
 HAS_LOCAL_EXTENSIONS := 0

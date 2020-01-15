@@ -176,8 +176,16 @@ SYSAPPSHARED := $(SYSBINDIR)/$(APPSHARED)
 SYSAPPSTATIC := $(SYSBINDIR)/$(APPSTATIC)
 
 #----------------------------------------------------------#
-APPFLAGS  =  $(LIBVED_SRCDIR)/libved+.c $(LIBVED_SRCDIR)/lib/argparse/argparse.c
-APPFLAGS  += -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
+REQOBJS   =   $(LIBVED_SRCDIR)/libved+.c
+REQOBJS   +=  $(LIBVED_SRCDIR)/lib/argparse/argparse.c
+REQOBJS   +=  $(LIBVED_SRCDIR)/lib/map/int_map.c
+
+ifneq ($(HAS_JSON), 0)
+  REQOBJS += $(LIBVED_SRCDIR)/lib/json/json.c
+endif
+
+APPFLAGS  =   $(REQOBJS)
+APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
 
 APPLICATION_FLAGS :=
 
