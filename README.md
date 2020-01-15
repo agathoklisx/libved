@@ -460,7 +460,7 @@ Normal mode:
  |     the scratch buffer (requires the man utility)     |
  |   - translate `word' (a personal function for demonstration)|
  |   - spell `word' (check if '`word' is mispelled)      |
- | F                 | file operations mode (via a selection menu)|
+ | F                 | File operations mode (via a selection menu)|
  | ,                 |                                   |
  |   - n             | like :bn (next buffer)            |  see Command mode
  |   - m             | like :bp (previous buffer)        |      -||-
@@ -565,6 +565,14 @@ Search:
   Ed.set.lang_map (this, lmap);
 
   These correspond to 'A'-'Z' and 'a'-'z' respectively.
+
+/* File operation mode
+   This is triggered with 'F' in normal mode and for now can:
+     - validate current buffer for invalid sequences
+     - write this file
+
+   As an extension and if elinks browser is install, can open this file
+   in a running elinks instance.
 
 /* Command line mode:
    (note) Commands do not get a range as in vi[like], but from the command line

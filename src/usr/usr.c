@@ -13,8 +13,6 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include "../lib/utf8/is_utf8.c"
-
 #if HAS_EXPR
 #include "../modules/tinyexpr/tinyexpr.c"
 #include "../ext/if_has_expr.c"
@@ -46,9 +44,6 @@ the needs and establish this application layer */
 #include "../lib/sys/com/battery.c"
 #include "../lib/sys/com/mkdir.c"
 #include "../lib/sys/com/stat.c"
-
-#include "../lib/fun/callbacks/validate_utf8.c"
-#include "../lib/fun/validate_utf8.c"
 
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
@@ -209,19 +204,6 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       break;
 #endif
 
-    case 'v': {
-      rline_t *rl = Rline.new (E(get.current));
-      string_t *str = String.new_with_fmt ("ignore --range=%d,%d",
-         fidx + 1, lidx + 1);
-      Rline.set.line (rl, str->bytes, str->num_bytes);
-      String.free (str);
-      Rline.parse (*thisp, rl);
-      __validate_utf8__ (thisp, rl);
-      Rline.free (rl);
-      retval = OK;
-    }
-      break;
-
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -230,7 +212,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
 }
 
 private void __u_add_lw_mode_actions__ (ed_t *this) {
-  int num_actions = 1;
+  int num_actions = 0;
 #if HAS_SPELL
   num_actions++;
 #endif
@@ -238,15 +220,17 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
 #if HAS_EXPR
   num_actions++;
 #endif
+
+ifnot (num_actions) return;
 
   utf8 chars[] = {
 #if HAS_SPELL
   'S',
 #endif
 #if HAS_EXPR
-  'm',
+  'm'
 #endif
-  'v'};
+  };
 
   char actions[] =
 #if HAS_SPELL
@@ -255,8 +239,8 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
 #if HAS_EXPR
      "math expression\n"
 #endif
-     "validate utf8";
-
+    ;
+  actions[bytelen (actions) - 1] = '\0';
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
 }
 
@@ -319,10 +303,7 @@ private void __u_add_cw_mode_actions__ (ed_t *this) {
           /* user defined commands and|or actions */
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
-  int num_commands = 2;
-  char *commands[3] = {"~battery", "@validate_utf8", NULL};
-  int num_args[] = {0, 0, 0}; int flags[] = {0, 0, 0};
-  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
+  Ed.append.rline_command (this, "~battery", 0, 0);
 
 #if HAS_SPELL
   Ed.append.rline_command (this, "~spell", 1, RL_ARG_RANGE);
@@ -384,13 +365,6 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     if (NULL is fnames) goto theend;
     retval = sys_stat (thisp, fnames->head->data->bytes);
     Vstring.free (fnames);
-
-  } else if (Cstring.eq (com->bytes, "@validate_utf8")) {
-    vstr_t *words = Rline.get.arg_fnames (rl, 1);
-    if (NULL is words) goto theend;
-
-    retval = __file_validate_utf8__ (thisp, words->head->data->bytes);
-    Vstring.free (words);
 
 #ifdef WORD_LEXICON_FILE
   } else if (Cstring.eq (com->bytes, "~translate")) {

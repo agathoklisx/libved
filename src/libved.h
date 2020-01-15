@@ -1023,6 +1023,8 @@ NewSelf (ustring,
     (*is_lower) (utf8),
     (*is_upper) (utf8);
 
+  size_t (*validate) (unsigned char *, size_t, char **, int *);
+
   utf8
     (*to_lower) (utf8),
     (*to_upper) (utf8);

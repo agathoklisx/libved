@@ -818,7 +818,7 @@ private int intable (struct width_interval* table, int table_length, int c) {
   return 0;
 }
 
-int cwidth (utf8 c) {
+private int cwidth (utf8 c) {
   if (c == 0 || c == 0x034F || (0x200B <= c && c <= 0x200F) ||
       c == 0x2028 || c == 0x2029 || (0x202A <= c && c <= 0x202E) ||
       (0x2060 <= c && c <= 0x2063)) {
@@ -838,6 +838,257 @@ private int char_utf8_width (char *s, int tabwidth) {
   if (s[0] >= ' ' and s[0] <= '~') return 1;
   if (s[0] is '\t') return tabwidth;
   return cwidth (utf8_code (s));
+}
+
+/* The following function is from the is_utf8 project at:
+   https://github.com/JulienPalard/is_utf8
+   specifically the is_utf8.c unit. 
+   Many Thanks
+ */
+
+/* is_utf8 is distributed under the following terms: */
+
+/*
+Copyright (c) 2013 Palard Julien. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+*/
+
+/*
+  Check if the given unsigned char * is a valid utf-8 sequence.
+
+  Return value :
+  If the string is valid utf-8, 0 is returned.
+  Else the position, starting from 1, is returned.
+
+  Source:
+   http://www.unicode.org/versions/Unicode7.0.0/UnicodeStandard-7.0.pdf
+   page 124, 3.9 "Unicode Encoding Forms", "UTF-8"
+
+  Table 3-7. Well-Formed UTF-8 Byte Sequences
+  -----------------------------------------------------------------------------
+  |  Code Points        | First Byte | Second Byte | Third Byte | Fourth Byte |
+  |  U+0000..U+007F     |     00..7F |             |            |             |
+  |  U+0080..U+07FF     |     C2..DF |      80..BF |            |             |
+  |  U+0800..U+0FFF     |         E0 |      A0..BF |     80..BF |             |
+  |  U+1000..U+CFFF     |     E1..EC |      80..BF |     80..BF |             |
+  |  U+D000..U+D7FF     |         ED |      80..9F |     80..BF |             |
+  |  U+E000..U+FFFF     |     EE..EF |      80..BF |     80..BF |             |
+  |  U+10000..U+3FFFF   |         F0 |      90..BF |     80..BF |      80..BF |
+  |  U+40000..U+FFFFF   |     F1..F3 |      80..BF |     80..BF |      80..BF |
+  |  U+100000..U+10FFFF |         F4 |      80..8F |     80..BF |      80..BF |
+  -----------------------------------------------------------------------------
+*/
+
+private size_t ustring_validate (unsigned char *str, size_t len,
+                              char **message, int *faulty_bytes) {
+  size_t i = 0;
+  *message = NULL;
+  *faulty_bytes = 0;
+
+  while (i < len) {
+    if (str[i] <= 0x7F) { /* 00..7F */
+      i += 1;
+    } else if (str[i] >= 0xC2 && str[i] <= 0xDF) { /* C2..DF 80..BF */
+      if (i + 1 < len) { /* Expect a 2nd byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0xBF) {
+          *message = "After a first byte between C2 and DF, expecting a 2nd byte between 80 and BF";
+          *faulty_bytes = 2;
+          return i;
+        }
+      } else {
+        *message = "After a first byte between C2 and DF, expecting a 2nd byte.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 2;
+
+    } else if (str[i] == 0xE0) { /* E0 A0..BF 80..BF */
+      if (i + 2 < len) { /* Expect a 2nd and 3rd byte */
+        if (str[i + 1] < 0xA0 || str[i + 1] > 0xBF) {
+          *message = "After a first byte of E0, expecting a 2nd byte between A0 and BF.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte of E0, expecting a 3nd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+      } else {
+        *message = "After a first byte of E0, expecting two following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 3;
+
+    } else if (str[i] >= 0xE1 && str[i] <= 0xEC) { /* E1..EC 80..BF 80..BF */
+      if (i + 2 < len) { /* Expect a 2nd and 3rd byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0xBF) {
+          *message = "After a first byte between E1 and EC, expecting the 2nd byte between 80 and BF.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte between E1 and EC, expecting the 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+      } else {
+        *message = "After a first byte between E1 and EC, expecting two following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 3;
+
+    } else if (str[i] == 0xED) { /* ED 80..9F 80..BF */
+      if (i + 2 < len) { /* Expect a 2nd and 3rd byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0x9F) {
+          *message = "After a first byte of ED, expecting 2nd byte between 80 and 9F.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte of ED, expecting 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+      } else {
+        *message = "After a first byte of ED, expecting two following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 3;
+
+    } else if (str[i] >= 0xEE && str[i] <= 0xEF) { /* EE..EF 80..BF 80..BF */
+      if (i + 2 < len) { /* Expect a 2nd and 3rd byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0xBF) {
+          *message = "After a first byte between EE and EF, expecting 2nd byte between 80 and BF.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte between EE and EF, expecting 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+      } else {
+        *message = "After a first byte between EE and EF, two following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 3;
+
+    } else if (str[i] == 0xF0) { /* F0 90..BF 80..BF 80..BF */
+      if (i + 3 < len) { /* Expect a 2nd, 3rd 3th byte */
+        if (str[i + 1] < 0x90 || str[i + 1] > 0xBF) {
+          *message = "After a first byte of F0, expecting 2nd byte between 90 and BF.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte of F0, expecting 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+
+        if (str[i + 3] < 0x80 || str[i + 3] > 0xBF) {
+          *message = "After a first byte of F0, expecting 4th byte between 80 and BF.";
+          *faulty_bytes = 4;
+          return i;
+        }
+      } else {
+        *message = "After a first byte of F0, expecting three following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 4;
+
+    } else if (str[i] >= 0xF1 && str[i] <= 0xF3) { /* F1..F3 80..BF 80..BF 80..BF */
+      if (i + 3 < len) { /* Expect a 2nd, 3rd 3th byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0xBF) {
+          *message = "After a first byte of F1, F2, or F3, expecting a 2nd byte between 80 and BF.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte of F1, F2, or F3, expecting a 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+
+        if (str[i + 3] < 0x80 || str[i + 3] > 0xBF) {
+          *message = "After a first byte of F1, F2, or F3, expecting a 4th byte between 80 and BF.";
+          *faulty_bytes = 4;
+          return i;
+        }
+      } else {
+        *message = "After a first byte of F1, F2, or F3, expecting three following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 4;
+
+    } else if (str[i] == 0xF4) { /* F4 80..8F 80..BF 80..BF */
+      if (i + 3 < len) { /* Expect a 2nd, 3rd 3th byte */
+        if (str[i + 1] < 0x80 || str[i + 1] > 0x8F) {
+          *message = "After a first byte of F4, expecting 2nd byte between 80 and 8F.";
+          *faulty_bytes = 2;
+          return i;
+        }
+
+        if (str[i + 2] < 0x80 || str[i + 2] > 0xBF) {
+          *message = "After a first byte of F4, expecting 3rd byte between 80 and BF.";
+          *faulty_bytes = 3;
+          return i;
+        }
+
+        if (str[i + 3] < 0x80 || str[i + 3] > 0xBF) {
+          *message = "After a first byte of F4, expecting 4th byte between 80 and BF.";
+          *faulty_bytes = 4;
+          return i;
+        }
+      } else {
+        *message = "After a first byte of F4, expecting three following bytes.";
+        *faulty_bytes = 1;
+        return i;
+      }
+      i += 4;
+
+    } else {
+      *message = "Expecting bytes in the following ranges: 00..7F C2..F4.";
+      *faulty_bytes = 1;
+      return i;
+    }
+  }
+
+  message = NULL;
+  return 0;
 }
 
 private void ustring_free_members (u8_t *u8) {
@@ -1194,6 +1445,7 @@ public ustring_T __init_ustring__ (void) {
       .new = ustring_new,
       .free = ustring_free,
       .encode = ustring_encode,
+      .validate = ustring_validate,
       .to_lower = ustring_to_lower,
       .to_upper = ustring_to_upper,
       .is_lower = ustring_is_lower,
@@ -4298,8 +4550,8 @@ theloop:
             }
           }
         }
-      }  
- 
+      }
+
       if (c is '"') {
         if ((i isnot 0 and data->bytes[i-1] is '\\' and balanced.has_opening_string)
           or ((i isnot 0 and data->bytes[i-1] is '\'') and
@@ -4366,7 +4618,9 @@ theend:
 
 private int balanced_lw_mode_cb (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
   (void) vstr; (void) c; (void) action;
-  return balanced_obj (thisp, fidx, lidx);
+  if (c is 'b')
+    return balanced_obj (thisp, fidx, lidx);
+  return NO_CALLBACK_FUNCTION;
 }
 
 private string_t *buf_ftype_autoindent (buf_t *this, row_t *row) {
@@ -11829,6 +12083,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
     [VED_COM_TEST_KEY] = "testkey",
+    [VED_COM_VALIDATE_UTF8] = "@validate_utf8",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
     [VED_COM_WIN_CHANGE_PREV_FOCUSED] = "winprevfocused",
@@ -11854,6 +12109,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_READ ... VED_COM_READ_ALIAS] = 1,
     [VED_COM_SPLIT] = 1,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] = 5,
+    [VED_COM_VALIDATE_UTF8] = 1,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] = 4,
     [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = 1
   };
@@ -11869,6 +12125,7 @@ private void ved_init_commands (ed_t *this) {
     [VED_COM_SPLIT] = RL_ARG_FILENAME,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] =
       RL_ARG_RANGE|RL_ARG_GLOBAL|RL_ARG_PATTERN|RL_ARG_SUB|RL_ARG_INTERACTIVE,
+    [VED_COM_VALIDATE_UTF8] = RL_ARG_FILENAME,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] =
       RL_ARG_FILENAME|RL_ARG_RANGE|RL_ARG_BUFNAME|RL_ARG_APPEND,
     [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = RL_ARG_GLOBAL
@@ -12679,6 +12936,128 @@ private int ved_test_key (buf_t *this) {
   return DONE;
 }
 
+private int __validate_utf8_cb__ (vstr_t *messages, char *line, size_t len,
+                                                        int lnr, void *obj) {
+  int *retval = (int *) obj;
+  char *message;
+  int num_faultbytes;
+  int cur_idx = 0;
+  char *bytes = line;
+  size_t orig_len = len;
+  size_t index;
+
+check_utf8:
+  index = ustring_validate ((unsigned char *) bytes, len, &message, &num_faultbytes);
+
+  ifnot (index) return OK;
+
+  vstr_append_with_fmt (messages,
+      "--== Invalid UTF8 sequence ==-\n"
+      "message: %s\n"
+      "%s\nat line number %d, at index %zd, num invalid bytes %d\n",
+      message, line, lnr, index + cur_idx, num_faultbytes);
+
+  *retval = NOTOK;
+  cur_idx += index + num_faultbytes;
+  len = orig_len - cur_idx;
+  bytes = line + cur_idx;
+  num_faultbytes = 0;
+  message = NULL;
+  goto check_utf8;
+
+  return *retval;
+}
+
+private int ved_com_validate_utf8 (buf_t **thisp, rline_t *rl) {
+  buf_t *this = *thisp;
+
+  int retval = OK;
+
+  vstr_t *fnames = NULL;
+  if (NULL is rl or (NULL is (fnames = rline_get_arg_fnames (rl, -1)))) {
+    fnames = vstr_new ();
+    vstr_append_with (fnames, $my(fname));
+  }
+
+  vstr_t *err_messages = vstr_new ();
+
+  vstring_t *it = fnames->head;
+
+  while (it) {
+    char *fname = it->data->bytes;
+    ifnot (file_exists (fname)) {
+      vstr_append_with_fmt (err_messages, "%s doesn't exists", fname);
+      retval = NOTOK;
+      goto next;
+    }
+
+    ifnot (file_is_readable (fname)) {
+      vstr_append_with_fmt (err_messages, "%s is not readable", fname);
+      retval = NOTOK;
+      goto next;
+    }
+
+    file_readlines (fname, err_messages, __validate_utf8_cb__, &retval);
+
+    if (retval is OK)
+      My(Msg).send_fmt ($my(root), COLOR_SUCCESS, "Validating %s ... OK", fname);
+
+next:
+    it = it->next;
+  }
+
+  if (retval is NOTOK) {
+    My(Ed).append.toscratch ($my(root), CLEAR, "ERROR MESSAGES:");
+    it = err_messages->head;
+    while (it) {
+      My(Ed).append.toscratch ($my(root), DONOT_CLEAR, it->data->bytes);
+      it = it->next;
+    }
+
+    My(Ed).scratch ($my(root), thisp, NOT_AT_EOF);
+    retval = OK;
+  }
+
+  vstr_free (fnames);
+  vstr_free (err_messages);
+  return retval;
+}
+
+int validate_utf8_lw_mode_cb (buf_t **thisp, int fidx, int lidx,
+                             vstr_t *rows, utf8 c, char *action) {
+  (void) action;
+  if (c isnot 'v') return NO_CALLBACK_FUNCTION;
+
+  buf_t *this = *thisp;
+
+  int retval = OK;
+  int count = lidx - fidx + 1;
+
+  vstr_t *err_messages = vstr_new ();
+  vstring_t *it = rows->head;
+
+  int i = 0;
+  while (it and i++ < count) {
+    __validate_utf8_cb__ (err_messages, it->data->bytes,
+        it->data->num_bytes, fidx + i, &retval);
+    it = it->next;
+  }
+
+  if (retval is NOTOK) {
+    My(Ed).append.toscratch ($my(root), CLEAR, "ERROR MESSAGES:");
+    it = err_messages->head;
+    while (it) {
+      My(Ed).append.toscratch ($my(root), DONOT_CLEAR, it->data->bytes);
+      it = it->next;
+    }
+
+    My(Ed).scratch ($my(root), thisp, NOT_AT_EOF);
+  } else
+    My(Msg).send ($my(root), COLOR_SUCCESS, "Validating text ... OK");
+
+  return retval;
+}
+
 private int ed_rline_exec (rline_t *this, buf_t **thisp) {
   this->state |= RL_EXEC;
   return ved_rline (thisp, this);
@@ -13088,6 +13467,10 @@ exec:
        ved_test_key (this);
        retval = DONE;
        goto theend;
+
+      case VED_COM_VALIDATE_UTF8:
+        retval = ved_com_validate_utf8 (thisp, rl);
+        goto theend;
 
     default:
       for (int i = 0; i < $myroots(num_rline_cbs); i++) {
@@ -13851,6 +14234,8 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
   utf8 bc[] = {'b'}; char bact[] = "balanced objects";
   self(set.lw_mode_actions, bc, 1, bact, balanced_lw_mode_cb);
+  utf8 vc[] = {'v'}; char vact[] = "validate string for invalid utf8 sequences";
+  self(set.lw_mode_actions, vc, 1, vact, validate_utf8_lw_mode_cb);
 }
 
 private void ved_free_file_mode_cbs (ed_t *this) {
@@ -13904,7 +14289,11 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
   switch (c) {
     case 'w':
       retval = self(write, VED_COM_WRITE_FORCE);
-    break;
+      break;
+
+     case 'v':
+       retval = ved_com_validate_utf8 (thisp, NULL);
+       break;
 
     default:
       break;
@@ -13914,8 +14303,8 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
 }
 
 private void ed_set_file_mode_actions_default (ed_t *this) {
-  utf8 chars[] = {'w'};
-  char actions[] = "write buffer";
+  utf8 chars[] = {'w', 'v'};
+  char actions[] = "write buffer\nvalidate file for invalid utf8 sequences";
   self(set.file_mode_actions, chars, ARRLEN(chars), actions, buf_file_mode_actions_cb);
 }
 
