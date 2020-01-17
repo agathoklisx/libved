@@ -7991,6 +7991,8 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
     it = $my(line)->tail;
   else
     if ($my(line)->num_items isnot 1)
+      if ((0 is is_ins_mode) or (is_ins_mode and (it->next isnot NULL or
+        it->code is '\n')))
       it = it->prev;
 
   int curcol = $mycur(first_col_idx);
@@ -8026,6 +8028,7 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
       if (is_ins_mode and 0 is $mycur(first_col_idx))
         $my(video)->col_pos = $my(cur_video_col) =
             $my(video)->col_pos - (tmp->width) + 1;
+
     } else {
       int width = $my(cur_video_col) - 1;
       if (is_ins_mode)
@@ -8036,7 +8039,7 @@ private int ved_normal_left (buf_t *this, int count, int draw) {
 
       ifnot (width) {
         width = 1;
-        $mycur(first_col_idx) -= it->len;
+        //$mycur(first_col_idx) -= it->len;
       }
 
       $my(video)->col_pos = $my(cur_video_col) = width;
