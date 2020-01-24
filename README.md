@@ -1442,6 +1442,7 @@ Search:
   - jsmn-example (the state machine for jsmn) (https://github.com/alisdair/jsmn-example)
   - tinyexpr (https://github.com/codeplea/tinyexpr)
   - argparse (https://github.com/cofyc/argparse)
+  - Tinyscript (https://github.com/totalspectrum/)
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
  */

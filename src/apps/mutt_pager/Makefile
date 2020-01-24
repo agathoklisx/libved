@@ -179,6 +179,7 @@ SYSAPPSTATIC := $(SYSBINDIR)/$(APPSTATIC)
 REQOBJS   =   $(LIBVED_SRCDIR)/libved+.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/argparse/argparse.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/map/int_map.c
+REQOBJS   +=  $(LIBVED_SRCDIR)/lib/i/i.c
 
 ifneq ($(HAS_JSON), 0)
   REQOBJS += $(LIBVED_SRCDIR)/lib/json/json.c

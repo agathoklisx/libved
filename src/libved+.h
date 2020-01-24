@@ -2,14 +2,17 @@
 #define LIBVED_PLUS_H
 
 DeclareSelf (This);
+DeclareClass (I);
 
 extern Class (This) *__THIS__;
 extern Self (This)  *__SELF__;
+extern Class (I)    *__I__;
 
 /* avoid __SELF__ ? */
 //#define This(__f__, ...) (*(Self (This) *) (__THIS__->self)).__f__ (__THIS__, ## __VA_ARGS__)
 #define This(__f__, ...) (*__SELF__).__f__ (__THIS__, ## __VA_ARGS__)
 #define E(__f__, ...) This(e.__f__, ## __VA_ARGS__)
+#define In (*__I__).self
 
 #define __E     __THIS__->__E__->self
 #define Ed      __THIS__->__E__->ed->self
@@ -20,7 +23,6 @@ extern Self (This)  *__SELF__;
 #define Rline   __THIS__->__E__->ed->Rline.self
 #define Error   __THIS__->__E__->ed->Error.self
 #define Vsys    __THIS__->__E__->ed->Vsys.self
-#define Venv    __THIS__->__E__->ed->Venv.self
 #define Term    __THIS__->__E__->ed->Term.self
 #define Input   __THIS__->__E__->ed->Input.self
 #define File    __THIS__->__E__->ed->File.self
@@ -44,22 +46,22 @@ int argparse_init (argparse_t *, argparse_option_t *, const char *const *, int);
 int argparse_parse (argparse_t *, int, const char **);
 
 enum argparse_flag {
-    ARGPARSE_STOP_AT_NON_OPTION = 1,
-    SHORT_OPT_HAS_NO_DASH,
+  ARGPARSE_STOP_AT_NON_OPTION = 1,
+  SHORT_OPT_HAS_NO_DASH,
 };
 
 enum argparse_option_type {
-    ARGPARSE_OPT_END,
-    ARGPARSE_OPT_GROUP,
-    ARGPARSE_OPT_BOOLEAN,
-    ARGPARSE_OPT_BIT,
-    ARGPARSE_OPT_INTEGER,
-    ARGPARSE_OPT_FLOAT,
-    ARGPARSE_OPT_STRING,
+  ARGPARSE_OPT_END,
+  ARGPARSE_OPT_GROUP,
+  ARGPARSE_OPT_BOOLEAN,
+  ARGPARSE_OPT_BIT,
+  ARGPARSE_OPT_INTEGER,
+  ARGPARSE_OPT_FLOAT,
+  ARGPARSE_OPT_STRING,
 };
 
 enum argparse_option_flags {
-    OPT_NONEG = 1,
+  OPT_NONEG = 1,
 };
 
 #define OPT_END()        { ARGPARSE_OPT_END, 0, NULL, NULL, 0, NULL, 0, 0 }
@@ -74,27 +76,27 @@ enum argparse_option_flags {
                                      argparse_help_cb, 0, OPT_NONEG)
 
 NewType (argparse_option,
-    enum argparse_option_type type;
-    const char short_name;
-    const char *long_name;
-    void *value;
-    const char *help;
-    argparse_callback *callback;
-    intptr_t data;
-    int flags;
+  enum argparse_option_type type;
+  const char short_name;
+  const char *long_name;
+  void *value;
+  const char *help;
+  argparse_callback *callback;
+  intptr_t data;
+  int flags;
 );
 
 NewType (argparse,
-    const argparse_option_t *options;
-    const char *const *usages;
-    int flags;
-    const char *description;
-    const char *epilog;
-    int argc;
-    const char **argv;
-    const char **out;
-    int cpidx;
-    const char *optvalue;
+  const argparse_option_t *options;
+  const char *const *usages;
+  int flags;
+  const char *description;
+  const char *epilog;
+  int argc;
+  const char **argv;
+  const char **out;
+  int cpidx;
+  const char *optvalue;
 );
 
 #if HAS_REGEXP
@@ -121,6 +123,195 @@ private void __init_ext__ (ed_t *);
 private void __deinit_ext__ (void);
 
 /* ************************************************ */
+
+typedef intptr_t ival_t;
+typedef ival_t (*Cfunc) (ival_t, ival_t, ival_t, ival_t);
+typedef ival_t (*Opfunc) (ival_t, ival_t);
+
+enum {
+  I_OK = 0,
+  I_ERR_NOMEM = -1,
+  I_ERR_SYNTAX = -2,
+  I_ERR_UNKNOWN_SYM = -3,
+  I_ERR_BADARGS = -4,
+  I_ERR_TOOMANYARGS = -5,
+  I_ERR_OK_ELSE = 1, // special internal condition
+};
+
+#define MAX_BUILTIN_PARAMS 4
+
+// symbols can take the following forms:
+#define INT      0x0  // integer
+#define STRING   0x1  // string
+#define OPERATOR 0x2  // operator; precedence in high 8 bits
+#define ARG      0x3  // argument; value is offset on stack
+#define BUILTIN  'B'  // builtin: number of operands in high 8 bits
+#define USRFUNC  'f'  // user defined a procedure; number of operands in high 8 bits
+#define TOK_BINOP 'o'
+
+#define STRING_TYPE_FUNC_ARGUMENT 1 << 8
+
+#define OUT_OF_FUNCTION_SCOPE     1 << 0
+#define FUNCTION_SCOPE            1 << 1
+#define FUNCTION_ARGUMENT_SCOPE   1 << 2
+
+#define BINOP(x) (((x) << 8) + TOK_BINOP)
+#define CFUNC(x) (((x) << 8) + BUILTIN)
+
+#define I_TOK_SYMBOL     'A'
+#define I_TOK_NUMBER     'N'
+#define I_TOK_HEX_NUMBER 'X'
+#define I_TOK_STRING     'S'
+#define I_TOK_IF         'i'
+#define I_TOK_ELSE       'e'
+#define I_TOK_WHILE      'w'
+#define I_TOK_PRINT      'p'
+#define I_TOK_VAR        'v'
+#define I_TOK_VARDEF     'V'
+#define I_TOK_BUILTIN    'B'
+#define I_TOK_BINOP      'o'
+#define I_TOK_FUNCDEF    'F'
+#define I_TOK_SYNTAX_ERR 'Z'
+#define I_TOK_RETURN     'r'
+
+typedef struct {
+  unsigned len_;
+  const char *ptr_;
+} String_t;
+
+typedef struct symbol {
+  String_t name;
+  int type;      // symbol type
+  ival_t value;  // symbol value, or string ptr
+} Sym;
+
+typedef struct ufunc {
+  String_t body;
+  int nargs;
+  String_t argName[MAX_BUILTIN_PARAMS];
+} UserFunc;
+
+typedef void (*PrintByte_cb) (FILE *, int);
+typedef void (*PrintBytes_cb) (FILE *, const char *);
+typedef void (*PrintFmtBytes_cb) (FILE *, const char *, ...);
+
+NewType (i_options,
+  char  *name;
+  int    name_gen;
+  size_t mem_size;
+  size_t max_script_size;
+  FILE  *err_fp;
+  FILE  *out_fp;
+  PrintByte_cb print_byte;
+  PrintBytes_cb print_bytes;
+  PrintFmtBytes_cb print_fmt_bytes;
+);
+
+#define I_INIT Type (i_options)
+#define I_INIT_QUAL(...) (I_INIT) {      \
+  .mem_size = 4096,                      \
+  .print_byte = NULL,                    \
+  .print_bytes = NULL,                   \
+  .print_fmt_bytes = NULL,               \
+  .err_fp = stderr,                      \
+  .out_fp = stdout,                      \
+  .name = NULL,                          \
+  .name_gen = 97,                        \
+  .max_script_size = 1 << 16,            \
+  __VA_ARGS__}
+
+DeclareType (i);
+
+NewType (istring,
+  char *ibuf;
+  istring_t *next;
+);
+
+NewType (Istrings,
+  Type (istring) *head;
+);
+
+NewType (i,
+  char name[32];
+  size_t
+    mem_size,
+    max_script_size;
+
+  char *arena;
+  int
+    linenum,
+    scope;
+
+  FILE
+    *err_fp,
+    *out_fp;
+
+  Type (Istrings) *strings;
+
+  Sym *symptr;
+  ival_t *valptr;
+
+  String_t parseptr;  // acts as instruction pointer
+
+  char ns[MAXLEN_NAME];
+  ival_t fArgs[MAX_BUILTIN_PARAMS];
+  ival_t fResult;
+
+  // variables for parsing
+  int curToken;  // what kind of token is current
+  int tokenArgs; // number of arguments for this token
+  String_t token;  // the actual string representing the token
+  ival_t tokenVal;  // for symbolic tokens, the symbol's value
+  Sym *tokenSym;
+
+  PrintByte_cb print_byte;
+  PrintBytes_cb print_bytes;
+  PrintFmtBytes_cb print_fmt_bytes;
+
+  Type (i) *next;
+);
+
+NewProp (I,
+  int name_gen;
+  Type (i) *head;
+  int num_instances;
+  int current_idx;
+);
+
+NewSubSelf (i, get,
+  Type (i) *(*current) (Class (I) *);
+  int (*current_idx) (Class (I) *);
+);
+
+NewSubSelf (i, set,
+  Type (i) *(*current) (Class (I) *, int);
+);
+
+NewSelf (i,
+  SubSelf (i, get) get;
+  SubSelf (i, set) set;
+
+  void (*free) (i_t **);
+  i_t *(*new) (void);
+
+  Type (i) *(*append_instance) (Class (I) *, Type (i) *);
+
+  int
+    (*init) (Class (I) *, i_t *, I_INIT),
+    (*def)  (i_t *, const char *, int, ival_t),
+    (*eval_file) (i_t *, const char *fname),
+    (*eval_string) (i_t *, const char *, int, int);
+);
+
+NewClass (I,
+  Self (i) self;
+  Prop (I) *prop;
+);
+
+public char *i_pop_string (ival_t);
+public Class (I) *__init_i__ (void);
+public void __deinit_i__ (Class (I) **);
+
 NewSubSelf (Thisparse, arg,
   int (*init) (Class (This) *, argparse_t *, argparse_option_t *, const char *const *, int);
   int (*run) (Class (This) *, argparse_t *, int, const char **);
@@ -144,6 +335,8 @@ NewSubSelf (Thise, get,
     (*prev_idx) (Class (This) *),
     (*num) (Class (This) *),
     (*state) (Class (This) *);
+
+  string_t *(*env) (Class (This) *, char *);
 );
 
 NewSubSelf (This, e,
@@ -163,13 +356,20 @@ NewSubSelf (This, parse,
   string_t *(*command) (Class (This) *, char *);
 );
 
+NewSubSelf (This, i,
+  i_t *(*init_instance) (Class (This) *, Class (I) *);
+  int (*load_file) (Class (This) *, char *);
+);
+
 NewSelf (This,
   SubSelf (This, e) e;
+  SubSelf (This, i) i;
   SubSelf (This, parse) parse;
 );
 
 NewProp (This,
   char *name;
+  Class (I) *__I__;
 );
 
 public Class (This) *__init_this__ (void);

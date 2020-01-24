@@ -411,8 +411,19 @@ char *sh_keywords[] = {
     "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
     "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
 char sh_singleline_comment[] = "#";
-char sh_balanced_pairs[] = "()[]{}";
-char *_u_NULL_ARRAY[] = {NULL};
+char __u_balanced_pairs[] = "()[]{}";
+char *__u_NULL_ARRAY[] = {NULL};
+
+char *i_extensions[] = {".i", NULL};
+char *i_shebangs[] = {"#!/bin/env i", NULL};
+char i_operators[] = "+:-*^><=|&~.()[]{}/";
+char *i_keywords[] = {
+    "while I", "print F", "var V",
+    "if I", "for I", "else I", "return I", "func I",
+    NULL,
+};
+
+char i_singleline_comment[] = "#";
 
 private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
   return Buf.syn.parser (this, line, len, idx, row);
@@ -423,34 +434,50 @@ private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
   return autoindent_fun (this, row);
 }
 
+private string_t *__i_ftype_autoindent (buf_t *this, row_t *row) {
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_c");
+  return autoindent_fun (this, row);
+}
+
 private ftype_t *__u_make_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "make"),
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "make"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_sh_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "sh"),
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "sh"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
+  return ft;
+}
+
+private ftype_t *__u_i_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "i"),
+    QUAL(FTYPE, .autoindent = __i_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
 /* really minimal and incomplete support */
 syn_t u_syn[] = {
   {
-    "make", make_filenames, make_extensions, _u_NULL_ARRAY,
+    "make", make_filenames, make_extensions, __u_NULL_ARRAY,
     make_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_make_syn_init, 0, 0, NULL, NULL, NULL,
   },
   {
-    "sh", _u_NULL_ARRAY, sh_extensions, sh_shebangs,
+    "sh", __u_NULL_ARRAY, sh_extensions, sh_shebangs,
     sh_keywords, sh_operators,
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL, sh_balanced_pairs,
+    __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs,
   },
+  {
+    "i", __u_NULL_ARRAY, i_extensions, i_shebangs, i_keywords, i_operators,
+    i_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_i_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs
+  }
 };
 
 private int __u_open_link_on_browser (buf_t *this) {
@@ -503,7 +530,7 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
 private void __init_usr__ (ed_t *this) {
   if (NULL is Uenv) {
     Uenv = AllocType (uenv);
-    string_t *path = Venv.get (this, "path");
+    string_t *path = E(get.env, "path");
     Uenv->man_exec = Vsys.which ("man", path->bytes);
     Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
   }
@@ -536,6 +563,7 @@ private void __init_usr__ (ed_t *this) {
 
   Ed.syn.append (this, u_syn[0]);
   Ed.syn.append (this, u_syn[1]);
+  Ed.syn.append (this, u_syn[2]);
 }
 
 private void __deinit_usr__ (void) {

@@ -2884,13 +2884,16 @@ private int term_set (term_t *this) {
   term_init_size (this, &$my(lines), &$my(columns));
   term_screen_save (this);
   term_screen_clear (this);
+  this->is_initialized = 1;
   return OK;
 }
 
 private int term_reset (term_t *this) {
+  ifnot (this->is_initialized) return OK;
   term_set_mode (this, 's');
   term_cursor_set_ptr_pos (this, $my(orig_curs_row_pos), $my(orig_curs_col_pos));
   term_screen_restore (this);
+  this->is_initialized = 0;
   return OK;
 }
 
@@ -5331,12 +5334,13 @@ private void venv_free (venv_t **env) {
   free (*env); *env = NULL;
 }
 
-private string_t *__venv_get__ (ed_t *this, string_t *v) {
+private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
   My(String).replace_with_len ($my(env)->env_str, v->bytes, v->num_bytes);
   return $my(env)->env_str;
 }
 
-private string_t *venv_get (ed_t *this, char *name) {
+private string_t *venv_get (Class (E) *__e__, char *name) {
+  ed_T *this = __e__->ed;
   if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
   if (str_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
   if (str_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
@@ -5346,18 +5350,6 @@ private string_t *venv_get (ed_t *this, char *name) {
   if (str_eq (name, "diff_exec")) return __venv_get__ (this, $my(env)->diff_exec);
   if (str_eq (name, "xclip_exec")) return __venv_get__ (this,  $my(env)->xclip_exec);
   return NULL;
-}
-
-public venv_T __init_venv__ (void) {
-  return ClassInit (venv,
-    .self = SelfInit (venv,
-      .get = venv_get
-    )
-  );
-}
-
-public void __deinit_venv__ (venv_T *this) {
-  (void) this;
 }
 
 private void history_free (hist_t **hist) {
@@ -6130,7 +6122,6 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(Dir) = $myparents(Dir);
   $my(Rline) = $myparents(Rline);
   $my(Vsys) = $myparents(Vsys);
-  $my(Venv) = $myparents(Venv);
 
   $my(term_ptr) = $myroots(term);
   $my(msg_row_ptr) = &$myroots(msg_row);
@@ -6430,7 +6421,6 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   $my(Dir) = $myparents(Dir);
   $my(Rline) = $myparents(Rline);
   $my(Vsys) = $myparents(Vsys);
-  $my(Venv) = $myparents(Venv);
 
   $my(video) = $myparents(video);
   $my(min_rows) = 1;
@@ -14400,7 +14390,7 @@ private void ed_free (ed_t *this) {
     My(Video).free ($my(video));
 
     history_free (&$my(history));
-    venv_free (&$my(env));
+    //venv_free (&$my(env));
 
     for (int i = 0; i < NUM_REGISTERS; i++)
       self(free_reg, &$my(regs)[i]);
@@ -15093,6 +15083,7 @@ private Class (ed) *editor_new (void) {
           .eof = ved_normal_eof,
           .down = ved_normal_down,
           .up = ved_normal_up,
+          .page_up = ved_normal_page_up,
           .page_down = ved_normal_page_down,
           .goto_linenr = ved_normal_goto_linenr
         ),
@@ -15139,7 +15130,6 @@ private Class (ed) *editor_new (void) {
     .Dir = __init_dir__ (),
     .Rline = __init_rline__ (),
     .Vsys = __init_vsys__ (),
-    .Venv = __init_venv__ ()
   );
 
   this->Cursor.self = this->Term.self.Cursor;
@@ -15149,7 +15139,8 @@ private Class (ed) *editor_new (void) {
   this->state = this->error_state = 0;
 
   $my(video) = NULL;
-  $my(term) = NULL;
+  $my(term)  = NULL;
+  $my(env)   = NULL;
 
   return this;
 }
@@ -15173,10 +15164,12 @@ public mutable size_t tostderr (char *bytes) {
 private int ed_main (ed_t *this, buf_t *buf) {
   if ($my(state) & ED_SUSPENDED)
     self(resume);
-  else
+  else {
+    $from(buf, flags) |= BUF_IS_VISIBLE;
     My(Win).draw (this->current);
+  }
 
-  $my(state) = 0;
+  $my(state) = UNSET;
 
 /*
   My(Msg).send (this, COLOR_CYAN,
@@ -15193,6 +15186,7 @@ private ed_t *ed_init (E_T *E) {
   $my(Me) = E->ed;
 
   $my(term) = $from($my(Me), term);
+  $my(env)  = $from($my(Me), env);
 
   $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
   $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
@@ -15216,9 +15210,6 @@ private ed_t *ed_init (E_T *E) {
   $my(Dir) =  &E->ed->Dir;
   $my(Rline) = &E->ed->Rline;
   $my(Vsys) = &E->ed->Vsys;
-  $my(Venv) = &E->ed->Venv;
-
-  $my(env) = venv_new ();
 
   $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
       $from($my(term), columns), 1, 1);
@@ -15562,7 +15553,6 @@ private ed_T *ed_init_prop (ed_T *this) {
   $my(Dir) = &this->Dir;
   $my(Rline) = &this->Rline;
   $my(Vsys) = &this->Vsys;
-  $my(Venv) = &this->Venv;
 
   $my(Me) = this;
   $my(video) = NULL;
@@ -15575,6 +15565,7 @@ private int init_ed (ed_T *this) {
   ed_init_prop (this);
 
   $my(term) = My(Term).new ();
+  $my(env)  = venv_new ();
 
   if (NOTOK is My(Term).set ($my(term)))
     return NOTOK;
@@ -15587,7 +15578,7 @@ private int init_ed (ed_T *this) {
 }
 
 public Class (E) *__init_ed__ (char *name) {
-  E_T *this = AllocClass (E);
+  Class (E) *this = AllocClass (E);
 
   *this = ClassInit (E,
     .self = SelfInit (E,
@@ -15603,7 +15594,8 @@ public Class (E) *__init_ed__ (char *name) {
         .prev_idx = __ed_get_prev_idx__,
         .num = __ed_get_num__,
         .error_state = __ed_get_error_state__,
-        .state = __ed_get_state__
+        .state = __ed_get_state__,
+        .env = venv_get
       ),
       .set = SubSelfInit (E, set,
         .state = __ed_set_state__,
@@ -15637,6 +15629,7 @@ public Class (E) *__init_ed__ (char *name) {
 private void ed_deallocate_prop (ed_T *this) {
   if ($myprop is NULL) return;
   My(Term).free (&$my(term));
+  venv_free (&$my(env));
   free ($myprop);
   $myprop = NULL;
 }

@@ -1389,14 +1389,6 @@ NewClass (vsys,
   Self (vsys) self;
 );
 
-NewSelf (venv,
-  string_t *(*get) (ed_t *, char *);
-);
-
-NewClass (venv,
-  Self (venv) self;
-);
-
 NewSubSelf (buf, set,
   SubSelf (bufset, as) as;
   SubSelf (bufset, row) row;
@@ -1477,6 +1469,7 @@ NewSubSelf (buf, normal,
     (*down) (buf_t *, int, int, int),
     (*bof) (buf_t *, int),
     (*eof) (buf_t *, int),
+    (*page_up) (buf_t *, int),
     (*page_down) (buf_t *, int),
     (*goto_linenr) (buf_t *, int, int);
 );
@@ -1766,13 +1759,12 @@ NewClass (ed,
   Class (dir) Dir;
   Class (rline) Rline;
   Class (vsys) Vsys;
-  Class (venv) Venv;
 );
 
 NewSubSelf (E, set,
   void
-     (*state) (E_T *, int),
-     (*at_exit_cb) (E_T *, EAtExit_cb);
+    (*state) (E_T *, int),
+    (*at_exit_cb) (E_T *, EAtExit_cb);
 
   ed_t
     *(*next) (E_T *),
@@ -1786,14 +1778,19 @@ NewSubSelf (E, get,
     *(*head) (E_T *);
 
   int
-     (*state) (E_T *),
-     (*error_state) (E_T *),
-     (*current_idx) (E_T *),
-     (*prev_idx) (E_T *),
-     (*num) (E_T *);
+    (*state) (E_T *),
+    (*error_state) (E_T *),
+    (*current_idx) (E_T *),
+    (*prev_idx) (E_T *),
+    (*num) (E_T *);
+
+  string_t *(*env) (E_T *, char *);
 );
 
 NewSelf (E,
+  SubSelf (E, get) get;
+  SubSelf (E, set) set;
+
   ed_t
     *(*init) (E_T *, EdAtInit_cb),
     *(*new) (E_T *, ED_INIT_OPTS);
@@ -1802,9 +1799,6 @@ NewSelf (E,
     (*main) (E_T *, buf_t *),
     (*exit_all) (E_T *),
     (*delete) (E_T *, int, int);
-
-  SubSelf (E, get) get;
-  SubSelf (E, set) set;
 );
 
 NewClass (This,

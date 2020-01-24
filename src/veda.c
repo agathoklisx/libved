@@ -27,6 +27,7 @@ int main (int argc, char **argv) {
     return 1;
 
   char
+    *load_file = NULL,
     *ftype = NULL,
     *backup_suffix = NULL,
     *exec_com = NULL;
@@ -52,8 +53,9 @@ int main (int argc, char **argv) {
     OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
     OPT_STRING(0, "backup-suffix", &backup_suffix, "backup suffix (default: ~)", NULL, 0, 0),
     OPT_STRING(0, "exec-com", &exec_com, "execute command", NULL, 0, 0),
+    OPT_STRING(0, "load-file", &load_file, "eval file", NULL, 0, 0),
     OPT_BOOLEAN(0, "exit", &exit, "exit", NULL, 0, 0),
-    OPT_END(),
+    OPT_END()
   };
 
   argparse_t argparser;
@@ -64,13 +66,27 @@ int main (int argc, char **argv) {
 
   E(set.at_exit_cb, __deinit_ext__);
 
+  ed_t *this = NULL;
+  win_t *w = NULL;
+
+  if (load_file isnot NULL) {
+    ifnot (OK is This(i.load_file, load_file))
+      goto theend;
+
+    signal (SIGWINCH, sigwinch_handler);
+
+    this = E(get.current);
+    w = Ed.get.current_win (this);
+    goto theloop;
+  }
+
   num_win = (num_win < argc ? num_win : argc);
 
-  ed_t *this = E(new, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
+  this = E(new, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
 
-  win_t *w = Ed.get.current_win (this);
+  w = Ed.get.current_win (this);
 
   ifnot (argc) {
     /* just create a new empty buffer and append it to its
@@ -122,9 +138,11 @@ int main (int argc, char **argv) {
     goto theend;
   }
 
+theloop:;
+    FILE *fp = fopen ("/tmp/main.debuf", "a+");
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
-
+    fprintf (fp, "fn %s\n", Buf.get.fname (buf)); fflush(fp);
     retval = E(main, buf);
 
     int state = E(get.state);

@@ -182,6 +182,7 @@ SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 REQOBJS    =  libved+.c
 REQOBJS   +=  lib/argparse/argparse.c
 REQOBJS   +=  lib/map/int_map.c
+REQOBJS   +=  lib/i/i.c
 
 ifneq ($(HAS_JSON), 0)
   REQOBJS += lib/json/json.c

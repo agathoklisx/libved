@@ -266,6 +266,7 @@ NewProp (term,
 );
 
 NewType (term,
+  int is_initialized;
   Prop (term) *prop;
 );
 
@@ -552,8 +553,7 @@ NewType (hist,
   Class (path) *Path;            \
   Class (dir) *Dir;              \
   Class (rline) *Rline;          \
-  Class (vsys) *Vsys;            \
-  Class (venv) *Venv
+  Class (vsys) *Vsys;
 
 NewType (dim,
   int
