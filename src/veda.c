@@ -139,10 +139,8 @@ int main (int argc, char **argv) {
   }
 
 theloop:;
-    FILE *fp = fopen ("/tmp/main.debuf", "a+");
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
-    fprintf (fp, "fn %s\n", Buf.get.fname (buf)); fflush(fp);
     retval = E(main, buf);
 
     int state = E(get.state);

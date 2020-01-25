@@ -430,10 +430,10 @@ private int i_do_next_token (i_t *this, int israw) {
   } else
     r = c;
 
-#ifdef DEBUG
-  printf("Token[%c / %x] = ", r & 0xff, r);
-  i_print_string (this, this->out_fp, this->token);
-  printf ("\n");
+#ifdef DEBUG_INTERPRETER_OUTPUT
+  this->print_fmt_bytes (this->err_fp, "Token[%c / %x] = ", r & 0xff, r);
+  i_print_string (this, this->err_fp, this->token);
+  this->print_byte (this->err_fp, '\n');
 #endif
 
   this->curToken = r;
@@ -1229,6 +1229,11 @@ public void __deinit_i__ (Class (I) **thisp) {
     Type (i) *tmp = it->next;
     i_free_strings (it);
     free (it->strings);
+
+#if DEBUG
+    fclose (it->err_fp);
+#endif
+
     i_free (&it);
     it = tmp;
   }

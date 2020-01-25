@@ -229,14 +229,15 @@
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
    VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
-   VED_TMPDIR="dir"           this sets the temp directory (default $(SYSDIR)/tmp)
+   VED_TMPDIR="dir"       this sets the temp directory (default $(SYSDIR)/tmp)
 
    /* the next option provides a way to extend the behavior and|or as an API
-    * documentation, but is intended for development (safely ignore much of it) */
+    * documentation, but is intended for development, buf it has many features
+    * that it might be usefull. */
 
    HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr.c (default 0)
 
-   /* the above setting also introduces a prerequisite to SYS_NAME definition,
+   /* the above setting also introduce a prerequisite to SYS_NAME definition,
     * which can be (and it is) handled and defined by the Makefile */
 
    HAS_LOCAL_EXTENSIONS=1|0 (#in|ex)clude src/local/local.c (default 0)
@@ -267,7 +268,7 @@
    CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                           is on those lines (default 1)
    TAB_ON_INSERT_MODE_INDENTS (1|0) tab in insert mode indents (default 0)
-C_TAB_ON_INSERT_MODE_INDENTS (1|0) the wrong indentation here is by purpose (default 1)
+C_TAB_ON_INSERT_MODE_INDENTS  (1|0) the wrong indentation here is by purpose (default 1)
    TABWIDTH (width)       this set the default tabwidth (default 8)
    UNDO_NUM_ENTRIES (num) this set the undo entries (default 40)
    RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (default 20)
@@ -736,6 +737,7 @@ Search:
       --backupfile          backup file on initial reading
       --backup-suffix=<str> backup suffix (default: ~)
       --ex-com="command"    run an editor command at the startup (see Utility)
+      --load-file=file      evaluate file with libved code (see Scripting)
       --exit                exit quickly (called after --ex-com)
  */
 
@@ -869,6 +871,19 @@ Search:
     on the specific filetype, by editing it (nothing should matter for the code, as it
     __should__ work in any way, otherwise is a bug in the code).
   */
+
+   /* Scripting
+      The application offers a tiny scripting interface, which is based on Tinyscript:
+      https://github.com/totalspectrum
+      Copyright 2016 Total Spectrum Software Inc.
+      TERMS OF USE: MIT License
+
+      It is a really minimal scripting Language, with just a bit over 1000 lines of
+      code, but which has the absolute essentials, for this kind of job we want.
+      See an example at: src/lib/i/example.i
+
+      Many many thanks to the above mentioned project.
+   */
 
    /* Work has been started on the Syntax and Filetypes, with the latter can be play
       a very interesting role, with regards to personalization, but also can be quite
@@ -1282,12 +1297,6 @@ Search:
    the standard output of a shell command. Interactive applications might have
    unexpected behavior in this implementation. To disable these features (as they
    are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
-
-   Invocation.
-   Options:
-    +, --line-nr=<int>    start at line number
-    --column=<int>        set pointer at column
-    --ftype=<str>         set the file type
 
    But see the src/usr/usr.c for more up to date commands or extensions, as this
    unit is meant as testing field.

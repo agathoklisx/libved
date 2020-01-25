@@ -453,13 +453,24 @@ private int i_load_file (Class (This) *__t__, char *fname) {
 private i_t *i_init_instance (Class (This) *__t__, Class (I) *__i__) {
   (void) __t__;
   i_t *this = In.new ();
-  FILE *fp = fopen ("/tmp/debug", "w");
+
+  FILE *err_fp = stderr;
+
+#if DEBUG_INTERPRETER
+  string_t *tdir = E(get.env, "tmp_dir");
+  size_t len = tdir->num_bytes + 1 + 7;
+  char tmp[len + 1 ];
+  Cstring.cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);
+  err_fp = fopen (tmp, "w");
+#endif
+
+
   In.init (__i__, this, QUAL(I_INIT,
     .mem_size = 8192,
     .print_bytes = i_print_bytes,
     .print_byte  = i_print_byte,
     .print_fmt_bytes = i_print_fmt_bytes,
-    .err_fp = fp
+    .err_fp = err_fp
   ));
 
   int err = 0;
