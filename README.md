@@ -695,6 +695,9 @@ Search:
    :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
    :@info [--buf,--win,--ed] (with no arguments defaults to --buf) (this prints
                        details to the scratch buffer of the corresponded arguments)
+   :@save_image [--as=file] (save current layout, that can be used at a next invocation
+                             with --load-file=file.i, to restore it,
+                             default filename: $SYSDATADIR/profiles/currentbufname.i)
 
    The `man command requires the man utility, which simply means probably also an
    implementation of a roff system. The col utility is not required, as we filter

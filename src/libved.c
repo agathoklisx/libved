@@ -5511,6 +5511,10 @@ private char *buf_get_fname (buf_t *this) {
   return $my(fname);
 }
 
+private char *buf_get_ftype_name (buf_t *this) {
+  return $my(ftype)->name;
+}
+
 private char *buf_get_basename (buf_t *this) {
   return $my(basename);
 }
@@ -5533,6 +5537,10 @@ private size_t buf_get_num_lines (buf_t *this) {
 
 private int buf_get_prop_tabwidth (buf_t *this) {
   return $my(ftype)->tabwidth;
+}
+
+private int buf_isit_special_type (buf_t *this) {
+  return ($my(flags) & BUF_IS_SPECIAL);
 }
 
 private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
@@ -6262,6 +6270,15 @@ private buf_t *win_get_buf_by_idx (win_t *w, int idx) {
   loop (idx) this = this->next;
 
   return this;
+}
+
+private buf_t *win_get_buf_head (win_t *this) {
+  return this->head;
+}
+
+private buf_t *win_get_buf_next (win_t *w, buf_t *this) {
+  (void) w;
+  return this->next;
 }
 
 private buf_t *win_get_buf_by_name (win_t *w, const char *fname, int *idx) {
@@ -13917,6 +13934,10 @@ private int ed_get_num_special_win (ed_t *this) {
   return $my(num_special_win);
 }
 
+private int win_isit_special_type (win_t *this) {
+  return ($my(type) is VED_WIN_SPECIAL_TYPE);
+}
+
 private buf_t *ed_get_bufname (ed_t *this, char *fname) {
   buf_t *buf = NULL;
   win_t *w = this->head;
@@ -14968,8 +14989,13 @@ private Class (ed) *editor_new (void) {
           .current_buf_idx = win_get_current_buf_idx,
           .buf_by_idx = win_get_buf_by_idx,
           .buf_by_name = win_get_buf_by_name,
+          .buf_head = win_get_buf_head,
+          .buf_next = win_get_buf_next,
           .num_buf = win_get_num_buf,
           .num_cols = win_get_num_cols
+        ),
+        .isit = SubSelfInit (win, isit,
+          .special_type = win_isit_special_type
         ),
         .pop = SubSelfInit (win, pop,
           .current_buf = win_pop_current_buf
@@ -15009,6 +15035,7 @@ private Class (ed) *editor_new (void) {
           .parent = buf_get_parent,
           .basename = buf_get_basename,
           .fname = buf_get_fname,
+          .ftype_name = buf_get_ftype_name,
           .flags = buf_get_flags,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,
@@ -15046,6 +15073,9 @@ private Class (ed) *editor_new (void) {
         ),
         .to = SubSelfInit (buf, to,
           .video = buf_to_video
+        ),
+        .isit = SubSelfInit (buf, isit,
+          .special_type = buf_isit_special_type
         ),
         .cur = SubSelfInit (buf, cur,
           .set = buf_current_set,
@@ -15386,6 +15416,11 @@ private ed_t *__ed_get_head__ (Class (E) *this) {
   return $my(head);
 }
 
+private ed_t *__ed_get_next__ (Class (E) *this, ed_t *ed) {
+  (void) this;
+  return ed->next;
+}
+
 private int __ed_get_num__ (Class (E) *this) {
   return $my(num_items);
 }
@@ -15590,6 +15625,7 @@ public Class (E) *__init_ed__ (char *name) {
       .get = SubSelfInit (E, get,
         .current = __ed_get_current__,
         .head = __ed_get_head__,
+        .next = __ed_get_next__,
         .current_idx = __ed_get_current_idx__,
         .prev_idx = __ed_get_prev_idx__,
         .num = __ed_get_num__,

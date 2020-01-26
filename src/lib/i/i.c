@@ -3,14 +3,15 @@
  * 
  * Many Thanks
  *
- * Added dynamic allocation
- * A specific type that passed as a first argument
- * Ability to create more than one instance
- * \ as the last character in the line is a continuation character
- * syntax_error() got a char * argument, that describes the error
- * it also prints the line number
- * Added ignore_next_char() to ignore next token
- * print* function references got a FILE * argument
+ * - added dynamic allocation
+ * - ability to create more than one instance
+ * - an instance can be passed as a first argument
+ * - \ as the last character in the line is a continuation character
+ * - syntax_error() got a char * argument, that describes the error
+ * - added ignore_next_char() to ignore next token
+ * - print* function references got a FILE * argument
+ * - it is possible to call a C function, with a literal string as argument
+ * - many changes that integrates Tinyscript to this environment
  */
 
 /* Tinyscript interpreter
@@ -1230,7 +1231,7 @@ public void __deinit_i__ (Class (I) **thisp) {
     i_free_strings (it);
     free (it->strings);
 
-#if DEBUG
+#if DEBUG_INTERPRETER
     fclose (it->err_fp);
 #endif
 

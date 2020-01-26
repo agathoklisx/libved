@@ -393,10 +393,153 @@ theend:
   return retval;
 }
 
+private int i_save_image (buf_t **thisp, rline_t *rl) {
+  int retval = NOTOK;
+  win_t *w = Buf.get.parent (*thisp);
+  int cbidx = Win.get.current_buf_idx (w);
+
+  char *fn = NULL;
+  string_t *fn_arg = Rline.get.anytype_arg (rl, "as");
+  ifnot (NULL is fn_arg) {
+    fn = fn_arg->bytes;
+  } else
+    fn = Path.basename (Buf.get.basename (*thisp));
+
+  string_t *img = String.new_with (fn);
+  char *extname = Path.extname (img->bytes);
+
+  size_t exlen = bytelen (extname);
+  if (exlen) {
+    if (exlen isnot img->num_bytes) {
+      char *p = img->bytes + img->num_bytes - 1;
+      while (*p isnot '.') {
+        p--;
+        String.clear_at (img, img->num_bytes - 1);
+      }
+    } else  // .file
+      String.append_byte (img, '.');
+  } else
+    String.append_byte (img, '.');
+
+  ifnot (Path.is_absolute (img->bytes)) {
+    String.prepend (img, "/profiles/");
+    String.prepend (img, E(get.env, "data_dir")->bytes);
+  }
+
+  String.append (img, "i");
+
+  FILE *fp = fopen (img->bytes, "w");
+  if (NULL is fp) goto theend;
+
+  String.clear (img);
+
+  String.append (img,
+     "var flags = 0\n"
+     "var frame_zero = 0\n"
+     "var draw = 1\n"
+     "var donot_draw = 0\n");
+
+  int g_num_buf = 0;
+  int g_num_win = 0;
+  int g_num_ed = 0;
+
+  ed_t *ed = E(get.head);
+
+  while (ed isnot NULL) {
+    ifnot (g_num_ed) {
+      String.append (img, "var ");
+    }
+
+    g_num_ed++;
+
+    int num_win = Ed.get.num_win (ed, NO_COUNT_SPECIAL);
+    String.append_fmt (img, "ed = ed_new (%d)\n", num_win);
+
+    ifnot (g_num_win) {
+      String.append (img, "var ");
+      g_num_win++;
+    }
+
+    String.append (img, "cwin = ed_get_current_win (ed)\n");
+
+    int l_num_win = 0;
+    win_t *cwin = Ed.get.win_head (ed);
+
+    while (cwin) {
+      if (Win.isit.special_type (cwin)) goto next_win;
+
+      if (l_num_win)
+        String.append (img, "cwin = ed_get_win_next (ed, cwin)\n\n");
+
+      l_num_win++;
+
+      buf_t *buf = Win.get.buf_head (cwin);
+      while (buf) {
+        if (Buf.isit.special_type (buf)) goto next_buf;
+        char *bufname = Buf.get.fname (buf);
+
+        ifnot (g_num_buf) {
+          String.append (img, "var ");
+          g_num_buf++;
+         }
+
+         String.append (img, "buf = win_buf_init (cwin, frame_zero, flags)\n");
+         String.append_fmt (img, "buf_init_fname (buf, \"%s\")\n", bufname);
+         char *ftype_name = Buf.get.ftype_name  (buf);
+         String.append_fmt (img, "buf_set_ftype (buf, \"%s\")\n", ftype_name);
+         int cur_row_idx = Buf.get.cur_idx (buf);
+         String.append_fmt (img, "buf_set_row_idx (buf, %d)\n", cur_row_idx);
+         String.append (img, "win_append_buf (cwin, buf)\n");
+
+next_buf:
+        buf = Win.get.buf_next (cwin, buf);
+      }
+
+next_win:
+      cwin = Ed.get.win_next (ed, cwin);
+    }
+
+    ed = E(get.next, ed);
+    ifnot (NULL is ed)
+      String.append (img, "ed = set_ed_next ()\n");
+  }
+
+  int idx = E(get.current_idx);
+  String.append_fmt (img, "ed = set_ed_by_idx (%d)\n", idx);
+  String.append (img, "cwin = ed_get_current_win (ed)\n");
+  String.append_fmt (img, "win_set_current_buf (cwin, %d, donot_draw)\n", cbidx);
+  String.append (img, "win_draw (cwin)\n");
+
+  fprintf (fp, "%s\n", img->bytes);
+  fclose (fp);
+  retval = OK;
+
+theend:
+  String.free (img);
+  return retval;
+}
+
+private int i_rline_cb (buf_t **thisp, rline_t *rl, utf8 c) {
+  (void) c;
+  int retval = RLINE_NO_COMMAND;
+  string_t *com = Rline.get.command (rl);
+
+  if (Cstring.eq (com->bytes, "@save_image")) {
+    retval = i_save_image (thisp, rl);
+  }
+
+  String.free (com);
+  return retval;
+}
+
 private void __u_add_rline_commands__ (ed_t *this) {
   __u_add_rline_sys_commands__ (this);
   __u_add_rline_user_commands__ (this);
   Ed.set.rline_cb (this, __u_rline_cb__);
+
+  Ed.append.rline_command (this, "@save_image", 0, 0);
+  Ed.append.command_arg (this,   "@save_image", "--as=", 5);
+  Ed.set.rline_cb (this, i_rline_cb);
 }
 
 char *make_filenames[] = {"Makefile", NULL};
@@ -567,6 +710,8 @@ private void __init_usr__ (ed_t *this) {
 }
 
 private void __deinit_usr__ (void) {
+  if (NULL is Uenv) return;
+
   String.free (Uenv->man_exec);
   String.free (Uenv->elinks_exec);
   free (Uenv);

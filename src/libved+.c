@@ -254,6 +254,10 @@ private ed_t *e_get_head (Class (This) *this) {
   return __E.get.head (this->__E__);
 }
 
+private ed_t *e_get_next (Class (This) *this, ed_t *ed) {
+  return __E.get.next (this->__E__, ed);
+}
+
 private string_t *e_get_env (Class (This) *this, char *name) {
   return __E.get.env (this->__E__, name);
 }
@@ -314,6 +318,15 @@ ival_t i_set_ed_next (void) {
   return (ival_t) E(set.next);
 }
 
+ival_t i_set_ed_by_idx (ival_t inst, int idx) {
+  (void) inst;
+  return (ival_t) E(set.current, idx);
+}
+
+ival_t i_get_ed_current_idx (void) {
+  return E(get.current_idx);
+}
+
 ival_t i_ed_new (ival_t inst, int num_win) {
   (void) inst;
   return (ival_t) E(new, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
@@ -367,12 +380,9 @@ ival_t i_win_buf_init (ival_t inst, win_t *this, int frame, int flags) {
 
 ival_t i_win_set_current_buf (ival_t inst, win_t *this, int idx, int draw) {
   (void) inst;
-  buf_t *buf =    Win.set.current_buf (this, idx, draw);
-  i_t *i = (i_t *) inst;
-  i->print_fmt_bytes (i->err_fp, "fn %s\n",
-  Buf.get.fname (buf));
+  buf_t *buf = Win.set.current_buf (this, idx, draw);
+  Buf.get.fname (buf);
   return (ival_t) buf;
-    //Win.set.current_buf (this, idx, draw);
 }
 
 ival_t i_buf_normal_page_down (ival_t inst, buf_t *this, int count) {
@@ -411,6 +421,8 @@ struct ifun_t {
   { "deinit_this",         (ival_t) i_deinit_this, 0},
   { "get_ed_num",          (ival_t) i_get_ed_num, 0},
   { "set_ed_next",         (ival_t) i_set_ed_next, 0},
+  { "set_ed_by_idx",       (ival_t) i_set_ed_by_idx, 1},
+  { "get_ed_current_idx",  (ival_t) i_get_ed_current_idx, 0},
   { "ed_new",              (ival_t) i_ed_new, 1},
   { "ed_get_num_win",      (ival_t) i_ed_get_num_win, 1},
   { "ed_get_current_win",  (ival_t) i_ed_get_current_win, 1},
@@ -514,6 +526,7 @@ private void __init_self__ (Class (This) *this) {
       .current = e_get_current,
       .current_idx = e_get_current_idx,
       .head = e_get_head,
+      .next = e_get_next,
       .env = e_get_env
     )
   );

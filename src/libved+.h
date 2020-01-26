@@ -327,6 +327,7 @@ NewSubSelf (Thise, set,
 
 NewSubSelf (Thise, get,
   ed_t
+    *(*next) (Class (This) *, ed_t *),
     *(*head) (Class (This) *),
     *(*current) (Class (This) *);
 

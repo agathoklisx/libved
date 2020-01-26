@@ -1324,6 +1324,7 @@ NewSubSelf (buf, get,
   char
      *(*basename) (buf_t *),
      *(*fname) (buf_t *),
+     *(*ftype_name) (buf_t *),
      *(*info_string) (buf_t *);
 
   size_t
@@ -1421,6 +1422,10 @@ NewSubSelf (buf, to,
   void (*video) (buf_t *);
 );
 
+NewSubSelf (buf, isit,
+  int (*special_type) (buf_t *);
+);
+
 NewSubSelf (buf, cur,
   int
     (*set) (buf_t *, int);
@@ -1481,6 +1486,7 @@ NewSelf (buf,
   SubSelf (buf, syn) syn;
   SubSelf (buf, ftype) ftype;
   SubSelf (buf, to) to;
+  SubSelf (buf, isit) isit;
   SubSelf (buf, free) free;
   SubSelf (buf, row) row;
   SubSelf (buf, read) read;
@@ -1537,7 +1543,9 @@ NewSubSelf (win, get,
 
   buf_t
     *(*current_buf) (win_t *),
+    *(*buf_head) (win_t *),
     *(*buf_by_idx) (win_t *, int),
+    *(*buf_next) (win_t *, buf_t *),
     *(*buf_by_name) (win_t *, const char *, int *);
 
   int
@@ -1562,9 +1570,14 @@ NewSubSelf (win, frame,
     *(*change) (win_t *, int, int);
 );
 
+NewSubSelf (win, isit,
+  int (*special_type) (win_t *);
+);
+
 NewSelf (win,
   SubSelf (win, set) set;
   SubSelf (win, get) get;
+  SubSelf (win, isit) isit;
   SubSelf (win, pop) pop;
   SubSelf (win, adjust) adjust;
   SubSelf (win, buf) buf;
@@ -1775,6 +1788,7 @@ NewSubSelf (E, set,
 NewSubSelf (E, get,
   ed_t
     *(*current) (E_T *),
+    *(*next) (E_T *, ed_t *),
     *(*head) (E_T *);
 
   int
