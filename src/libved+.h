@@ -24,6 +24,9 @@ extern Class (I)    *__I__;
 #define Error   __THIS__->__E__->ed->Error.self
 #define Vsys    __THIS__->__E__->ed->Vsys.self
 #define Term    __THIS__->__E__->ed->Term.self
+#define Cursor  __THIS__->__E__->ed->Cursor.self
+#define Video   __THIS__->__E__->ed->Video.self
+#define Screen  __THIS__->__E__->ed->Screen.self
 #define Input   __THIS__->__E__->ed->Input.self
 #define File    __THIS__->__E__->ed->File.self
 #define Path    __THIS__->__E__->ed->Path.self

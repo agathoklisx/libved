@@ -2674,7 +2674,7 @@ private int fd_read (int fd, char *buf, size_t len) {
   return bts;
 }
 
-private int fd_write (int fd, char *buf, int len) {
+private int fd_write (int fd, char *buf, size_t len) {
   int retval = len;
   int bts;
 
@@ -2691,8 +2691,13 @@ private int fd_write (int fd, char *buf, int len) {
   return retval;
 }
 
-#define SEND_ESC_SEQ(fd, seq) fd_write ((fd), seq, seq ## _LEN)
-#define TERM_SEND_ESC_SEQ(seq) fd_write ($my(out_fd), seq, seq ## _LEN)
+private void term_screen_bell (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_BELL);
+}
+
+private void term_screen_set_color (term_t *this, int color) {
+  fd_write ($my(out_fd), TERM_MAKE_COLOR(color), 5);
+}
 
 private void term_screen_save (term_t *this) {
   TERM_SEND_ESC_SEQ (TERM_SCREEN_SAVE);
@@ -3273,7 +3278,9 @@ public term_T __init_term__ (void) {
         .restore = term_screen_restore,
         .save = term_screen_save,
         .clear = term_screen_clear,
-        .clear_eol = term_screen_clear_eol
+        .clear_eol = term_screen_clear_eol,
+        .bell = term_screen_bell,
+        .set_color = term_screen_set_color
       ),
       .Input = SubSelfInit (term, input,
         .get = term_get_input
@@ -5390,6 +5397,7 @@ private void buf_set_video_first_row (buf_t *this, int idx) {
   }
 
   int num;
+
   if (idx < $my(video_first_row_idx)) {
     num = $my(video_first_row_idx) - idx;
     loop (num) $my(video_first_row) = $my(video_first_row)->prev;
@@ -5547,7 +5555,7 @@ private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
   do {
     idx = current_list_set (this, idx);
     if (idx is INDEX_ERROR) {
-      idx = 0;
+      idx--;
       continue;
     }
   } while (0);
@@ -14954,6 +14962,10 @@ private Class (ed) *editor_new (void) {
       ),
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
+      ),
+      .fd = SubSelfInit (ed, fd,
+        .read = fd_read,
+        .write = fd_write
       ),
       .history = SubSelfInit (ed, history,
         .add = ved_history_add,

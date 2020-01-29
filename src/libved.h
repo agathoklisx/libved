@@ -323,6 +323,7 @@
 #define TERM_FIRST_LEFT_CORNER      "\033[H"
 #define TERM_FIRST_LEFT_CORNER_LEN  3
 #define TERM_BOL                    "\033[E"
+#define TERM_BOL_LEN                3
 #define TERM_GET_PTR_POS            "\033[6n"
 #define TERM_GET_PTR_POS_LEN        4
 #define TERM_SCREEN_SAVE            "\033[?47h"
@@ -341,6 +342,8 @@
 #define TERM_LINE_CLR_EOL_LEN       4
 #define TERM_BOLD                   "\033[1m"
 #define TERM_BOLD_LEN               4
+#define TERM_BELL                   "\033[7"
+#define TERM_BELL_LEN               3
 #define TERM_ITALIC                 "\033[3m"
 #define TERM_ITALIC_LEN             4
 #define TERM_UNDERLINE              "\033[4m"
@@ -357,8 +360,11 @@
 #define TERM_GOTO_PTR_POS_FMT       "\033[%d;%dH"
 #define TERM_SET_COLOR_FMT          "\033[%dm"
 #define TERM_SET_COLOR_FMT_LEN      5
+
 #define TERM_MAKE_COLOR(clr) \
 ({char b__[8];snprintf (b__, 8, TERM_SET_COLOR_FMT, (clr));b__;})
+#define SEND_ESC_SEQ(fd, seq) fd_write ((fd), seq, seq ## _LEN)
+#define TERM_SEND_ESC_SEQ(seq) fd_write ($my(out_fd), seq, seq ## _LEN)
 
 #define NO_OFFSET  0
 
@@ -944,6 +950,8 @@ NewClass (video,
 
 NewSubSelf (term, screen,
   void
+    (*set_color) (term_t *, int),
+    (*bell) (term_t *),
     (*restore) (term_t *),
     (*save)  (term_t *),
     (*clear) (term_t *),
@@ -1713,6 +1721,11 @@ NewSubSelf (ed, draw,
   void (*current_win) (ed_t *);
 );
 
+NewSubSelf (ed, fd,
+  int (*read) (int, char *, size_t);
+  int (*write) (int, char *, size_t);
+);
+
 NewSelf (ed,
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
@@ -1726,6 +1739,7 @@ NewSelf (ed,
   SubSelf (ed, sh) sh;
   SubSelf (ed, history) history;
   SubSelf (ed, draw) draw;
+  SubSelf (ed, fd) fd;
 
   void
     (*free) (ed_t *),

@@ -86,7 +86,6 @@ public char *i_pop_string (ival_t instance) {
   return istring_pop ();
 }
 
-FILE *FPP = NULL;
 private int i_parse_stmt (i_t *, int);
 private int i_parse_expr (i_t *, ival_t *);
 
@@ -1138,6 +1137,21 @@ private int i_get_current_idx (Class (I) *this) {
   return $my(current_idx);
 }
 
+private ival_t i_exit (ival_t inst, int code) {
+  (void) inst;
+  __deinit_this__ (&__THIS__);
+  exit (code);
+}
+
+struct ifun_t {
+  const char *name;
+  ival_t val;
+  int nargs;
+} i_funs[] = {
+  { "exit",  (ival_t) i_exit, 1},
+  { NULL, 0, 0}
+};
+
 private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
   int i;
   int err = 0;
@@ -1163,6 +1177,14 @@ private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
   for (i = 0; idefs[i].name; i++) {
     err = i_define (this, idefs[i].name, idefs[i].toktype, idefs[i].val);
 
+    if (err isnot I_OK) {
+      i_free (&this);
+      return err;
+    }
+  }
+
+  for (i = 0; i_funs[i].name; i++) {
+    err = i_define (this, i_funs[i].name, CFUNC (i_funs[i].nargs), i_funs[i].val);
     if (err isnot I_OK) {
       i_free (&this);
       return err;

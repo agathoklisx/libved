@@ -441,11 +441,21 @@ struct ifun_t {
   { NULL, 0, 0}
 };
 
-private int i_load_file (Class (This) *__t__, char *fname) {
+private int i_load_file (Class (This) *__t__, char *fn) {
   (void) __t__;
   i_t *in = This(i.init_instance, __I__);
 
-  ifnot (Path.is_absolute (fname)) {
+  ifnot (Path.is_absolute (fn)) {
+    size_t fnlen = bytelen (fn);
+    char fname[fnlen+3];
+    Cstring.cp (fname, fnlen + 1, fn, fnlen);
+    char *extname = Path.extname (fname);
+    ifnot (extname[0]) {
+      fname[fnlen] = '.';
+      fname[fnlen+1] = 'i';
+      fname[fnlen+2] = '\0';
+    }
+
     if (File.exists (fname))
       return In.eval_file (in, fname);
 
@@ -457,7 +467,7 @@ private int i_load_file (Class (This) *__t__, char *fname) {
       return NOTOK;
     return In.eval_file (in, tmp);
   } else
-    return In.eval_file (in, fname);
+    return In.eval_file (in, fn);
 
   return OK;
 }
