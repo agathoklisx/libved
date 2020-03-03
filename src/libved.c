@@ -2727,6 +2727,10 @@ private void term_cursor_restore (term_t *this) {
   TERM_SEND_ESC_SEQ (TERM_CURSOR_RESTORE);
 }
 
+private void term_cursor_save (term_t *this) {
+  TERM_SEND_ESC_SEQ (TERM_CURSOR_SAVE);
+}
+
 private int term_cursor_get_ptr_pos (term_t *this, int *row, int *col) {
   if (NOTOK is TERM_SEND_ESC_SEQ (TERM_GET_PTR_POS))
     return NOTOK;
@@ -3270,8 +3274,9 @@ public term_T __init_term__ (void) {
       .Cursor = SubSelfInit (term, cursor,
         .get_pos = term_cursor_get_ptr_pos,
         .set_pos = term_cursor_set_ptr_pos,
-        .hide = term_cursor_hide,
         .show = term_cursor_show,
+        .hide = term_cursor_hide,
+        .save = term_cursor_save,
         .restore = term_cursor_restore
       ),
       .Screen = SubSelfInit (term, screen,
@@ -4278,7 +4283,7 @@ syn_t HL_DB[] = {
 
 #define IsSeparator(c)                          \
   ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
-   byte_in_str (",.()+-/=*~%<>[]:;}", (c)) isnot NULL)
+   byte_in_str (",.()+-/=*~%<>[]:;}@", (c)) isnot NULL)
 
 #define IGNORE(c) ((c) > '~' || (c) <= ' ')
 
@@ -5552,6 +5557,8 @@ private int buf_isit_special_type (buf_t *this) {
 }
 
 private int buf_set_row_idx (buf_t *this, int idx, int ofs, int col) {
+  if (idx < 0) idx = 0;
+
   do {
     idx = current_list_set (this, idx);
     if (idx is INDEX_ERROR) {

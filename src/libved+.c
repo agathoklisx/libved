@@ -486,7 +486,6 @@ private i_t *i_init_instance (Class (This) *__t__, Class (I) *__i__) {
   err_fp = fopen (tmp, "w");
 #endif
 
-
   In.init (__i__, this, QUAL(I_INIT,
     .mem_size = 8192,
     .print_bytes = i_print_bytes,

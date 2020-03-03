@@ -140,7 +140,7 @@
   not provide a static executable). To compile the library and the test application
   using gcc as the default compiler (use the CC variable during compilation to change
   that) issue from the src directory of this distribution (every step implies a zero
-  exit code to considered successful (catch that):
+  exit code to considered successful (catch that)):
  */
 
 ```
@@ -232,7 +232,7 @@
    VED_TMPDIR="dir"       this sets the temp directory (default $(SYSDIR)/tmp)
 
    /* the next option provides a way to extend the behavior and|or as an API
-    * documentation, but is intended for development, buf it has many features
+    * documentation, and [wa]is intended for development, buf it has many features
     * that it might be usefull. */
 
    HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr.c (default 0)
@@ -250,6 +250,9 @@
 
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
+
+     (small emphasis) as the last in the chain, can overide everything that allowed
+     to overwritten.
    */
 
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)

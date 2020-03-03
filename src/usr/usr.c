@@ -542,6 +542,10 @@ private void __u_add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, i_rline_cb);
 }
 
+
+char __u_balanced_pairs[] = "()[]{}";
+char *__u_NULL_ARRAY[] = {NULL};
+
 char *make_filenames[] = {"Makefile", NULL};
 char *make_extensions[] = {".Makefile", NULL};
 char *make_keywords[] = {
@@ -554,9 +558,6 @@ char *sh_keywords[] = {
     "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
     "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
 char sh_singleline_comment[] = "#";
-char __u_balanced_pairs[] = "()[]{}";
-char *__u_NULL_ARRAY[] = {NULL};
-
 char *i_extensions[] = {".i", NULL};
 char *i_shebangs[] = {"#!/bin/env i", NULL};
 char i_operators[] = "+:-*^><=|&~.()[]{}/";
@@ -568,6 +569,48 @@ char *i_keywords[] = {
 
 char i_singleline_comment[] = "#";
 
+char *zig_extensions[] = {".zig", NULL};
+char zig_operators[] = "+:-*^><=|&~.()[]{}/";
+char zig_singleline_comment[] = "//";
+char *zig_keywords[] = {
+  "const V", "@import V", "pub I", "fn I", "void T", "try I",
+  "else I", "if I", "while I", "true V", "false V", "Self V", "@This V",
+  "return I", "u8 T", "struct T", "enum T", "var V", "comptime T",
+  "switch I", "continue I", "for I", "type T", "void T", "defer I",
+  "orelse I", "errdefer I", "undefined T", "threadlocal T", NULL};
+
+char *lua_extensions[] = {".lua", NULL};
+char *lua_shebangs[] = {"#!/bin/env lua", "#!/usr/bin/lua", NULL};
+char  lua_operators[] = "+:-*^><=|&~.()[]{}!@/";
+char *lua_keywords[] = {
+    "do I", "if I", "while I", "else I", "elseif I", "nil I",
+    "local I",  "self V", "require V", "return V", "and V",
+    "then I", "end I", "function V", "or I", "in V",
+    "repeat I", "for I",  "goto I", "not I", "break I",
+    "setmetatable F", "getmetatable F", "until I",
+    "true I", "false I", NULL
+};
+
+char lua_singleline_comment[] = "--";
+char lua_multiline_comment_start[] = "--[[";
+char lua_multiline_comment_end[] = "]]";
+
+char *lai_extensions[] = {".lai", ".du", NULL};
+char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/doctu", NULL};
+char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
+char *lai_keywords[] = {
+    "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
+    "is I", "isnot I", "nil E", "not I", "var V", "return V", "and I", "or I",
+    "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
+    "trait T", "true V", "false E", "import T", "hasAttribute F", "getAttribute F",
+    "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
+    "use T", "elseif I", "static T",
+     NULL};
+
+char lai_singleline_comment[] = "//";
+char lai_multiline_comment_start[] = "/*";
+char lai_multiline_comment_end[] = "*/";
+
 private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
   return Buf.syn.parser (this, line, len, idx, row);
 }
@@ -577,9 +620,26 @@ private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
   return autoindent_fun (this, row);
 }
 
+private string_t *__u_c_ftype_autoindent (buf_t *this, row_t *row) {
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_c");
+  return autoindent_fun (this, row);
+}
+
 private string_t *__i_ftype_autoindent (buf_t *this, row_t *row) {
   FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_c");
   return autoindent_fun (this, row);
+}
+
+private ftype_t *__u_lai_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "lai"),
+    QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+  return ft;
+}
+
+private ftype_t *__u_lua_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "lua"),
+    QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+  return ft;
 }
 
 private ftype_t *__u_make_syn_init (buf_t *this) {
@@ -594,9 +654,15 @@ private ftype_t *__u_sh_syn_init (buf_t *this) {
   return ft;
 }
 
+private ftype_t *__u_zig_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "zig"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_c_ftype_autoindent));
+  return ft;
+}
+
 private ftype_t *__u_i_syn_init (buf_t *this) {
   ftype_t *ft = Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "i"),
-    QUAL(FTYPE, .autoindent = __i_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+    QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
@@ -620,6 +686,23 @@ syn_t u_syn[] = {
     "i", __u_NULL_ARRAY, i_extensions, i_shebangs, i_keywords, i_operators,
     i_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_i_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs
+  },
+  {
+    "zig", __u_NULL_ARRAY, zig_extensions, __u_NULL_ARRAY, zig_keywords, zig_operators,
+    zig_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_zig_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs
+  },
+  {
+    "lua", __u_NULL_ARRAY, lua_extensions, lua_shebangs, lua_keywords, lua_operators,
+    lua_singleline_comment, lua_multiline_comment_start, lua_multiline_comment_end,
+    NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_lua_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs,
+  },
+  {
+    "lai", __u_NULL_ARRAY, lai_extensions, lai_shebangs, lai_keywords, lai_operators,
+    lai_singleline_comment, lai_multiline_comment_start, lai_multiline_comment_end,
+    NULL, HL_STRINGS, HL_NUMBERS,
+    __u_syn_parser, __u_lai_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs,
   }
 };
 
@@ -704,9 +787,8 @@ private void __init_usr__ (ed_t *this) {
   ExprClass = __init_expr__ ();
 #endif
 
-  Ed.syn.append (this, u_syn[0]);
-  Ed.syn.append (this, u_syn[1]);
-  Ed.syn.append (this, u_syn[2]);
+  for (size_t i = 0; i < ARRLEN(u_syn); i++)
+    Ed.syn.append (this, u_syn[i]);
 }
 
 private void __deinit_usr__ (void) {

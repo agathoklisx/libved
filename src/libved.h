@@ -125,6 +125,8 @@
 #define IsAlsoAHex(c)    (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
 #define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
 
+#define ARRLEN(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 #define NO_GLOBAL 0
 #define GLOBAL    1
 
@@ -336,8 +338,10 @@
 #define TERM_CURSOR_HIDE_LEN        6
 #define TERM_CURSOR_SHOW            "\033[?25h"
 #define TERM_CURSOR_SHOW_LEN        6
-#define TERM_CURSOR_RESTORE         "\033[?25h"
-#define TERM_CURSOR_RESTORE_LEN     6
+#define TERM_CURSOR_SAVE            "\0337"
+#define TERM_CURSOR_SAVE_LEN        2
+#define TERM_CURSOR_RESTORE         "\0338"
+#define TERM_CURSOR_RESTORE_LEN     2
 #define TERM_LINE_CLR_EOL           "\033[2K"
 #define TERM_LINE_CLR_EOL_LEN       4
 #define TERM_BOLD                   "\033[1m"
@@ -967,6 +971,7 @@ NewSubSelf (term, cursor,
     (*set_pos) (term_t *, int, int),
     (*hide) (term_t *),
     (*show) (term_t *),
+    (*save) (term_t *),
     (*restore) (term_t *);
 
   int (*get_pos) (term_t *, int *, int *);

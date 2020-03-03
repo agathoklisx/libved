@@ -917,7 +917,6 @@ static const utf8 offsetsFromUTF8[6] = {
  */
 
 #define ONE_PAGE ($my(dim->num_rows) - 1)
-#define ARRLEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define isnotutf8(c) IS_UTF8 (c) == 0
 #define isnotatty(fd__) (0 == isatty ((fd__)))
 #define IsNotDirSep(c) (c != DIR_SEP)
