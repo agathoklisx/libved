@@ -5507,8 +5507,11 @@ private row_t *buf_current_pop_next (buf_t *this) {
 
   this->current = this->current->next;
   this->cur_idx++;
-  row_t *row; __buf_current_delete (this, &row);
-  ifnot (this->cur_idx + 1 is this->num_items) {
+  int islastidx = this->cur_idx + 1 == this->num_items;
+  row_t *row;
+  __buf_current_delete (this, &row);
+
+  ifnot (islastidx) {
     this->current = this->current->prev;
     this->cur_idx--;
   }
