@@ -595,13 +595,13 @@ char lua_singleline_comment[] = "--";
 char lua_multiline_comment_start[] = "--[[";
 char lua_multiline_comment_end[] = "]]";
 
-char *lai_extensions[] = {".lai", ".du", NULL};
-char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/doctu", NULL};
+char *lai_extensions[] = {".lai", ".du", ".yala", NULL};
+char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "#!/usr/bin/doctu", NULL};
 char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
 char *lai_keywords[] = {
     "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
     "is I", "isnot I", "nil E", "not I", "var V", "return V", "and I", "or I",
-    "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
+    "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
     "trait T", "true V", "false E", "import T", "hasAttribute F", "getAttribute F",
     "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
     "use T", "elseif I", "static T",

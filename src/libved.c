@@ -2561,16 +2561,20 @@ public dir_T __init_dir__ (void) {
   );
 }
 
-/* a pointer to (base) name, i wonder if this is safe */
 private char *path_basename (char *name) {
   ifnot (name) return name;
   char *p = nullbyte_in_str (name);
   if (p is NULL) p = name + bytelen (name) + 1;
+  if (p - 1 is name and IS_DIR_SEP (*(p - 1)))
+    return p - 1;
+
+  while (p > name and IS_DIR_SEP (*(p - 1))) p--;
   while (p > name and IsNotDirSep (*(p - 1))) --p;
+  if (p is name and IS_DIR_SEP (*p))
+    return DIR_SEP_STR;
   return p;
 }
 
-/* likewise */
 private char *path_extname (char *name) {
   ifnot (name) return name;
   char *p = nullbyte_in_str (name);

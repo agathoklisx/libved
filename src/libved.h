@@ -113,6 +113,7 @@
 #define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
 #define PATH_SEP        ':'
 #define DIR_SEP         '/'
+#define DIR_SEP_STR     "/"
 #define IS_DIR_SEP(c)   (c == DIR_SEP)
 #define IS_DIR_ABS(p)   IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
