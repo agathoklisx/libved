@@ -20,12 +20,12 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   lex = WORD_LEXICON_FILE;
 #endif
 
-  Msg.send_fmt (ed, COLOR_YELLOW, "translating [%s]", word);
-
   ifnot (File.exists (lex)) {
     Msg.error (ed, "%s(): lexicon has not been found", __func__);
     return NOTOK;
   }
+
+  Msg.send_fmt (ed, COLOR_YELLOW, "translating [%s]", word);
 
   FILE *fp = fopen (lex, "r");
   if (NULL is fp) {
@@ -58,4 +58,21 @@ private int __translate_word__ (buf_t **thisp, char *word) {
   if (line isnot NULL) free (line);
 
   return match;
+}
+
+private int __edit_lexicon__ (buf_t **thisp) {
+  buf_t *this = *thisp;
+  char *lex = NULL;
+
+#ifndef WORD_LEXICON_FILE
+  ed_t *ed = E(get.current);
+  Msg.error (ed, "%s(): lexikon has not been defined", __func__);
+  return NOTOK;
+#else
+  lex = WORD_LEXICON_FILE;
+#endif
+
+  win_t *w = Buf.get.parent (this);
+  Win.edit_fname (w, thisp, lex, 0, 0, 1, 0);
+  return OK;
 }

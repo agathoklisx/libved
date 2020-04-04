@@ -312,6 +312,7 @@ private void __u_add_rline_user_commands__ (ed_t *this) {
 
 #ifdef WORD_LEXICON_FILE
   Ed.append.rline_command (this, "~translate", 0, 0);
+  Ed.append.command_arg (this, "~translate", "--edit", 6);
 #endif
 }
 
@@ -368,6 +369,13 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
 #ifdef WORD_LEXICON_FILE
   } else if (Cstring.eq (com->bytes, "~translate")) {
+
+    int edit = Rline.arg.exists (rl, "edit");
+    if (edit) {
+      retval = __edit_lexicon__ (thisp);
+      goto theend;
+    }
+
     vstr_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
 
