@@ -117,14 +117,14 @@
 #define IS_DIR_SEP(c)   (c == DIR_SEP)
 #define IS_DIR_ABS(p)   IS_DIR_SEP (p[0])
 #define IS_DIGIT(c)     ('0' <= (c) && (c) <= '9')
-#define IS_CNTRL(c)     ((c < 0x20 and c >= 0) || c == 0x7f)
+#define IS_CNTRL(c)     ((c < 0x20 && c >= 0) || c == 0x7f)
 #define IS_SPACE(c)     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
 #define IS_ALPHA(c)     (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
 #define IS_ALNUM(c)     (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_HEX_DIGIT(c) (IS_DIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F')))
 
-#define IsAlsoAHex(c)    (((c) >= 'a' and (c) <= 'f') or ((c) >= 'A' and (c) <= 'F'))
-#define IsAlsoANumber(c) ((c) is '.' or (c) is 'x' or IsAlsoAHex (c))
+#define IsAlsoAHex(c)    (((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
+#define IsAlsoANumber(c) ((c) == '.' || (c) == 'x' || IsAlsoAHex (c))
 
 #define ARRLEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -296,25 +296,25 @@
 #define COLOR_MENU_HEADER COLOR_CYAN
 #define COLOR_DIVIDER     COLOR_MAGENTA
 
-#define HL_NORMAL       COLOR_NORMAL
-#define HL_VISUAL       COLOR_CYAN
-#define HL_IDENTIFIER   COLOR_BLUE
-#define HL_KEYWORD      COLOR_MAGENTA
-#define HL_OPERATOR     COLOR_MAGENTA
-#define HL_FUNCTION     COLOR_MAGENTA
-#define HL_VARIABLE     COLOR_BLUE
-#define HL_TYPE         COLOR_BLUE
-#define HL_DEFINITION   COLOR_BLUE
-#define HL_COMMENT      COLOR_YELLOW
-#define HL_NUMBER       COLOR_MAGENTA
-#define HL_STRING_DELIM COLOR_GREEN
-#define HL_STRING       COLOR_YELLOW
-#define HL_TRAILING_WS  COLOR_RED
-#define HL_TAB          COLOR_CYAN
-#define HL_ERROR        COLOR_RED
-#define HL_QUOTE        COLOR_YELLOW
-#define HL_QUOTE_1      COLOR_BLUE
-#define HL_QUOTE_2      COLOR_CYAN
+#define HL_NORMAL         COLOR_NORMAL
+#define HL_VISUAL         COLOR_CYAN
+#define HL_IDENTIFIER     COLOR_BLUE
+#define HL_KEYWORD        COLOR_MAGENTA
+#define HL_OPERATOR       COLOR_MAGENTA
+#define HL_FUNCTION       COLOR_MAGENTA
+#define HL_VARIABLE       COLOR_BLUE
+#define HL_TYPE           COLOR_BLUE
+#define HL_DEFINITION     COLOR_BLUE
+#define HL_COMMENT        COLOR_YELLOW
+#define HL_NUMBER         COLOR_MAGENTA
+#define HL_STRING_DELIM   COLOR_GREEN
+#define HL_STRING         COLOR_YELLOW
+#define HL_TRAILING_WS    COLOR_RED
+#define HL_TAB            COLOR_CYAN
+#define HL_ERROR          COLOR_RED
+#define HL_QUOTE          COLOR_YELLOW
+#define HL_QUOTE_1        COLOR_BLUE
+#define HL_QUOTE_2        COLOR_CYAN
 
 #define COLOR_CHARS  "IKCONSDFVTMEQ><"
 // I: identifier, K: keyword, C: comment, O: operator, N: number, S: string

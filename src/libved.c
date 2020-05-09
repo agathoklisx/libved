@@ -7923,6 +7923,7 @@ private void ved_on_blankline (buf_t *this) {
 
 private int ved_normal_right (buf_t *this, int count, int draw) {
   int is_ins_mode = IS_MODE (INSERT_MODE);
+
   if ($mycur(cur_col_idx) is ((int) $mycur(data)->num_bytes -
       ustring_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]) +
       is_ins_mode) or 0 is $mycur(data)->num_bytes or
@@ -7935,8 +7936,14 @@ private int ved_normal_right (buf_t *this, int count, int draw) {
 
   vchar_t *it = buf_get_line_nth ($my(line), $mycur(cur_col_idx));
 
+  int orig_count = count;
   while (count-- and it) {
-    if (it->code is '\n' or it is $my(line)->tail) break;
+    if (it->code is '\n' or it is $my(line)->tail) {
+      if (count is orig_count - 1)
+        return NOTHING_TODO;
+      else
+        break;
+    }
 
     $mycur(cur_col_idx) += it->len;
 
@@ -8104,11 +8111,13 @@ private int ved_normal_end_word (buf_t **thisp, int count, int run_insert_mode, 
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   int cur_idx = $mycur(cur_col_idx);
-  int retval = NOTHING_TODO;
+  int retval = count <= 0 ? NOTHING_TODO : DONE;
   for (int i = 0; i < count; i++) {
     while (($mycur(cur_col_idx) isnot (int) $mycur(data)->num_bytes - 1) and
-          (0 is (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))))
+          (0 is (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)])))) {
       retval = ved_normal_right (this, 1, DONOT_DRAW);
+      if (NOTHING_TODO == retval) break;
+   }
 
     if (NOTHING_TODO is retval) break;
     if (NOTHING_TODO is (retval = ved_normal_right (this, 1, DONOT_DRAW))) break;

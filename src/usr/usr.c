@@ -608,8 +608,8 @@ char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "
 char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
 char *lai_keywords[] = {
     "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
-    "is I", "isnot I", "nil E", "not I", "var V", "return V", "and I", "or I",
-    "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
+    "is I", "isnot I", "nil E", "not I", "var V", "const V", "return V", "and I",
+    "or I", "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
     "trait T", "true V", "false E", "import T", "hasAttribute F", "getAttribute F",
     "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
     "use T", "elseif I", "static T",
