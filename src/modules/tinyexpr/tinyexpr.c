@@ -61,7 +61,7 @@ enum {
 enum {TE_CONSTANT = 1};
 
 
-typedef struct state {
+typedef struct te_state {
     const char *start;
     const char *next;
     int type;
@@ -70,21 +70,21 @@ typedef struct state {
 
     const te_variable *lookup;
     int lookup_len;
-} state;
+} te_state;
 
 
 #define TYPE_MASK(TYPE) ((TYPE)&0x0000001F)
 
 #define IS_PURE(TYPE) (((TYPE) & TE_FLAG_PURE) != 0)
-#define IS_FUNCTION(TYPE) (((TYPE) & TE_FUNCTION0) != 0)
-#define IS_CLOSURE(TYPE) (((TYPE) & TE_CLOSURE0) != 0)
+#define TE_IS_FUNCTION(TYPE) (((TYPE) & TE_FUNCTION0) != 0)
+#define TE_IS_CLOSURE(TYPE) (((TYPE) & TE_CLOSURE0) != 0)
 #define ARITY(TYPE) ( ((TYPE) & (TE_FUNCTION0 | TE_CLOSURE0)) ? ((TYPE) & 0x00000007) : 0 )
 #define NEW_EXPR(type, ...) new_expr((type), (const te_expr*[]){__VA_ARGS__})
 
 static te_expr *new_expr(const int type, const te_expr *parameters[]) {
     const int arity = ARITY(type);
     const int psize = sizeof(void*) * arity;
-    const int size = (sizeof(te_expr) - sizeof(void*)) + psize + (IS_CLOSURE(type) ? sizeof(void*) : 0);
+    const int size = (sizeof(te_expr) - sizeof(void*)) + psize + (TE_IS_CLOSURE(type) ? sizeof(void*) : 0);
     te_expr *ret = malloc(size);
     memset(ret, 0, size);
     if (arity && parameters) {
@@ -203,7 +203,7 @@ static const te_variable *find_builtin(const char *name, int len) {
     return 0;
 }
 
-static const te_variable *find_lookup(const state *s, const char *name, int len) {
+static const te_variable *find_lookup(const te_state *s, const char *name, int len) {
     int iters;
     const te_variable *var;
     if (!s->lookup) return 0;
@@ -226,7 +226,7 @@ static double negate(double a) {return -a;}
 static double comma(double a, double b) {(void)a; return b;}
 
 
-void next_token(state *s) {
+void next_token(te_state *s) {
     s->type = TOK_NULL;
 
     do {
@@ -293,11 +293,11 @@ void next_token(state *s) {
 }
 
 
-static te_expr *list(state *s);
-static te_expr *expr(state *s);
-static te_expr *power(state *s);
+static te_expr *te_list(te_state *s);
+static te_expr *expr(te_state *s);
+static te_expr *power(te_state *s);
 
-static te_expr *base(state *s) {
+static te_expr *base(te_state *s) {
     /* <base>      =    <constant> | <variable> | <function-0> {"(" ")"} | <function-1> <power> | <function-X> "(" <expr> {"," <expr>} ")" | "(" <list> ")" */
     te_expr *ret;
     int arity;
@@ -319,7 +319,7 @@ static te_expr *base(state *s) {
         case TE_CLOSURE0:
             ret = new_expr(s->type, 0);
             ret->function = s->function;
-            if (IS_CLOSURE(s->type)) ret->parameters[0] = s->context;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[0] = s->context;
             next_token(s);
             if (s->type == TOK_OPEN) {
                 next_token(s);
@@ -335,7 +335,7 @@ static te_expr *base(state *s) {
         case TE_CLOSURE1:
             ret = new_expr(s->type, 0);
             ret->function = s->function;
-            if (IS_CLOSURE(s->type)) ret->parameters[1] = s->context;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[1] = s->context;
             next_token(s);
             ret->parameters[0] = power(s);
             break;
@@ -348,7 +348,7 @@ static te_expr *base(state *s) {
 
             ret = new_expr(s->type, 0);
             ret->function = s->function;
-            if (IS_CLOSURE(s->type)) ret->parameters[arity] = s->context;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[arity] = s->context;
             next_token(s);
 
             if (s->type != TOK_OPEN) {
@@ -373,7 +373,7 @@ static te_expr *base(state *s) {
 
         case TOK_OPEN:
             next_token(s);
-            ret = list(s);
+            ret = te_list(s);
             if (s->type != TOK_CLOSE) {
                 s->type = TOK_ERROR;
             } else {
@@ -392,7 +392,7 @@ static te_expr *base(state *s) {
 }
 
 
-static te_expr *power(state *s) {
+static te_expr *power(te_state *s) {
     /* <power>     =    {("-" | "+")} <base> */
     int sign = 1;
     while (s->type == TOK_INFIX && (s->function == te_add || s->function == te_sub)) {
@@ -413,7 +413,7 @@ static te_expr *power(state *s) {
 }
 
 #ifdef TE_POW_FROM_RIGHT
-static te_expr *factor(state *s) {
+static te_expr *factor(te_state *s) {
     /* <factor>    =    <power> {"^" <power>} */
     te_expr *ret = power(s);
 
@@ -452,7 +452,7 @@ static te_expr *factor(state *s) {
     return ret;
 }
 #else
-static te_expr *factor(state *s) {
+static te_expr *factor(te_state *s) {
     /* <factor>    =    <power> {"^" <power>} */
     te_expr *ret = power(s);
 
@@ -469,7 +469,7 @@ static te_expr *factor(state *s) {
 
 
 
-static te_expr *term(state *s) {
+static te_expr *term(te_state *s) {
     /* <term>      =    <factor> {("*" | "/" | "%") <factor>} */
     te_expr *ret = factor(s);
 
@@ -484,7 +484,7 @@ static te_expr *term(state *s) {
 }
 
 
-static te_expr *expr(state *s) {
+static te_expr *expr(te_state *s) {
     /* <expr>      =    <term> {("+" | "-") <term>} */
     te_expr *ret = term(s);
 
@@ -499,7 +499,7 @@ static te_expr *expr(state *s) {
 }
 
 
-static te_expr *list(state *s) {
+static te_expr *te_list(te_state *s) {
     /* <list>      =    <expr> {"," <expr>} */
     te_expr *ret = expr(s);
 
@@ -587,13 +587,13 @@ static void optimize(te_expr *n) {
 
 
 te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error) {
-    state s;
+    te_state s;
     s.start = s.next = expression;
     s.lookup = variables;
     s.lookup_len = var_count;
 
     next_token(&s);
-    te_expr *expr = list(&s);
+    te_expr *expr = te_list(&s);
 
     if (s.type != TOK_END) {
         te_free(expr);
