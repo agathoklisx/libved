@@ -17,7 +17,10 @@
 public Class (This) *__THIS__ = NULL;
 public Self (This)  *__SELF__ = NULL;
 public Class (I)    *__I__    = NULL;
+
+#if HAS_RUNTIME_INTERPRETER
 public Class (L)    *__L__    = NULL;
+#endif
 
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"

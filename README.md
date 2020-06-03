@@ -257,6 +257,9 @@
 
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
    HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
+   HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
+   HAS_RUNTIME_INTERPRETER=1|0 (en|dis)able runtime interpreter (default 0)
+   HAS_CURL=1|0     (en|dis)able libcurl, used by the interpreter (default 0)
    SPELL_DICTIONARY="path/to/spell_dictionary" (default $(SYSDATADIR)/spell/spell.txt)
    SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
    /* The above options requires HAS_USER_EXTENSIONS=1,
@@ -513,6 +516,10 @@ Visual mode:
  |             note: this requires HAS_USER_EXTENSIONS|HAS_SPELL          |
  | M                 | evaluate selected as a math expression [(char|line)wise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
+ | I                 | interpret selected [linewise]
+ |             note: this requires HAS_USER_EXTENSIONS|HAS_RUNTIME_INTERPRETER |
+ | C                 | compile selected as C code [linewise]
+ |             note: this requires HAS_USER_EXTENSIONS|HAS_TCC |
  | TAB               | triggers a completion menu with the correspondent to the
  |                     specific mode above actions    |
  | escape            | aborts                         |
@@ -570,15 +577,18 @@ Search:
 
   These correspond to 'A'-'Z' and 'a'-'z' respectively.
 
-/* File operation mode
+  File operation mode.
    This is triggered with 'F' in normal mode and for now can:
      - validate current buffer for invalid sequences
      - write this file
+     - compile this file with tcc C compiler
+     - interpret this file
 
-   As an extension and if elinks browser is install, can open this file
+   As an extension and if elinks browser is installed, it can open this file
    in a running elinks instance.
 
-/* Command line mode:
+
+  Command line mode:
    (note) Commands do not get a range as in vi[like], but from the command line
    switch --range=. Generally speaking the experience in the command line should
    feel more like a shell and specifically the zsh completion way.
@@ -891,6 +901,27 @@ Search:
       Many many thanks to the above mentioned project.
    */
 
+   /* C compiler
+      The application can compile C code (using the tcc library as a compiler) in
+      two ways:
+         - in visual linewise mode
+         - file operation mode
+
+      Assumed that an error such a segmentation fault can bring down the whole
+      system.
+   */
+
+   /* Runtime interpreter
+      The application can interpret code (using the Dictu programming language with
+      a couple of modifications) in two ways:
+         - in visual linewise mode
+         - file operation mode
+
+      Notes:
+         - System.exit() is disabled
+         - without HAS_CURL=1 the HTTP module is disabled
+   */
+
    /* Work has been started on the Syntax and Filetypes, with the latter can be play
       a very interesting role, with regards to personalization, but also can be quite
       powerful of a tool, for all kind of things. As it had been said already it is an
@@ -1047,6 +1078,8 @@ Search:
       `/some/dir/*'
       `*string' or `string*string' or `string*'
         (likewise for directories)
+
+   Note: many commands has a --recursive option
  */
 
 /* Registers and Marks are supported with the minimal features, same with
@@ -1457,7 +1490,9 @@ Search:
   - jsmn-example (the state machine for jsmn) (https://github.com/alisdair/jsmn-example)
   - tinyexpr (https://github.com/codeplea/tinyexpr)
   - argparse (https://github.com/cofyc/argparse)
-  - Tinyscript (https://github.com/totalspectrum/)
+  - Tinyscript (https://github.com/totalspectrum)
+  - Dictu (https://github.com/jason2605/Dictu)
+  - Tcc (http://repo.or.cz/tinycc)
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
  */
@@ -1578,7 +1613,7 @@ Search:
    ))). I mean that was the thought.
 
 
- /* THE FAR AWAY FUTURE
+  THE FAR AWAY FUTURE
     - Self Sufficiency, so to be the easiest thing ever to integrate
 
     - Underlying Machine, so enough capabilities and easy to use them
@@ -1763,9 +1798,9 @@ Search:
 
       - educational, documentation and understanding, as this is a serious personal
         motivation for programming in general, but especially programming in C.
-  */
+ */
 
- * We all have to thank each other for their work to open/free source way of thinking
+ /* We all have to thank each other for their work to open/free source way of thinking
    and life.
 
    Specifically, we all first owe to our stubborn hero Richard (time will give us all
@@ -1808,4 +1843,5 @@ Search:
    And if there is a way, we have to found it and describe it.
    So have a good research, as we go back (or forth anyway) to our only duty, which
    it is the way to our Re-Evolution.
-``
+ */
+```

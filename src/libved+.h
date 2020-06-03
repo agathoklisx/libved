@@ -133,7 +133,63 @@ NewType (argparse,
 typedef l_t Thislself_t;
 typedef l_table_t Thisltableself_t;
 typedef lang_t L_T;
-#endif
+#endif /* HAS_RUNTIME_INTERPRETER */
+
+#if HAS_TCC
+#include <libtcc.h>
+
+#define TCC_CONFIG_TCC_DIR    1
+#define TCC_ADD_INC_PATH      2
+#define TCC_ADD_SYS_INC_PATH  3
+#define TCC_ADD_LPATH         4
+#define TCC_ADD_LIB           5
+#define TCC_SET_OUTPUT_PATH   6
+#define TCC_COMPILE_FILE      7
+
+typedef void (*TCCErrorFunc) (void *, const char *);
+
+NewType (tcc,
+  TCCState *handler;
+  int retval;
+  int state;
+  int id;
+);
+
+NewSubSelf (tcc, set,
+  int
+    (*path) (tcc_t *, char *, int),
+    (*output_type) (tcc_t *, int);
+
+  void (*options) (tcc_t *, char *);
+  void (*error_handler) (tcc_t *, void *, TCCErrorFunc);
+);
+
+NewProp (tcc,
+  int id;
+);
+
+NewSelf (tcc,
+  Prop (tcc) prop;
+  SubSelf (tcc, set) set;
+
+  tcc_t *(*new) (void);
+    void (*free) (tcc_t **);
+
+  int
+     (*compile_string) (tcc_t *, char *),
+     (*compile_file) (tcc_t *, char *),
+     (*run) (tcc_t *, int, char **),
+     (*relocate) (tcc_t *, void *);
+);
+
+NewClass (tcc,
+  Self (tcc) self;
+);
+
+public tcc_T __init_tcc__ (void);
+public void __deinit_tcc__ (tcc_T **this);
+
+#endif /* HAS_TCC */
 
 private void __init_ext__ (ed_t *);
 private void __deinit_ext__ (void);

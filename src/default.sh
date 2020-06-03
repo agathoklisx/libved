@@ -48,6 +48,7 @@ make                                                \
     HAS_SPELL=0                                     \
     HAS_JSON=0                                      \
     HAS_EXPR=0                                      \
+    HAS_TCC=0                                       \
     HAS_LOCAL_EXTENSIONS=0                          \
     HAS_HISTORY=0                                   \
     CLEAR_BLANKLINES=1                              \

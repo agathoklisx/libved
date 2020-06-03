@@ -155,17 +155,19 @@ HEADERS = $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 THIS_LAI_HEADER = lib/lai/lai.h
 SYS_LAI_HEADER = $(SYSINCDIR)/lai.h
 
+HAS_RUNTIME_INTERPRETER := 0
+
 ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
   HEADERS += $(SYS_LAI_HEADER)
 endif
 
-#header: $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 header: $(HEADERS)
+
 $(SYSINCDIR)/$(THIS_HEADER):
 	@$(CP) $(THIS_HEADER) $(SYSINCDIR)
 $(SYSINCDIR)/$(THIS_HEADER_EXT):
 	@$(CP) $(THIS_HEADER_EXT) $(SYSINCDIR)
-$(SYSINCDIR)/lai.h:
+$(SYS_LAI_HEADER):
 	@$(CP) $(THIS_LAI_HEADER) $(SYSINCDIR)
 
 preproc:
@@ -179,7 +181,7 @@ clean_static: clean_header
 clean_header:
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER)     || $(RM) $(SYSINCDIR)/$(THIS_HEADER)
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
-	@$(TEST) ! -f $(SYSINCDIR)/lai.h              || $(RM) $(SYSINCDIR)/lai.h
+	@$(TEST) ! -f $(SYS_LAI_HEADER)               || $(RM) $(SYS_LAI_HEADER)
 
 #----------------------------------------------------------#
 
@@ -192,6 +194,10 @@ SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
 SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
 
 #----------------------------------------------------------#
+APPFLAGS  :=
+STATIC_APP_FLAGS :=
+SHARED_APP_FLAGS :=
+
 REQOBJS    =  libved+.c
 REQOBJS   +=  lib/argparse/argparse.c
 REQOBJS   +=  lib/map/int_map.c
@@ -201,13 +207,17 @@ ifneq ($(HAS_JSON), 0)
   REQOBJS += lib/json/json.c
 endif
 
-HAS_RUNTIME_INTERPRETER := 0
+HAS_TCC := 0
+
+ifneq ($(HAS_TCC), 0)
+  REQOBJS += lib/Ccompilers/tcc/tcc.c
+endif
 
 ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
   REQOBJS += lib/lai/lai.c
 endif
 
-APPFLAGS  =  $(REQOBJS)
+APPFLAGS  +=  $(REQOBJS)
 APPFLAGS += -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
 
 HAS_LOCAL_EXTENSIONS := 0
@@ -249,15 +259,11 @@ HAS_SPELL := 0
 SPELL_DICTIONARY := $(SYSDATADIR)/spell/spell.txt
 SPELL_DICTIONARY_NUM_ENTRIES := 10000
 
+HAS_CURL := 0
 HAS_JSON := 0
-
 HAS_EXPR := 0
 
-HAS_RUNTIME_INTERPRETER :=0
-
 WORD_LEXICON_FILE :=
-
-STATIC_APP_FLAGS :=
 
 ifneq ($(HAS_USER_EXTENSIONS), 0)
   APPFLAGS += -DHAS_USER_EXTENSIONS
@@ -285,12 +291,21 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
     APPFLAGS += -DWORD_LEXICON_FILE='"$(WORD_LEXICON_FILE)"'
   endif
 
+  ifneq ($(HAS_TCC), 0)
+    APPFLAGS += -DHAS_TCC -ltcc -ldl
+  endif
+
 endif
 
 APPFLAGS += $(FLAGS)
 
 ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
   STATIC_APP_FLAGS += -DDISABLE_HTTP
+  ifeq ($(HAS_CURL), 0)
+    SHARED_APP_FLAGS += -DDISABLE_HTTP
+  else
+    SHARED_APP_FLAGS += -lcurl -DHAS_CURL
+  endif
   APPFLAGS += -DHAS_RUNTIME_INTERPRETER -Wno-strict-aliasing
 endif
 
@@ -304,7 +319,7 @@ clean_veda_static:
 
 veda-shared: shared $(SYSEDSHARED)
 $(SYSEDSHARED):
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -o $(EDSHARED)
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(SHARED_APP_FLAGS) -o $(EDSHARED)
 	@$(INSTALL) -v $(EDSHARED) $(SYSBINDIR)
 	@$(RM) $(EDSHARED)
 

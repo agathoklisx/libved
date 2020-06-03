@@ -21,6 +21,13 @@ static expr_T ExprClass;
 #define  Expr ExprClass.self
 #endif
 
+#if HAS_TCC
+
+static tcc_T TccClass;
+#define Tcc TccClass.self
+
+#endif
+
 NewType (uenv,
   string_t *man_exec;
   string_t *elinks_exec;
@@ -131,7 +138,7 @@ private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
   Expr.free (&expr);
   return retval;
 }
-#endif // HAS_EXPR
+#endif /* HAS_EXPR */
 
 #ifdef HAS_RUNTIME_INTERPRETER
 private int __interpret__ (buf_t **thisp, char *bytes) {
@@ -150,7 +157,74 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
   Win.draw (w);
   return OK;
 }
-#endif // HAS_RUNTIME_INTERPRETER
+#endif /* HAS_RUNTIME_INTERPRETER */
+
+#ifdef HAS_TCC
+private void c_tcc_error_cb (void *obj, const char *msg) {
+  (void) obj;
+  ed_t *ed = E(get.current);
+  Msg.write (ed, "====- Tcc Error Message -====\n");
+  Msg.write (ed, (char *) msg);
+}
+
+private int c_tcc_string_add_lnums_cb (vstr_t *str, char *tok, void *obj) {
+  (void) str;
+  ed_t *ed = E(get.current);
+  int *lnr = (int *) obj;
+  Ed.append.message_fmt (ed, "%d|%s", ++(*lnr), tok);
+  return OK;
+}
+
+private void c_tcc_string_add_lnums (char *src) {
+  vstr_t unused;
+  int lnr = 0;
+  Cstring.chop (src, '\n', &unused, c_tcc_string_add_lnums_cb, &lnr);
+}
+
+private int c_tcc_string (buf_t **thisp, char *src) {
+  (void) thisp;
+  ed_t *ed = E(get.current);
+  tcc_t *this = Tcc.new ();
+
+  Tcc.set.error_handler (this, NULL, c_tcc_error_cb);
+  Tcc.set.output_type (this, TCC_OUTPUT_MEMORY);
+
+  int retval = NOTOK;
+  if (NOTOK is (retval = Tcc.compile_string (this, src))) {
+failed:
+    Ed.append.message (ed, "Failed to compile string\n");
+    c_tcc_string_add_lnums (src);
+    goto theend;
+  }
+
+  char *argv[] = {"libved_module"};
+  if (NOTOK is (retval = Tcc.run (this, 1, argv)))
+    goto failed;
+
+theend:
+  Tcc.free (&this);
+  Ed.append.message_fmt (ed, "exitstatus: %d\n", retval);
+  return retval;
+}
+
+private int __tcc_compile__ (buf_t **thisp, string_t *src) {
+  ed_t *ed = E(get.current);
+  term_t *term = Ed.get.term (ed);
+  Term.reset (term);
+  int exit_code = c_tcc_string (thisp, src->bytes);
+  String.free (src);
+  Term.set_mode (term, 'r');
+  Input.get (term);
+  Term.set (term);
+  Ed.draw.current_win (ed);
+
+  if (NOTOK is exit_code)
+    Ed.messages (ed, thisp, NOT_AT_EOF);
+
+  return exit_code;
+}
+
+#endif /* HAS_TCC */
 
 private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
   (void) this; (void) fp;
@@ -197,6 +271,22 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     break;
 #endif
 
+#if HAS_TCC
+    case 'C': {
+      int flags = Buf.get.flags (*thisp);
+      if (0 is (flags & BUF_IS_SPECIAL) and
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+        vstr_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
+        ifnot (NULL is lines) {
+          retval = __tcc_compile__ (thisp, Vstring.join (lines, "\n"));
+          Vstring.free (lines);
+        } else
+          retval = NOTOK;
+      }
+    }
+    break;
+#endif
+
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -208,24 +298,35 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 #if HAS_RUNTIME_INTERPRETER
   num_actions++;
 #endif
+#if HAS_TCC
+  num_actions++;
+#endif
 
   utf8 chars[] = {
 #if HAS_RUNTIME_INTERPRETER
   'I',
+#endif
+#if HAS_TCC
+  'C',
 #endif
  'B'};
   char actions[] =
 #if HAS_RUNTIME_INTERPRETER
  "Interpret: Interpret file\n"
 #endif
+#if HAS_TCC
+ "Compile file with tcc compiler\n"
+#endif
  "Browser: Open file in the text browser (elinks)";
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
 }
 
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
-  (void) vstr; (void) action;
+  (void) vstr;
 
   int retval = NO_CALLBACK_FUNCTION;
+  if (Cstring.eq_n (action, "Math", 4)) c = 'm';
+
   switch (c) {
 #if HAS_SPELL
     case 'S': {
@@ -240,6 +341,13 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       else
         Rline.free (rl);
     }
+#endif
+
+#ifdef HAS_TCC
+    case 'C': {
+      return __tcc_compile__ (thisp, Vstring.join (vstr, "\n"));
+    }
+      break;
 #endif
 
 #ifdef HAS_EXPR
@@ -273,6 +381,10 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   num_actions++;
 #endif
 
+#if HAS_TCC
+  num_actions++;
+#endif
+
 #if HAS_EXPR
   num_actions++;
 #endif
@@ -287,6 +399,9 @@ ifnot (num_actions) return;
 #if HAS_SPELL
   'S',
 #endif
+#if HAS_TCC
+  'C',
+#endif
 #if HAS_RUNTIME_INTERPRETER
   'I',
 #endif
@@ -298,6 +413,9 @@ ifnot (num_actions) return;
   char actions[] =
 #if HAS_SPELL
      "Spell line[s]\n"
+#endif
+#if HAS_TCC
+  "Compile lines with tcc\n"
 #endif
 #if HAS_RUNTIME_INTERPRETER
      "Interpret\n"
@@ -861,6 +979,10 @@ private void __init_usr__ (ed_t *this) {
   ExprClass = __init_expr__ ();
 #endif
 
+#if HAS_TCC
+  TccClass = __init_tcc__ ();
+#endif
+
 #if HAS_RUNTIME_INTERPRETER
   __L__->states[__L__->cur_state] = L.init ("__global__", 0, NULL);
 #endif
@@ -887,9 +1009,5 @@ private void __deinit_usr__ (void) {
 #if HAS_EXPR
   __deinit_expr__ (&ExprClass);
 #endif
-
-//#if HAS_RUNTIME_INTERPRETER
-//  free (LState);
-//#endif
 
 }

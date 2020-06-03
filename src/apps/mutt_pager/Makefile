@@ -124,11 +124,23 @@ LIBVED_FLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
 
 LIBVED_CFLAGS += -I. -I$(SYSINCDIR) $(LIBVED_FLAGS)
 
-libved-header: $(LIBVED_SYSHEADER) $(LIBVED_SYSHEADER_EXT)
+HEADERS = $(LIBVED_SYSHEADER) $(LIBVED_SYSHEADER_EXT)
+
+THIS_LAI_HEADER = $(LIBVED_SRCDIR)/lib/lai/lai.h
+SYS_LAI_HEADER = $(SYSINCDIR)/lai.h
+HAS_RUNTIME_INTERPRETER := 0
+
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  HEADERS += $(SYS_LAI_HEADER)
+endif
+
+libved-header: $(HEADERS))
 $(LIBVED_SYSHEADER):
 	@$(CP) $(LIBVED_HEADER) $(SYSINCDIR)
 $(LIBVED_SYSHEADER_EXT):
 	@$(CP) $(LIBVED_HEADER_EXT) $(SYSINCDIR)
+$(SYS_LAI_HEADER):
+	@$(CP) $(THIS_LAI_HEADER) $(SYSINCDIR)
 
 libved-static: prereq libved-header $(LIBVED_STATIC_OBJ)
 $(LIBVED_STATIC_OBJ):
@@ -145,17 +157,18 @@ $(LIBVED_SHARED_OBJ):
 clean_libved: clean_libved_shared clean_libved_static clean_libved_header
 
 clean_libved_shared: clean_libved_header
-	@$(TEST) ! -f $(LIBVED_SHARED_OBJ) || $(RM) -v $(LIBVED_SHARED_OBJ)
+	@$(TEST) ! -f $(LIBVED_SHARED_OBJ)      || $(RM) -v $(LIBVED_SHARED_OBJ)
 	@$(TEST) ! -L $(LIBVED_SHARED_OBJ_LINK) || $(RM) -v $(LIBVED_SHARED_OBJ_LINK)
 
 clean_libved_static: clean_libved_header clean_libved_static_obj
 clean_libved_static_obj:
-	@$(TEST) ! -f $(LIBVED_STATIC_OBJ) || $(RM) -v $(LIBVED_STATIC_OBJ)
+	@$(TEST) ! -f $(LIBVED_STATIC_OBJ)      || $(RM) -v $(LIBVED_STATIC_OBJ)
 	@$(TEST) ! -L $(LIBVED_STATIC_OBJ_LINK) || $(RM) -v $(LIBVED_STATIC_OBJ_LINK)
 
 clean_libved_header:
-	@$(TEST) ! -f $(LIBVED_SYSHEADER) || $(RM) $(LIBVED_SYSHEADER)
+	@$(TEST) ! -f $(LIBVED_SYSHEADER)     || $(RM) $(LIBVED_SYSHEADER)
 	@$(TEST) ! -f $(LIBVED_SYSHEADER_EXT) || $(RM) $(LIBVED_SYSHEADER_EXT)
+	@$(TEST) ! -f $(SYS_LAI_HEADER)       || $(RM) $(SYS_LAI_HEADER)
 #----------------------------------------------------------#
 
 WORD_LEXICON_FILE :=
@@ -181,9 +194,23 @@ REQOBJS   +=  $(LIBVED_SRCDIR)/lib/argparse/argparse.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/map/int_map.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/i/i.c
 
+HAS_TCC  := 0
+HAS_CURL := 0
+
+ifneq ($(HAS_TCC), 0)
+  REQOBJS += $(LIBVED_SRCDIR)/lib/Ccompilers/tcc/tcc.c
+endif
+
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  REQOBJS += $(LIBVED_SRCDIR)/lib/lai/lai.c
+endif
+
 ifneq ($(HAS_JSON), 0)
   REQOBJS += $(LIBVED_SRCDIR)/lib/json/json.c
 endif
+
+STATIC_APP_FLAGS :=
+SHARED_APP_FLAGS :=
 
 APPFLAGS  =   $(REQOBJS)
 APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
@@ -198,6 +225,10 @@ APPFLAGS += $(FLAGS)
 
 ifeq (-$(SYSKERNEL), -Linux)
   APPFLAGS += -DSYS_IS_LINUX
+endif
+
+ifneq ($(HAS_TCC), 0)
+  SHARED_APP_FLAGS += -DHAS_TCC -ltcc -ldl
 endif
 
 APPFLAGS += -DHAS_LOCAL_EXTENSIONS
@@ -217,6 +248,17 @@ APPFLAGS += -DVED_DIR='"$(SYSDIR)"'
 APPFLAGS += -DVED_DATADIR='"$(SYSDATADIR)"'
 APPFLAGS += -DVED_TMPDIR='"$(SYSTMPDIR)"'
 
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  STATIC_APP_FLAGS += -DDISABLE_HTTP
+  ifeq ($(HAS_CURL), 0)
+    SHARED_APP_FLAGS += -DDISABLE_HTTP
+  else
+    SHARED_APP_FLAGS += -lcurl
+  endif
+
+  APPFLAGS += -DHAS_RUNTIME_INTERPRETER -Wno-strict-aliasing
+endif
+
 app-all: app-static app-shared
 
 clean_app: clean_app_static clean_app_shared
@@ -226,12 +268,12 @@ clean_veda_static:
 	@$(TEST) ! -f $(SYSAPPSTATIC) || $(RM) $(SYSAPPSTATIC)
 
 app-shared: Env libved-shared
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -o $(APPSHARED)
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(SHARED_APP_FLAGS) -o $(APPSHARED)
 	@$(INSTALL) -v $(APPSHARED) $(SYSBINDIR)
 	@$(RM) $(APPSHARED)
 
 app-static: Env libved-static
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) -o $(APPSTATIC)
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) $(STATIC_APP_FLAGS) -o $(APPSTATIC)
 	@$(INSTALL) -v $(APPSTATIC) $(SYSBINDIR)
 	@$(RM) $(APPSTATIC)
 
