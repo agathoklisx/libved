@@ -17,6 +17,7 @@
 public Class (This) *__THIS__ = NULL;
 public Self (This)  *__SELF__ = NULL;
 public Class (I)    *__I__    = NULL;
+public Class (L)    *__L__    = NULL;
 
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"
@@ -507,6 +508,41 @@ private i_t *i_init_instance (Class (This) *__t__, Class (I) *__i__) {
   return this;
 }
 
+#if HAS_RUNTIME_INTERPRETER
+
+private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
+  return initVM (0, src, argc, argv);
+}
+
+private void __deinit_lstate__ (Lstate **thisp) {
+  if (NULL is *thisp) return;
+  freeVM (*thisp);
+  *thisp = NULL;
+}
+
+public Class (L) *__init_l__ (int num_states) {
+  Class (L) *this =  Alloc (sizeof (Class (L)));
+
+  this->num_states = num_states;
+  this->states = Alloc (vm_sizeof () * this->num_states);
+  this->cur_state = 0;
+  return this;
+}
+
+public void __deinit_l__ (Class (L) **thisp) {
+  if (NULL is *thisp) return;
+  Class (L) *this = *thisp;
+
+  for (int i = 0; i < this->num_states; i++)
+    __deinit_lstate__ (&this->states[i]);
+
+  free (this->states);
+  free (this);
+  *thisp = NULL;
+}
+
+#endif /* HAS_RUNTIME_INTERPRETER */
+
 private void __init_self__ (Class (This) *this) {
   this->self = AllocSelf (This);
 
@@ -546,6 +582,20 @@ private void __init_self__ (Class (This) *this) {
     .load_file = i_load_file
   );
   ((Self (This) *) this->self)->i = in;
+
+#if HAS_RUNTIME_INTERPRETER
+  SubSelf (This, l) l = SubSelfInit (This, l,
+    .init = __init_lstate__,
+    .deinit = __deinit_lstate__,
+    .compile = interpret,
+    .new_string = copyString,
+    .table = SubSelfInit (Thisl, table,
+      .get = tableGet
+    )
+  );
+
+  ((Self (This) *) this->self)->l = l;
+#endif
 }
 
 private int __initialize__ (void) {
@@ -580,6 +630,12 @@ public Class (This) *__init_this__ (void) {
 
   ((Prop (This) *) $myprop)->__I__ = __I__;
 
+#if HAS_RUNTIME_INTERPRETER
+  __L__ = __init_l__ (2);
+  ((Prop (This) *) $myprop)->__L__ = __L__;
+  __L__->self = __SELF__->l;
+#endif
+
   return __THIS__;
 }
 
@@ -593,6 +649,10 @@ public void __deinit_this__ (Class (This) **thisp) {
   free (__SELF__);
 
   __deinit_i__ (&__I__);
+
+#if HAS_RUNTIME_INTERPRETER
+  __deinit_l__ (&__L__);
+#endif
 
   free (this->prop);
   free (this);

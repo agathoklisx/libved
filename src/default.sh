@@ -41,6 +41,7 @@ make                                                \
     SYSTMPDIR=$SYSTMPDIR                            \
     DEBUG=0                                         \
     DEBUG_INTERPRETER=1                             \
+    HAS_RUNTIME_INTERPRETER=0                       \
     HAS_REGEXP=0                                    \
     HAS_SHELL_COMMANDS=1                            \
     HAS_USER_EXTENSIONS=0                           \

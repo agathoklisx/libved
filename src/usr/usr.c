@@ -133,6 +133,25 @@ private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
 }
 #endif // HAS_EXPR
 
+#ifdef HAS_RUNTIME_INTERPRETER
+private int __interpret__ (buf_t **thisp, char *bytes) {
+  (void) thisp;
+  ed_t *ed = E(get.current);
+  term_t *term = Ed.get.term (ed);
+  Term.reset (term);
+  InterpretResult retval = interpret (__L__->states[__L__->cur_state], bytes);
+  (void) retval;
+  Term.set_mode (term, 'r');
+  Input.get (term);
+  Term.set (term);
+  win_t *w = Ed.get.current_win (ed);
+  int idx = Win.get.current_buf_idx (w);
+  Win.set.current_buf (w, idx, DONOT_DRAW);
+  Win.draw (w);
+  return OK;
+}
+#endif // HAS_RUNTIME_INTERPRETER
+
 private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
   (void) this; (void) fp;
   return 0;
@@ -162,6 +181,22 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       }
       break;
 
+#if HAS_RUNTIME_INTERPRETER
+    case 'I': {
+      int flags = Buf.get.flags (*thisp);
+      if (0 is (flags & BUF_IS_SPECIAL) and
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+        vstr_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
+        ifnot (NULL is lines) {
+          retval = __interpret__ (thisp, Vstring.join (lines, "\n")->bytes);
+          Vstring.free (lines);
+        } else
+          retval = NOTOK;
+      }
+    }
+    break;
+#endif
+
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -170,8 +205,20 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 
 private void __u_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
-  utf8 chars[] = {'B'};
-  char actions[] = "Browser: Open file in the text browser (elinks)";
+#if HAS_RUNTIME_INTERPRETER
+  num_actions++;
+#endif
+
+  utf8 chars[] = {
+#if HAS_RUNTIME_INTERPRETER
+  'I',
+#endif
+ 'B'};
+  char actions[] =
+#if HAS_RUNTIME_INTERPRETER
+ "Interpret: Interpret file\n"
+#endif
+ "Browser: Open file in the text browser (elinks)";
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
 }
 
@@ -204,6 +251,15 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       break;
 #endif
 
+#ifdef HAS_RUNTIME_INTERPRETER
+    case 'I': {
+      string_t *expression = Vstring.join (vstr, "\n");
+      retval = __interpret__ (thisp, expression->bytes);
+      String.free (expression);
+    }
+      break;
+#endif
+
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -221,11 +277,18 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   num_actions++;
 #endif
 
+#if HAS_RUNTIME_INTERPRETER
+  num_actions++;
+#endif
+
 ifnot (num_actions) return;
 
   utf8 chars[] = {
 #if HAS_SPELL
   'S',
+#endif
+#if HAS_RUNTIME_INTERPRETER
+  'I',
 #endif
 #if HAS_EXPR
   'm'
@@ -235,6 +298,9 @@ ifnot (num_actions) return;
   char actions[] =
 #if HAS_SPELL
      "Spell line[s]\n"
+#endif
+#if HAS_RUNTIME_INTERPRETER
+     "Interpret\n"
 #endif
 #if HAS_EXPR
      "math expression\n"
@@ -795,6 +861,10 @@ private void __init_usr__ (ed_t *this) {
   ExprClass = __init_expr__ ();
 #endif
 
+#if HAS_RUNTIME_INTERPRETER
+  __L__->states[__L__->cur_state] = L.init ("__global__", 0, NULL);
+#endif
+
   for (size_t i = 0; i < ARRLEN(u_syn); i++)
     Ed.syn.append (this, u_syn[i]);
 }
@@ -817,5 +887,9 @@ private void __deinit_usr__ (void) {
 #if HAS_EXPR
   __deinit_expr__ (&ExprClass);
 #endif
+
+//#if HAS_RUNTIME_INTERPRETER
+//  free (LState);
+//#endif
 
 }

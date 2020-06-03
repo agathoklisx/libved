@@ -411,7 +411,7 @@ private json_t *json_new (int num_tokens, JsonParse_cb parse_cb,
   return this;
 }
 
-private int json_parse (json_t *this) {
+private int parse_json (json_t *this) {
   if (NOTOK is this->get_data (this)) return NOTOK;
 
   this->retval = jsmn_parse (this->jsmn, this->data->bytes, this->data->num_bytes,
@@ -440,7 +440,7 @@ public Class (json) __init_json__ (void) {
     .self = SelfInit (json,
       .free = json_free,
       .new = json_new,
-      .parse = json_parse
+      .parse = parse_json
     )
   );
 }

@@ -14,6 +14,10 @@ extern Class (I)    *__I__;
 #define E(__f__, ...) This(e.__f__, ## __VA_ARGS__)
 #define In (*__I__).self
 
+#if HAS_RUNTIME_INTERPRETER
+#define L (*__L__).self
+#endif
+
 #define __E     __THIS__->__E__->self
 #define Ed      __THIS__->__E__->ed->self
 #define Cstring __THIS__->__E__->ed->Cstring.self
@@ -120,6 +124,15 @@ NewType (argparse,
 #if HAS_LOCAL_EXTENSIONS
   private void __init_local__ (ed_t *);
   private void __deinit_local__ (void);
+#endif
+
+#if HAS_RUNTIME_INTERPRETER
+#include <stdbool.h>
+#include <lai.h>
+
+typedef l_t Thislself_t;
+typedef l_table_t Thisltableself_t;
+typedef lang_t L_T;
 #endif
 
 private void __init_ext__ (ed_t *);
@@ -369,11 +382,19 @@ NewSelf (This,
   SubSelf (This, e) e;
   SubSelf (This, i) i;
   SubSelf (This, parse) parse;
+
+#if HAS_RUNTIME_INTERPRETER
+  SubSelf (This, l) l;
+#endif
 );
 
 NewProp (This,
   char *name;
   Class (I) *__I__;
+
+#if HAS_RUNTIME_INTERPRETER
+  Class (L) *__L__;
+#endif
 );
 
 public Class (This) *__init_this__ (void);

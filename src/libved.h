@@ -438,7 +438,7 @@ typedef ptrdiff_t msize_t;
 #define isnot !=
 #define and   &&
 #define or    ||
-#define ifnot(expr) if (0 == (expr))
+#define ifnot(__expr__) if (0 == (__expr__))
 #define loop(num_) for (int $i = 0; $i < (num_); $i++)
 #define forever for (;;)
 #define OK     0

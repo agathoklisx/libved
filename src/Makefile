@@ -1,5 +1,6 @@
 #----------------------------------------------------------#
 THIS_LIBNAME := ved
+EDNAME       := veda
 
 API := 0
 REV := 1
@@ -149,11 +150,23 @@ $(THIS_STATICLIB):
 	@$(AR) $(THIS_STATICLIB) $(THIS_LIB).o
 	@$(RM) $(THIS_LIB).o
 
-header: $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+HEADERS = $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+
+THIS_LAI_HEADER = lib/lai/lai.h
+SYS_LAI_HEADER = $(SYSINCDIR)/lai.h
+
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  HEADERS += $(SYS_LAI_HEADER)
+endif
+
+#header: $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+header: $(HEADERS)
 $(SYSINCDIR)/$(THIS_HEADER):
 	@$(CP) $(THIS_HEADER) $(SYSINCDIR)
 $(SYSINCDIR)/$(THIS_HEADER_EXT):
 	@$(CP) $(THIS_HEADER_EXT) $(SYSINCDIR)
+$(SYSINCDIR)/lai.h:
+	@$(CP) $(THIS_LAI_HEADER) $(SYSINCDIR)
 
 preproc:
 	$(CC) -x c $(THIS_LIBSRC) $(LIBFLAGS) $(SHARED_CFLAGS) -E
@@ -164,11 +177,11 @@ clean_shared: clean_header
 clean_static: clean_header
 	@$(TEST) ! -f $(THIS_STATICLIB) || $(RM) $(THIS_STATICLIB)
 clean_header:
-	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER) || $(RM) $(SYSINCDIR)/$(THIS_HEADER)
+	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER)     || $(RM) $(SYSINCDIR)/$(THIS_HEADER)
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+	@$(TEST) ! -f $(SYSINCDIR)/lai.h              || $(RM) $(SYSINCDIR)/lai.h
 
 #----------------------------------------------------------#
-EDNAME := veda
 
 THIS_APPSRC  := $(EDNAME).c
 THIS_APPVERS := $(VER)$(API)$(REV)
@@ -186,6 +199,12 @@ REQOBJS   +=  lib/i/i.c
 
 ifneq ($(HAS_JSON), 0)
   REQOBJS += lib/json/json.c
+endif
+
+HAS_RUNTIME_INTERPRETER := 0
+
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  REQOBJS += lib/lai/lai.c
 endif
 
 APPFLAGS  =  $(REQOBJS)
@@ -234,7 +253,11 @@ HAS_JSON := 0
 
 HAS_EXPR := 0
 
+HAS_RUNTIME_INTERPRETER :=0
+
 WORD_LEXICON_FILE :=
+
+STATIC_APP_FLAGS :=
 
 ifneq ($(HAS_USER_EXTENSIONS), 0)
   APPFLAGS += -DHAS_USER_EXTENSIONS
@@ -266,6 +289,11 @@ endif
 
 APPFLAGS += $(FLAGS)
 
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  STATIC_APP_FLAGS += -DDISABLE_HTTP
+  APPFLAGS += -DHAS_RUNTIME_INTERPRETER -Wno-strict-aliasing
+endif
+
 veda-all: veda-static veda-shared
 
 clean_veda: clean_veda_static clean_veda_shared
@@ -282,7 +310,7 @@ $(SYSEDSHARED):
 
 veda-static: static $(SYSEDSTATIC)
 $(SYSEDSTATIC):
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) -o $(EDSTATIC)
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_APP_FLAGS) $(STATIC_CFLAGS) -o $(EDSTATIC)
 	@$(INSTALL) -v $(EDSTATIC) $(SYSBINDIR)
 	@$(RM) $(EDSTATIC)
 
