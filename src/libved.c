@@ -4233,7 +4233,7 @@ private void buf_action_push (buf_t *this, action_t *action) {
 /* a highlight theme derived from tte editor, fork of kilo editor,
  * adjusted and enhanced for the environment
  * written by itself (the very first lines) (iirc somehow after the middle days
- * of February) 
+ * of February of 2019) 
  */
 
 private char *buf_syn_parser (buf_t *, char *, int, int, row_t *);
@@ -9525,6 +9525,93 @@ private int ved_normal_put (buf_t *this, int regidx, utf8 com) {
   return DONE;
 }
 
+private int ved_delete_inner (buf_t *this, utf8 c, int regidx) {
+  ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
+
+  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
+        CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
+
+  vchar_t *it = $my(line)->current;
+
+  int cur_idx = $mycur(cur_col_idx);
+  int fidx = cur_idx;
+  int lidx = cur_idx;
+  int found = 0;
+  int left = 0;
+
+  int isc = it->code is c;
+  int len = it->code isnot c;
+
+  while (it isnot $my(line)->head) {
+    it = it->prev;
+    if (it->code is c) {
+      found = 1;
+      break;
+    }
+    fidx -= it->len;
+    len += it->len;
+    left++;
+  }
+
+  ifnot (found) {
+    ifnot (isc)
+      return NOTHING_TODO;
+
+    len = 0;
+    fidx = cur_idx + 1;
+    left = 0;
+  }
+
+  if (found is 0 or isc is 0) {
+    found = 0;
+    it = $my(line)->current;
+
+    while (it isnot $my(line)->tail) {
+      it = it->next;
+      if (it->code is c) {
+        found = 1;
+        break;
+      }
+      lidx += it->len;
+      len += it->len;
+    }
+
+    ifnot (found) return NOTHING_TODO;
+  }
+
+  ifnot (len) return NOTHING_TODO;
+
+  char word[len + 1];
+  for (int i = 0; i < len; i++)
+    word[i] = $mycur(data)->bytes[fidx + i];
+  word[len] = '\0';
+
+  action_t *action = AllocType (action);
+  act_t *act = AllocType (act);
+  vundo_set (act, REPLACE_LINE);
+  act->idx = this->cur_idx;
+  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+
+  act->cur_col_idx = $mycur(cur_col_idx);
+  act->first_col_idx = $mycur(first_col_idx);
+
+  if (fidx > cur_idx)
+    ved_normal_right(this, 1, DONOT_DRAW);
+  else
+    ved_normal_left (this, left, DONOT_DRAW);
+
+  My(String).delete_numbytes_at ($mycur(data), bytelen (word), fidx);
+
+  stack_push (action, act);
+
+  vundo_push (this, action);
+  ed_register_set_with ($my(root), regidx, CHARWISE, word, 0);
+
+  $my(flags) |= BUF_IS_MODIFIED;
+  self(draw_cur_row);
+  return DONE;
+}
+
 private int ved_normal_handle_c (buf_t **thisp, int count, int regidx) {
   (void) count;
   buf_t *this = *thisp;
@@ -9532,6 +9619,13 @@ private int ved_normal_handle_c (buf_t **thisp, int count, int regidx) {
   switch (c) {
     case 'w':
       ved_delete_word (this, regidx);
+      return ved_insert (thisp, 'c', NULL);
+
+    case 'i':
+      c = My(Input).get ($my(term_ptr));
+      if (NOTHING_TODO is ved_delete_inner (this, c, regidx))
+        return NOTHING_TODO;
+
       return ved_insert (thisp, 'c', NULL);
   }
 

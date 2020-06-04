@@ -404,6 +404,7 @@ Normal mode:
  | d[G|END]          | delete lines to the end of file|
  | dw                | delete word                    |
  | cw                | change word                    |
+ | ci[char]          | change inner text delimited by [char]|
  | x|DELETE          | delete character               | yes
  | D                 | delete to end of line          |
  | X|BACKSPACE       | delete character to the left   | yes
