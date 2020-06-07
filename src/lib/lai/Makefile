@@ -1,6 +1,6 @@
 NAME    := lai
 VERSION := 0.1
-SYSDIR  := /home/aga/agathoklisx/sys
+SYSDIR  := $(shell realpath ../../sys)
 BINDIR   = $(SYSDIR)/bin
 INCDIR   = $(SYSDIR)/include
 LIBDIR   = $(SYSDIR)/lib
@@ -34,8 +34,8 @@ ifneq ($(ENABLE_REPL), 0)
   INTERP_FLAGS += -DENABLE_REPL
 endif
 
-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
-
+shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
+	@echo $(LIBDIR)/lib$(NAME)-$(VERSION).so
 $(INCDIR)/$(HEADER):
 	@$(CP) $(HEADER) $(INCDIR)
 
@@ -43,14 +43,31 @@ $(LIBDIR)/lib$(NAME)-$(VERSION).so:
 	$(CC) -o $(LIBDIR)/lib$(NAME)-$(VERSION).so -shared -fPIC $(FLAGS) $(LIB_FILES)
 	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).so $(LIBDIR)/lib$(NAME).so
 
-interp: library
+static-library: $(LIBDIR)/lib$(NAME)-$(VERSION).a
+
+$(LIBDIR)/lib$(NAME)-$(VERSION).a:
+	$(CC) $(FLAGS) $(LIB_FILES) -static -c -o lib$(NAME).o
+	@$(AR) $(LIBDIR)/lib$(NAME)-$(VERSION).a lib$(NAME).o
+	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).a $(LIBDIR)/lib$(NAME).a
+	@$(RM) lib$(NAME).o
+
+interp: shared-library
 	$(CC) -o $(BINDIR)/$(NAME) -lm -l$(NAME) $(INTERP_FLAGS) $(INTERP_FILES)
 
-clean:
-	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).so || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).so
+clean: clean-header clean-shared clean-static
+
+clean-header:
 	@$(TEST) ! -f $(INCDIR)/$(HEADER)     || $(RM) $(INCDIR)/$(HEADER)
+
+clean-shared:
+	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).so || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).so
 	@$(TEST) ! -L $(LIBDIR)/lib$(NAME).so || $(RM) $(LIBDIR)/lib$(NAME).so
 
+clean-static:
+	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).a || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).a
+	@$(TEST) ! -L $(LIBDIR)/lib$(NAME).a || $(RM) $(LIBDIR)/lib$(NAME).a
+
+AR   = ar rs
 RM   = rm
 CP   = cp
 TEST = test

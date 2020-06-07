@@ -46,6 +46,10 @@
 #include <libved.h>
 #include <libved+.h>
 
+#if HAS_RUNTIME_INTERPRETER
+#include <lai.h>
+#endif
+
 char *mail_hdrs_keywords[] = {
   "Subject K", "From K", "To: K", "Date: K", "Reply-To: K", "Cc: K", "cc: K",
   "Message-ID: K", "Message-id: K", "User-Agent: K", "X-Mailer: K", "Bc: K", "bc: K",
