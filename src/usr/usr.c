@@ -14,7 +14,7 @@
 #include <grp.h>
 
 #if HAS_EXPR
-#include "../modules/tinyexpr/tinyexpr.c"
+#include "../lib/tinyexpr/tinyexpr.c"
 #include "../ext/if_has_expr.c"
 
 static expr_T ExprClass;

@@ -1,6 +1,6 @@
 /* this unit is no guarded */
 
-#include "../modules/proc/proc.c"
+#include "../lib/proc/proc.c"
 
 private int ext_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {

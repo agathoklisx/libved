@@ -1,5 +1,5 @@
-#include "../modules/slre/slre.h"
-#include "../modules/slre/slre.c"
+#include "../lib/slre/slre.h"
+#include "../lib/slre/slre.c"
 
 /* this is like slre_match(), with an aditional argument and three extra fields
  * in the slre regex_info structure */
