@@ -68,7 +68,7 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
     case 't':
       retval = __translate_word__ (thisp, word);
       if (0 is retval)
-        Msg.send_fmt (E(get.current), COLOR_RED, "Nothing matched the pattern [%s]", word);
+        Msg.send_fmt (E(get.current), COLOR_ERROR, "Nothing matched the pattern [%s]", word);
       else if (0 < retval)
         Ed.scratch (E(get.current), thisp, NOT_AT_EOF);
       retval = (retval > 0 ? OK : NOTOK);
@@ -226,8 +226,8 @@ private int __tcc_compile__ (buf_t **thisp, string_t *src) {
 
 #endif /* HAS_TCC */
 
-private int __u_proc_popen_open_link_cb (buf_t *this, fp_t *fp) {
-  (void) this; (void) fp;
+private int __u_proc_popen_open_link_cb (buf_t *this, FILE *stream, fp_t *fp) {
+  (void) this; (void) fp; (void) stream;
   return 0;
 }
 
@@ -565,7 +565,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     retval = __translate_word__ (thisp, words->head->data->bytes);
     if (0 is retval)
-       Msg.send_fmt (E(get.current), COLOR_RED, "Nothing matched the pattern [%s]",
+       Msg.send_fmt (E(get.current), COLOR_ERROR, "Nothing matched the pattern [%s]",
            words->head->data->bytes);
       else if (0 < retval)
         Ed.scratch (E(get.current), thisp, NOT_AT_EOF);

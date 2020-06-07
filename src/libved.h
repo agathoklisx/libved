@@ -170,6 +170,11 @@
 #define X_PRIMARY     0
 #define X_CLIPBOARD   1
 
+#define DONOT_REDIRECT 0
+#define REDIRECT       1
+
+#define NULL_CALLBACK_FN  NULL
+
 #define DEFAULT_ORDER  0
 #define REVERSE_ORDER -1
 #define NORMAL_ORDER DEFAULT_ORDER
@@ -629,7 +634,7 @@ typedef int  (*FileReadLines_cb) (vstr_t *, char *, size_t, int, void *);
 typedef int  (*RlineAtBeg_cb) (rline_t **);
 typedef int  (*RlineAtEnd_cb) (rline_t **);
 typedef int  (*RlineTabCompletion_cb) (rline_t *);
-typedef int  (*PopenRead_cb) (buf_t *, fp_t *);
+typedef int  (*PopenRead_cb) (buf_t *, FILE *stream, fp_t *);
 typedef int  (*MenuProcessList_cb) (menu_t *);
 typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
@@ -1188,7 +1193,9 @@ NewSelf (rline,
      *(*new) (ed_t *),
      *(*new_with) (ed_t *, char *);
 
-  void (*free) (rline_t *);
+  void
+    (*free) (rline_t *),
+    (*clear_line) (rline_t *);
 
   int (*exec) (rline_t *, buf_t **);
 
@@ -1470,7 +1477,7 @@ NewSubSelf (buf, row,
 
 NewSubSelf (buf, read,
   ssize_t  (*fname) (buf_t *);
-  int (*from_fp) (buf_t *, fp_t *);
+  int (*from_fp) (buf_t *, FILE *, fp_t *);
 );
 
 NewSubSelf (buf, action,

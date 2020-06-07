@@ -729,6 +729,8 @@ NewType (venv,
   gid_t gid;
 
   string_t
+    *user_name,
+    *group_name,
     *term_name,
     *my_dir,
     *home_dir,
@@ -739,7 +741,6 @@ NewType (venv,
     *path,
     *display,
     *env_str;
-
 );
 
 NewProp (ed,

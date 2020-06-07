@@ -15,6 +15,7 @@
 #include <sys/select.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <grp.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <time.h>
@@ -5276,11 +5277,28 @@ theend:
   return retval;
 }
 
-private venv_t *venv_new () {
+private venv_t *venv_new (void) {
   venv_t *env = AllocType (venv);
   env->pid = getpid ();
   env->uid = getuid ();
   env->gid = getgid ();
+
+  errno = 0;
+  struct passwd *pswd = getpwuid (env->uid);
+  if (NULL is pswd) {
+    fprintf (stderr, "Can not read password record %s\n", strerror (errno));
+    exit (1);
+  }
+
+  env->user_name = string_new_with (pswd->pw_name);
+
+  struct group *gr = getgrgid (env->gid);
+  if (NULL is gr) {
+    fprintf (stderr, "Can not read group record %s\n", strerror (errno));
+    exit (1);
+  }
+
+  env->group_name = string_new_with (gr->gr_name);
 
   char *term_name = getenv ("TERM");
   if (NULL is term_name) {
@@ -5292,12 +5310,8 @@ private venv_t *venv_new () {
   char *hdir = getenv ("HOME");
   ifnot (NULL is hdir)
     env->home_dir = string_new_with (hdir);
-  else {
-    struct passwd *pswd = getpwuid (env->uid);
-    if (NULL is pswd)
-      fprintf (stderr, "Can not read password record, and can not determinate home directory\n");
+  else
     env->home_dir = string_new_with ((NULL is pswd ? "NONE" : pswd->pw_name));
-  }
 
   if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
     string_clear_at (env->home_dir, env->home_dir->num_bytes - 1);
@@ -5337,6 +5351,8 @@ private venv_t *venv_new () {
 private void venv_free (venv_t **env) {
   if (NULL is env) return;
 
+  string_free ((*env)->user_name);
+  string_free ((*env)->group_name);
   string_free ((*env)->my_dir);
   string_free ((*env)->home_dir);
   string_free ((*env)->tmp_dir);
@@ -5357,6 +5373,8 @@ private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
 
 private string_t *venv_get (Class (E) *__e__, char *name) {
   ed_T *this = __e__->ed;
+  if (str_eq (name, "user_name")) return __venv_get__ (this, $my(env)->user_name);
+  if (str_eq (name, "group_name")) return __venv_get__ (this, $my(env)->group_name);
   if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
   if (str_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
   if (str_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
@@ -10894,7 +10912,8 @@ private int buf_write (buf_t *this, int force) {
   return DONE;
 }
 
-private int ved_buf_read_from_fp (buf_t *this, fp_t *fp) {
+private int ved_buf_read_from_fp (buf_t *this, FILE *stream, fp_t *fp) {
+  (void) stream;
   mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
   row_t *row = this->current;
   action_t *action = AllocType (action);
@@ -10936,7 +10955,7 @@ private int ved_buf_read_from_file (buf_t *this, char *fname) {
     return NOTHING_TODO;
   }
 
-  int retval = self(read.from_fp, &fp);
+  int retval = self(read.from_fp, NULL, &fp);
   fclose (fp.fp);
   return retval;
 }
@@ -11595,6 +11614,10 @@ private void rline_clear (rline_t *rl) {
   }
 
   rl->state &= ~RL_CLEAR_FREE_LINE;
+}
+
+private void rline_clear_line (rline_t *rl) {
+  rline_clear (rl);
 }
 
 private void rline_free_members (rline_t *rl) {
@@ -13224,6 +13247,7 @@ public rline_T __init_rline__ (void) {
       .history = SubSelfInit (rline, history,
         .push = ved_rline_history_push
       ),
+      .clear_line = rline_clear_line,
       .new = ved_rline_new_api,
       .new_with = ed_rline_new_with,
       .free = rline_free_api,

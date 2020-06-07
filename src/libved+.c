@@ -25,6 +25,10 @@ public Class (L)    *__L__    = NULL;
 #include "handlers/sigwinch_handler.c"
 #include "handlers/alloc_err_handler.c"
 
+#if HAS_SHELL_COMMANDS
+  #include "ext/if_has_shell.c"
+#endif
+
 #if HAS_USER_EXTENSIONS
   #include "usr/usr.c"
 #endif
@@ -35,10 +39,6 @@ public Class (L)    *__L__    = NULL;
 
 #if HAS_REGEXP
   #include "ext/if_has_regexp.c"
-#endif
-
-#if HAS_SHELL_COMMANDS
-  #include "ext/if_has_shell.c"
 #endif
 
 private string_t *__ex_buf_serial_info__ (bufinfo_t *info) {
@@ -599,6 +599,12 @@ private void __init_self__ (Class (This) *this) {
 
   ((Self (This) *) this->self)->l = l;
 #endif
+
+#if HAS_SHELL_COMMANDS
+  Self (proc) p = __init_proc__ ().self;
+  ((Self (This) *) this->self)->proc = p;
+#endif
+
 }
 
 private int __initialize__ (void) {

@@ -40,6 +40,10 @@ extern Class (I)    *__I__;
 #define Dir     __THIS__->__E__->ed->Dir.self
 #define Re      __THIS__->__E__->ed->Re.self
 
+#if HAS_SHELL_COMMANDS
+#define Proc ((Self (This) *) __THIS__->self)->proc
+#endif
+
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
 private void sigwinch_handler (int sig);
@@ -112,9 +116,66 @@ NewType (argparse,
   private string_t *ext_re_parse_substitute (regexp_t *, char *, char *);
 #endif
 
-#if HAS_SHELL
+#if HAS_SHELL_COMMANDS
+NewProp (proc,
+  pid_t  pid;
+
+  char
+    *stdin_buf,
+    **argv;
+
+   int
+     argc,
+     sys_errno,
+     is_bg,
+     read_stdout,
+     read_stderr,
+     dup_stdin,
+     stdout_fds[2],
+     stderr_fds[2],
+     stdin_fds[2],
+     status,
+     reset_term,
+     prompt_atend;
+
+   size_t stdin_buf_size;
+
+   term_t *term;
+   buf_t *buf;
+   ed_t *ed;
+   PopenRead_cb read;
+);
+
+NewType (proc,
+  Prop (proc) *prop;
+);
+
+NewSelf (proc,
+  proc_t *(*new) (void);
+
+  void
+    (*free) (proc_t *),
+    (*free_argv) (proc_t *);
+
+  char **(*parse) (proc_t *, char *);
+  int
+    (*exec) (proc_t *, char *),
+    (*read) (proc_t *);
+
+  pid_t (*wait) (proc_t *);
+);
+
+NewClass (proc,
+  Self (proc) self;
+);
+
+#define PIPE_READ_END  0
+#define PIPE_WRITE_END 1
+  public Class (proc) __init_proc__ (void);
+  public void __deinit_proc__ (Class (proc) **);
+
   private int ext_ed_sh_popen (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
-#endif
+#endif /* HAS_SHELL_COMMANDS */
 
 #if HAS_USER_EXTENSIONS
   private void __init_usr__ (ed_t *);
@@ -438,6 +499,9 @@ NewSelf (This,
   SubSelf (This, e) e;
   SubSelf (This, i) i;
   SubSelf (This, parse) parse;
+#if HAS_SHELL_COMMANDS
+  Self (proc) proc;
+#endif
 
 #if HAS_RUNTIME_INTERPRETER
   SubSelf (This, l) l;
