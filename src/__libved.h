@@ -633,25 +633,26 @@ NewProp (buf,
 
   ed_t  *root;
   win_t *parent;
-  term_t *term_ptr;
-  row_t *video_first_row;
-  syn_t *syn;
+
+  term_t  *term_ptr;
+  row_t   *video_first_row;
+  syn_t   *syn;
   ftype_t *ftype;
-  rg_t *regs;
-  mark_t marks[NUM_MARKS];
-  hist_t *history;
-  vis_t vis[2];
+  rg_t    *regs;
+  hist_t  *history;
+  mark_t   marks[NUM_MARKS];
+  vis_t    vis[2];
 
   undo_t
     *undo,
     *redo;
 
   char
-    backup_suffix[8],
     *fname,
     *basename,
     *extname,
     *cwd,
+     backup_suffix[8],
      mode[MAXLEN_MODE];
 
   int

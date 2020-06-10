@@ -35,7 +35,7 @@ ifneq ($(ENABLE_REPL), 0)
 endif
 
 shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
-	@echo $(LIBDIR)/lib$(NAME)-$(VERSION).so
+
 $(INCDIR)/$(HEADER):
 	@$(CP) $(HEADER) $(INCDIR)
 

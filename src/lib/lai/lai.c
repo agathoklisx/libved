@@ -498,7 +498,9 @@ bool valuesEqual(Value a, Value b) {
 }
     /* 2: chunk.c */
 
-void initChunk(UNUSED VM *vm, Chunk *chunk) {
+void initChunk(VM *vm, Chunk *chunk) {
+    UNUSED(vm);
+
     chunk->count = 0;
     chunk->capacity = 0;
     chunk->code = NULL;
@@ -2146,7 +2148,9 @@ static void declareVariable(Compiler *compiler) {
     addLocal(compiler, *name);
 }
 
-static uint8_t parseVariable(Compiler *compiler, const char *errorMessage, UNUSED bool constant) {
+static uint8_t parseVariable(Compiler *compiler, const char *errorMessage, bool constant) {
+    UNUSED(constant);
+
     consume(compiler, TOKEN_IDENTIFIER, errorMessage);
 
     // If it's a global variable, create a string constant for it.
@@ -2193,7 +2197,9 @@ static int argumentList(Compiler *compiler) {
     return argCount;
 }
 
-static void and_(Compiler *compiler, UNUSED bool canAssign) {
+static void and_(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     // left operand...
     // OP_JUMP_IF       ------.
     // OP_POP // left operand |
@@ -2211,7 +2217,9 @@ static void and_(Compiler *compiler, UNUSED bool canAssign) {
     patchJump(compiler, endJump);
 }
 
-static void binary(Compiler *compiler, UNUSED bool canAssign) {
+static void binary(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     TokenType operatorType = compiler->parser->previous.type;
 
     ParseRule *rule = getRule(operatorType);
@@ -2268,7 +2276,9 @@ static void binary(Compiler *compiler, UNUSED bool canAssign) {
     }
 }
 
-static void comp_call(Compiler *compiler, UNUSED bool canAssign) {
+static void comp_call(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     int argCount = argumentList(compiler);
     emitBytes(compiler, OP_CALL, argCount);
 }
@@ -2324,7 +2334,9 @@ static void dot(Compiler *compiler, bool canAssign) {
     }
 }
 
-static void literal(Compiler *compiler, UNUSED bool canAssign) {
+static void literal(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     switch (compiler->parser->previous.type) {
         case TOKEN_FALSE:
             emitByte(compiler, OP_FALSE);
@@ -2386,7 +2398,9 @@ static void beginFunction(Compiler *compiler, Compiler *fnCompiler, FunctionType
     consume(fnCompiler, TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
 }
 
-static void arrow(Compiler *compiler, UNUSED bool canAssign) {
+static void arrow(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     Compiler fnCompiler;
 
     // Setup function and parse parameters
@@ -2405,17 +2419,23 @@ static void arrow(Compiler *compiler, UNUSED bool canAssign) {
     endCompiler(&fnCompiler);
 }
 
-static void grouping(Compiler *compiler, UNUSED bool canAssign) {
+static void grouping(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     expression(compiler);
     consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-static void comp_number(Compiler *compiler, UNUSED bool canAssign) {
+static void comp_number(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     double value = strtod(compiler->parser->previous.start, NULL);
     emitConstant(compiler, NUMBER_VAL(value));
 }
 
-static void or_(Compiler *compiler, UNUSED bool canAssign) {
+static void or_(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     // left operand...
     // OP_JUMP_IF       ---.
     // OP_JUMP          ---+--.
@@ -2480,7 +2500,9 @@ int parseString(char *string, int length) {
     return length;
 }
 
-static void rString(Compiler *compiler, UNUSED bool canAssign) {
+static void rString(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     if (match(compiler, TOKEN_STRING)) {
         Parser *parser = compiler->parser;
         emitConstant(compiler, OBJ_VAL(copyString(parser->vm, parser->previous.start + 1,
@@ -2492,7 +2514,9 @@ static void rString(Compiler *compiler, UNUSED bool canAssign) {
     consume(compiler, TOKEN_STRING, "Expected string after r delimiter");
 }
 
-static void comp_string(Compiler *compiler, UNUSED bool canAssign) {
+static void comp_string(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     Parser *parser = compiler->parser;
 
     char *string = malloc(sizeof(char) * parser->previous.length - 1);
@@ -2504,7 +2528,9 @@ static void comp_string(Compiler *compiler, UNUSED bool canAssign) {
     free(string);
 }
 
-static void list(Compiler *compiler, UNUSED bool canAssign) {
+static void list(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     emitByte(compiler, OP_NEW_LIST);
 
     do {
@@ -2518,7 +2544,9 @@ static void list(Compiler *compiler, UNUSED bool canAssign) {
     consume(compiler, TOKEN_RIGHT_BRACKET, "Expected closing ']'");
 }
 
-static void dict(Compiler *compiler, UNUSED bool canAssign) {
+static void dict(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     emitByte(compiler, OP_NEW_DICT);
 
     do {
@@ -2694,7 +2722,9 @@ static void pushSuperclass(Compiler *compiler) {
     namedVariable(compiler, syntheticToken("super"), false);
 }
 
-static void super_(Compiler *compiler, UNUSED bool canAssign) {
+static void super_(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     if (compiler->class == NULL) {
         error(compiler->parser, "Cannot utilise 'super' outside of a class.");
     } else if (!compiler->class->hasSuperclass) {
@@ -2720,7 +2750,9 @@ static void super_(Compiler *compiler, UNUSED bool canAssign) {
     }
 }
 
-static void this_(Compiler *compiler, UNUSED bool canAssign) {
+static void this_(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     if (compiler->class == NULL) {
         error(compiler->parser, "Cannot utilise 'this' outside of a class.");
     } else if (compiler->class->staticMethod) {
@@ -2730,7 +2762,9 @@ static void this_(Compiler *compiler, UNUSED bool canAssign) {
     }
 }
 
-static void static_(Compiler *compiler, UNUSED bool canAssign) {
+static void static_(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     if (compiler->class == NULL) {
         error(compiler->parser, "Cannot utilise 'static' outside of a class.");
     }
@@ -2750,7 +2784,9 @@ static void useStatement(Compiler *compiler) {
     consume(compiler, TOKEN_SEMICOLON, "Expect ';' after use statement.");
 }
 
-static void unary(Compiler *compiler, UNUSED bool canAssign) {
+static void unary(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     TokenType operatorType = compiler->parser->previous.type;
 
     parsePrecedence(compiler, PREC_UNARY);
@@ -2767,7 +2803,9 @@ static void unary(Compiler *compiler, UNUSED bool canAssign) {
     }
 }
 
-static void prefix(Compiler *compiler, UNUSED bool canAssign) {
+static void prefix(Compiler *compiler, bool canAssign) {
+    UNUSED(canAssign);
+
     TokenType operatorType = compiler->parser->previous.type;
     Token cur = compiler->parser->current;
     consume(compiler, TOKEN_IDENTIFIER, "Expected variable");
@@ -5176,7 +5214,9 @@ static Value inputNative(VM *vm, int argCount, Value *args) {
     return l;
 }
 
-static Value printNative(UNUSED VM *vm, int argCount, Value *args) {
+static Value printNative(VM *vm, int argCount, Value *args) {
+    UNUSED(vm);
+
     if (argCount == 0) {
         printf("\n");
         return NIL_VAL;
@@ -6486,7 +6526,9 @@ void declareListMethods(VM *vm) {
 
     /* 18: nil.c */
 
-static Value toStringNil(VM *vm, int argCount, UNUSED Value *args) {
+static Value toStringNil(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "toString() takes no arguments (%d given)", argCount);
         return EMPTY_VAL;
@@ -7805,7 +7847,7 @@ void createHTTPClass(VM *vm) {
    #include <stdint.h>
 #endif
 
-#define UNUSED __attribute__((unused))
+#define UNUSED(__x__) (void) __x__
 
 const struct _json_value json_value_none;
 
@@ -7857,13 +7899,17 @@ typedef struct
 
 } json_state;
 
-static void * default_alloc (size_t size, int zero, UNUSED void * user_data)
+static void * default_alloc (size_t size, int zero, void * user_data)
 {
+    UNUSED(user_data);
+
     return zero ? calloc (1, size) : malloc (size);
 }
 
-static void default_free (void * ptr, UNUSED void * user_data)
+static void default_free (void * ptr, void * user_data)
 {
+    UNUSED(user_data);
+
     free (ptr);
 }
 
@@ -7924,7 +7970,7 @@ static int new_value (json_state * state,
                     return 0;
                 }
 
-                value->_reserved.object_mem = (*(char **) &value->u.object.values) + values_size;
+                value->_reserved.object_mem = ((char *)*(json_object_entry**) &value->u.object.values) + values_size;
 
                 value->u.object.length = 0;
                 break;
@@ -8186,7 +8232,7 @@ json_value * json_parse_ex (json_settings * settings,
                         case json_object:
 
                             if (state.first_pass)
-                                (*(json_char **) &top->u.object.values) += string_length + 1;
+                                (*(json_object_entry**) &top->u.object.values) += string_length + 1;
                             else
                             {
                                 top->u.object.values [top->u.object.length].name
@@ -10450,7 +10496,9 @@ void createPathClass(VM *vm) {
 
     /* 30: system.c */
 
-static Value getgidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value getgidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "getgid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10459,7 +10507,9 @@ static Value getgidNative(VM *vm, int argCount, UNUSED Value *args) {
     return NUMBER_VAL(getgid());
 }
 
-static Value getegidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value getegidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "getegid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10468,7 +10518,9 @@ static Value getegidNative(VM *vm, int argCount, UNUSED Value *args) {
     return NUMBER_VAL(getegid());
 }
 
-static Value getuidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value getuidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "getuid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10477,7 +10529,9 @@ static Value getuidNative(VM *vm, int argCount, UNUSED Value *args) {
     return NUMBER_VAL(getuid());
 }
 
-static Value geteuidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value geteuidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "geteuid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10486,7 +10540,9 @@ static Value geteuidNative(VM *vm, int argCount, UNUSED Value *args) {
     return NUMBER_VAL(geteuid());
 }
 
-static Value getppidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value getppidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "getppid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10495,7 +10551,9 @@ static Value getppidNative(VM *vm, int argCount, UNUSED Value *args) {
     return NUMBER_VAL(getppid());
 }
 
-static Value getpidNative(VM *vm, int argCount, UNUSED Value *args) {
+static Value getpidNative(VM *vm, int argCount, Value *args) {
+    UNUSED(args);
+
     if (argCount != 0) {
         runtimeError(vm, "getpid() doesn't take any argument (%d given)", argCount);
         return EMPTY_VAL;
@@ -10603,7 +10661,9 @@ static Value setCWDNative(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(retval == 0 ? OK : NOTOK);
 }
 
-static Value getCWDNative(VM *vm, UNUSED int argCount, UNUSED Value *args) {
+static Value getCWDNative(VM *vm, int argCount, Value *args) {
+    UNUSED(argCount); UNUSED(args);
+
     char cwd[PATH_MAX];
 
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
@@ -10615,15 +10675,21 @@ static Value getCWDNative(VM *vm, UNUSED int argCount, UNUSED Value *args) {
     return NIL_VAL;
 }
 
-static Value timeNative(UNUSED VM *vm, UNUSED int argCount, UNUSED Value *args) {
+static Value timeNative(VM *vm, int argCount, Value *args) {
+    UNUSED(vm); UNUSED(argCount); UNUSED(args);
+
     return NUMBER_VAL((double) time(NULL));
 }
 
-static Value clockNative(UNUSED VM *vm, UNUSED int argCount, UNUSED Value *args) {
+static Value clockNative(VM *vm, int argCount, Value *args) {
+    UNUSED(vm); UNUSED(argCount); UNUSED(args);
+
     return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
 }
 
-static Value collectNative(VM *vm, UNUSED int argCount, UNUSED Value *args) {
+static Value collectNative(VM *vm, int argCount, Value *args) {
+    UNUSED(argCount); UNUSED(args);
+
     collectGarbage(vm);
     return NIL_VAL;
 }

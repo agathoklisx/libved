@@ -144,8 +144,11 @@ typedef enum {
     INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 
+typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
+
 #define OK     0
 #define NOTOK -1
+#define UNUSED(__x__) (void) __x__
 
 VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]);
 
@@ -173,9 +176,15 @@ typedef struct l_t {
   l_table_t table;
 
   Lstate *(*init) (const char *, int, const char **);
-  void (*deinit) (Lstate **);
+
+  void
+    (*deinit) (Lstate **),
+    (*defineProp) (Lstate *, Table *, const char *, Value),
+    (*defineFun) (Lstate *, Table *, const char *, NativeFn);
+
   InterpretResult (*compile) (Lstate *, const char *);
-  ObjString *(*new_string) (Lstate *, const char *, int);
+  ObjString *(*newString) (Lstate *, const char *, int);
+
 } l_t;
 
 typedef struct lang_t {
@@ -199,7 +208,6 @@ typedef struct lang_t {
 })
 
 char *readFile(const char *path);
-typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
 ObjString *copyString(VM *vm, const char *chars, int length);
 bool tableGet(Table *table, ObjString *key, Value *value);
 Value strerrorGeneric(VM *vm, int error);
@@ -213,5 +221,6 @@ void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
 
 /* extensions */
 Table vm_get_globals(VM *vm);
+Value strerrorNative(VM *vm, int argCount, Value *args);
 size_t vm_sizeof (void);
 #endif /* LAPI */

@@ -16,6 +16,7 @@ extern Class (I)    *__I__;
 
 #if HAS_RUNTIME_INTERPRETER
 #define L (*__L__).self
+#define L_CUR_STATE  __L__->states[__L__->cur_state]
 #endif
 
 #define __E     __THIS__->__E__->self
@@ -190,6 +191,7 @@ NewClass (proc,
 #if HAS_RUNTIME_INTERPRETER
 #include <stdbool.h>
 #include <lai.h>
+#include <led.h>
 
 typedef l_t Thislself_t;
 typedef l_table_t Thisltableself_t;

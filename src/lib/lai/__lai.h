@@ -698,7 +698,7 @@ typedef enum {
 #define OK     0
 #define NOTOK -1
 
-#define UNUSED __attribute__((unused))
+#define UNUSED(__x__) (void) __x__
 
 VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]);
 
@@ -1437,7 +1437,7 @@ void createMathsClass(VM *vm);
 
 
 #ifndef PATH_MAX
-    PATH_MAX = 4096;
+#define PATH_MAX 4096
 #endif
 
 #ifdef _WIN32

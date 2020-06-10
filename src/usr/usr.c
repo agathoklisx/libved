@@ -983,10 +983,6 @@ private void __init_usr__ (ed_t *this) {
   TccClass = __init_tcc__ ();
 #endif
 
-#if HAS_RUNTIME_INTERPRETER
-  __L__->states[__L__->cur_state] = L.init ("__global__", 0, NULL);
-#endif
-
   for (size_t i = 0; i < ARRLEN(u_syn); i++)
     Ed.syn.append (this, u_syn[i]);
 }

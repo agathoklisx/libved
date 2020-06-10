@@ -514,7 +514,9 @@ private i_t *i_init_instance (Class (This) *__t__, Class (I) *__i__) {
 #if HAS_RUNTIME_INTERPRETER
 
 private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
-  return initVM (0, src, argc, argv);
+  Lstate *this = initVM (0, src, argc, argv);
+  __init_led__ (this);
+  return this;
 }
 
 private void __deinit_lstate__ (Lstate **thisp) {
@@ -591,7 +593,9 @@ private void __init_self__ (Class (This) *this) {
     .init = __init_lstate__,
     .deinit = __deinit_lstate__,
     .compile = interpret,
-    .new_string = copyString,
+    .newString = copyString,
+    .defineFun = defineNative,
+    .defineProp = defineNativeProperty,
     .table = SubSelfInit (Thisl, table,
       .get = tableGet
     )
@@ -640,9 +644,10 @@ public Class (This) *__init_this__ (void) {
   ((Prop (This) *) $myprop)->__I__ = __I__;
 
 #if HAS_RUNTIME_INTERPRETER
-  __L__ = __init_l__ (2);
+  __L__ = __init_l__ (1);
   ((Prop (This) *) $myprop)->__L__ = __L__;
   __L__->self = __SELF__->l;
+  L_CUR_STATE = L.init ("__global__", 0, NULL);
 #endif
 
   return __THIS__;
