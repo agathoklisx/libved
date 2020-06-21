@@ -34,6 +34,13 @@ struct sObj {
     struct sObj *next;
 };
 
+struct sObjString {
+    Obj obj;
+    int length;
+    char *chars;
+    uint32_t hash;
+};
+
 typedef struct {
     ObjString *key;
     Value value;

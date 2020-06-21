@@ -225,7 +225,7 @@
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
-   HAS_REGEXP=1|0         (en|dis)able regular expression support (default 0)
+   HAS_REGEXP=1|0         (en|dis)able regular expression support (default 1)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
    VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
@@ -447,7 +447,7 @@ Normal mode:
  |                     type is pager                     |
  | g                 |                                   |
  |   - b             | open link under the cursor to the |
- |             browser (requires the elinks text browser |
+ |             browser: requires the elinks text browser |
  |             to be installed, and it uses the -remote  |
  |             elinks option, so elinks should be running|
 ¹| CTRL-j            | detach editor and gives control to|
@@ -456,6 +456,7 @@ Normal mode:
  | CTRL-O|CTRL-I     | jump to the previus|next location |
  |             to the jump list, (this differs from vim, |
  |             as this is like scrolling to the history) |
+ |                                                       |
  | W                 | word operations mode (via a selection menu)|                            |
  | (implemented in the library)                          |
  |   - send `word' on XCLIPBOARD                         |
@@ -468,13 +469,18 @@ Normal mode:
  |     the scratch buffer (requires the man utility)     |
  |   - translate `word' (a personal function for demonstration)|
  |   - spell `word' (check if '`word' is mispelled)      |
+ |                                                       |
  | F                 | File operations mode (via a selection menu)|
+ |                                                       |
  | ,                 |                                   |
  |   - n             | like :bn (next buffer)            |  see Command mode
  |   - m             | like :bp (previous buffer)        |      -||-
  |   - ,             | like :b` (prev focused buffer)    |      -||-
  |   - .             | like :w` (prev focused window)    |      -||-
- |   - /             | like :wn[ext] (next window)       |      -||-
+ |   - /             | like :winext   (next window)      |      -||-
+ |   - ;             | like :ednext   (next editor)      |      -||-
+ |   - '             | like :edprev   (prev editor)      |      -||-
+ |   - l             | like :edprevfocused (prev focused ed)|   -||-
 
 Insert mode:
  |
@@ -599,17 +605,19 @@ Search:
     - arguments
     - filenames
 
-   If an argument (like a substitution string) needs a space, it should be quoted.
-
-   If a command takes a filename or a bufname as an argument, tab completion
-   will quote the argument (for embedded spaces).
-
    Command completion is triggered when the cursor is at the first word token.
 
    Arg completion is triggered when the first char word token is an '-' or
    when the current command, gets a bufname as an argument.
 
    In any other case a filename completion is performed.
+
+   note: that if an argument (like a substitution string) needs a space, it should be
+   quoted
+
+   If a command takes a filename or a bufname as an argument, tab completion
+   will quote by default the argument (for embedded spaces): this mechanism
+   uses the --fname= argument.
 
    Options are usually long (that means prefixed with two dashes), unless some
    established/unambiguous like (for now):
@@ -619,12 +627,12 @@ Search:
    Default command line switches:
    --range=...
       valid ranges:
-      --range=%    for the whole buffer
-      --range=linenr,linenr counted from 1
-      --range=.    for current line
-      --range=[linenr|.],$  from linenr to the end
-      --range=linenr,. from linenr to current line
-   without --range, assumed current line number
+      --range=%              for the whole buffer
+      --range=linenr,linenr  counted from 1
+      --range=.              for current line
+      --range=[linenr|.],$   from linenr to the end
+      --range=linenr,. from  linenr to current line
+   without --range,          assumed current line number
 
    --global          is like the g flag on vim substitute
    --interactive,-i  is like the c flag on vim substitute
@@ -1317,6 +1325,8 @@ Search:
  */
 
 /* Sample Application
+
+   Regexp:
    This application adds regular expression support, by using a slightly modified
    version of the slre machine, which is an ISO C library that implements a subset
    of Perl regular expression syntax, see and clone at:
@@ -1324,8 +1334,9 @@ Search:
      https://github.com/cesanta/slre.git
    Many thanks.
 
-   It is implemented outside of the library by overriding methods from the Re structure.
-   To enable it use "HAS_REGEXP=1" during compilation.
+   It is implemented outside of the library by overriding methods from the Re structure
+   and that api is what is actually being used for a long time now, so it is enabled
+   by default.
 
    The substitution string in the ":substitute command", can use '&' to denote the
    full captured matched string, but also captures of which denoted with \nth.
@@ -1333,6 +1344,7 @@ Search:
    of the pattern. This option won't work with multibyte characters. Searching for
    multibyte characters it should work properly though.
 
+   Shell Commands:
    The application can also run shell commands or to read into current buffer
    the standard output of a shell command. Interactive applications might have
    unexpected behavior in this implementation. To disable these features (as they
@@ -1420,8 +1432,8 @@ Search:
 
 /* TO DO
    Seriously! Please do not use this on sensitive documents. There are many conditions
-   that i know and for certain quite many that i don't know, that it might need to be
-   handled.
+   that i know and for certain quite many that i don't know, that they might need to
+   be handled.
    The bad thing here is that there is a workflow and in that workflow range i fix
    things or develop things. But for sure there are conditions or combinations of them
    out of this workflow.

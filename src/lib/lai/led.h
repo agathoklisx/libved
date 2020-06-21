@@ -9,5 +9,6 @@
 
 #include <lai.h>
 #include <libved.h>
+#include <libved+.h>
 
 public void __init_led__ (Lstate *);

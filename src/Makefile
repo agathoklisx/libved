@@ -78,7 +78,7 @@ else
   endif
 endif
 
-HAS_REGEXP := 0
+HAS_REGEXP := 1
 
 HAS_SHELL_COMMANDS := 1
 

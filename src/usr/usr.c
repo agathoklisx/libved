@@ -794,7 +794,7 @@ char *lai_keywords[] = {
     "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
     "is I", "isnot I", "nil E", "not I", "var V", "const V", "return V", "and I",
     "or I", "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
-    "trait T", "true V", "false E", "import T", "hasAttribute F", "getAttribute F",
+    "trait T", "true V", "false E", "import T", "as T", "hasAttribute F", "getAttribute F",
     "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
     "use T", "elseif I", "static T",
      NULL};

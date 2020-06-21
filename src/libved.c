@@ -5373,8 +5373,8 @@ private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
 
 private string_t *venv_get (Class (E) *__e__, char *name) {
   ed_T *this = __e__->ed;
-  if (str_eq (name, "user_name")) return __venv_get__ (this, $my(env)->user_name);
-  if (str_eq (name, "group_name")) return __venv_get__ (this, $my(env)->group_name);
+  if (str_eq (name, "group_name"))  return __venv_get__ (this, $my(env)->group_name);
+  if (str_eq (name, "user_name"))  return __venv_get__ (this, $my(env)->user_name);
   if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
   if (str_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
   if (str_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
