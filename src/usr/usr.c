@@ -803,6 +803,54 @@ char lai_singleline_comment[] = "//";
 char lai_multiline_comment_start[] = "/*";
 char lai_multiline_comment_end[] = "*/";
 
+char *diff_extensions[] = {".diff", ".patch", NULL};
+
+private char *__u_diff_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
+  (void) idx; (void) row;
+
+  ifnot (len) return line;
+
+  int color = HL_NORMAL;
+
+  if (Cstring.eq_n (line, "--- ", 4)) {
+    color = HL_IDENTIFIER;
+    goto theend;
+  }
+
+  if (Cstring.eq_n (line, "+++ ", 4)) {
+    color = HL_NUMBER;
+    goto theend;
+  }
+
+  if (line[0] is  '-') {
+    color = HL_VISUAL;
+    goto theend;
+  }
+
+  if (line[0] is  '+') {
+    color = HL_STRING_DELIM;
+    goto theend;
+  }
+
+  if (Cstring.eq_n (line, "diff ", 5) or Cstring.eq_n (line, "index ", 6)
+      or Cstring.eq_n (line, "@@ ", 3)) {
+    color = HL_COMMENT;
+    goto theend;
+  }
+
+theend:;
+  string_t *shared = Buf.get.shared_str (this);
+  String.replace_with_fmt (shared, "%s%s%s", TERM_MAKE_COLOR(color), line, TERM_COLOR_RESET);
+  Cstring.cp (line, MAXLEN_LINE, shared->bytes, shared->num_bytes);
+  return line;
+}
+
+private ftype_t *__u_diff_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "diff"),
+    QUAL(FTYPE, .tabwidth = 0, .tab_indents = 0));
+  return ft;
+}
+
 private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
   return Buf.syn.parser (this, line, len, idx, row);
 }
@@ -895,6 +943,12 @@ syn_t u_syn[] = {
     lai_singleline_comment, lai_multiline_comment_start, lai_multiline_comment_end,
     NULL, HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_lai_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs,
+  },
+  {
+    "diff", __u_NULL_ARRAY, diff_extensions, __u_NULL_ARRAY,
+    __u_NULL_ARRAY, NULL, NULL, NULL, NULL,
+    NULL, HL_STRINGS_NO, HL_NUMBERS_NO,
+    __u_diff_syn_parser, __u_diff_syn_init, 0, 0, NULL, NULL, NULL
   }
 };
 

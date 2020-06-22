@@ -5571,6 +5571,10 @@ private char *buf_get_basename (buf_t *this) {
   return $my(basename);
 }
 
+private string_t *buf_get_shared_str (buf_t *this) {
+  return $my(shared_str);
+}
+
 private int buf_get_flags (buf_t *this) {
   return $my(flags);
 }
@@ -15243,6 +15247,7 @@ private Class (ed) *editor_new (void) {
           .basename = buf_get_basename,
           .fname = buf_get_fname,
           .ftype_name = buf_get_ftype_name,
+          .shared_str = buf_get_shared_str,
           .flags = buf_get_flags,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,

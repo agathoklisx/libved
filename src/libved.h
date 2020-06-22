@@ -423,6 +423,21 @@
 #define NULL_PTR_ERROR         -1001
 #define INTEGEROVERFLOW_ERROR  -1002
 
+enum {
+  NO_CALLBACK_FUNCTION = -4,
+  RLINE_NO_COMMAND = -3,
+  ERROR = -2,
+  NOTHING_TODO = -1,
+  DONE = 0,
+  NEWCHAR,
+  EXIT_THIS,
+  EXIT_ALL,
+  EXIT_ALL_FORCE,
+  WIN_EXIT,
+  BUF_EXIT,
+  BUF_QUIT,
+};
+
 typedef signed int utf8;
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -1312,6 +1327,24 @@ NewClass (dir,
   Self (dir) self;
 );
 
+NewSubSelf (vsys, stat,
+  char *(*mode_to_string) (char *, mode_t);
+);
+
+NewSubSelf (vsys, get,
+  long (*clock_sec) (clockid_t);
+);
+
+NewSelf (vsys,
+  SubSelf (vsys, stat) stat;
+  SubSelf (vsys, get) get;
+  string_t *(*which) (char *, char *);
+);
+
+NewClass (vsys,
+  Self (vsys) self;
+);
+
 NewSubSelf (buf, iter,
   void (*free) (buf_t *, bufiter_t *);
 
@@ -1357,6 +1390,7 @@ NewSubSelf (buf, get,
     (*size) (buf_t *),
     (*num_lines) (buf_t *);
 
+  string_t *(*shared_str) (buf_t *);
 
   row_t *(*line_at) (buf_t *, int);
 
@@ -1381,39 +1415,6 @@ NewSubSelf (bufset, row,
 
 NewSubSelf (bufset, normal,
   void (*at_beg_cb) (buf_t *, BufNormalBeg_cb);
-);
-
-enum {
-  NO_CALLBACK_FUNCTION = -4,
-  RLINE_NO_COMMAND = -3,
-  ERROR = -2,
-  NOTHING_TODO = -1,
-  DONE = 0,
-  NEWCHAR,
-  EXIT_THIS,
-  EXIT_ALL,
-  EXIT_ALL_FORCE,
-  WIN_EXIT,
-  BUF_EXIT,
-  BUF_QUIT,
-};
-
-NewSubSelf (vsys, stat,
-  char *(*mode_to_string) (char *, mode_t);
-);
-
-NewSubSelf (vsys, get,
-  long (*clock_sec) (clockid_t);
-);
-
-NewSelf (vsys,
-  SubSelf (vsys, stat) stat;
-  SubSelf (vsys, get) get;
-  string_t *(*which) (char *, char *);
-);
-
-NewClass (vsys,
-  Self (vsys) self;
 );
 
 NewSubSelf (buf, set,
