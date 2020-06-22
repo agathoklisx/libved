@@ -195,6 +195,8 @@ NewClass (proc,
 
 typedef l_t Thislself_t;
 typedef l_table_t Thisltableself_t;
+typedef l_table_get_t Thisltablegetself_t;
+typedef l_module_t Thislmodulegetself_t;
 typedef lang_t L_T;
 #endif /* HAS_RUNTIME_INTERPRETER */
 

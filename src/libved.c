@@ -7651,6 +7651,20 @@ private rg_t *ed_register_set_api (ed_t *this, int c, int type, char *bytes, int
   return ed_register_push_with (this, regidx, type, bytes, dir);
 }
 
+private rg_t *ed_register_setidx_api (ed_t *this, int regidx, int type, char *bytes, int dir) {
+  ed_register_new (this, regidx);
+  return ed_register_push_with (this, regidx, type, bytes, dir);
+}
+
+private int ed_register_expression (ed_t *this, buf_t *buf, int regidx) {
+  for (int i = 0; i < $my(num_expr_register_cbs); i++) {
+    int retval = $my(expr_register_cbs)[i] (this, buf, regidx);
+    if (retval isnot NO_CALLBACK_FUNCTION) return retval;
+  }
+
+  return NOTOK;
+}
+
 private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
   if (NOTOK is ed_register_is_special (this, regidx))
     return NOTHING_TODO;
@@ -7724,6 +7738,8 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
       return DONE;
 
     case REG_EXPR:
+      return ed_register_expression (this, buf, regidx);
+
     case REG_BLACKHOLE:
       return NOTOK;
   }
@@ -13227,9 +13243,14 @@ private rline_t *ed_rline_new_with (ed_t *this, char *bytes) {
   return rl;
 }
 
+private void ed_rline_set_prompt_char (rline_t *rl, char c) {
+  rl->prompt_char = c;
+}
+
 public rline_T __init_rline__ (void) {
   return ClassInit (rline,
     .self = SelfInit (rline,
+      .edit = rline_edit,
       .get = SubSelfInit (rline, get,
         .line = ved_rline_get_line,
         .command = ved_rline_get_command,
@@ -13239,6 +13260,7 @@ public rline_T __init_rline__ (void) {
         .range = rline_get_range
       ),
       .set = SubSelfInit (rline, set,
+        .prompt_char = ed_rline_set_prompt_char,
         .line = ved_rline_set_line
       ),
       .arg = SubSelfInit (rline, arg,
@@ -13289,6 +13311,21 @@ private void ved_set_normal_on_g_cb (ed_t *this, BufNormalOng_cb cb) {
 private void ved_free_on_normal_g_cbs (ed_t *this) {
   ifnot ($my(num_on_normal_g_cbs)) return;
   free ($my(on_normal_g_cbs));
+}
+
+private void ved_set_expr_register_cb (ed_t *this, ExprRegister_cb cb) {
+  $my(num_expr_register_cbs)++;
+  ifnot ($my(num_expr_register_cbs) - 1)
+    $my(expr_register_cbs) = Alloc (sizeof (ExprRegister_cb));
+  else
+    $my(expr_register_cbs) = Realloc ($my(expr_register_cbs), sizeof (ExprRegister_cb) * $my(num_expr_register_cbs));
+
+  $my(expr_register_cbs)[$my(num_expr_register_cbs) - 1] = cb;
+}
+
+private void ved_free_expr_register_cbs (ed_t *this) {
+  ifnot ($my(num_expr_register_cbs)) return;
+  free ($my(expr_register_cbs));
 }
 
 private int ved_rline (buf_t **thisp, rline_t *rl) {
@@ -14577,6 +14614,7 @@ private void ed_free (ed_t *this) {
 
     ved_free_rline_cbs (this);
     ved_free_on_normal_g_cbs (this);
+    ved_free_expr_register_cbs (this);
     ved_free_lw_mode_cbs (this);
     ved_free_cw_mode_cbs (this);
     ved_free_file_mode_cbs (this);
@@ -15044,6 +15082,7 @@ private Class (ed) *editor_new (void) {
         .word_actions = ed_set_word_actions,
         .file_mode_actions = ed_set_file_mode_actions,
         .on_normal_g_cb = ved_set_normal_on_g_cb,
+        .expr_register_cb = ved_set_expr_register_cb,
         .lang_map = ed_set_lang_map
       ),
       .get = SubSelfInit (ed, get,
@@ -15071,7 +15110,8 @@ private Class (ed) *editor_new (void) {
         .get_ftype_idx = ed_syn_get_ftype_idx
       ),
       .reg = SubSelfInit (ed, reg,
-        .set = ed_register_set_api
+        .set = ed_register_set_api,
+        .setidx = ed_register_setidx_api
       ),
       .append = SubSelfInit (ed, append,
         .win = ed_append_win,

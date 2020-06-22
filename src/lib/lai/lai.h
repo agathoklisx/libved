@@ -10,8 +10,10 @@ typedef struct sObjList ObjList;
 typedef struct sObjDict ObjDict;
 typedef struct sObjSet  ObjSet;
 typedef struct sObjFile ObjFile;
+typedef struct ObjModule ObjModule;
 
 typedef enum {
+    OBJ_MODULE,
     OBJ_BOUND_METHOD,
     OBJ_CLASS,
     OBJ_NATIVE_CLASS,
@@ -62,6 +64,7 @@ typedef struct sObjClassNative {
 
 #define OBJ_TYPE(value)         (AS_OBJ(value)->type)
 
+#define IS_MODULE(value)        isObjType(value, OBJ_MODULE)
 #define IS_BOUND_METHOD(value)  isObjType(value, OBJ_BOUND_METHOD)
 #define IS_CLASS(value)         isObjType(value, OBJ_CLASS)
 #define IS_NATIVE_CLASS(value)  isObjType(value, OBJ_NATIVE_CLASS)
@@ -76,6 +79,7 @@ typedef struct sObjClassNative {
 #define IS_SET(value)           isObjType(value, OBJ_SET)
 #define IS_FILE(value)          isObjType(value, OBJ_FILE)
 
+#define AS_MODULE(value)        ((ObjModule*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
 #define AS_CLASS_NATIVE(value)  ((ObjClassNative*)AS_OBJ(value))
@@ -175,12 +179,26 @@ bool isFalsey(Value value);
 
 typedef VM Lstate;
 
+typedef struct l_table_get_t {
+  Value *(*value) (Lstate *, Table *, ObjString *, Value *);
+
+  Table
+    *(*globals) (Lstate *),
+    *(*module)  (Lstate *, char *, int);
+
+} l_table_get_t;
+
 typedef struct l_table_t {
-  bool (*get) (Table *, ObjString *, Value *);
+  l_table_get_t get;
 } l_table_t;
+
+typedef struct l_module_t {
+  ObjModule *(*get) (Lstate *, char *, int len);
+} l_module_t;
 
 typedef struct l_t {
   l_table_t table;
+  l_module_t module;
 
   Lstate *(*init) (const char *, int, const char **);
 
@@ -188,6 +206,8 @@ typedef struct l_t {
     (*deinit) (Lstate **),
     (*defineProp) (Lstate *, Table *, const char *, Value),
     (*defineFun) (Lstate *, Table *, const char *, NativeFn);
+
+  size_t (*vmsize) (void);
 
   InterpretResult (*compile) (Lstate *, const char *);
   ObjString *(*newString) (Lstate *, const char *, int);
@@ -227,7 +247,10 @@ void defineNativeProperty(VM *vm, Table *table, const char *name, Value value);
 void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
 
 /* extensions */
-Table vm_get_globals(VM *vm);
+Table *vm_get_globals(VM *vm);
+ObjModule *vm_module_get(VM *vm, char *name, int len);
+Table *vm_get_module_table(VM *vm, char *name, int len);
+Value *vm_table_get_value(VM *vm, Table *table, ObjString *obj, Value *value);
 Value strerrorNative(VM *vm, int argCount, Value *args);
 size_t vm_sizeof (void);
 #endif /* LAPI */

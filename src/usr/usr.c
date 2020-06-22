@@ -146,7 +146,7 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
   ed_t *ed = E(get.current);
   term_t *term = Ed.get.term (ed);
   Term.reset (term);
-  InterpretResult retval = interpret (__L__->states[__L__->cur_state], bytes);
+  InterpretResult retval = L.compile (L_CUR_STATE, bytes);
   (void) retval;
   Term.set_mode (term, 'r');
   Input.get (term);
@@ -945,6 +945,58 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
   return NO_CALLBACK_FUNCTION;
 }
 
+#if HAS_RUNTIME_INTERPRETER
+
+private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
+  (void) this; (void) buf; (void) regidx;
+
+  Msg.send (this, COLOR_NORMAL, "Expression Register");
+
+  rline_t *rl = Rline.new (this);
+  Rline.set.prompt_char (rl, '=');
+  Rline.edit (rl);
+  string_t *line = Rline.get.line (rl);
+  Rline.free (rl);
+  ifnot (line->num_bytes) {
+    String.free (line);
+    return NOTOK;
+  }
+
+  String.prepend (line, "var __val__ = ");
+  InterpretResult retval = L.compile (L_CUR_STATE, line->bytes);
+  String.free (line);
+
+  if (retval isnot INTERPRET_OK)
+    return NOTOK;
+
+  ObjString *var = L.newString (L_CUR_STATE, "__val__", 7);
+  Table *table = L.table.get.module(L_CUR_STATE, "main", 4);
+
+  if (NULL is table) return NOTOK;
+
+  Value value;
+  if (NULL is L.table.get.value (L_CUR_STATE, table, var, &value))
+    return NOTOK;
+
+  if (IS_STRING (value)) {
+    char *cstr = AS_CSTRING(value);
+    Ed.reg.setidx (this, regidx, CHARWISE, cstr, NORMAL_ORDER);
+  } else if (IS_NUMBER (value)) {
+    double num = AS_NUMBER(value);
+    char cstr[32];
+    snprintf (cstr, 32, "%f", num);
+    Ed.reg.setidx (this, regidx, CHARWISE, cstr, NORMAL_ORDER);
+  } else
+    return NOTOK;
+
+  return OK;
+}
+
+private void __u_add_expr_register_cb__ (ed_t *this) {
+  Ed.set.expr_register_cb (this, __u_expr_register_cb__);
+}
+#endif /* HAS_RUNTIME_INTERPRETER */
+
 private void __init_usr__ (ed_t *this) {
   if (NULL is Uenv) {
     Uenv = AllocType (uenv);
@@ -962,6 +1014,10 @@ private void __init_usr__ (ed_t *this) {
   __u_add_cw_mode_actions__ (this);
 
   __u_add_file_mode_actions__ (this);
+
+#if HAS_RUNTIME_INTERPRETER
+  __u_add_expr_register_cb__ (this);
+#endif
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
 

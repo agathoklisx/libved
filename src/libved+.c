@@ -527,9 +527,11 @@ private void __deinit_lstate__ (Lstate **thisp) {
 
 public Class (L) *__init_l__ (int num_states) {
   Class (L) *this =  Alloc (sizeof (Class (L)));
+  this->self = __SELF__->l;
+  __L__ = this;
 
   this->num_states = num_states;
-  this->states = Alloc (vm_sizeof () * this->num_states);
+  this->states = Alloc (L.vmsize () * this->num_states);
   this->cur_state = 0;
   return this;
 }
@@ -596,9 +598,17 @@ private void __init_self__ (Class (This) *this) {
     .newString = copyString,
     .defineFun = defineNative,
     .defineProp = defineNativeProperty,
+    .vmsize = vm_sizeof,
     .table = SubSelfInit (Thisl, table,
-      .get = tableGet
-    )
+      .get = SubSelfInit (Thisltable, get,
+        .globals = vm_get_globals,
+        .module = vm_get_module_table,
+        .value = vm_table_get_value
+      )
+    ),
+    .module = SubSelfInit (Thislmodule, get,
+      .get = vm_module_get
+   )
   );
 
   ((Self (This) *) this->self)->l = l;
@@ -644,9 +654,8 @@ public Class (This) *__init_this__ (void) {
   ((Prop (This) *) $myprop)->__I__ = __I__;
 
 #if HAS_RUNTIME_INTERPRETER
-  __L__ = __init_l__ (1);
+  __init_l__ (1);
   ((Prop (This) *) $myprop)->__L__ = __L__;
-  __L__->self = __SELF__->l;
   L_CUR_STATE = L.init ("__global__", 0, NULL);
 #endif
 

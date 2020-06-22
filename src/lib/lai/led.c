@@ -80,8 +80,8 @@ private void createU8Class(VM *vm) {
 
     defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
 
-    Table table = vm_get_globals (vm);
-    tableSet(vm, &table, name, OBJ_VAL(klass));
+    Table *table = vm_get_globals (vm);
+    tableSet(vm, table, name, OBJ_VAL(klass));
     pop(vm);
     pop(vm);
 }
@@ -103,8 +103,8 @@ private void createEdClass(VM *vm) {
 
     defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
 
-    Table table = vm_get_globals (vm);
-    tableSet(vm, &table, name, OBJ_VAL(klass));
+    Table *table = vm_get_globals (vm);
+    tableSet(vm, table, name, OBJ_VAL(klass));
     pop(vm);
     pop(vm);
 }

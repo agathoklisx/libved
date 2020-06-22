@@ -5170,12 +5170,34 @@ InterpretResult interpret(VM *vm, const char *source) {
 
 /*** EXTENSIONS ***/
 
-Table vm_get_globals(VM *vm) {
-    return vm->globals;
+Table *vm_get_globals(VM *vm) {
+    return &vm->globals;
 }
 
 size_t vm_sizeof(void) {
-    return sizeof (VM);
+    return sizeof(VM);
+}
+
+ObjModule *vm_module_get(VM *vm, char *name, int len) {
+    Value moduleVal;
+    ObjString *string = copyString (vm, name, len);
+    if (!tableGet(&vm->modules, string, &moduleVal))
+        return NULL;
+    return AS_MODULE(moduleVal);
+}
+
+Table *vm_get_module_table(VM *vm, char *name, int len) {
+    ObjModule *module = vm_module_get(vm, name, len);
+    if (NULL == module)
+        return NULL;
+    return &module->values;
+}
+
+Value *vm_table_get_value(VM *vm, Table *table, ObjString *obj, Value *value){
+    UNUSED(vm);
+    if (false == tableGet(table, obj, value))
+        return NULL;
+    return value;
 }
 
 /*** EXTENSIONS END ***/

@@ -831,6 +831,9 @@ NewProp (ed,
   int num_syntaxes;
   syn_t syntaxes[NUM_SYNTAXES];
 
+  int num_expr_register_cbs;
+  ExprRegister_cb *expr_register_cbs;
+
   int num_at_exit_cbs;
   EdAtExit_cb *at_exit_cbs;
 );

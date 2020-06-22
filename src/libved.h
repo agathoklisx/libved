@@ -651,10 +651,10 @@ typedef char *(*FtypeOpenFnameUnderCursor_cb) (char *, size_t, size_t);
 typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
 typedef int (*Balanced_cb) (buf_t **, int, int);
+typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
-
 #define NULL_REF NULL
 
 NewType (string,
@@ -1159,7 +1159,10 @@ NewClass (vstring,
 );
 
 NewSubSelf (rline, set,
-  void (*line) (rline_t *, char *, size_t);
+  void
+     (*prompt_char) (rline_t *, char),
+     (*line) (rline_t *, char *, size_t);
+
 );
 
 NewSubSelf (rline, get,
@@ -1191,7 +1194,8 @@ NewSelf (rline,
 
   rline_t
      *(*new) (ed_t *),
-     *(*new_with) (ed_t *, char *);
+     *(*new_with) (ed_t *, char *),
+     *(*edit) (rline_t *);
 
   void
     (*free) (rline_t *),
@@ -1662,6 +1666,7 @@ NewSubSelf (ed, set,
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
      (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
+     (*expr_register_cb) (ed_t *, ExprRegister_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
      (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),
@@ -1680,7 +1685,8 @@ NewSubSelf (ed, syn,
 
 NewSubSelf (ed, reg,
   rg_t
-     *(*set) (ed_t *, int, int, char *, int);
+     *(*set) (ed_t *, int, int, char *, int),
+     *(*setidx) (ed_t *, int, int, char *, int);
 );
 
 NewSubSelf (ed, append,
