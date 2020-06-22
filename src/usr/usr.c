@@ -963,6 +963,11 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
   }
 
   String.prepend (line, "var __val__ = ");
+  String.trim_end (line, '\n');
+  String.trim_end (line, ' ');
+  ifnot (line->bytes[line->num_bytes - 1] is ';')
+    String.append_byte (line, ';');
+
   InterpretResult retval = L.compile (L_CUR_STATE, line->bytes);
   String.free (line);
 

@@ -1653,6 +1653,19 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
   return string_replace_with_len (this, bytes, len);
 }
 
+private string_t *string_trim_end (string_t *this, char c) {
+  char *sp = nullbyte_in_str (this->bytes);
+  sp--;
+
+  while (sp >= this->bytes) {
+    if (*sp isnot c) break;
+    string_clear_at (this, -1);
+    if (sp is this->bytes) break;
+  }
+
+  return this;
+}
+
 public string_T __init_string__ (void) {
   return ClassInit (string,
     .self = SelfInit (string,
@@ -1676,6 +1689,7 @@ public string_T __init_string__ (void) {
       .replace_with = string_replace_with,
       .replace_with_len = string_replace_with_len,
       .replace_with_fmt = string_replace_with_fmt,
+      .trim_end = string_trim_end,
       .clear = string_clear,
       .clear_at = string_clear_at,
     )

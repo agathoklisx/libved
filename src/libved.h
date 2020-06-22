@@ -1116,6 +1116,7 @@ NewSelf (string,
     *(*replace_with) (string_t *, char *),
     *(*replace_with_len) (string_t *, const char *, size_t),
     *(*replace_with_fmt) (string_t *, const char *, ...),
+    *(*trim_end) (string_t *, char c),
     *(*replace_numbytes_at_with) (string_t *, int, int, const char *);
 
   int (*delete_numbytes_at) (string_t *, int, int);
