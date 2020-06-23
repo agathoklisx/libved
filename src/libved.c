@@ -7919,7 +7919,8 @@ private int ved_quit (ed_t *ed, int force, int global) {
 
     buf_t *this = w->head;
     while (this isnot NULL) {
-      if ($my(flags) & BUF_IS_SPECIAL) goto bufnext;
+      if ($my(flags) & BUF_IS_SPECIAL or str_eq ($my(fname), UNAMED))
+         goto bufnext;
       ifnot ($my(flags) & BUF_IS_MODIFIED) goto bufnext;
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C','d'};
 thequest:;

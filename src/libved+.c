@@ -624,10 +624,16 @@ private void __init_self__ (Class (This) *this) {
 private int __initialize__ (void) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */
-  if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
-    tostderr ("Not a controlled terminal\n");
-    return NOTOK;
-  }
+
+  /* 
+    if (0 is isatty (fileno (stdout)) or 0 is isatty (fileno (stdin))) {
+      tostderr ("Not a controlled terminal\n");
+      return NOTOK;
+    }
+
+    Update: Tue 23 Jun 2020, first handle of this, as the first thing to check at
+    the main() function.
+  */
 
   setlocale (LC_ALL, "");
   AllocErrorHandler = __alloc_error_handler__;

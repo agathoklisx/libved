@@ -11,7 +11,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <errno.h>
 
 #include <libved.h>
@@ -23,6 +25,14 @@ static const char *const usage[] = {
 };
 
 int main (int argc, char **argv) {
+  int ifd = -1;
+
+  ifnot (isatty (fileno (stdin))) {
+    /* this looks sufficient but time will tell */
+    ifd = dup (fileno (stdin));
+    freopen ("/dev/tty", "r", stdin);
+  }
+
   if (NULL is __init_this__ ())
     return 1;
 
@@ -88,11 +98,19 @@ int main (int argc, char **argv) {
 
   w = Ed.get.current_win (this);
 
-  ifnot (argc) {
+  if (0 is argc or ifd isnot -1) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
     buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL(.ftype = filetype, .autosave = autosave));
     Win.append_buf (w, buf);
+
+    /* check if input comes from stdin */
+    if (ifd isnot -1) {
+      FILE *fpin = fdopen (ifd, "r");
+      fp_t fp = (fp_t) {.fp = fpin};
+      Buf.read.from_fp (buf, NULL, &fp);
+    }
+
   } else {
     int
       first_idx = Ed.get.current_win_idx (this),

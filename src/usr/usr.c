@@ -788,7 +788,7 @@ char lua_multiline_comment_start[] = "--[[";
 char lua_multiline_comment_end[] = "]]";
 
 char *lai_extensions[] = {".lai", ".du", ".yala", NULL};
-char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "#!/usr/bin/doctu", NULL};
+char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "#!/usr/bin/dictu", NULL};
 char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
 char *lai_keywords[] = {
     "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
