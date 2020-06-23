@@ -48,6 +48,7 @@ int main (int argc, char **argv) {
     filetype = FTYPE_DEFAULT,
     autosave = 0,
     backupfile = 0,
+    ispager = 0,
     linenr = 0,
     column = 1,
     num_win = 1;
@@ -60,10 +61,11 @@ int main (int argc, char **argv) {
     OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
     OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
     OPT_INTEGER(0, "autosave", &autosave, "interval time in minutes to autosave buffer", NULL, 0, 0),
-    OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
     OPT_STRING(0, "backup-suffix", &backup_suffix, "backup suffix (default: ~)", NULL, 0, 0),
     OPT_STRING(0, "exec-com", &exec_com, "execute command", NULL, 0, 0),
     OPT_STRING(0, "load-file", &load_file, "eval file", NULL, 0, 0),
+    OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
+    OPT_BOOLEAN(0, "pager", &ispager, "behave as a pager", NULL, 0, 0),
     OPT_BOOLEAN(0, "exit", &exit, "exit", NULL, 0, 0),
     OPT_END()
   };
@@ -101,7 +103,10 @@ int main (int argc, char **argv) {
   if (0 is argc or ifd isnot -1) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = Win.buf.new (w, BUF_INIT_QUAL(.ftype = filetype, .autosave = autosave));
+    buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
+      .ftype = filetype,
+      .autosave = autosave,
+      .flags = (ispager ? BUF_IS_PAGER : 0)));
     Win.append_buf (w, buf);
 
     /* check if input comes from stdin */
@@ -127,7 +132,8 @@ int main (int argc, char **argv) {
         .at_column = column,
         .backupfile = backupfile,
         .backup_suffix = backup_suffix,
-        .autosave = autosave));
+        .autosave = autosave,
+        .flags = (ispager ? BUF_IS_PAGER : 0)));
 
       Win.append_buf (w, buf);
 

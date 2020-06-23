@@ -1405,6 +1405,7 @@ NewSubSelf (buf, get,
 
 NewSubSelf (bufset, as,
   void
+    (*pager) (buf_t *),
     (*unamed) (buf_t *),
     (*non_existant) (buf_t *);
 );

@@ -5687,6 +5687,10 @@ private void buf_set_as_unamed (buf_t *this) {
   self(set.as.non_existant);
 }
 
+private void buf_set_as_pager (buf_t *this) {
+  $my(flags) &= BUF_IS_PAGER;
+}
+
 private int buf_set_fname (buf_t *this, char *filename) {
   int is_null = (NULL is filename);
   int is_unamed = (is_null ? 0 : str_eq (filename, UNAMED));
@@ -7919,9 +7923,12 @@ private int ved_quit (ed_t *ed, int force, int global) {
 
     buf_t *this = w->head;
     while (this isnot NULL) {
-      if ($my(flags) & BUF_IS_SPECIAL or str_eq ($my(fname), UNAMED))
-         goto bufnext;
-      ifnot ($my(flags) & BUF_IS_MODIFIED) goto bufnext;
+      if ($my(flags) & BUF_IS_SPECIAL
+          or 0 is ($my(flags) & BUF_IS_MODIFIED)
+          or ($my(flags) & BUF_IS_PAGER)
+          or str_eq ($my(fname), UNAMED))
+        goto bufnext;
+
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C','d'};
 thequest:;
       utf8 c = quest (this, str_fmt (
@@ -15267,7 +15274,8 @@ private Class (ed) *editor_new (void) {
           .modified = buf_set_modified,
           .as = SubSelfInit (bufset, as,
             .unamed = buf_set_as_unamed,
-            .non_existant = buf_set_as_non_existant
+            .non_existant = buf_set_as_non_existant,
+            .pager = buf_set_as_pager
           ),
           .normal = SubSelfInit (bufset, normal,
             .at_beg_cb = buf_set_normal_cb

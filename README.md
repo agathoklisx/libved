@@ -763,6 +763,7 @@ Search:
       --backup-suffix=<str> backup suffix (default: ~)
       --ex-com="command"    run an editor command at the startup (see Utility)
       --load-file=file      evaluate file with libved code (see Scripting)
+      --pager               behave like a pager
       --exit                exit quickly (called after --ex-com)
  */
 
