@@ -652,6 +652,7 @@ NewProp (buf,
     *basename,
     *extname,
     *cwd,
+    *backupfile,
      backup_suffix[8],
      mode[MAXLEN_MODE];
 
@@ -668,8 +669,7 @@ NewProp (buf,
     cur_video_row,
     cur_video_col,
     statusline_row,
-    show_statusline,
-    backupfile;
+    show_statusline;
 
   int
     *msg_row_ptr,

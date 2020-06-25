@@ -682,6 +682,10 @@ Search:
    :testkey               (test keyboard keys)
    :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
                           whole file is assumed)
+   :@bufbackup            backup file as (dirname(fname)/.basename(fname)`suffix',
+                          but it has to be set first (with :set or with --backupfile),
+                          if backupfile exists, it raises a question, same if this
+                          true at the initialization
    :set options           (set options for current buffer
                            --ftype=[string] set filetype
                            --tabwidth=[int] set tabwidth

@@ -256,7 +256,7 @@
 #define FTYPE_DEFAULT 0
 
 #define UNAMED          "[No Name]"
-
+#define BACKUP_SUFFIX   "~"
 #define FIRST_FRAME 0
 #define SECOND_FRAME 1
 #define THIRD_FRAME 2
@@ -927,7 +927,7 @@ NewType (ed_init_opts,
   .ftype = FTYPE_DEFAULT,                        \
   .autosave = 0,                                 \
   .backupfile = 0,                               \
-  .backup_suffix = "~",                          \
+  .backup_suffix = BACKUP_SUFFIX,                \
   .flags = 0, .fname = UNAMED, __VA_ARGS__}
 
 #define FTYPE_QUAL(...) (ftype_t) {              \

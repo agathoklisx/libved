@@ -4835,12 +4835,16 @@ private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
 
   if (rline_arg_exists (rl, "backupfile")) {
     arg = rline_get_anytype_arg (rl, "backup-suffix");
-    self(set.backup, 1, (NULL is arg ? "" : arg->bytes));
+    self(set.backup, 1, (NULL is arg ? BACKUP_SUFFIX : arg->bytes));
     return OK;
   }
 
   if (rline_arg_exists (rl, "no-backupfile")) {
-    self(set.backup, 0, NULL);
+    ifnot (NULL is $my(backupfile)) {
+      free ($my(backupfile));
+      $my(backupfile) = NULL;
+    }
+
     return OK;
   }
 
@@ -5647,15 +5651,38 @@ private void buf_set_autosave (buf_t *this, long minutes) {
     vsys_get_clock_sec (DEFAULT_CLOCK);
 }
 
-private void buf_set_backup (buf_t *this, int backupfile, char *suffix) {
-  if (backupfile <= 0) return;
-  $my(backupfile) = 1;
-  if (NULL is suffix) return;
+private void buf_set_backup (buf_t *this, int backup, char *suffix) {
+  if (backup <= 0
+      or NULL isnot $my(backupfile)
+      or NULL is suffix
+      or ($my(flags) & BUF_IS_SPECIAL)
+      or str_eq ($my(fname), UNAMED))
+    return;
+
   size_t len = bytelen (suffix);
   ifnot (len) return;
   if (len > 7) len = 7;
   for (size_t i = 0; i < len; i++) $my(backup_suffix)[i] = suffix[i];
   $my(backup_suffix)[len] = '\0';
+
+  char *dname = path_dirname ($my(fname));
+  size_t dname_len = bytelen (dname);
+
+  size_t baselen = bytelen ($my(basename));
+  size_t suffixlen = bytelen ($my(backup_suffix));
+  size_t backuplen = 2 + dname_len + baselen + suffixlen;
+
+  $my(backupfile) = Alloc (backuplen + 1);
+
+  size_t i = 0;
+  for (; i < dname_len; i++) $my(backupfile)[i] = dname[i];
+  free (dname);
+
+  $my(backupfile)[i++] = '/'; $my(backupfile)[i++] = '.';
+
+  for (size_t j = 0; j < baselen; j++, i++) $my(backupfile)[i] = $my(basename)[j];
+  for (size_t j = 0; j < suffixlen; i++, j++) $my(backupfile)[i] = $my(backup_suffix)[j];
+  $my(backupfile)[backuplen] = '\0';
 }
 
 private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
@@ -5807,22 +5834,21 @@ private ssize_t ed_readline_from_fp (char **line, size_t *len, FILE *fp) {
 }
 
 private int buf_backupfile (buf_t *this) {
-  if ($my(backupfile) <= 0) return NOTHING_TODO;
+  // RECENT WORDS
+  if (NULL is $my(backupfile)) return NOTHING_TODO;
 
-  size_t cwdlen = bytelen ($my(cwd));
-  size_t baselen = bytelen ($my(basename));
-  size_t suffixlen = bytelen ($my(backup_suffix));
-  size_t backuplen = 2 + cwdlen + baselen + suffixlen;
-  char backupfile[backuplen + 1];
-  size_t i = 0;
-  for (; i < cwdlen; i++) backupfile[i] = $my(cwd)[i];
-  backupfile[i++] = '/'; backupfile[i++] = '.';
-  for (size_t j = 0; j < baselen; j++, i++) backupfile[i] = $my(basename)[j];
-  for (size_t j = 0; j < suffixlen; i++, j++) backupfile[i] = $my(backup_suffix)[j];
-  backupfile[backuplen] = '\0';
+  if (file_exists ($my(backupfile))) {
+    utf8 chars[] = {'y', 'Y', 'n', 'N'};
+    utf8 c =  quest (this, str_fmt ("backup file: %s exists\noverride? [yYnN]",
+        $my(backupfile)), chars, ARRLEN(chars));
 
-  return ved_write_to_fname (this, backupfile, DONOT_APPEND, 0, this->num_items - 1,
-      NO_FORCE, VERBOSE_OFF);
+      switch (c) {
+        case 'n': case 'N': return NOTHING_TODO;
+      }
+  }
+
+  return ved_write_to_fname (this, $my(backupfile), DONOT_APPEND, 0,
+      this->num_items - 1, FORCE, VERBOSE_OFF);
 }
 
 private ssize_t buf_read_fname (buf_t *this) {
@@ -5874,7 +5900,9 @@ private ssize_t buf_read_fname (buf_t *this) {
 
   if (line isnot NULL) free (line);
 
-  self(backupfile);
+  /* actually this might be called only on :e! (and in that case we do not want it)
+   * self(backupfile);
+   */
 
 theend:
   fclose (fp);
@@ -6031,6 +6059,8 @@ private void buf_free (buf_t *this) {
   if ($my(fname) isnot NULL) free ($my(fname));
 
   free ($my(cwd));
+  ifnot (NULL is $my(backupfile))
+    free ($my(backupfile));
 
   My(String).free ($my(statusline));
   My(String).free ($my(shared_str));
@@ -6226,7 +6256,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(statusline_row) = $my(dim)->last_row;
   $my(show_statusline) = 1;
 
-  $my(autosave) = $my(backupfile) = 0;
+  $my(autosave) = 0;
+  $my(backupfile) = NULL;
   $my(backup_suffix)[0] = '~'; $my(backup_suffix)[1] = '\0';
 
   this->on_normal_beg = ved_buf_on_normal_beg;
@@ -6242,7 +6273,8 @@ private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
   self(set.ftype, opts.ftype);
   self(set.row.idx, 0, NO_OFFSET, 1);
   self(set.autosave, opts.autosave);
-  self(set.backup, opts.backupfile, opts.backup_suffix);
+  self(set.backup, opts.backupfile,
+    (NULL is opts.backup_suffix ? BACKUP_SUFFIX : opts.backup_suffix));
   self(backupfile);
 
   ved_normal_goto_linenr (this, opts.at_linenr, DONOT_DRAW);
