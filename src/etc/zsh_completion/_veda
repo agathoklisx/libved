@@ -1,0 +1,17 @@
+#compdef veda vedas
+
+_arguments \
+  '--line-nr=[start at the given line number]' \
+  '--ftype=[set filetype]' \
+  '--load-file=[load file]' \
+  '--column=[set pointer at column]' \
+  '--num-win=[create new num windows]' \
+  '--ftype=[set the file type]' \
+  '--autosave=[interval time in minutes to autosave buffer]' \
+  '--backup-suffix=[backup suffix (default: ~)]' \
+  '--exec-com=[execute command]' \
+  '--load-file=[eval file]' \
+  '--backupfile[backup file at the initial reading]' \
+  '--pager[behave as a pager]' \
+  '--exit[exit]' \
+  '*:files:_files'
