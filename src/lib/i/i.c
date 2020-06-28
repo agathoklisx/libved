@@ -443,12 +443,13 @@ private int i_do_next_token (i_t *this, int israw) {
 private int i_next_token (i_t *this) { return i_do_next_token (this, 0); }
 private int i_next_raw_token (i_t *this) { return i_do_next_token (this, 1); }
 
-private void i_push (i_t *this, ival_t x) {
+private int i_push (i_t *this, ival_t x) {
   --this->valptr;
   if ((ival_t) this->valptr < (ival_t) this->symptr)
-    abort ();  // out of memory
+    return I_ERR_NOMEM;
 
   *this->valptr = x;
+  return I_OK;
 }
 
 private ival_t i_pop (i_t *this) {
@@ -525,9 +526,11 @@ private int i_parse_expr_list (i_t *this) {
     if (err isnot I_OK) return err;
 
     if (v is STRING_TYPE_FUNC_ARGUMENT) {
-      i_push (this, (ival_t) this);
+      err = i_push (this, (ival_t) this);
     } else
-      i_push (this, v);
+      err = i_push (this, v);
+
+    if (err isnot I_OK) return err;
 
     count++;
 
@@ -580,10 +583,6 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
   int expectargs;
   int c;
 
-FILE *fp = fopen("/tmp/deb", "a+");
-ifnot (uf) {
-  fprintf (fp, "tArgs %d\n", this->tokenArgs);
-  fflush (fp); }
   if (uf)
     expectargs = uf->nargs;
   else
@@ -591,7 +590,9 @@ ifnot (uf) {
 
   c = i_next_token (this);
   if (c isnot '(') return i_syntax_error (this, "expected open parentheses");
+
   this->scope = FUNCTION_ARGUMENT_SCOPE;
+
   c = i_next_token (this);
   if (c isnot ')') {
     paramCount = i_parse_expr_list (this);
@@ -604,8 +605,6 @@ ifnot (uf) {
   if (c isnot ')')
     return i_syntax_error (this, "expected closed parentheses");
 
-fprintf (fp, "exp %d count %d\n", expectargs, paramCount);fflush (fp);
-fclose (fp);
   if (expectargs isnot paramCount)
     return i_arg_mismatch (this);
 
@@ -1139,6 +1138,8 @@ private int i_get_current_idx (Class (I) *this) {
 
 private ival_t i_exit (ival_t inst, int code) {
   (void) inst;
+  return I_OK; // ignore
+
   __deinit_this__ (&__THIS__);
   exit (code);
 }
