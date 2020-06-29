@@ -12,6 +12,7 @@
  * - print* function references got a FILE * argument
  * - it is possible to call a C function, with a literal string as argument
  * - many changes that integrates Tinyscript to this environment
+ * - remove abort() and disable exit()
  */
 
 /* Tinyscript interpreter
@@ -430,7 +431,7 @@ private int i_do_next_token (i_t *this, int israw) {
   } else
     r = c;
 
-#ifdef DEBUG_INTERPRETER_OUTPUT
+#ifdef DEBUG_INTERPRETER
   this->print_fmt_bytes (this->err_fp, "Token[%c / %x] = ", r & 0xff, r);
   i_print_string (this, this->err_fp, this->token);
   this->print_byte (this->err_fp, '\n');
@@ -1184,6 +1185,7 @@ private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
     }
   }
 
+  /*
   for (i = 0; i_funs[i].name; i++) {
     err = i_define (this, i_funs[i].name, CFUNC (i_funs[i].nargs), i_funs[i].val);
     if (err isnot I_OK) {
@@ -1191,6 +1193,7 @@ private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
       return err;
     }
   }
+  */
 
   i_append_instance (interp, this);
   return I_OK;

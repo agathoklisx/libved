@@ -86,7 +86,7 @@ ifneq ($(HAS_SHELL_COMMANDS), 0)
   FLAGS += -DHAS_SHELL_COMMANDS
 endif
 
-HAS_HISTORY := 0
+HAS_HISTORY := 1
 
 ifneq ($(HAS_HISTORY), 0)
   FLAGS += -DHAS_HISTORY
@@ -199,6 +199,8 @@ EDSHARED    := $(EDNAME)-$(THIS_APPVERS)_shared
 EDSTATIC    := $(EDNAME)-$(THIS_APPVERS)_static
 SYSEDSHARED := $(SYSBINDIR)/$(EDSHARED)
 SYSEDSTATIC := $(SYSBINDIR)/$(EDSTATIC)
+SYSEDSHAREDSH := $(SYSBINDIR)/$(EDNAME)s
+SYSEDSTATICLNK := $(SYSBINDIR)/$(EDNAME)
 
 #----------------------------------------------------------#
 APPFLAGS  :=
@@ -274,12 +276,6 @@ ifneq ($(DEBUG_INTERPRETER), 0)
   APPFLAGS += -DDEBUG_INTERPRETER
 endif
 
-DEBUG_INTERPRETER_OUTPUT := 0
-
-ifneq ($(DEBUG_INTERPRETER_OUTPUT), 0)
-  APPFLAGS += -DDEBUG_INTERPRETER_OUTPUT
-endif
-
 HAS_USER_EXTENSIONS := 0
 USER_EXTENSIONS_FLAGS :=
 
@@ -293,7 +289,27 @@ HAS_EXPR := 0
 
 WORD_LEXICON_FILE :=
 
- ifneq ($(HAS_USER_EXTENSIONS), 0)
+ifneq ($(HAS_SPELL), 0)
+  HAS_USER_EXTENSIONS = 1
+endif
+
+ifneq ($(HAS_JSON), 0)
+  HAS_USER_EXTENSIONS = 1
+endif
+
+ifneq ($(HAS_EXPR), 0)
+  HAS_USER_EXTENSIONS = 1
+endif
+
+ifneq ($(HAS_TCC), 0)
+  HAS_USER_EXTENSIONS = 1
+endif
+
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  HAS_USER_EXTENSIONS = 1
+endif
+
+ifneq ($(HAS_USER_EXTENSIONS), 0)
   APPFLAGS += -DHAS_USER_EXTENSIONS
 
   ifdef USER_EXTENSIONS_FLAGS
@@ -340,21 +356,35 @@ $(SYSEDSHARED):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(SHARED_APP_FLAGS) -o $(EDSHARED)
 	@$(INSTALL) -v $(EDSHARED) $(SYSBINDIR)
 	@$(RM) $(EDSHARED)
+	@$(PRINTF) "#!/bin/sh\n" > $(SYSEDSHAREDSH)
+	@$(PRINTF) "LD_LIBRARY_PATH=$(SYSLIBDIR) $(SYSEDSHARED) \"\$$@\"\n" >> $(SYSEDSHAREDSH)
+	@$(CHMOD_X) $(SYSEDSHAREDSH)
 
 veda-static: static $(REQ_STATIC_LIBS) $(SYSEDSTATIC)
 $(SYSEDSTATIC):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_APP_FLAGS) $( STATIC_CFLAGS) -o $(EDSTATIC)
 	@$(INSTALL) -v $(EDSTATIC) $(SYSBINDIR)
 	@$(RM) $(EDSTATIC)
+	@$(LN_S) -f $(SYSEDSTATIC) $(SYSEDSTATICLNK)
 
 veda-shared-preproc:
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -E
 
+lai-shared-lib: lai-clean $(RUNTIME_INTERPR_NAME)-shared
+
 $(RUNTIME_INTERPR_NAME)-shared:
 	@cd $(RUNTIME_INTERPR_DIR) && make SYSDIR=$(SYSDIR) $(RUNTIME_INTERPR_SHARED_FLAGS) shared-library
-	
+
+lai-static-lib: lai-clean $(RUNTIME_INTERPR_NAME)-static
+
 $(RUNTIME_INTERPR_NAME)-static:
 	@cd $(RUNTIME_INTERPR_DIR) && make SYSDIR=$(SYSDIR) $(RUNTIME_INTERPR_STATIC_FLAGS) static-library
+
+lai-clean:
+	@cd $(RUNTIME_INTERPR_DIR) && make SYSDIR=$(SYSDIR) clean
+
+lai-interpr:
+	@cd $(RUNTIME_INTERPR_DIR) && make SYSDIR=$(SYSDIR) ENABLE_REPL=1 interpr
 
 #----------------------------------------------------------#
 LD_LIBRARY_PATH := $(SYSLIBDIR)
@@ -371,6 +401,9 @@ MKDIR_P = $(MKDIR) -p
 CP = cp
 CP_R = $(CP) -r
 LN_S = ln -s
+CHMOD = chmod
+CHMOD_X = $(CHMOD) 0755
+PRINTF = printf
 INSTALL = install
 MAKE = make
 VALGRIND = valgrind

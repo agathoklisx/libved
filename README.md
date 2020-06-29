@@ -196,6 +196,19 @@
    # to clean up and start over
 
    make clean
+
+   # Notes:
+
+   # The libraries are installed under $SYSDIR/lib.
+   # The header files are installed under $SYSDIR/include.
+   # The applications are installed under $SYSDIR/bin.
+
+   # For convenience:
+   #  - a symbolic link is created to static application as veda
+   #  - a shell script is installed to call the shared application as vedas
+   #    having set also LD_LIBRARY_PATH to $SYSDIR/bin
+   # both are installed under $SYSDIR/bin
+   # $(SYSDIR)/bin should be set in $PATH for convenience.
 ```
 ```C
 /* Note: It is not guaranteed that these three compilers will produce the same
@@ -228,6 +241,8 @@
    HAS_REGEXP=1|0         (en|dis)able regular expression support (default 1)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
+
+   SYSDIR="dir"           this sets the system directory (default src/sys)
    VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
    VED_TMPDIR="dir"       this sets the temp directory (default $(SYSDIR)/tmp)
 
@@ -251,25 +266,29 @@
       private void __init_local__ (ed_t *this);
       private void __deinit_local__ (ed_t *this);
 
-     (small emphasis) as the last in the chain, can overide everything that allowed
-     to overwritten.
+     (small emphasis) as the last in the chain, it can overide everything that
+     is allowed to overwritten.
    */
+
+   /* The following options extend the application and any of them enables the
+    * HAS_USER_EXTENSIONS option.
+    * For an example, see the Spelling section below in this same document */
 
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
    HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
    HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
    HAS_RUNTIME_INTERPRETER=1|0 (en|dis)able runtime interpreter (default 0)
+   /* Implemented but used for now only in local code */
+   HAS_JSON=1|0     (en|dis)able json support (defaulr 0)
+
+   /* The following options can control, the relative above options */
+
    HAS_CURL=1|0     (en|dis)able libcurl, used by the interpreter (default 0)
    SPELL_DICTIONARY="path/to/spell_dictionary" (default $(SYSDATADIR)/spell/spell.txt)
    SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
-   /* The above options requires HAS_USER_EXTENSIONS=1,
-    * but see for details to the Spelling section below in this same document */
 
-   /* Make options to extend the compiler flags (intended for -llib) */
-
-   USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
-
-   /* The following options can change/control the behavior */
+   /* The following options can change/control the editor behavior. */
+    * They used to be set the defaults during filetype initialization. */
 
    CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                           is on those lines (default 1)
@@ -290,45 +309,25 @@ C_TAB_ON_INSERT_MODE_INDENTS  (1|0) the wrong indentation here is by purpose (de
                           of a shell command (default 1), note: that this option
                           activates HAS_SHELL_COMMANDS
 
- /* (those set the defaults during filetype initiation) */
+   /* The following options extend the compiler flags (intended for -llib) and
+    * intended to be used mainly by the local namespace, but also to give some
+    * flexibility to the user. */
 
-/* C
-  This compiles to C11 for two reasons:
-  - the fvisibility flags that turns out the defaults, a global scope object
-    needs en explicit declaration
-  - the statement expressions that allow, local scope code with access to the
-    function scope, to return a value; also very useful in macro definitions
+   USER_EXTENSIONS_FLAGS, LOCAL_EXTENSIONS_FLAGS, VED_APPLICATION_FLAGS
 
-  It uses the following macros.
- */
 
-  #define ifnot(__expr__) if (0 == (__expr__))
-  /* clearly for clarity; also same semantics with SLang's ifnot */
+   /* there two shell scripts located at the src directory, that makes easy to
+    * enable/disable options
 
-  #define loop(__num__) for (int $i = 0; $i < (__num__); $i++)
-  /* likewise for both reasons; here also the $i variable can be used inside the
-     block, though it will violate the semantics (if the variable change state),
-     which is: "loop for `nth' times".
-     Anyway this loop macro is being used in a lot of repositories.
-   */
+    *  - src/default.sh
+    *  - src/convenience.sh
 
- /* also purely for linguistic and expressional reasons the followings: */
-
-  #define is    ==
-  #define isnot !=
-  #define and   &&
-  #define or    ||
- /* again, those they being used by others too, see for instance the Cello project
-    at github/orangeduck/Cello */
-
- /* and for plain purism, the following */
-  #define bytelen strlen
- /* SLang also implements strbytelen(), while strlen() returns character length
-    I guess the most precise is bytelen() and charlen() in the utf8 era */
-
-  /* defined but not being used, though i could happily use it if it was enforced
-     by a standard */
-  #define forever for (;;)
+    * the default.sh, sets the default options and is pretty minimal and intended
+    * for testing, while the convenience.sh does the opposite and is inteded for
+    * usage. You can use it simply as:
+    * sh default.sh  or
+    * sh convenience.sh
+    */
 
 /* Interface and Semantics.
    The is almost a vi[m] like interface and is based on modes, with some of the
@@ -936,7 +935,60 @@ Search:
          - without HAS_CURL=1 the HTTP module is disabled
    */
 
-   /* Work has been started on the Syntax and Filetypes, with the latter can be play
+   /* Unified Diff
+      This feature requires (for now) the `diff' utility.
+
+      The :diff command open a dedicated "diff" buffer, with the results (if any) of
+      the differences (in a unified format), between the buffer in memory with the one
+      that is written on the disk. This buffer can be quickly closed with 'q' as in a
+      pager (likewise for the other special buffers, like the message buffer).
+      Note that it first clears the previous diff.
+
+      The :diffbuf command gives the focus to this same buffer.
+
+      Another usage of this feature is when quiting normally (without forcing) and
+      the buffer has been modified.
+      In that case a dialog (below) presents some options:
+
+        "[bufname] has been modified since last change
+        continue writing? [yY|nN], [cC]ansel, unified [d]iff?"
+
+        on 'y': write the buffer and continue
+        on 'n': continue without writing
+        on 'c': cancel operation at this point (some buffers might be closed already)
+        on 'd': print to the stdout the unified diff and redo the question (note that
+                when printing to the stdout, the previous terminal state is restored;
+                any key can bring back the focus)
+   */
+
+   /* Regexp
+      This application adds regular expression support, by using a slightly modified
+      version of the slre machine, which is an ISO C library that implements a subset
+      of Perl regular expression syntax, see and clone at:
+
+      https://github.com/cesanta/slre.git
+      Many thanks.
+
+      It is implemented outside of the library by overriding methods from the Re structure
+      and that api is what is actually being used for a long time now, so it is enabled
+      by default.
+
+      The substitution string in the ":substitute command", can use '&' to denote the
+      full captured matched string, but also captures of which denoted with \nth.
+      It is also possible to force caseless searching, by using (like pcre) (?i) in front
+      of the pattern. This option won't work with multibyte characters. Searching for
+      multibyte characters it should work properly though.
+   */
+
+   /* Shell Commands
+      The application can also run shell commands or to read into current buffer
+      the standard output of a shell command. Interactive applications might have
+      unexpected behavior in this implementation. To disable these features (as they
+      are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
+   */
+
+   /* Filetypes
+      Work has been started on the Syntax and Filetypes, with the latter can be play
       a very interesting role, with regards to personalization, but also can be quite
       powerful of a tool, for all kind of things. As it had been said already it is an
       ongoing work, so this section is quite empty for the moment.
@@ -1027,14 +1079,16 @@ Search:
     (note that the C filetype, implements the above two callbacks)
    */
 
-  /* History Completion Semantics (command line and search)
+   /*
+     History Completion Semantics (command line and search)
    - the ARROW_UP key starts from the last entry set in history, and scrolls down
      to the past entries
 
    - the ARROW_DOWN key starts from the first entry, and scrolls up to most recent
    */
 
-  /* Searching on files (a really quite basic emulation of quickfix vim's windows).
+   /*
+    Searching on files (a really quite basic emulation of quickfix vim's windows).
 
    The command :vgrep it takes a pattern and at least a filename as argument[s]:
 
@@ -1057,34 +1111,8 @@ Search:
    This command can search recursively and skips (as a start) any object file.
   */
 
- /* Unified Diff
-  This feature requires (for now) the `diff' utility.
-
-  The :diff command open a dedicated "diff" buffer, with the results (if any) of
-  the differences (in a unified format), between the buffer in memory with the one
-  that is written on the disk. This buffer can be quickly closed with 'q' as in a
-  pager (likewise for the other special buffers, like the message buffer).
-  Note that it first clears the previous diff.
-
-  The :diffbuf command gives the focus to this same buffer.
-
-  Another usage of this feature is when quiting normally (without forcing) and
-  the buffer has been modified.
-  In that case a dialog (below) presents some options:
-
-    "[bufname] has been modified since last change
-     continue writing? [yY|nN], [cC]ansel, unified [d]iff?"
-
-   on 'y': write the buffer and continue
-   on 'n': continue without writing
-   on 'c': cancel operation at this point (some buffers might be closed already)
-   on 'd': print to the stdout the unified diff and redo the question (note that
-           when printing to the stdout, the previous terminal state is restored;
-           any key can bring back the focus)
- */
-
-/* Glob Support
-   (for now)
+  /* Glob Support
+    (for now)
     - this is limited to just one directory depth
     - it uses only '*'
     - and understands (or should):
@@ -1093,65 +1121,72 @@ Search:
       `*string' or `string*string' or `string*'
         (likewise for directories)
 
-   Note: many commands has a --recursive option
- */
-
-/* Registers and Marks are supported with the minimal features, same with
-   other myriad details that needs care.
-
-   Mark set:
-   [abcdghjklqwertyuiopzxcvbnm1234567890]
-   Special Marks:
-   - unnamed mark [`] jumps to the previous position
-
-   Register set:
-   [abcdghjklqwertyuiopzxcvbnm1234567890]
-   Special Registers:
-    - unnamed register ["] (default)
-    - filename register [%]
-    - last search register [/]
-    - last command line register [:]
-    - registers [+*] send|receive text to|from X clipboard (if xclip is available)
-    - blackhole [_] register, which stores nothing
-    - CTRL('w') current word
-    - [=] expression register (not yet implemented so does nothing)
- */
-
-/* Menus
-   Many completions (and there are many) are based on menus.
-   Semantics and Keys:
-      Navigation keys:
-      - left and right (for left and right motions)
-        the left key should move the focus to the previous item on line, unless the
-        focus is on the first item in line, which in that case should focus to the
-        previous item (the last one on the previous line, unless is on the first line
-        which in that case should jump to the last item (the last item to the last
-        line))
-
-      - the right key should jump to the next item, unless the focus is on the last
-        item, which in that case should focus to the next item (the first one on the
-        next line, unless is on the last line, which in that case should jump to the
-        first item (the first item to the first line))
-
-      - page down/up keys for page down|up motions
-
-      - tab key is like the right key
-
-      Decision keys:
-      - Enter accepts selection; the function should return the focused item to the
-        caller
-
-      - Spacebar can also accept selection if it is enabled by the caller. That is
-        because a space can change the initial pattern|seed which calculates the
-        displayed results. But using the spacebar speeds a lot of those operations,
-        so in most cases is enabled, even in cases like CTRL('n') in insert mode.
-
-      - Escape key aborts the operation
-
-    In all the cases the window state should be restored afterwards.
+    Note: many commands has a --recursive option
   */
 
-/* Application Interface.
+  /* Registers and Marks are supported with the minimal features, same with
+     other myriad details that needs care.
+
+     Mark set:
+     [abcdghjklqwertyuiopzxcvbnm1234567890]
+     Special Marks:
+       - unnamed mark [`] jumps to the previous position
+
+     Register set:
+     [abcdghjklqwertyuiopzxcvbnm1234567890]
+     Special Registers:
+       - unnamed register ["] (default)
+       - filename register [%]
+       - last search register [/]
+       - last command line register [:]
+       - registers [+*] send|receive text to|from X clipboard (if xclip is available)
+       - blackhole [_] register, which stores nothing
+       - expression [=] register (experimental) (runtime code evaluation)
+       - CTRL('w') current word
+   */
+
+   /* Menus
+     Many completions (and there are many) are based on menus.
+     Semantics and Keys:
+
+     Navigation keys:
+       - left and right (for left and right motions)
+         the left key should move the focus to the previous item on line, unless the
+         focus is on the first item in line, which in that case should focus to the
+         previous item (the last one on the previous line, unless is on the first line
+         which in that case should jump to the last item (the last item to the last
+         line))
+
+       - the right key should jump to the next item, unless the focus is on the last
+         item, which in that case should focus to the next item (the first one on the
+         next line, unless is on the last line, which in that case should jump to the
+         first item (the first item to the first line))
+
+       - page down/up keys for page down|up motions
+
+       - tab key is like the right key
+
+     Decision keys:
+       - Enter accepts selection; the function should return the focused item to the
+         caller
+
+       - Spacebar can also accept selection if it is enabled by the caller. That is
+         because a space can change the initial pattern|seed which calculates the
+         displayed results. But using the spacebar speeds a lot of those operations,
+         so in most cases is enabled, even in cases like CTRL('n') in insert mode.
+
+       - Escape key aborts the operation
+
+     In all the cases the window state should be restored afterwards.
+   */
+
+   /* The sample Application that provides the main() function, can also read
+      from standard input to an unamed buffer. Thus it can be used as a pager:
+
+        git diff | veda-101_shared --ftype=diff --pager "$@"
+   */
+
+   /* Application Interface.
     This library can be used with two ways:
 
       - copy libved.c libved.h and __libved.h to the project directory
@@ -1162,8 +1197,14 @@ Search:
         compilation (if the library was installed in a not standard location
         use -L/dir/where/libved/was/installed)
 
-    The library exposes an enormous root struct, two de|init public functions
-    that de|initialize the structure and quite a lot of opaque pointers.
+    It can optionally include libved+.h and libved+.c (recommended). Those
+    two files can use the following compilation options.
+      HAS_REGEXP, HAS_SHELL_COMMANDS, HAS_HISTORY, HAS_SHELL_COMMANDS,
+      HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
+      HAS_RUNTIME_INTERPRETER (the building of the language is handled by the
+      this Makefile automatically, otherwise it should be compiled explicitly:
+      note that this target it can use libcurl)
+      HAS_TCC (this option requires libtcc installed)
 
     The code uses an object oriented style, though it is just for practical
     reasons as permits mostly code organization, simplicity, abstraction,
@@ -1200,7 +1241,7 @@ Search:
       It could be a wise future path for C, if it will concentrate just to implement
       algorithms or standard interfaces.
 
-   STRUCTURE:
+   STRUCTURE DETAILS:
 
    A buffer instance is a child of a window instance and is responsible to manipulate
    a double linked list that hold the contents. It's structure has references to the
@@ -1327,101 +1368,111 @@ Search:
 
    The underlying properties of the types are accesible through [gs]etters as none
    of the types exposes their data.
- */
+   */
 
-/* Sample Application
+   /* C
+     This compiles to C11 for two reasons:
+       - the fvisibility flags that turns out the defaults, a global scope object
+         needs en explicit declaration
+       - the statement expressions that allow, local scope code with access to the
+         function scope, to return a value; also very useful in macro definitions
 
-   Regexp:
-   This application adds regular expression support, by using a slightly modified
-   version of the slre machine, which is an ISO C library that implements a subset
-   of Perl regular expression syntax, see and clone at:
+     It uses the following macros.
+   */
 
-     https://github.com/cesanta/slre.git
-   Many thanks.
+   #define ifnot(__expr__) if (0 == (__expr__))
+   /* clearly for clarity; also same semantics with SLang's ifnot */
 
-   It is implemented outside of the library by overriding methods from the Re structure
-   and that api is what is actually being used for a long time now, so it is enabled
-   by default.
+   #define loop(__num__) for (int $i = 0; $i < (__num__); $i++)
+   /* likewise for both reasons; here also the $i variable can be used inside the
+      block, though it will violate the semantics (if the variable change state),
+      which is: "loop for `nth' times" and this how is being used in the codebase.
+      Anyway this loop macro is being used in a lot of repositories
+   */
 
-   The substitution string in the ":substitute command", can use '&' to denote the
-   full captured matched string, but also captures of which denoted with \nth.
-   It is also possible to force caseless searching, by using (like pcre) (?i) in front
-   of the pattern. This option won't work with multibyte characters. Searching for
-   multibyte characters it should work properly though.
+   /* also purely for linguistic and expressional reasons the followings: */
 
-   Shell Commands:
-   The application can also run shell commands or to read into current buffer
-   the standard output of a shell command. Interactive applications might have
-   unexpected behavior in this implementation. To disable these features (as they
-   are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
+   #define is    ==
+   #define isnot !=
+   #define and   &&
+   #define or    ||
+   /* again, those they being used by others too, see for instance the Cello project
+      at github/orangeduck/Cello */
 
-   But see the src/usr/usr.c for more up to date commands or extensions, as this
-   unit is meant as testing field.
- */
+   /* and for plain purism, the following */
+   #define bytelen strlen
+   /* SLang also implements strbytelen(), while strlen() returns character length
+      I guess the most precise is bytelen() and charlen() in the utf8 era */
 
-/* Memory Interface
-   The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
-   integer overflows), and it exposes a public mutable handler function that is
-   invoked on such overflows or when there is not enough memory available errors.
+   /* defined but not being used, though i could happily use it if it was enforced
+      by a standard */
+   #define forever for (;;)
 
-   This function is meant to be set by the user of the library, on the application
-   side and scope. The provided one exits the program with a detailed message.
-   I do not know the results however, if this function could wait for an answer
-   before exits, as (theoretically) the user could free resources, and return for
-   a retry. The function signature should change to account for that.
+   /* Memory Interface
+      The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
+      integer overflows), and it exposes a public mutable handler function that is
+      invoked on such overflows or when there is not enough memory available errors.
 
-   The code defines two those memory wrappers.
-   Alloc (size) and Realloc (object, size). Both like their counterparts, they return
-   void *.
- */
+      This function is meant to be set by the user of the library, on the application
+      side and scope. The provided one exits the program with a detailed message.
+      I do not know the results however, if this function could wait for an answer
+      before exits, as (theoretically) the user could free resources, and return for
+      a retry. The function signature should change to account for that.
 
-/* LICENSE:
-   I wish we could do without LICENSES. In my world it is natural to give credits
-   where they belong, and the open source model is assumed, as it is the way to
-   evolution. But in this world and based on the history, we wouldn't be here if it
-   wasn't for GPL. Of course, it was the GPL and the GNU products (libc, compiler,
-   debugger, linker, coreutils and so on ...), that brought this tremendous code
-   evolution, so the whole code universe owes and should respect GNU.
+      The code defines two those memory wrappers.
+        Alloc (size) and Realloc (object, size).
+      Both like their counterparts, they return void *.
+   */
 
-   However the MIT like LICENSES are more close to the described above spirit,
-   though they don't emphasize on the code freedom as GPL does (many thanks for
-   that).
-   The truth is that my heart is with GNU, but my mind refuses to accept the existence
-   of the word LICENSE.
-   I wish there was a road to an unlicense, together with a certain certainity, that
-   we (humans) full of the gained conscience, can guard it and keep it safe, as it
-   is also (besides ideology) the road to paradise.
+   /* LICENSE:
+      I wish we could do without LICENSES. In my world it is natural to give credits
+      where they belong, and the open source model is assumed, as it is the way to
+      evolution. But in this world and based on the history, we wouldn't be here if it
+      wasn't for GPL. Of course, it was the GPL and the GNU products (libc, compiler,
+      debugger, linker, coreutils and so on ...), that brought this tremendous code
+      evolution, so the whole code universe owes and should respect GNU.
 
-   Anyway.
-   Since it seems there is no other way, other than to specify a license to avoid
-   stupid, stupid troubles, is licensed under GPL2, but my mind still refuces and
-   with a huge right, to accept this word (at least in this domain and at this time
-   of time (2019)). There is no virginity here and actually (almost) never was, so
-   the code even if it is ours, has a lot of influences of others, as we are just
-   another link in the chain, and this is wonderfull. Also we!!! are oweing to the
-   environment - our mother, our grandpa, our friends and enemies, our heroes, our
-   neighbors, the people we met and we never really met them, the butterflies, the
-   frogs, a nice song or a terrible sound, an admirable work, or a chain of words,
-   and especially the randomness - so who actually owe the copyrights? Now.
-   The work that someone put in a project, should be respected and should be mentioned
-   without any second thought and with pleasure, as it is the marrow of the world,
-   and it is so nice to be part of a continuation, both as receiver or as a producer.
- */
+      However the MIT like LICENSES are more close to the described above spirit,
+      though they don't emphasize on the code freedom as GPL does (many thanks for
+      that).
+      The truth is that my heart is with GNU, but my mind refuses to accept the existence
+      of the word LICENSE.
+      I wish there was a road to an unlicense, together with a certain certainity, that
+      we (humans) full of the gained conscience, can guard it and keep it safe, as it
+      is also (besides ideology) the road to paradise.
 
-/* Coding style.
-   Easy.
-     - every little everything is separated with a space, except in some cases on
-       array indexing
+      Anyway.
+      Since it seems there is no other way, other than to specify a license to avoid
+      stupid, stupid troubles, is licensed under GPL2, but my mind still refuces and
+      with a huge right, to accept this word (at least in this domain and at this time
+      of time (2019)). There is no virginity here and actually (almost) never was, so
+      the code even if it is ours, has a lot of influences of others, as we are just
+      another link in the chain, and this is wonderfull. Also we!!! are oweing to the
+      environment - our mother, our grandpa, our friends and enemies, our heroes, our
+      neighbors, the people we met and we never really met them, the butterflies, the
+      frogs, a nice song or a terrible sound, an admirable work, or a chain of words,
+      and especially the randomness - so who actually owe the copyrights?
 
-     - two spaces for indentation
+      Now.
+      The work that someone put in a project, should be respected and should be mentioned
+      without any second thought and with pleasure, as it is the marrow of the world,
+      and it is so nice to be part of a continuation, both as receiver or as a producer.
+   */
 
-     - the opening brace is on the same line with the (usually) conditional expression
+   /* Coding style.
+      Easy.
+        - every little everything is separated with a space, except in some cases on
+          array indexing
 
-     - the closed brace is on the same byte index of the first letter of the block
+        - two spaces for indentation
 
-     - the code (and if the compiler permits) do not use braces on conditional branches
-       when there is single statement on the block
- */
+        - the opening brace is on the same line with the (usually) conditional expression
+
+        - the closed brace is on the same byte index of the first letter of the block
+
+        - the code (and if the compiler permits) do not use braces on conditional branches
+          when there is single statement on the block
+   */
 
 /* NOTE:
    This code it contains quite a lot of idiomatic C and (probably) in many cases it

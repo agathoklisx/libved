@@ -4564,7 +4564,6 @@ static InterpretResult run(VM *vm) {
             if (tableGet(&vm->modules, fileName, &moduleVal)) {
                 ++vm->scriptNameCount;
                 vm->lastModule = AS_MODULE(moduleVal);
-                push(vm, OBJ_VAL(vm->lastModule));
                 DISPATCH();
             }
 
@@ -4614,6 +4613,9 @@ static InterpretResult run(VM *vm) {
             } else {
                 setcurrentFile(vm, "", 0);
             }
+
+            vm->lastModule = frame->closure->function->module;
+
             DISPATCH();
         }
 
