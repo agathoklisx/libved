@@ -1,5 +1,6 @@
 NAME    := lai
 VERSION := 0.1
+
 SYSDIR  := $(shell realpath ../../sys)
 BINDIR   = $(SYSDIR)/bin
 INCDIR   = $(SYSDIR)/include
@@ -7,7 +8,8 @@ LIBDIR   = $(SYSDIR)/lib
 
 CC          := gcc
 CC_STD      := -std=c11
-BASE_FLAGS  := -g -O2 -march=native
+EXT_FLAGS   :=
+BASE_FLAGS  := -g -O2 -march=native $(EXT_FLAGS)
 # -fvisibility=hidden
 
 DEBUG_FLAGS := -Wextra -Wno-shadow -Wall -Wunused-function -Wunused-macros
@@ -19,13 +21,6 @@ HEADER       = $(NAME).h
 LIB_FILES    = $(NAME).c
 INTERP_FILES = main.c
 
-ENABLE_HTTP := 1
-ifneq ($(ENABLE_HTTP), 0)
-  FLAGS += -lcurl
-else
-  FLAGS += -DDISABLE_HTTP
-endif
-
 INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
 
 ENABLE_REPL := 0
@@ -34,25 +29,37 @@ ifneq ($(ENABLE_REPL), 0)
   INTERP_FLAGS += -DENABLE_REPL
 endif
 
+SHARED_FLAGS :=
+STATIC_FLAGS = -DDISABLE_HTTP -static
+
+ENABLE_HTTP := 1
+ifneq ($(ENABLE_HTTP), 0)
+  SHARED_FLAGS += -lcurl
+else
+endif
+
 shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
 
 $(INCDIR)/$(HEADER):
 	@$(CP) $(HEADER) $(INCDIR)
 
 $(LIBDIR)/lib$(NAME)-$(VERSION).so:
-	$(CC) -o $(LIBDIR)/lib$(NAME)-$(VERSION).so -shared -fPIC $(FLAGS) $(LIB_FILES)
+	$(CC) -o $(LIBDIR)/lib$(NAME)-$(VERSION).so -shared -fPIC $(FLAGS) $(SHARED_FLAGS) $(LIB_FILES)
 	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).so $(LIBDIR)/lib$(NAME).so
 
 static-library: $(LIBDIR)/lib$(NAME)-$(VERSION).a
 
 $(LIBDIR)/lib$(NAME)-$(VERSION).a:
-	$(CC) $(FLAGS) $(LIB_FILES) -static -c -o lib$(NAME).o
+	$(CC) $(FLAGS) $(LIB_FILES) $(STATIC_FLAGS) -c -o lib$(NAME).o
 	@$(AR) $(LIBDIR)/lib$(NAME)-$(VERSION).a lib$(NAME).o
 	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).a $(LIBDIR)/lib$(NAME).a
 	@$(RM) lib$(NAME).o
 
 interpr: shared-library
-	$(CC) -o $(BINDIR)/$(NAME) -lm -l$(NAME) $(INTERP_FLAGS) $(INTERP_FILES)
+	$(CC) -o $(BINDIR)/$(NAME) -l$(NAME) $(INTERP_FLAGS) $(SHARED_FLAGS) $(INTERP_FILES)
+
+interpr-static: static-library
+	$(CC) $(INTERP_FILES) -l$(NAME) $(INTERP_FLAGS) $(STATIC_FLAGS) -o $(BINDIR)/$(NAME)-static
 
 clean: clean-header clean-shared clean-static
 

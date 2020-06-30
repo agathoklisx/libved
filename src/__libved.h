@@ -136,8 +136,11 @@ enum {
   char *r = strchr (REGISTERS, register); r - REGISTERS;
  */
 
-#define REGISTERS "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890ABCDGHJKLQWERTYUIOPZXCVBNM^_\n"
-#define NUM_REGISTERS  72
+#define REGISTERS "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890ABCDGHJKLQWERTYUIOPZXCVBNM^`_\n"
+#define NUM_REGISTERS  73
+
+#define REG_CURWORD_CHR '^'
+#define REG_SHARED_CHR  '`'
 
 enum {
   REG_UNAMED = 0,
@@ -147,7 +150,8 @@ enum {
   REG_STAR,
   REG_PLUS,
   REG_EXPR,
-  REG_CURWORD = NUM_REGISTERS - 3,
+  REG_CURWORD = NUM_REGISTERS - 4,
+  REG_SHARED,
   REG_BLACKHOLE,
   REG_RDONLY
 };
@@ -854,6 +858,8 @@ NewProp (E,
    int  prev_idx;
 
   Self (ed) Ed;
+
+  rg_t shared_reg[1];
 
   int num_at_exit_cbs;
   EAtExit_cb *at_exit_cbs;

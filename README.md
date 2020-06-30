@@ -1135,14 +1135,15 @@ Search:
      Register set:
      [abcdghjklqwertyuiopzxcvbnm1234567890]
      Special Registers:
-       - unnamed register ["] (default)
-       - filename register [%]
-       - last search register [/]
-       - last command line register [:]
+       - unnamed ["] register (default)
+       - current filename [%] register
+       - last search [/] register
+       - last command line [:] register
        - registers [+*] send|receive text to|from X clipboard (if xclip is available)
        - blackhole [_] register, which stores nothing
        - expression [=] register (experimental) (runtime code evaluation)
        - CTRL('w') current word
+       - shared [`] register (accessed by all the editor instances)
    */
 
    /* Menus

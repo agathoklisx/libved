@@ -7609,11 +7609,11 @@ private int ed_selection_to_X_word_actions_cb (buf_t **thisp, int fidx, int lidx
   return DONE;
 }
 
-private void ed_register_free (ed_t *this, rg_t *rg) {
+private void register_free (rg_t *rg) {
   reg_t *reg = rg->head;
   while (reg) {
     reg_t *tmp = reg->next;
-    My(String).free (reg->data);
+    string_free (reg->data);
     free (reg);
     reg = tmp;
   }
@@ -7623,8 +7623,14 @@ private void ed_register_free (ed_t *this, rg_t *rg) {
 
 private rg_t *ed_register_new (ed_t *this, int regidx) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
-  rg_t *rg = &$my(regs)[regidx];
-  self(free_reg, rg);
+
+  rg_t *rg;
+  if (regidx isnot REG_SHARED)
+    rg = &$my(regs)[regidx];
+  else
+    rg = &$from($my(root), shared_reg)[0];
+
+  register_free (rg);
   return rg;
 }
 
@@ -7640,7 +7646,7 @@ private void ed_register_init_all (ed_t *this) {
 
 private int ed_register_get_idx (ed_t *this, int c) {
   (void) this;
-  if (c is 0x17) c = '^';
+  if (c is 0x17) c = REG_CURWORD_CHR;
   char regs[] = REGISTERS; /* this is for tcc */
   char *r = byte_in_str (regs, c);
   return (NULL isnot r) ? (r - regs) : NOTOK;
@@ -7648,7 +7654,12 @@ private int ed_register_get_idx (ed_t *this, int c) {
 
 private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
-  rg_t *rg = &$my(regs)[regidx];
+  rg_t *rg = NULL;
+  if (regidx isnot REG_SHARED)
+    rg = &$my(regs)[regidx];
+  else
+    rg = &$from($my(root), shared_reg)[0];
+
   rg->reg = regidx;
   rg->type = type;
   stack_push (rg, reg);
@@ -7657,7 +7668,12 @@ private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
 
 private rg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
-  rg_t *rg = &$my(regs)[regidx];
+  rg_t *rg = NULL;
+  if (regidx isnot REG_SHARED)
+    rg = &$my(regs)[regidx];
+  else
+    rg = &$from($my(root), shared_reg)[0];
+
   reg_t *it = rg->head;
   if (it is NULL)
     return ed_register_push (this, regidx, type, reg);
@@ -7793,6 +7809,10 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
 
     case REG_EXPR:
       return ed_register_expression (this, buf, regidx);
+
+    case REG_SHARED:
+      $my(regs)[REG_SHARED] = $from($my(root), shared_reg)[0];
+      return DONE;
 
     case REG_BLACKHOLE:
       return NOTOK;
@@ -10202,6 +10222,27 @@ handle_char:
           vstr_free (rows);
           goto theend;
         }
+
+      case REG_SHARED_CHR:
+        if ($my(vis)[0].fidx <= $my(vis)[0].lidx) {
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+        } else {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+          self(cur.set, $my(vis)[0].fidx);
+          this->cur_idx = $my(vis)[0].fidx;
+        }
+
+        {
+          ed_register_new ($my(root), REG_SHARED);
+          row_t *row = this->current;
+
+          for (int i = $my(vis)[0].fidx; i <= $my(vis)[0].lidx; i++) {
+            ed_register_push_with ($my(root), REG_SHARED, LINEWISE,
+                row->data->bytes, REVERSE_ORDER);
+            row = row->next;
+          }
+        }
+        goto theend;
 
       default:
         for (int i = 0; i < $myroots(lw_mode_chars_len); i++)
@@ -14477,7 +14518,7 @@ private void ved_free_lw_mode_cbs (ed_t *this) {
 }
 
 private void ed_set_lw_mode_actions_default (ed_t *this) {
-  utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', 033};
+  utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', '`', 033};
   char actions[] =
     "substitute command for the selected lines\n"
     "write selected lines to file\n"
@@ -14487,7 +14528,8 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     ">indent in\n"
     "<indent out\n"
     "+send selected lines to XA_CLIPBOARD\n"
-    "*send selected lines to XA_PRIMARY";
+    "*send selected lines to XA_PRIMARY\n"
+    "`send selected lines to the shared register";
 
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
   utf8 bc[] = {'b'}; char bact[] = "balanced objects";
@@ -14657,8 +14699,10 @@ private void ed_free (ed_t *this) {
     history_free (&$my(history));
     //venv_free (&$my(env));
 
-    for (int i = 0; i < NUM_REGISTERS; i++)
-      self(free_reg, &$my(regs)[i]);
+    for (int i = 0; i < NUM_REGISTERS; i++) {
+      if (i is REG_SHARED) continue;
+      register_free (&$my(regs)[i]);
+    }
 
     for (int i = 0; i < $my(num_syntaxes); i++) {
       free ($my(syntaxes)[i].keywords_len);
@@ -15118,7 +15162,6 @@ private Class (ed) *editor_new (void) {
   *this = ClassInit (ed,
     .prop = this->prop,
     .self = SelfInit (ed,
-      .free_reg = ed_register_free,
       .free_info = ed_free_info,
       .quit = ved_quit,
       .scratch = ved_scratch,
@@ -15911,6 +15954,7 @@ public Class (E) *__init_ed__ (char *name) {
   $my(name_gen) = ('z' - 'a') + 1;
   $my(cur_idx) = $my(prev_idx) = -1;
   $my(state) = 0;
+  $my(shared_reg)[0] = (rg_t) {.reg = REG_SHARED_CHR};
 
   return this;
 }
@@ -15937,6 +15981,8 @@ public void __deinit_ed__ (Class (E) **thisp) {
 
   for (int i = 0; i < $my(num_at_exit_cbs); i++)
     $my(at_exit_cbs)[i] ();
+
+  register_free (&$my(shared_reg)[0]);
 
   deinit_ed (this->ed);
 

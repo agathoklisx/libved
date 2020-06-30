@@ -8,7 +8,7 @@
 
 #include <lai.h>
 #ifdef ENABLE_REPL
-#define VERSION "Dictu Version: 0.5.2\n"
+#define VERSION "Dictu Version: 0.7.0\n"
 
 #include "linenoise.h"
 

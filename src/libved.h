@@ -1765,7 +1765,6 @@ NewSelf (ed,
 
   void
     (*free) (ed_t *),
-    (*free_reg) (ed_t *, rg_t *),
     (*free_info) (ed_t *, edinfo_t **),
     (*suspend) (ed_t *),
     (*resume) (ed_t *);

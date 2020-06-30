@@ -204,9 +204,6 @@ REQOBJS   +=  $(LIBVED_SRCDIR)/lib/argparse/argparse.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/map/int_map.c
 REQOBJS   +=  $(LIBVED_SRCDIR)/lib/i/i.c
 
-STATIC_APP_FLAGS :=
-SHARED_APP_FLAGS :=
-
 APPFLAGS :=
 
 HAS_TCC  := 0
@@ -217,25 +214,20 @@ ifneq ($(HAS_TCC), 0)
 endif
 
 RUNTIME_INTERPR_SHARED_FLAGS =
-RUNTIME_INTERPR_STATIC_FLAGS =
+RUNTIME_INTERPR_STATIC_FLAGS += "ENABLE_HTTP=0"
 
 ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  APPFLAGS += -DHAS_RUNTIME_INTERPRETER
+  REQOBJS  += $(RUNTIME_INTERPR_DIR)/led.c
+
   REQ_SHARED_LIBS = $(RUNTIME_INTERPR_NAME)-shared
   REQ_STATIC_LIBS = $(RUNTIME_INTERPR_NAME)-static
-
-  STATIC_APP_FLAGS += -l$(RUNTIME_INTERPR_NAME)
-  SHARED_APP_FLAGS += -l$(RUNTIME_INTERPR_NAME)
-
-  RUNTIME_INTERPR_STATIC_FLAGS += "ENABLE_HTTP=0"
 
   ifeq ($(HAS_CURL), 0)
     RUNTIME_INTERPR_SHARED_FLAGS += "ENABLE_HTTP=0"
   else
     RUNTIME_INTERPR_SHARED_FLAGS += "ENABLE_HTTP=1"
   endif
-
-  APPFLAGS += -DHAS_RUNTIME_INTERPRETER
-  REQOBJS  += $(RUNTIME_INTERPR_DIR)/led.c
 
 endif
 
@@ -244,7 +236,15 @@ ifneq ($(HAS_JSON), 0)
 endif
 
 APPFLAGS  +=   $(REQOBJS)
-APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
+APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved
+
+# This is to set specific order, needed by the linker in the static target
+# as it has to be after the required objects but before -lm (if present)
+ifneq ($(HAS_RUNTIME_INTERPRETER), 0)
+  APPFLAGS += -l$(RUNTIME_INTERPR_NAME)
+endif
+
+APPFLAGS += -lm
 
 APPLICATION_FLAGS :=
 
@@ -258,6 +258,7 @@ ifeq (-$(SYSKERNEL), -Linux)
   APPFLAGS += -DSYS_IS_LINUX
 endif
 
+SHARED_APP_FLAGS :=
 ifneq ($(HAS_TCC), 0)
   SHARED_APP_FLAGS += -DHAS_TCC -ltcc -ldl
 endif
@@ -301,7 +302,7 @@ app-shared: Env libved-shared $(REQ_SHARED_LIBS)
 	@$(RM) $(APPSHARED)
 
 app-static: Env libved-static $(REQ_STATIC_LIBS)
-	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) $(STATIC_APP_FLAGS) -o $(APPSTATIC)
+	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) -o $(APPSTATIC)
 	@$(INSTALL) -v $(APPSTATIC) $(SYSBINDIR)
 	@$(RM) $(APPSTATIC)
 

@@ -1,4 +1,3 @@
-
     /* 32: common.h */
 #ifndef dictu_common_h
 #define dictu_common_h
