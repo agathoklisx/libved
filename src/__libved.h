@@ -646,6 +646,7 @@ NewProp (buf,
   hist_t  *history;
   mark_t   marks[NUM_MARKS];
   vis_t    vis[2];
+  vis_t    lw_vis_prev[1];
 
   undo_t
     *undo,
@@ -915,6 +916,7 @@ private string_t *vsys_which (char *, char *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
 private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);
+private int ved_normal_visual_lw (buf_t **);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

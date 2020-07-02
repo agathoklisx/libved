@@ -192,6 +192,9 @@
 #define NO_COMMAND 0
 #define NO_OPTION 0
 
+#define NO_NL  0
+#define ADD_NL 1
+
 #define RLINE_HISTORY  0
 #define SEARCH_HISTORY 1
 
@@ -239,6 +242,7 @@
 #define BUF_IS_SPECIAL      (1 << 9)
 #define BUF_FORCE_REOPEN    (1 << 10)
 #define PTR_IS_AT_EOL       (1 << 12)
+#define BUF_LW_RESELECT     (1 << 13)
 
 #define ED_SUSPENDED        (1 << 0)
 #define ED_EXIT             (1 << 1)
@@ -1151,9 +1155,14 @@ NewSubSelf (vstring, add,
   vstr_t *(*sort_and_uniq) (vstr_t *, char *bytes);
 );
 
+NewSubSelf (vstring, to,
+  char *(*cstring) (vstr_t *, int);
+);
+
 NewSelf (vstring,
   SubSelf (vstring, cur) cur;
   SubSelf (vstring, add) add;
+  SubSelf (vstring, to) to;
 
   vstr_t *(*new) (void);
   void

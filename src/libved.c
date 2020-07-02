@@ -1724,6 +1724,37 @@ private vstr_t *vstr_new (void) {
   return AllocType (vstr);
 }
 
+private size_t vstr_len (vstr_t *this) {
+  size_t len = 0;
+  vstring_t *it = this->head;
+
+  while (it) {
+    len += it->data->num_bytes;
+    it = it->next;
+  }
+
+  return len;
+}
+
+private char *vstr_to_cstring (vstr_t *this, int addnl) {
+  size_t len = vstr_len (this) + (addnl ? this->num_items : 0);
+  char *buf = Alloc (len + 1);
+
+  vstring_t *it = this->head;
+
+  size_t offset = 0;
+
+  while (it) {
+    byte_cp (buf + offset, it->data->bytes, it->data->num_bytes);
+    offset += it->data->num_bytes;
+    if (addnl) buf[offset++] = '\n';
+    it = it->next;
+  }
+
+  buf[len] = '\0';
+  return buf;
+}
+
 /* maybe also a vstr_join_u() for characters as separators */
 private string_t *vstr_join (vstr_t *this, char *sep) {
   string_t *bytes = string_new (32);
@@ -1926,6 +1957,9 @@ public vstring_T __init_vstring__ (void) {
       ),
       .add = SubSelfInit (vstring, add,
         .sort_and_uniq = vstr_add_sort_and_uniq
+      ),
+      .to = SubSelfInit (vstring, to,
+        .cstring = vstr_to_cstring
       )
     )
   );
@@ -6260,6 +6294,9 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(backupfile) = NULL;
   $my(backup_suffix)[0] = '~'; $my(backup_suffix)[1] = '\0';
 
+  $my(lw_vis_prev)[0].fidx = -1;
+  $my(lw_vis_prev)[0].lidx = -1;
+
   this->on_normal_beg = ved_buf_on_normal_beg;
   this->on_normal_end = ved_buf_on_normal_end;
 
@@ -9228,6 +9265,10 @@ private int ved_normal_handle_g (buf_t **thisp, int count) {
       return ved_open_fname_under_cursor (thisp, str_eq ($my(fname), VED_MSG_BUF)
          ? 0 : AT_CURRENT_FRAME, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
 
+    case 'v':
+      $my(state) |= BUF_LW_RESELECT;
+      return ved_normal_visual_lw (thisp);
+
     default:
       for (int i = 0; i < $myroots(num_on_normal_g_cbs); i++) {
         int retval = $myroots(on_normal_g_cbs)[i] (thisp, c);
@@ -9935,7 +9976,7 @@ do {                                        \
   int reg = -1;  int count = 1;  (void) count;                                      \
   $my(vis)[1] = (vis_t) {                                                           \
     .fidx = this->cur_idx, .lidx = this->cur_idx, .orig_syn_parser = $my(syn)->parse};                                  \
- $my(vis)[0] = (vis_t) {                                                            \
+  $my(vis)[0] = (vis_t) {                                                           \
     .fidx = $mycur(cur_col_idx), .lidx = $mycur(cur_col_idx), .orig_syn_parser = $my(syn)->parse};\
   $my(syn)->parse = (parse_fun)
 
@@ -10059,10 +10100,26 @@ theend:
 private int ved_normal_visual_lw (buf_t **thisp) {
   buf_t *this = *thisp;
   VISUAL_INIT_FUN (VISUAL_MODE_LW, ved_syn_parse_visual_lw);
+
+  utf8 c = ESCAPE_KEY;
+  int goto_cb = 0;
+
   $my(vis)[0] = $my(vis)[1];
 
-  int goto_cb = 0;
-  utf8 c;
+  if ($my(state) & BUF_LW_RESELECT) {
+    $my(state) &= ~BUF_LW_RESELECT;
+    if ($my(lw_vis_prev)[0].fidx isnot -1 and
+        $my(lw_vis_prev)[0].lidx isnot -1 and
+        $my(lw_vis_prev)[0].fidx < this->num_items and
+        $my(lw_vis_prev)[0].lidx < this->num_items) {
+      $my(vis)[0].fidx = $my(lw_vis_prev)[0].fidx;
+      $my(vis)[0].lidx = $my(lw_vis_prev)[0].lidx;
+      ved_normal_goto_linenr (this, $my(lw_vis_prev)[0].fidx + 1, DONOT_DRAW);
+      state_set (&mark); mark.cur_idx = this->cur_idx;
+      ved_normal_goto_linenr (this, $my(lw_vis_prev)[0].lidx + 1, DONOT_DRAW);
+    }
+  }
+
   char vis_action[MAXLEN_WORD_ACTION];
   vis_action[0] = '\0';
 
@@ -10292,6 +10349,11 @@ theend:
   if (goto_cb) goto callback;
 
 thereturn:
+  if (c isnot ESCAPE_KEY) {
+    $my(lw_vis_prev)[0].fidx = $my(vis)[0].fidx;
+    $my(lw_vis_prev)[0].lidx = $my(vis)[0].lidx;
+  }
+
   return DONE;
 }
 

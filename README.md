@@ -437,13 +437,15 @@ Normal mode:
  |   - `             | previous focused window        |
  | g                 |                                |
  |   - g             | home row                       |
+ |   - v             | visual linewise mode, with the |
+ |                 previous selected rows if any      |
  |   - f             | open filename under the cursor |
- |     gf on C filetype, can open header <header.h>   |
+ |        (on C filetype, can open header <header.h>) |
  | :                 | command line mode              |
 
  | Normal Mode Extensions or different behavior with vim.|
- | q                 | quit (not delete) and when buffer |
- |                     type is pager                     |
+ | q                 | like :quit  if the buffer type is |
+ |                     set to pager                      |
  | g                 |                                   |
  |   - b             | open link under the cursor to the |
  |             browser: requires the elinks text browser |
