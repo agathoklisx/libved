@@ -18,7 +18,7 @@
  * of quoting).
 
  * Note that it requires at least 14 screen lines, and with less or on sigwinch
- * that shrinks the window, it will refuse to work or exit, with a violent way.
+ * that shrinks the window, it will refuse to work or it will exit with a violent way.
 
  * Relative mutt setting:
  *   set pager="path_to_executable"
@@ -27,7 +27,7 @@
  * following:
  * macro index <f3>  '<enter-command>set pager=builtin'
 
- * Thisbuilds both a static executable and or an executable which links against
+ * This builds both a static executable and or an executable which links against
  * the shared library. In the latter case LD_LIBRARY_PATH should point to the lib
  * directory (by default src/sys/library).
  * Both executables are installed in src/sys/bin.
@@ -62,24 +62,21 @@ private char *__mail_hdrs_syn_parser (buf_t *this, char *line, int len, int idx,
 }
 
 private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
- (void) this; (void) idx; (void) row;
-  if (line[0] isnot '>') {
-    if (NULL is Cstring.byte_in_str (line, '\t'))
-      return line;
+  (void) this; (void) idx; (void) row;
+  int tabwidth = Buf.get.prop.tabwidth (this);
+  string_t *sline = String.new (len + 8);
+  for (int i = 0; i < len; i++)
+    if (line[i] is '\t') {
+      for (int j = 0; j < tabwidth; j++)
+        String.append_byte (sline, ' ');
+    } else
+      String.append_byte (sline, line[i]);
 
-    int tabwidth = Buf.get.prop.tabwidth (this);
-    string_t *lline = String.new (len + 8);
-    for (int i = 0; i < len; i++)
-      if (line[i] is '\t') {
-        for (int j = 0; j < tabwidth; j++)
-          String.append_byte (lline, ' ');
-      } else
-          String.append_byte (lline, line[i]);
+  Cstring.cp (line, MAXLEN_LINE, sline->bytes, sline->num_bytes);
+  String.free (sline);
 
-     Cstring.cp (line, MAXLEN_LINE, lline->bytes, lline->num_bytes);
-     String.free (lline);
-     return line;
-  }
+  if (line[0] isnot '>')
+    return line;
 
   char lline[len + 16];
   int count = 1;
@@ -190,7 +187,7 @@ struct buftypes {
 };
 
 private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
-                                                                   void *obj) {
+                                                                 void *obj) {
   (void) lines;
   struct buftypes *bufs = (struct buftypes *) obj;
   if (idx < 3) return 0;
@@ -249,7 +246,11 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
         continue;
       }
 
-      if (' ' is lline[cur_idx]) continue;
+      if (' ' is lline[cur_idx]) {
+        numchars++;
+        continue;
+      }
+
       break;
     }
 
@@ -291,6 +292,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
         sp[j++] = it->buf[i];
 
       numchars += it->width;
+
       tmp = it;
       it = it->next;
     }
@@ -307,6 +309,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   k = j;
 
   it = tmp;
+
   while (numchars > bufs->num_cols) {
     j -= it->len;
     numchars -= it->width;
@@ -316,7 +319,7 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
   if (k isnot j) {
     sp[j] = '\0';
     Buf.cur.replace_with (cur_buf, sp);
-     sp[0] = '\0';
+    sp[0] = '\0';
     j = 0;
 
     if (cur_buf is bufs->body and quot_num) {
