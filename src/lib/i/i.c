@@ -10,9 +10,13 @@
  * - syntax_error() got a char * argument, that describes the error
  * - added ignore_next_char() to ignore next token
  * - print* function references got a FILE * argument
- * - it is possible to call a C function, with a literal string as argument
- * - many changes that integrates Tinyscript to this environment
  * - remove abort() and disable exit()
+ * - add is, isnot, true, false, ifnot, OK and NOTOK keywords
+ * - add println (that emit a newline character, while print does not)
+ * - add the ability to pass literal strings when calling C defined functions
+ *     (i_pop_string() gets these strings from C)
+ * - print functions can print multibyte characters
+ * - quite of many changes that integrates Tinyscript to this environment
  */
 
 /* Tinyscript interpreter
@@ -107,6 +111,7 @@ private int stringeq (String_t ai, String_t bi) {
 
   a = StringGetPtr (ai);
   b = StringGetPtr (bi);
+
   for (i = 0; i < len; i++) {
     if (*a isnot *b) return 0;
     a++; b++;
@@ -294,8 +299,9 @@ private int isidentifier (int c) {
   return isalpha (c) or isidpunct (c);
 }
 
-private int notquote (int c) {
-  return (c >= 0) and 0 is char_in (c, "\"\n");
+private int notquote (int chr) {
+  uchar c = (unsigned char) chr;
+  return 0 is char_in (c, "\"\n");
 }
 
 private void i_get_span (i_t *this, int (*testfn) (int)) {
@@ -310,6 +316,7 @@ private int isoperator (int c) {
 
 private Sym * i_lookup_sym (i_t *this, String_t name) {
   Sym *s = this->symptr;
+
   while ((ival_t) s > (ival_t) this->arena) {
     --s;
     if (stringeq (s->name, name))
@@ -362,6 +369,19 @@ private int i_do_next_token (i_t *this, int israw) {
       i_get_span (this, isdigit);
       r = I_TOK_NUMBER;
     }
+
+  } else if (c == '\'') {
+      c = i_get_char (this); // get first
+      if (c == '\\') i_get_char (this);
+      c = i_get_char (this); // get closing '
+      // ignore ' on both sides
+      if (c == '\'') {
+        i_ignore_first_char (this);
+        i_ignore_last_char (this);
+        r = I_TOK_CHAR;
+      } else {
+        r = I_TOK_SYNTAX_ERR;
+      }
 
   } else if (isalpha (c)) {
     i_get_span (this, isidentifier);
@@ -542,6 +562,23 @@ private int i_parse_expr_list (i_t *this) {
   return count;
 }
 
+private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
+  const char *ptr = StringGetPtr (token);
+  if (ptr[0] is '\'') return i_syntax_error (this, "error while getting a char token ");
+  if (ptr[0] is '\\') {
+    /* if (StringGetLen(token) != 2) return SyntaxError(); */
+    if (ptr[1] is 'n') { *vp = '\n'; return I_OK; }
+    if (ptr[1] is 't') { *vp = '\t'; return I_OK; }
+    if (ptr[1] is 'r') { *vp = '\r'; return I_OK; }
+    if (ptr[1] is '\\') { *vp = '\\'; return I_OK; }
+    if (ptr[1] is '\'') { *vp = '\''; return I_OK; }
+    return i_syntax_error (this, "unkown escape sequence");
+  }
+
+  if (ptr[0] >= ' ' and ptr[0] <= '~') { *vp = ptr[0]; return I_OK; }
+  return i_syntax_error (this, "out of ascii range");
+}
+
 private int i_parse_string (i_t *this, String_t str, int saveStrings, int topLevel) {
   int c,  r;
   String_t savepc = this->parseptr;
@@ -670,6 +707,11 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
     *vp = HexStringToNum (this->token);
     i_next_token (this);
     return I_OK;
+
+  } else if (c is I_TOK_CHAR) {
+      err = i_parse_char (this, vp, this->token);
+      i_next_token (this);
+      return err;
 
   } else if (c is I_TOK_VAR) {
     *vp = this->tokenVal;
@@ -825,30 +867,40 @@ private int i_parse_expr (i_t *this, ival_t *vp) {
   return err;
 }
 
-private int i_parse_if (i_t *this) {
-  String_t ifpart, elsepart;
-  int haveelse = 0;
-  ival_t cond;
+private int i_parse_if_rout (i_t *this, ival_t *cond, int *haveelse, String_t *ifpart, String_t *elsepart) {
   int c;
   int err;
 
+  *haveelse = 0;
+
   c = i_next_token (this);
-  err = i_parse_expr (this, &cond);
+  err = i_parse_expr (this, cond);
   if (err isnot I_OK) return err;
 
   c = this->curToken;
   if (c isnot I_TOK_STRING) return i_syntax_error (this, "parsing if, not a string");
 
-  ifpart = this->token;
+  *ifpart = this->token;
   c = i_next_token (this);
   if (c is I_TOK_ELSE) {
     c = i_next_token (this);
-    if (c isnot I_TOK_STRING) return i_syntax_error(this, "parsing else, not a string");
+    if (c isnot I_TOK_STRING) return i_syntax_error (this, "parsing else, not a string");
 
-    elsepart = this->token;
-    haveelse = 1;
+    *elsepart = this->token;
+    *haveelse = 1;
     i_next_token (this);
   }
+
+  return I_OK;
+}
+
+private int i_parse_if (i_t *this) {
+  String_t ifpart, elsepart;
+  int haveelse = 0;
+  ival_t cond;
+  int err = i_parse_if_rout (this, &cond, &haveelse, &ifpart, &elsepart);
+  if (err isnot I_OK)
+    return err;
 
   if (cond)
     err = i_parse_string (this, ifpart, 0, 0);
@@ -856,6 +908,23 @@ private int i_parse_if (i_t *this) {
     err = i_parse_string(this, elsepart, 0, 0);
 
   if (err is I_OK and 0 is cond) err = I_ERR_OK_ELSE;
+  return err;
+}
+
+private int i_parse_ifnot (i_t *this) {
+  String_t ifpart, elsepart;
+  int haveelse = 0;
+  ival_t cond;
+  int err = i_parse_if_rout (this, &cond, &haveelse, &ifpart, &elsepart);
+  if (err isnot I_OK)
+    return err;
+
+  if (!cond)
+    err = i_parse_string (this, ifpart, 0, 0);
+  else if (haveelse)
+    err = i_parse_string(this, elsepart, 0, 0);
+
+  if (err is I_OK and 0 isnot cond) err = I_ERR_OK_ELSE;
   return err;
 }
 
@@ -933,7 +1002,7 @@ private int i_parse_func_def (i_t *this, int saveStrings) {
   return I_OK;
 }
 
-private int i_parse_print (i_t *this) {
+private int i_parse_print_rout (i_t *this) {
   int c;
   int err = I_OK;
 
@@ -951,9 +1020,17 @@ print_more:
   }
 
   if (this->curToken is ',') goto print_more;
+  return err;
+}
 
+private int i_parse_println (i_t *this) {
+  int err = i_parse_print_rout (this);
   this->print_byte (this->out_fp, '\n');
   return err;
+}
+
+private int i_parse_print (i_t *this) {
+  return i_parse_print_rout (this);
 }
 
 private int i_parse_return (i_t *this) {
@@ -965,8 +1042,7 @@ private int i_parse_return (i_t *this) {
   return err;
 }
 
-private int
-i_parse_while (i_t *this) {
+private int i_parse_while (i_t *this) {
   int err;
   String_t savepc = this->parseptr;
 
@@ -978,38 +1054,45 @@ again:
     this->parseptr = savepc;
     goto again;
   }
+
   return err;
 }
 
 // builtin
-private ival_t prod(ival_t x, ival_t y) { return x*y; }
-private ival_t quot(ival_t x, ival_t y) { return x/y; }
-private ival_t sum(ival_t x, ival_t y) { return x+y; }
-private ival_t diff(ival_t x, ival_t y) { return x-y; }
-private ival_t bitand(ival_t x, ival_t y) { return x&y; }
-private ival_t bitor(ival_t x, ival_t y) { return x|y; }
-private ival_t bitxor(ival_t x, ival_t y) { return x^y; }
-private ival_t shl(ival_t x, ival_t y) { return x<<y; }
-private ival_t shr(ival_t x, ival_t y) { return x>>y; }
-private ival_t equals(ival_t x, ival_t y) { return x==y; }
-private ival_t ne(ival_t x, ival_t y) { return x!=y; }
-private ival_t lt(ival_t x, ival_t y) { return x<y; }
-private ival_t le(ival_t x, ival_t y) { return x<=y; }
-private ival_t gt(ival_t x, ival_t y) { return x>y; }
-private ival_t ge(ival_t x, ival_t y) { return x>=y; }
+private ival_t prod (ival_t x, ival_t y) { return x*y; }
+private ival_t quot (ival_t x, ival_t y) { return x/y; }
+private ival_t sum (ival_t x, ival_t y) { return x+y; }
+private ival_t diff (ival_t x, ival_t y) { return x-y; }
+private ival_t bitand (ival_t x, ival_t y) { return x&y; }
+private ival_t bitor (ival_t x, ival_t y) { return x|y; }
+private ival_t bitxor (ival_t x, ival_t y) { return x^y; }
+private ival_t shl (ival_t x, ival_t y) { return x<<y; }
+private ival_t shr (ival_t x, ival_t y) { return x>>y; }
+private ival_t equals (ival_t x, ival_t y) { return x==y; }
+private ival_t ne (ival_t x, ival_t y) { return x!=y; }
+private ival_t lt (ival_t x, ival_t y) { return x<y; }
+private ival_t le (ival_t x, ival_t y) { return x<=y; }
+private ival_t gt (ival_t x, ival_t y) { return x>y; }
+private ival_t ge (ival_t x, ival_t y) { return x>=y; }
 
 private struct def {
   const char *name;
   int toktype;
   ival_t val;
 } idefs[] = {
-  { "var",    I_TOK_VARDEF,  (ival_t) 0 },
-  { "else",   I_TOK_ELSE,    (ival_t) 0 },
-  { "if",     I_TOK_IF,      (ival_t) i_parse_if },
-  { "while",  I_TOK_WHILE,   (ival_t) i_parse_while },
-  { "print",  I_TOK_PRINT,   (ival_t) i_parse_print },
-  { "func",   I_TOK_FUNCDEF, (ival_t) i_parse_func_def },
-  { "return", I_TOK_RETURN,  (ival_t) i_parse_return },
+  { "var",     I_TOK_VARDEF,  (ival_t) 0 },
+  { "else",    I_TOK_ELSE,    (ival_t) 0 },
+  { "if",      I_TOK_IF,      (ival_t) i_parse_if },
+  { "ifnot",   I_TOK_IFNOT,   (ival_t) i_parse_ifnot },
+  { "while",   I_TOK_WHILE,   (ival_t) i_parse_while },
+  { "println", I_TOK_PRINTLN, (ival_t) i_parse_println },
+  { "print",   I_TOK_PRINT,   (ival_t) i_parse_print },
+  { "func",    I_TOK_FUNCDEF, (ival_t) i_parse_func_def },
+  { "return",  I_TOK_RETURN,  (ival_t) i_parse_return },
+  { "true",    INT, (ival_t) 1},
+  { "false",   INT, (ival_t) 0},
+  { "OK",      INT, (ival_t) 0},
+  { "NOTOK",   INT, (ival_t) -1},
   // operators
   { "*",     BINOP(1), (ival_t) prod },
   { "/",     BINOP(1), (ival_t) quot },
@@ -1021,6 +1104,8 @@ private struct def {
   { ">>",    BINOP(3), (ival_t) shr },
   { "<<",    BINOP(3), (ival_t) shl },
   { "=",     BINOP(4), (ival_t) equals },
+  { "is",    BINOP(4), (ival_t) equals },
+  { "isnot", BINOP(4), (ival_t) ne },
   { "<>",    BINOP(4), (ival_t) ne },
   { "<",     BINOP(4), (ival_t) lt },
   { "<=",    BINOP(4), (ival_t) le },
@@ -1037,7 +1122,8 @@ private int i_define (i_t *this, const char *name, int typ, ival_t val) {
 }
 
 private int i_eval_string (i_t *this, const char *buf, int saveStrings, int topLevel) {
-  return i_parse_string (this, cstring_new (buf), saveStrings, topLevel);
+  String_t x = cstring_new (buf);
+  return i_parse_string (this, x, saveStrings, topLevel);
 }
 
 private int i_eval_file (i_t *this, const char *filename) {
@@ -1082,6 +1168,29 @@ private void i_free (i_t **thisp) {
   *thisp = NULL;
 }
 
+private void i_free_strings (Type (i) *this) {
+  Type (istring) *it = mystrings->head;
+  while (it) {
+    Type (istring) *next = it->next;
+    free (it->ibuf);
+    free (it);
+    it = next;
+  }
+}
+
+private void i_free_instance (i_t **thisp) {
+  i_t *this = *thisp;
+
+  i_free_strings (this);
+  free (this->strings);
+
+#if DEBUG_INTERPRETER
+  fclose (this->err_fp);
+#endif
+
+  i_free (thisp);
+}
+
 private i_t *i_new (void) {
   Type (i) *this = AllocType (i);
   return this;
@@ -1094,6 +1203,41 @@ private char *i_name_gen (char *name, int *name_gen, char *prefix, size_t prelen
   for (; i < num; i++) name[i] = 'a' + ((*name_gen)++ % 26);
   name[num] = '\0';
   return name;
+}
+
+private void i_remove_instance (Class (I) *this, Type (i) *instance) {
+  Type (i) *it = $my(head);
+  Type (i) *prev = NULL;
+
+  int idx = 0;
+  while (it isnot instance) {
+    prev = it;
+    idx++;
+    it = it->next;
+  }
+
+  if (it is NULL) return;
+  if (idx >= $my(current_idx)) $my(current_idx)--;
+  $my(num_instances)--;
+
+  ifnot ($my(num_instances)) {
+    $my(head) = NULL;
+    goto theend;
+  }
+
+  if (1 is $my(num_instances)) {
+    if (it->next is NULL) {
+      $my(head) = prev;
+      $my(head)->next = NULL;
+    } else
+      $my(head) = it->next;
+    goto theend;
+  }
+
+  prev->next = it->next;
+
+theend:
+  i_free_instance (&it);
 }
 
 private Type (i) *i_append_instance (Class (I) *this, Type (i) *instance) {
@@ -1150,7 +1294,7 @@ struct ifun_t {
   ival_t val;
   int nargs;
 } i_funs[] = {
-  { "exit",  (ival_t) i_exit, 1},
+  //  { "exit",  (ival_t) i_exit, 1},
   { NULL, 0, 0}
 };
 
@@ -1208,6 +1352,7 @@ public Class (I) *__init_i__ (void) {
       .free = i_free,
       .init = i_init,
       .def =  i_define,
+      .remove_instance = i_remove_instance,
       .append_instance = i_append_instance,
       .eval_string =  i_eval_string,
       .eval_file = i_eval_file,
@@ -1237,16 +1382,6 @@ public Class (I) *__init_i__ (void) {
   return this;
 }
 
-private void i_free_strings (Type (i) *this) {
-  Type (istring) *it = mystrings->head;
-  while (it) {
-    Type (istring) *next = it->next;
-    free (it->ibuf);
-    free (it);
-    it = next;
-  }
-}
-
 public void __deinit_i__ (Class (I) **thisp) {
   if (NULL is *thisp) return;
   Class (I) *this = *thisp;
@@ -1254,14 +1389,7 @@ public void __deinit_i__ (Class (I) **thisp) {
   Type (i) *it = $my(head);
   while (it) {
     Type (i) *tmp = it->next;
-    i_free_strings (it);
-    free (it->strings);
-
-#if DEBUG_INTERPRETER
-    fclose (it->err_fp);
-#endif
-
-    i_free (&it);
+    i_free_instance (&it);
     it = tmp;
   }
 

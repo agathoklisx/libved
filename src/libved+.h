@@ -300,9 +300,11 @@ enum {
 #define I_TOK_HEX_NUMBER 'X'
 #define I_TOK_STRING     'S'
 #define I_TOK_IF         'i'
+#define I_TOK_IFNOT      'I'
 #define I_TOK_ELSE       'e'
 #define I_TOK_WHILE      'w'
 #define I_TOK_PRINT      'p'
+#define I_TOK_PRINTLN    'P'
 #define I_TOK_VAR        'v'
 #define I_TOK_VARDEF     'V'
 #define I_TOK_BUILTIN    'B'
@@ -310,6 +312,7 @@ enum {
 #define I_TOK_FUNCDEF    'F'
 #define I_TOK_SYNTAX_ERR 'Z'
 #define I_TOK_RETURN     'r'
+#define I_TOK_CHAR       'C'
 
 typedef struct {
   unsigned len_;
@@ -431,6 +434,7 @@ NewSelf (i,
   void (*free) (i_t **);
   i_t *(*new) (void);
 
+  void (*remove_instance) (Class (I) *, Type (i) *);
   Type (i) *(*append_instance) (Class (I) *, Type (i) *);
 
   int
