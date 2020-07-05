@@ -86,6 +86,9 @@
   }                                          \
 })
 
+#define ERROR_COLOR "\033[31m"
+#define TERM_RESET  "\033[m"
+
 public char *i_pop_string (ival_t instance) {
   i_t *this = (i_t *) instance;
   return istring_pop ();
@@ -186,33 +189,32 @@ private String_t i_dup_string (i_t *this, String_t orig) {
 
 private int i_err_ptr (i_t *this, int err) {
   i_print_string (this, this->err_fp, this->parseptr);
-  this->print_byte (this->err_fp, '\n');
+  this->print_bytes (this->err_fp, TERM_RESET "\n");
   return err;
 }
 
 private int i_syntax_error (i_t *this, const char *msg) {
-  this->print_bytes (this->err_fp, msg);
-  this->print_fmt_bytes (this->err_fp, "syntax error before:");
+  this->print_fmt_bytes (this->err_fp, "\n" ERROR_COLOR "SYNTAX ERROR: %s\nbefore: ", msg);
   return i_err_ptr (this, I_ERR_SYNTAX);
 }
 
 private int i_arg_mismatch (i_t *this) {
-  this->print_fmt_bytes (this->err_fp, "argument mismatch before:");
+  this->print_fmt_bytes (this->err_fp, "\n" ERROR_COLOR "argument mismatch before:");
   return i_err_ptr (this, I_ERR_BADARGS);
 }
 
 private int i_too_many_args (i_t *this) {
-  this->print_fmt_bytes (this->err_fp, "too many arguments before:");
+  this->print_fmt_bytes (this->err_fp, "\n" ERROR_COLOR "too many arguments before:");
   return i_err_ptr (this, I_ERR_TOOMANYARGS);
 }
 
 private int i_unknown_symbol (i_t *this) {
-  this->print_fmt_bytes (this->err_fp, "unknown symbol before:");
+  this->print_fmt_bytes (this->err_fp, "\n" ERROR_COLOR "unknown symbol before:");
   return i_err_ptr (this, I_ERR_UNKNOWN_SYM);
 }
 
 private int i_out_of_mem (i_t *this) {
-  this->print_fmt_bytes (this->err_fp, "out of memory\n");
+  this->print_fmt_bytes (this->err_fp, ERROR_COLOR "out of memory" TERM_RESET "\n");
   return I_ERR_NOMEM;
 }
 
@@ -370,18 +372,21 @@ private int i_do_next_token (i_t *this, int israw) {
       r = I_TOK_NUMBER;
     }
 
-  } else if (c == '\'') {
+  } else if (c is '\'') {
       c = i_get_char (this); // get first
-      if (c == '\\') i_get_char (this);
-      c = i_get_char (this); // get closing '
-      // ignore ' on both sides
-      if (c == '\'') {
-        i_ignore_first_char (this);
-        i_ignore_last_char (this);
-        r = I_TOK_CHAR;
-      } else {
-        r = I_TOK_SYNTAX_ERR;
-      }
+      if (c is '\\') i_get_char (this);
+      int max = 4;
+      r = I_TOK_SYNTAX_ERR;
+      /* add multibyte support */
+      do {
+        c = i_get_char (this);
+        if (c is '\'') {
+          i_ignore_first_char (this);
+          i_ignore_last_char (this);
+          r = I_TOK_CHAR;
+          break;
+        }
+      } while (--max isnot 0);
 
   } else if (isalpha (c)) {
     i_get_span (this, isidentifier);
@@ -564,6 +569,7 @@ private int i_parse_expr_list (i_t *this) {
 
 private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
   const char *ptr = StringGetPtr (token);
+
   if (ptr[0] is '\'') return i_syntax_error (this, "error while getting a char token ");
   if (ptr[0] is '\\') {
     /* if (StringGetLen(token) != 2) return SyntaxError(); */
@@ -575,8 +581,23 @@ private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
     return i_syntax_error (this, "unkown escape sequence");
   }
 
-  if (ptr[0] >= ' ' and ptr[0] <= '~') { *vp = ptr[0]; return I_OK; }
-  return i_syntax_error (this, "out of ascii range");
+  if (ptr[0] >= ' ' and ptr[0] <= '~') {
+    if (ptr[1] is '\'') {
+      *vp = ptr[0];
+      return I_OK;
+    } else {
+      return i_syntax_error (this, "error while taking character literal");
+    }
+  }
+
+  int len = 0;
+  utf8 c = Ustring.get.code_at ((char *) ptr, 4, 0, &len);
+
+  if ('\'' isnot ptr[len])
+    return i_syntax_error (this, "error while taking character literal");
+
+  *vp = c;
+  return I_OK;
 }
 
 private int i_parse_string (i_t *this, String_t str, int saveStrings, int topLevel) {
@@ -699,7 +720,7 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
     return err;
 
   } else if (c is I_TOK_NUMBER) {
-    *vp = i_string_to_num(this->token);
+    *vp = i_string_to_num (this->token);
     i_next_token (this);
     return I_OK;
 
@@ -1009,8 +1030,8 @@ private int i_parse_print_rout (i_t *this) {
 print_more:
   c = i_next_token (this);
   if (c is I_TOK_STRING) {
-    i_print_string(this, this->out_fp, this->token);
-    i_next_token(this);
+    i_print_string (this, this->out_fp, this->token);
+    i_next_token (this);
   } else {
     ival_t val;
     err = i_parse_expr (this, &val);
