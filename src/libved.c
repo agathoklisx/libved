@@ -7658,15 +7658,20 @@ private void register_free (rg_t *rg) {
   rg->head = NULL;
 }
 
-private rg_t *ed_register_new (ed_t *this, int regidx) {
+private rg_t *ed_register_get (ed_t *this, int regidx) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
 
-  rg_t *rg;
+  rg_t *rg = NULL;
   if (regidx isnot REG_SHARED)
     rg = &$my(regs)[regidx];
   else
     rg = &$from($my(root), shared_reg)[0];
 
+  return rg;
+}
+
+private rg_t *ed_register_new (ed_t *this, int regidx) {
+  rg_t *rg = ed_register_get (this, regidx);
   register_free (rg);
   return rg;
 }
@@ -7687,6 +7692,21 @@ private int ed_register_get_idx (ed_t *this, int c) {
   char regs[] = REGISTERS; /* this is for tcc */
   char *r = byte_in_str (regs, c);
   return (NULL isnot r) ? (r - regs) : NOTOK;
+}
+
+private rg_t *ed_register_append (ed_t *this, int regidx, int type, reg_t *reg) {
+  if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
+  rg_t *rg = NULL;
+  if (regidx isnot REG_SHARED)
+    rg = &$my(regs)[regidx];
+  else
+    rg = &$from($my(root), shared_reg)[0];
+
+  rg->reg = regidx;
+  rg->type = type;
+
+  stack_append (rg, reg_t, reg);
+  return rg;
 }
 
 private rg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
@@ -9383,12 +9403,27 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
   int isatend = $my(state) & PTR_IS_AT_EOL;
 
   action_t *action = AllocType (action);
-  rg_t *rg = ed_register_new ($my(root), regidx);
+
+  int ridx = regidx;
+  rg_t *rg = NULL;
+  int reg_append = ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z');
+                                       /* optimization for large buffers */
+  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 5)) and
+                    regidx isnot REG_INTERNAL;
+
+  if (perfom_reg) {
+    if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
+      if (reg_append) {
+        ridx = REG_INTERNAL;
+        rg = ed_register_new ($my(root), ridx);
+      } else {
+        rg = ed_register_new ($my(root), regidx);
+      }
+    }
+  }
 
   int fidx = this->cur_idx;
   int lidx = fidx + count - 1;
-                                       /* optimization for large buffers */
-  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 5));
 
   for (int idx = fidx; idx <= lidx; idx++) {
     act_t *act = AllocType (act);
@@ -9400,7 +9435,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     /* with large buffers, this really slowdown a lot the operation */
     if (perfom_reg) {
       rg = ed_register_push_with (
-        $my(root), regidx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
+        $my(root), ridx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
       rg->cur_col_idx = $mycur(cur_col_idx);
       rg->first_col_idx = $mycur(first_col_idx);
       rg->col_pos = $my(cur_video_col);
@@ -9416,7 +9451,6 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
   if (this->num_items is 1 and $my(cur_video_row) isnot $my(dim)->first_row)
     $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
-
 
   if (this->cur_idx is currow_idx) {
     if ($my(video_first_row_idx) < fidx) {
@@ -9434,7 +9468,16 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
-  if (perfom_reg) MSG("deleted into register [%c]", REGISTERS[regidx]);
+  if (perfom_reg) {
+    if (reg_append) {
+      ed_register_append ($my(root), regidx, LINEWISE, rg->head);
+      $myroots(regs)[REG_INTERNAL].head = NULL;
+    }
+
+    MSG("deleted into register [%c]%s", REGISTERS[regidx],
+        reg_append ? " [appended]" : "");
+  }
+
   self(draw);
 
   vundo_push (this, action);
@@ -9544,10 +9587,17 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
 
   int currow_idx = this->cur_idx;
 
+  int ridx = regidx;
   rg_t *rg = NULL;
+  int reg_append = ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z');
 
   if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
-    rg = ed_register_new ($my(root), regidx);
+    if (reg_append) {
+      ridx = REG_INTERNAL;
+      rg = ed_register_new ($my(root), ridx);
+    } else {
+      rg = ed_register_new ($my(root), regidx);
+    }
   }
 
   My(String).clear ($my(shared_str));
@@ -9556,7 +9606,7 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
     self(cur.set, (currow_idx + count - 1) - i);
     if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
       rg = ed_register_push_with (
-          $my(root), regidx, LINEWISE, $mycur(data)->bytes, DEFAULT_ORDER);
+          $my(root), ridx, LINEWISE, $mycur(data)->bytes, DEFAULT_ORDER);
       rg->cur_col_idx = $mycur(cur_col_idx);
       rg->first_col_idx = $mycur(first_col_idx);
       rg->col_pos = $my(cur_video_col);
@@ -9569,7 +9619,13 @@ private int ved_normal_Yank (buf_t *this, int count, int regidx) {
     ed_selection_to_X ($my(root), $my(shared_str)->bytes, $my(shared_str)->num_bytes,
         (REG_STAR is regidx ? X_PRIMARY : X_CLIPBOARD));
 
-  MSG("yanked [linewise] into register [%c]", REGISTERS[regidx]);
+  if (reg_append) {
+    ed_register_append ($my(root), regidx, LINEWISE, rg->head);
+    $myroots(regs)[REG_INTERNAL].head = NULL;
+  }
+
+  MSG("yanked [linewise] into register [%c]%s", REGISTERS[regidx],
+      reg_append ? " [appended]" : "");
   return DONE;
 }
 

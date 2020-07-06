@@ -1135,7 +1135,8 @@ Search:
        - unnamed mark [`] jumps to the previous position
 
      Register set:
-     [abcdghjklqwertyuiopzxcvbnm1234567890]
+     [abcdghjklqwertyuiopzxsvbnm1234567890ABCDGHJKLQWERTYUIOPZXSVBNM]
+
      Special Registers:
        - unnamed ["] register (default)
        - current filename [%] register
@@ -1146,6 +1147,10 @@ Search:
        - expression [=] register (experimental) (runtime code evaluation)
        - CTRL('w') current word
        - shared [`] register (accessed by all the editor instances)
+
+     Note that for uppercase [A-Z], the content is appended to the current content,
+     while for the [a-z] set, any previous content is replaced.
+
    */
 
    /* Menus

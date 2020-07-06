@@ -136,8 +136,9 @@ enum {
   char *r = strchr (REGISTERS, register); r - REGISTERS;
  */
 
-#define REGISTERS "\"/:%*+=abcdghjklqwertyuiopzxcvbnm1234567890ABCDGHJKLQWERTYUIOPZXCVBNM^`_\n"
-#define NUM_REGISTERS  73
+#define REGISTERS \
+"\"/:%*+=abcdghjklqwertyuiopzxsvbnm1234567890ABCDGHJKLQWERTYUIOPZXSVBNM^`_-\n"
+#define NUM_REGISTERS  74
 
 #define REG_CURWORD_CHR '^'
 #define REG_SHARED_CHR  '`'
@@ -150,9 +151,10 @@ enum {
   REG_STAR,
   REG_PLUS,
   REG_EXPR,
-  REG_CURWORD = NUM_REGISTERS - 4,
+  REG_CURWORD = NUM_REGISTERS - 5,
   REG_SHARED,
   REG_BLACKHOLE,
+  REG_INTERNAL,
   REG_RDONLY
 };
 
@@ -1053,6 +1055,23 @@ do {                                                                \
   }                                                                 \
 } while (0)
 
+#define stack_append(list, type, node)                              \
+({                                                                  \
+  type *item = (node);                                              \
+  while (item and item->next) item = item->next;                    \
+  item->next = NULL;                                                \
+  item = (list)->head;                                              \
+  if (item == NULL) {                                               \
+    (list)->head = (node);                                          \
+    (list)->head->prev = NULL;                                      \
+  } else {                                                          \
+    while (item->next != NULL) item = item->next;                   \
+    (node)->prev = item;                                            \
+    item->next = (node);                                            \
+  }                                                                 \
+  (list);                                                           \
+})
+
 #define stack_push(list, node)                                      \
 ({                                                                  \
   if ((list)->head == NULL) {                                       \
@@ -1063,7 +1082,7 @@ do {                                                                \
     (list)->head = (node);                                          \
   }                                                                 \
                                                                     \
- list;                                                              \
+ (list);                                                            \
 })
 
 #define stack_pop(list_, type_)                                     \
