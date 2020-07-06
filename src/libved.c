@@ -14878,6 +14878,9 @@ private int ved_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int r
     count = range[0];
   }
 
+  if (regidx < 0 or regidx >= NUM_REGISTERS)
+    regidx = REG_UNAMED;
+
   int retval = NOTHING_TODO;
   switch (this->on_normal_beg (thisp, com, range, regidx)) {
     case -1: goto theend;
@@ -15118,6 +15121,16 @@ handle_com:
 
     case 'F':
       retval = ved_normal_handle_F (thisp);
+      break;
+
+    case '-':
+    case '_':
+      if ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z') {
+        register_free (&$myroots(regs)[regidx]);
+        retval = DONE;
+      } else
+          retval = NOTHING_TODO;
+
       break;
 
     default:

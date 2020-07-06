@@ -1150,6 +1150,8 @@ Search:
 
      Note that for uppercase [A-Z], the content is appended to the current content,
      while for the [a-z] set, any previous content is replaced.
+     An uppercase register can be cleared, by using in Normal mode the "-" command,
+     prefixed with '"' and the register letter, e.g., "Z- for the "Z" register.
 
    */
 
