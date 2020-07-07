@@ -8418,6 +8418,8 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
 }
 
 private int ved_normal_page_down (buf_t *this, int count) {
+  $myroots(record_cb) ($my(root), str_fmt ("buf_normal_page_down (buf, %d)", count));
+
   if (this->num_items < ONE_PAGE
       or this->num_items - $my(video_first_row_idx) < ONE_PAGE + 1)
     return NOTHING_TODO;
@@ -8453,6 +8455,8 @@ private int ved_normal_page_down (buf_t *this, int count) {
 }
 
 private int ved_normal_page_up (buf_t *this, int count) {
+  $myroots(record_cb) ($my(root), str_fmt ("buf_normal_page_up (buf, %d)", count));
+
   if ($my(video_first_row_idx) is 0 or this->num_items < ONE_PAGE)
     return NOTHING_TODO;
 
@@ -8545,6 +8549,9 @@ draw:
 }
 
 private int ved_normal_goto_linenr (buf_t *this, int lnr, int draw) {
+  $myroots(record_cb) ($my(root),
+  	str_fmt ("buf_normal_goto_linenr (buf, %d, %d)", lnr, draw));
+
   int currow_idx = this->cur_idx;
 
   if (lnr <= 0 or lnr is currow_idx + 1 or lnr > this->num_items)
@@ -13530,6 +13537,18 @@ private void ved_free_on_normal_g_cbs (ed_t *this) {
   free ($my(on_normal_g_cbs));
 }
 
+private void ed_set_record_cb (ed_t *this, Record_cb cb) {
+  $my(record_cb) = cb;
+}
+
+private void ed_set_i_record_cb (ed_t *this, IRecord_cb cb) {
+  $my(i_record_cb) = cb;
+}
+
+private void ed_set_init_record_cb (ed_t *this, InitRecord_cb cb) {
+  $my(init_record_cb) = cb;
+}
+
 private void ved_set_expr_register_cb (ed_t *this, ExprRegister_cb cb) {
   $my(num_expr_register_cbs)++;
   ifnot ($my(num_expr_register_cbs) - 1)
@@ -14822,6 +14841,11 @@ private void ed_free (ed_t *this) {
       register_free (&$my(regs)[i]);
     }
 
+    for (int i = 0; i < NUM_RECORDS; i++)
+      vstr_free ($my(records)[i]);
+
+    string_free ($my(last_record));
+
     for (int i = 0; i < $my(num_syntaxes); i++) {
       free ($my(syntaxes)[i].keywords_len);
       free ($my(syntaxes)[i].keywords_colors);
@@ -14861,6 +14885,43 @@ private void ed_init_special_win (ed_t *this) {
   ved_diff_buf (this);
   ved_search_buf (this);
   $my(num_special_win) = 4;
+}
+
+private void ed_deinit_record (ed_t *this) {
+  $my(record) = 0;
+}
+
+private void ed_record_default (ed_t *this, char *bytes) {
+  if ($my(record))
+    vstr_append_with ($my(records)[$my(record_idx)], bytes);
+  else
+    My(String).replace_with ($my(last_record), bytes);
+}
+
+private int ed_i_record_default (ed_t *this, vstr_t *record) {
+  (void) this; (void) record;
+  return OK;
+}
+
+private void ed_init_record_default (ed_t *this, int idx) {
+  if (0 > idx or idx > NUM_RECORDS - 1) idx = 0;
+  $my(record_idx) = idx;
+  $my(record) = 1;
+
+  vstr_t *rec = $my(records)[$my(record_idx)];
+  if (rec)
+    vstr_clear (rec);
+  else
+    rec = vstr_new ();
+
+   vstr_append_with (rec,
+      "var ed = e_get_ed_current ()\n"
+      "var win = ed_get_current_win (ed)\n"
+      "var buf = win_get_current_buf (win)\n"
+      "var draw = 1"
+  );
+
+  $my(records)[$my(record_idx)] = rec;
 }
 
 private int ved_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int regidx) {
@@ -14906,6 +14967,19 @@ handle_com:
   switch (com) {
     case 'q':
       if ($my(flags) & BUF_IS_PAGER) return BUF_QUIT;
+
+    case 'Q':
+      if ($from(ed, record))
+        ed_deinit_record (ed);
+      else
+        $from(ed, init_record_cb) (ed, My(Input).get ($my(term_ptr)) - '1');
+      break;
+
+    case '@':
+      if ($from(ed, record) or $from(ed, record_idx) is -1)
+        break;
+
+      retval = $from(ed, i_record_cb) (ed, $from(ed, records)[$from(ed, record_idx)]);
       break;
 
     case ':':
@@ -15315,7 +15389,10 @@ private Class (ed) *editor_new (void) {
         .file_mode_actions = ed_set_file_mode_actions,
         .on_normal_g_cb = ved_set_normal_on_g_cb,
         .expr_register_cb = ved_set_expr_register_cb,
-        .lang_map = ed_set_lang_map
+        .lang_map = ed_set_lang_map,
+        .record_cb = ed_set_record_cb,
+        .i_record_cb = ed_set_i_record_cb,
+        .init_record_cb = ed_set_init_record_cb
       ),
       .get = SubSelfInit (ed, get,
         .info = SubSelfInit (edget, info,
@@ -15691,6 +15768,13 @@ private ed_t *ed_init (E_T *E) {
   $my(history)->rline->history_idx = 0;
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
+
+  $my(record) = 0;
+  $my(record_idx) = -1;
+  $my(record_cb) = ed_record_default;
+  $my(i_record_cb) = ed_i_record_default;
+  $my(init_record_cb) = ed_init_record_default;
+  $my(last_record) = My(String).new (32);
 
   this->name_gen = ('z' - 'a') + 1;
 

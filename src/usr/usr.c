@@ -693,11 +693,11 @@ next_win:
 
     ed = E(get.next, ed);
     ifnot (NULL is ed)
-      String.append (img, "ed = set_ed_next ()\n");
+      String.append (img, "ed = e_set_ed_next ()\n");
   }
 
   int idx = E(get.current_idx);
-  String.append_fmt (img, "ed = set_ed_by_idx (%d)\n", idx);
+  String.append_fmt (img, "ed = e_set_ed_by_idx (%d)\n", idx);
   String.append (img, "cwin = ed_get_current_win (ed)\n");
   String.append_fmt (img, "win_set_current_buf (cwin, %d, donot_draw)\n", cbidx);
   String.append (img, "win_draw (cwin)\n");
@@ -734,7 +734,6 @@ private void __u_add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, i_rline_cb);
 }
 
-
 char __u_balanced_pairs[] = "()[]{}";
 char *__u_NULL_ARRAY[] = {NULL};
 
@@ -747,8 +746,8 @@ char *sh_extensions[] = {".sh", ".bash", NULL};
 char *sh_shebangs[] = {"#!/bin/sh", "#!/bin/bash", NULL};
 char  sh_operators[] = "+:-%*><=|&()[]{}!$/`?";
 char *sh_keywords[] = {
-    "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
-    "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
+  "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
+  "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
 char sh_singleline_comment[] = "#";
 char *i_extensions[] = {".i", NULL};
 char *i_shebangs[] = {"#!/bin/env i", NULL};
@@ -774,12 +773,12 @@ char *lua_extensions[] = {".lua", NULL};
 char *lua_shebangs[] = {"#!/bin/env lua", "#!/usr/bin/lua", NULL};
 char  lua_operators[] = "+:-*^><=|&~.()[]{}!@/";
 char *lua_keywords[] = {
-    "do I", "if I", "while I", "else I", "elseif I", "nil I",
-    "local I",  "self V", "require V", "return V", "and V",
-    "then I", "end I", "function V", "or I", "in V",
-    "repeat I", "for I",  "goto I", "not I", "break I",
-    "setmetatable F", "getmetatable F", "until I",
-    "true I", "false I", NULL
+  "do I", "if I", "while I", "else I", "elseif I", "nil I",
+  "local I",  "self V", "require V", "return V", "and V",
+  "then I", "end I", "function V", "or I", "in V",
+  "repeat I", "for I",  "goto I", "not I", "break I",
+  "setmetatable F", "getmetatable F", "until I",
+  "true I", "false I", NULL
 };
 
 char lua_singleline_comment[] = "--";
@@ -790,13 +789,13 @@ char *lai_extensions[] = {".lai", ".du", ".yala", NULL};
 char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "#!/usr/bin/dictu", NULL};
 char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
 char *lai_keywords[] = {
-    "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
-    "is I", "isnot I", "nil E", "not I", "var V", "const V", "return V", "and I",
-    "or I", "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
-    "trait T", "true V", "false E", "import T", "as T", "hasAttribute F", "getAttribute F",
-    "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
-    "use T", "elseif I", "static T",
-     NULL};
+  "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
+  "is I", "isnot I", "nil E", "not I", "var V", "const V", "return V", "and I",
+  "or I", "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
+  "trait T", "true V", "false E", "import T", "as T", "hasAttribute F", "getAttribute F",
+  "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
+  "use T", "elseif I", "static T",
+   NULL};
 
 char lai_singleline_comment[] = "//";
 char lai_multiline_comment_start[] = "/*";

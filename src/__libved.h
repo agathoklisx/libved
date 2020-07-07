@@ -128,6 +128,8 @@ enum {
   VED_COM_END,
 };
 
+#define NUM_RECORDS    3
+
 #define MARKS          "`abcdghjklqwertyuiopzxcvbnm1234567890"
 #define NUM_MARKS      37
 #define MARK_UNAMED    0
@@ -843,6 +845,14 @@ NewProp (ed,
 
   int num_at_exit_cbs;
   EdAtExit_cb *at_exit_cbs;
+
+  int record;
+  int record_idx;
+  string_t   *last_record;
+  vstr_t     *records[NUM_RECORDS];
+  Record_cb   record_cb;
+  IRecord_cb  i_record_cb;
+  InitRecord_cb init_record_cb;
 );
 
 NewProp (E,

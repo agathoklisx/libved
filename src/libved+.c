@@ -314,21 +314,25 @@ ival_t i_deinit_this (void) {
   return OK;
 }
 
-ival_t i_get_ed_num (void) {
+ival_t i_e_get_ed_num (void) {
   return E(get.num);
 }
 
-ival_t i_set_ed_next (void) {
+ival_t i_e_set_ed_next (void) {
   return (ival_t) E(set.next);
 }
 
-ival_t i_set_ed_by_idx (ival_t inst, int idx) {
+ival_t i_e_set_ed_by_idx (ival_t inst, int idx) {
   (void) inst;
   return (ival_t) E(set.current, idx);
 }
 
-ival_t i_get_ed_current_idx (void) {
+ival_t i_e_get_ed_current_idx (void) {
   return E(get.current_idx);
+}
+
+ival_t i_e_get_ed_current (void) {
+  return (ival_t) E(get.current);
 }
 
 ival_t i_ed_new (ival_t inst, int num_win) {
@@ -389,6 +393,11 @@ ival_t i_win_set_current_buf (ival_t inst, win_t *this, int idx, int draw) {
   return (ival_t) buf;
 }
 
+ival_t i_win_get_current_buf (ival_t inst, win_t *this) {
+  (void) inst;
+  return (ival_t) Win.get.current_buf (this);
+}
+
 ival_t i_buf_normal_page_down (ival_t inst, buf_t *this, int count) {
   (void) inst;
   return Buf.normal.page_down (this, count);
@@ -423,10 +432,11 @@ struct ifun_t {
 } ifuns[] = {
   { "init_this",           (ival_t) i_init_this, 0},
   { "deinit_this",         (ival_t) i_deinit_this, 0},
-  { "get_ed_num",          (ival_t) i_get_ed_num, 0},
-  { "set_ed_next",         (ival_t) i_set_ed_next, 0},
-  { "set_ed_by_idx",       (ival_t) i_set_ed_by_idx, 1},
-  { "get_ed_current_idx",  (ival_t) i_get_ed_current_idx, 0},
+  { "e_get_ed_num",        (ival_t) i_e_get_ed_num, 0},
+  { "e_set_ed_next",       (ival_t) i_e_set_ed_next, 0},
+  { "e_set_ed_by_idx",     (ival_t) i_e_set_ed_by_idx, 1},
+  { "e_get_ed_current_idx",(ival_t) i_e_get_ed_current_idx, 0},
+  { "e_get_ed_current",    (ival_t) i_e_get_ed_current, 0},
   { "ed_new",              (ival_t) i_ed_new, 1},
   { "ed_get_num_win",      (ival_t) i_ed_get_num_win, 1},
   { "ed_get_current_win",  (ival_t) i_ed_get_current_win, 1},
@@ -442,6 +452,7 @@ struct ifun_t {
   { "win_draw",            (ival_t) i_win_draw, 1},
   { "win_append_buf",      (ival_t) i_win_append_buf, 2},
   { "win_set_current_buf", (ival_t) i_win_set_current_buf, 3},
+  { "win_get_current_buf", (ival_t) i_win_get_current_buf, 1},
   { NULL, 0, 0}
 };
 

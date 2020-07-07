@@ -674,6 +674,10 @@ typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
+typedef void (*Record_cb)     (ed_t *, char *);
+typedef int  (*IRecord_cb)    (ed_t *, vstr_t *);
+typedef void (*InitRecord_cb) (ed_t *, int);
+
 #define NULL_REF NULL
 
 NewType (string,
@@ -1684,7 +1688,10 @@ NewSubSelf (ed, set,
      (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),
      (*at_exit_cb) (ed_t *, EdAtExit_cb),
      (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
-     (*lang_map) (ed_t *, int[][26]);
+     (*lang_map) (ed_t *, int[][26]),
+     (*record_cb) (ed_t *, Record_cb),
+     (*i_record_cb) (ed_t *, IRecord_cb),
+     (*init_record_cb) (ed_t *, InitRecord_cb);
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, dim_t *, int, int, int, int);

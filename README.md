@@ -247,8 +247,8 @@
    VED_TMPDIR="dir"       this sets the temp directory (default $(SYSDIR)/tmp)
 
    /* the next option provides a way to extend the behavior and|or as an API
-    * documentation, and [wa]is intended for development, buf it has many features
-    * that it might be usefull. */
+    * documentation, and [wa]is intended for development, but it has many features
+    * that it might be usefull and now after time is recommended */
 
    HAS_USER_EXTENSIONS=1|0 (#in|ex)clude src/usr/usr.c (default 0)
 
@@ -359,7 +359,7 @@ C_TAB_ON_INSERT_MODE_INDENTS  (1|0) the wrong indentation here is by purpose (de
 
    - A window can be splited in frames.
 
-   - An Editor instance can have unlimited in-depended windows.
+   - An Editor instance can have unlimited independed windows.
 
    - There can be unlimited independent editor instances that can be (de|rea)tached¹.
 
@@ -648,6 +648,7 @@ Search:
    --sub=`replacement string'
                      - '&' can be used to mean the full captured string
                      -  to include a white space, the string should be (double) quoted,
+                        and in that case and to include a '"' it should be escaped.
                      -  if has regular expression support, then \1\2... can be used
                         to mean, `nth' captured substring numbering from one.
 
@@ -685,7 +686,7 @@ Search:
                           whole file is assumed)
    :@bufbackup            backup file as (dirname(fname)/.basename(fname)`suffix',
                           but it has to be set first (with :set or with --backupfile),
-                          if backupfile exists, it raises a question, same if this
+                          if backupfile exists, it raises a question, same if this is
                           true at the initialization
    :set options           (set options for current buffer
                            --ftype=[string] set filetype
@@ -694,7 +695,7 @@ Search:
                            --backupfile set backup
                            --backup-suffix=[string] set backup suffix (default: ~)
                            --no-backupfile unset the backup option
-                           --autosave=[int] set in minutes the interval, used
+                           --autosave=[int] set in minutes the interval, (used
                              at the end of insert mode to autosave buffer)
    :q[!] [--global]       (quit (if force, do not check for modified buffers),
                                 (if global exit all editor instances))
@@ -922,7 +923,7 @@ Search:
          - in visual linewise mode
          - file operation mode
 
-      Assumed that an error such a segmentation fault can bring down the whole
+      It is assumed that an error such a segmentation fault can bring down the whole
       system.
    */
 
@@ -1017,7 +1018,7 @@ Search:
      Note: the relative syntax variable is:
         multiline_comment_continuation as char[]
 
-     So this simple means that if someone do not want to penaltize performance then
+     So this simply means that if someone do not want to penaltize performance then
      it is wise to use " * " in the beginning of the line to force the code, as soon
      as possible to search on previous lines (as this is expensive).
 
@@ -1078,7 +1079,8 @@ Search:
 
           char *(*ftype_on_open_fname_under_cursor) (char *, size_t, size_t);
 
-    (note that the C filetype, implements the above two callbacks)
+    Note that the C filetype, implements the above two callbacks, and 'gf' and when
+    the cursor is on <sys/stat.h>, then it opens the /usr/include/sys/stat.h.
    */
 
    /*
@@ -1090,7 +1092,7 @@ Search:
    */
 
    /*
-    Searching on files (a really quite basic emulation of quickfix vim's windows).
+   Searching on files (a really quite basic emulation of quickfix vim's windows).
 
    The command :vgrep it takes a pattern and at least a filename as argument[s]:
 
@@ -1111,6 +1113,10 @@ Search:
    to the previous state (as it acts like a pager).
 
    This command can search recursively and skips (as a start) any object file.
+
+   Note that because it is a really basic implementation, some unexpected results
+   might occur, if there is no usage discipline of this feature (for instance :bd
+   can bring some confusion to the layout and the functionality).
   */
 
   /* Glob Support
@@ -1123,7 +1129,7 @@ Search:
       `*string' or `string*string' or `string*'
         (likewise for directories)
 
-    Note: many commands has a --recursive option
+    Note: many commands have a --recursive option
   */
 
   /* Registers and Marks are supported with the minimal features, same with
@@ -1254,7 +1260,7 @@ Search:
    STRUCTURE DETAILS:
 
    A buffer instance is a child of a window instance and is responsible to manipulate
-   a double linked list that hold the contents. It's structure has references to the
+   a double linked list that hold the contents. The structure has references to the
    next and previous buffer (if any), to the window instance where belongs (parent)
    and to the editor instance where it's parent belongs (an editor instance).
 
@@ -1839,7 +1845,7 @@ Search:
             We want the same.
 
             And it is wise and really smart for You, to feel the same for Us. As the
-            outiside of You is equally important with You. Though the You - and this
+            outside of You is equally important with You. Though the You - and this
             by default - will always prioritize the self, usually without even the
             self realize it..., it is this magnificent undescribable structure
             that is the real treasure (and this is for you and this is for me

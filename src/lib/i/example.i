@@ -64,7 +64,7 @@ func libved_layout () {
   buf_set_row_idx (buf, 0)
   win_append_buf (cwin, buf)
 
-  ed = set_ed_next ()
+  ed = e_set_ed_next ()
 
   cwin = ed_get_current_win (ed)
 
