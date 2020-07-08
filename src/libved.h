@@ -635,6 +635,9 @@ DeclareSelf (input);
 DeclareClass (video);
 DeclareClass (string);
 
+DeclareType (i);
+DeclareClass (I);
+
 DeclareClass (E);
 DeclareProp (E);
 DeclareSelf (E);
@@ -1874,10 +1877,209 @@ NewClass (This,
   Class (E) *__E__;
 );
 
+/*  interpreter */
+
+typedef intptr_t ival_t;
+typedef ival_t (*Cfunc) (ival_t, ival_t, ival_t, ival_t);
+typedef ival_t (*Opfunc) (ival_t, ival_t);
+
+enum {
+  I_OK = 0,
+  I_ERR_NOMEM = -1,
+  I_ERR_SYNTAX = -2,
+  I_ERR_UNKNOWN_SYM = -3,
+  I_ERR_BADARGS = -4,
+  I_ERR_TOOMANYARGS = -5,
+  I_ERR_OK_ELSE = 1, // special internal condition
+};
+
+#define MAX_BUILTIN_PARAMS 4
+
+// symbols can take the following forms:
+#define INT      0x0  // integer
+#define STRING   0x1  // string
+#define OPERATOR 0x2  // operator; precedence in high 8 bits
+#define ARG      0x3  // argument; value is offset on stack
+#define BUILTIN  'B'  // builtin: number of operands in high 8 bits
+#define USRFUNC  'f'  // user defined a procedure; number of operands in high 8 bits
+#define TOK_BINOP 'o'
+
+#define STRING_TYPE_FUNC_ARGUMENT 1 << 8
+
+#define OUT_OF_FUNCTION_SCOPE     1 << 0
+#define FUNCTION_SCOPE            1 << 1
+#define FUNCTION_ARGUMENT_SCOPE   1 << 2
+
+#define BINOP(x) (((x) << 8) + TOK_BINOP)
+#define CFUNC(x) (((x) << 8) + BUILTIN)
+
+#define I_TOK_SYMBOL     'A'
+#define I_TOK_NUMBER     'N'
+#define I_TOK_HEX_NUMBER 'X'
+#define I_TOK_STRING     'S'
+#define I_TOK_IF         'i'
+#define I_TOK_IFNOT      'I'
+#define I_TOK_ELSE       'e'
+#define I_TOK_WHILE      'w'
+#define I_TOK_PRINT      'p'
+#define I_TOK_PRINTLN    'P'
+#define I_TOK_VAR        'v'
+#define I_TOK_VARDEF     'V'
+#define I_TOK_BUILTIN    'B'
+#define I_TOK_BINOP      'o'
+#define I_TOK_FUNCDEF    'F'
+#define I_TOK_SYNTAX_ERR 'Z'
+#define I_TOK_RETURN     'r'
+#define I_TOK_CHAR       'C'
+
+typedef struct {
+  unsigned len_;
+  const char *ptr_;
+} String_t;
+
+typedef struct symbol {
+  String_t name;
+  int type;      // symbol type
+  ival_t value;  // symbol value, or string ptr
+} Sym;
+
+typedef struct ufunc {
+  String_t body;
+  int nargs;
+  String_t argName[MAX_BUILTIN_PARAMS];
+} UserFunc;
+
+typedef void (*PrintByte_cb) (FILE *, int);
+typedef void (*PrintBytes_cb) (FILE *, const char *);
+typedef void (*PrintFmtBytes_cb) (FILE *, const char *, ...);
+
+NewType (i_options,
+  char  *name;
+  int    name_gen;
+  size_t mem_size;
+  size_t max_script_size;
+  FILE  *err_fp;
+  FILE  *out_fp;
+  PrintByte_cb print_byte;
+  PrintBytes_cb print_bytes;
+  PrintFmtBytes_cb print_fmt_bytes;
+);
+
+#define I_INIT Type (i_options)
+#define I_INIT_QUAL(...) (I_INIT) {      \
+  .mem_size = 4096,                      \
+  .print_byte = NULL,                    \
+  .print_bytes = NULL,                   \
+  .print_fmt_bytes = NULL,               \
+  .err_fp = stderr,                      \
+  .out_fp = stdout,                      \
+  .name = NULL,                          \
+  .name_gen = 97,                        \
+  .max_script_size = 1 << 16,            \
+  __VA_ARGS__}
+
+NewType (istring,
+  char *ibuf;
+  istring_t *next;
+);
+
+NewType (Istrings,
+  Type (istring) *head;
+);
+
+NewType (i,
+  char name[32];
+  size_t
+    mem_size,
+    max_script_size;
+
+  char *arena;
+  int
+    linenum,
+    scope;
+
+  FILE
+    *err_fp,
+    *out_fp;
+
+  Type (Istrings) *strings;
+
+  Sym *symptr;
+  ival_t *valptr;
+
+  String_t parseptr;  // acts as instruction pointer
+
+  char ns[MAXLEN_NAME];
+  ival_t fArgs[MAX_BUILTIN_PARAMS];
+  ival_t fResult;
+
+  // variables for parsing
+  int curToken;  // what kind of token is current
+  int tokenArgs; // number of arguments for this token
+  String_t token;  // the actual string representing the token
+  ival_t tokenVal;  // for symbolic tokens, the symbol's value
+  Sym *tokenSym;
+
+  PrintByte_cb print_byte;
+  PrintBytes_cb print_bytes;
+  PrintFmtBytes_cb print_fmt_bytes;
+
+  Class (E) *e;
+  Type (i) *next;
+);
+
+NewProp (I,
+  Class (E) *e;
+  int name_gen;
+  Type (i) *head;
+  int num_instances;
+  int current_idx;
+);
+
+NewSubSelf (i, get,
+  Type (i) *(*current) (Class (I) *);
+  int (*current_idx) (Class (I) *);
+);
+
+NewSubSelf (i, set,
+  Type (i) *(*current) (Class (I) *, int);
+);
+
+NewSelf (i,
+  SubSelf (i, get) get;
+  SubSelf (i, set) set;
+
+  void (*free) (i_t **);
+  i_t
+    *(*new) (void),
+    *(*init_instance) (Class (I) *);
+
+  void (*remove_instance) (Class (I) *, Type (i) *);
+  Type (i) *(*append_instance) (Class (I) *, Type (i) *);
+
+  int
+    (*init) (Class (I) *, i_t *, I_INIT),
+    (*def)  (i_t *, const char *, int, ival_t),
+    (*eval_file) (i_t *, const char *),
+    (*load_file) (Class (I) *, char *),
+    (*eval_string) (i_t *, const char *, int, int);
+);
+
+NewClass (I,
+  Self (i) self;
+  Prop (I) *prop;
+);
+
+public char *i_pop_string (ival_t);
+public Class (I) *__init_i__ (Class (E) *);
+public void __deinit_i__ (Class (I) **);
+/*  interpreter */
+
 NewClass (E,
   Self (E) self;
   Prop (E) *prop;
   Class (ed) *ed;
+  Class (I) *i;
 
   Class (This) *__THIS__;
 );

@@ -290,238 +290,6 @@ private int e_main (Class (This) *this, buf_t *buf) {
   return __E.main (this->__E__, buf);
 }
 
-private void i_print_bytes (FILE *fp, const char *bytes) {
-  fprintf (fp, "%s", bytes);
-}
-
-private void i_print_fmt_bytes (FILE *fp, const char *fmt, ...) {
-  size_t len = VA_ARGS_FMT_SIZE (fmt);
-  char bytes[len + 1];
-  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
-  i_print_bytes (fp, bytes);
-}
-
-private void i_print_byte (FILE *fp, int c) {
-  i_print_fmt_bytes (fp, "%c", c);
-}
-
-ival_t i_init_this (void) {
-  return (ival_t) __init_this__ ();
-}
-
-ival_t i_deinit_this (void) {
-  __deinit_this__ (&__THIS__);
-  return OK;
-}
-
-ival_t i_e_get_ed_num (void) {
-  return E(get.num);
-}
-
-ival_t i_e_set_ed_next (void) {
-  return (ival_t) E(set.next);
-}
-
-ival_t i_e_set_ed_by_idx (ival_t inst, int idx) {
-  (void) inst;
-  return (ival_t) E(set.current, idx);
-}
-
-ival_t i_e_get_ed_current_idx (void) {
-  return E(get.current_idx);
-}
-
-ival_t i_e_get_ed_current (void) {
-  return (ival_t) E(get.current);
-}
-
-ival_t i_ed_new (ival_t inst, int num_win) {
-  (void) inst;
-  return (ival_t) E(new, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
-}
-
-ival_t i_ed_get_num_win (ival_t inst, ed_t *ed) {
-  (void) inst;
-  return Ed.get.num_win (ed, 0);
-}
-
-ival_t i_ed_get_current_win (ival_t inst, ed_t *ed) {
-  (void) inst;
-  return (ival_t) Ed.get.current_win (ed);
-}
-
-ival_t i_ed_get_win_next (ival_t inst, ed_t *ed, win_t *win) {
-  (void) inst;
-  return (ival_t) Ed.get.win_next (ed, win);
-}
-
-ival_t i_buf_init_fname (ival_t inst, buf_t *this) {
-  char *fn = i_pop_string (inst);
-  Buf.init_fname (this, fn);
-  free (fn);
-  return OK;
-}
-
-ival_t i_buf_set_ftype (ival_t inst, buf_t *this) {
-  char *ftype = i_pop_string (inst);
-  Buf.set.ftype (this, Ed.syn.get_ftype_idx (E(get.current), ftype));
-  free (ftype);
-  return OK;
-}
-
-ival_t i_buf_set_row_idx (ival_t inst, buf_t *this, int row) {
-  (void) inst;
-  Buf.set.row.idx (this, row, NO_OFFSET, 1);
-  return OK;
-}
-
-ival_t i_buf_draw (ival_t inst, buf_t *this) {
-  (void) inst;
-  Buf.draw (this);
-  return OK;
-}
-
-ival_t i_win_buf_init (ival_t inst, win_t *this, int frame, int flags) {
-  (void) inst;
-  return (ival_t) Win.buf.init (this, frame, flags);
-}
-
-ival_t i_win_set_current_buf (ival_t inst, win_t *this, int idx, int draw) {
-  (void) inst;
-  buf_t *buf = Win.set.current_buf (this, idx, draw);
-  Buf.get.fname (buf);
-  return (ival_t) buf;
-}
-
-ival_t i_win_get_current_buf (ival_t inst, win_t *this) {
-  (void) inst;
-  return (ival_t) Win.get.current_buf (this);
-}
-
-ival_t i_buf_normal_page_down (ival_t inst, buf_t *this, int count) {
-  (void) inst;
-  return Buf.normal.page_down (this, count);
-}
-
-ival_t i_buf_normal_page_up (ival_t inst, buf_t *this, int count) {
-  (void) inst;
-  return Buf.normal.page_up (this, count);
-}
-
-ival_t i_buf_normal_goto_linenr (ival_t inst, buf_t *this, int linenum, int draw) {
-  (void) inst;
-  return Buf.normal.goto_linenr (this, linenum, draw);
-}
-
-ival_t i_win_draw (ival_t inst, win_t *this) {
-  (void) inst;
-  Win.draw (this);
-  return OK;
-}
-
-ival_t i_win_append_buf (ival_t inst, win_t *this, buf_t *buf) {
-  (void) inst;
-  Win.append_buf (this, buf);
-  return OK;
-}
-
-struct ifun_t {
-  const char *name;
-  ival_t val;
-  int nargs;
-} ifuns[] = {
-  { "init_this",           (ival_t) i_init_this, 0},
-  { "deinit_this",         (ival_t) i_deinit_this, 0},
-  { "e_get_ed_num",        (ival_t) i_e_get_ed_num, 0},
-  { "e_set_ed_next",       (ival_t) i_e_set_ed_next, 0},
-  { "e_set_ed_by_idx",     (ival_t) i_e_set_ed_by_idx, 1},
-  { "e_get_ed_current_idx",(ival_t) i_e_get_ed_current_idx, 0},
-  { "e_get_ed_current",    (ival_t) i_e_get_ed_current, 0},
-  { "ed_new",              (ival_t) i_ed_new, 1},
-  { "ed_get_num_win",      (ival_t) i_ed_get_num_win, 1},
-  { "ed_get_current_win",  (ival_t) i_ed_get_current_win, 1},
-  { "ed_get_win_next",     (ival_t) i_ed_get_win_next, 2},
-  { "buf_init_fname",      (ival_t) i_buf_init_fname, 2},
-  { "buf_set_ftype",       (ival_t) i_buf_set_ftype, 2},
-  { "buf_set_row_idx",     (ival_t) i_buf_set_row_idx, 2},
-  { "buf_draw",            (ival_t) i_buf_draw, 1},
-  { "buf_normal_page_down",(ival_t) i_buf_normal_page_down, 2},
-  { "buf_normal_page_up",  (ival_t) i_buf_normal_page_up, 2},
-  { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
-  { "win_buf_init",        (ival_t) i_win_buf_init, 3},
-  { "win_draw",            (ival_t) i_win_draw, 1},
-  { "win_append_buf",      (ival_t) i_win_append_buf, 2},
-  { "win_set_current_buf", (ival_t) i_win_set_current_buf, 3},
-  { "win_get_current_buf", (ival_t) i_win_get_current_buf, 1},
-  { NULL, 0, 0}
-};
-
-private int i_load_file (Class (This) *__t__, char *fn) {
-  (void) __t__;
-  i_t *in = This(i.init_instance, __I__);
-
-  ifnot (Path.is_absolute (fn)) {
-    size_t fnlen = bytelen (fn);
-    char fname[fnlen+3];
-    Cstring.cp (fname, fnlen + 1, fn, fnlen);
-    char *extname = Path.extname (fname);
-    ifnot (extname[0]) {
-      fname[fnlen] = '.';
-      fname[fnlen+1] = 'i';
-      fname[fnlen+2] = '\0';
-    }
-
-    if (File.exists (fname))
-      return In.eval_file (in, fname);
-
-    string_t *ddir = E(get.env, "data_dir");
-    size_t len = ddir->num_bytes + bytelen (fname) + 2 + 8;
-    char tmp[len + 1];
-    Cstring.cp_fmt (tmp, len + 1, "%s/profiles/%s", ddir->bytes, fname);
-    ifnot (File.exists (tmp))
-      return NOTOK;
-    return In.eval_file (in, tmp);
-  } else
-    return In.eval_file (in, fn);
-
-  return OK;
-}
-
-private i_t *i_init_instance (Class (This) *__t__, Class (I) *__i__) {
-  (void) __t__;
-  i_t *this = In.new ();
-
-  FILE *err_fp = stderr;
-
-#if DEBUG_INTERPRETER
-  string_t *tdir = E(get.env, "tmp_dir");
-  size_t len = tdir->num_bytes + 1 + 7;
-  char tmp[len + 1 ];
-  Cstring.cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);
-  err_fp = fopen (tmp, "w");
-#endif
-
-  In.init (__i__, this, QUAL(I_INIT,
-    .mem_size = 8192,
-    .print_bytes = i_print_bytes,
-    .print_byte  = i_print_byte,
-    .print_fmt_bytes = i_print_fmt_bytes,
-    .err_fp = err_fp
-  ));
-
-  int err = 0;
-  for (int i = 0; ifuns[i].name; i++) {
-    err = In.def (this, ifuns[i].name, CFUNC (ifuns[i].nargs), ifuns[i].val);
-    if (err isnot I_OK) {
-      __deinit_this__ (&__THIS__);
-      fprintf (stderr, "Error while initializing the interpreter\n");
-      exit (1);
-    }
-  }
-
-  return this;
-}
-
 #if HAS_RUNTIME_INTERPRETER
 
 private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
@@ -593,13 +361,8 @@ private void __init_self__ (Class (This) *this) {
       .env = e_get_env
     )
   );
-  ((Self (This) *) this->self)->e = e;
 
-  SubSelf (This, i) in = SubSelfInit (This, i,
-    .init_instance = i_init_instance,
-    .load_file = i_load_file
-  );
-  ((Self (This) *) this->self)->i = in;
+  ((Self (This) *) this->self)->e = e;
 
 #if HAS_RUNTIME_INTERPRETER
   SubSelf (This, l) l = SubSelfInit (This, l,
@@ -666,9 +429,7 @@ public Class (This) *__init_this__ (void) {
   __init_self__ (__THIS__);
   __SELF__ = __THIS__->self;
 
-  __I__ = __init_i__ ();
-
-  ((Prop (This) *) $myprop)->__I__ = __I__;
+  __I__ = __e__->i;
 
 #if HAS_RUNTIME_INTERPRETER
   __init_l__ (1);
@@ -687,8 +448,6 @@ public void __deinit_this__ (Class (This) **thisp) {
   __deinit_ed__ (&this->__E__);
 
   free (__SELF__);
-
-  __deinit_i__ (&__I__);
 
 #if HAS_RUNTIME_INTERPRETER
   __deinit_l__ (&__L__);
