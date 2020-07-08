@@ -153,8 +153,8 @@ syn_t mail_syn[] = {
   }
 };
 
-private int __on_normal_beg (buf_t **thisp, int com, int *range, int regidx) {
-  (void) range; (void) regidx;
+private int __on_normal_beg (buf_t **thisp, int com, int count, int regidx) {
+  (void) count; (void) regidx;
 
   buf_t *this = *thisp;
 

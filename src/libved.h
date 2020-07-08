@@ -659,8 +659,8 @@ typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
 typedef int  (*WordActions_cb)  (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
 typedef int  (*FileActions_cb)  (buf_t **, utf8, char *);
-typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int *, int);
-typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int *, int);
+typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int, int);
+typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int, int);
 typedef int  (*BufNormalOng_cb) (buf_t **, int);
 typedef int  (*ReCompile_cb) (regexp_t *);
 typedef int  (*DirProcessDir_cb) (dirwalk_t *, char *, struct stat *);
@@ -674,9 +674,9 @@ typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
-typedef void (*Record_cb)     (ed_t *, char *);
-typedef int  (*IRecord_cb)    (ed_t *, vstr_t *);
-typedef void (*InitRecord_cb) (ed_t *, int);
+typedef void (*Record_cb) (ed_t *, char *);
+typedef int  (*IRecord_cb) (ed_t *, vstr_t *);
+typedef char *(*InitRecord_cb) (void);
 
 #define NULL_REF NULL
 
@@ -1428,7 +1428,9 @@ NewSubSelf (bufset, row,
 );
 
 NewSubSelf (bufset, normal,
-  void (*at_beg_cb) (buf_t *, BufNormalBeg_cb);
+  void
+    (*at_beg_cb) (buf_t *, BufNormalBeg_cb),
+    (*at_end_cb) (buf_t *, BufNormalEnd_cb);
 );
 
 NewSubSelf (buf, set,

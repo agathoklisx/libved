@@ -846,10 +846,10 @@ NewProp (ed,
   int num_at_exit_cbs;
   EdAtExit_cb *at_exit_cbs;
 
+  int repeat_mode;
   int record;
   int record_idx;
-  string_t   *last_record;
-  vstr_t     *records[NUM_RECORDS];
+  vstr_t     *records[NUM_RECORDS + 1];
   Record_cb   record_cb;
   IRecord_cb  i_record_cb;
   InitRecord_cb init_record_cb;
@@ -902,7 +902,7 @@ private int ved_buf_change_bufname (buf_t **, char *);
 private int ved_buf_change (buf_t **, int);
 private int ved_insert_complete_filename (buf_t **);
 private int ved_rline (buf_t **, rline_t *);
-private int ved_grep_on_normal (buf_t **, utf8, int *, int);
+private int ved_grep_on_normal (buf_t **, utf8, int, int);
 private int       ved_rline_parse_range (buf_t *, rline_t *, arg_t *);
 private rline_t  *ved_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
 private rline_t  *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
@@ -929,6 +929,7 @@ private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
 private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);
 private int ved_normal_visual_lw (buf_t **);
+private void ed_record (ed_t *, char *, ...);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

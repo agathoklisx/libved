@@ -5719,8 +5719,12 @@ private void buf_set_backup (buf_t *this, int backup, char *suffix) {
   $my(backupfile)[backuplen] = '\0';
 }
 
-private void buf_set_normal_cb (buf_t *this, BufNormalBeg_cb cb) {
+private void buf_set_normal_beg_cb (buf_t *this, BufNormalBeg_cb cb) {
   this->on_normal_beg = cb;
+}
+
+private void buf_set_normal_end_cb (buf_t *this, BufNormalEnd_cb cb) {
+  this->on_normal_end = cb;
 }
 
 private void buf_set_show_statusline (buf_t *this, int val) {
@@ -6065,13 +6069,13 @@ private buf_t *win_frame_change (win_t* w, int frame, int draw) {
   return NULL;
 }
 
-private int ved_buf_on_normal_beg (buf_t **thisp, utf8 com, int *range, int regidx) {
-  (void) thisp; (void) com; (void) range; (void) regidx;
+private int ved_buf_on_normal_beg (buf_t **thisp, utf8 com, int count, int regidx) {
+  (void) thisp; (void) com; (void) count; (void) regidx;
   return 0;
 }
 
-private int ved_buf_on_normal_end (buf_t **thisp, utf8 com, int *range, int regidx) {
-  (void) thisp; (void) com; (void) range; (void) regidx;
+private int ved_buf_on_normal_end (buf_t **thisp, utf8 com, int count, int regidx) {
+  (void) thisp; (void) com; (void) count; (void) regidx;
   return 0;
 }
 
@@ -7270,7 +7274,8 @@ private int ved_search (buf_t *this, char com) {
   if (com is '*' or com is '#') {
     com = '*' is com ? '/' : '?';
 
-    char word[MAXLEN_WORD]; int fidx, lidx;
+    char word[MAXLEN_WORD]; word[0] = '\0';
+    int fidx, lidx;
     get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
@@ -7412,8 +7417,8 @@ theend:
   return DONE;
 }
 
-private int ved_grep_on_normal (buf_t **thisp, utf8 com, int *range, int regidx) {
-  (void) range; (void) regidx;
+private int ved_grep_on_normal (buf_t **thisp, utf8 com, int count, int regidx) {
+  (void) count; (void) regidx;
   buf_t *this = *thisp;
 
   if (com isnot '\r' and com isnot 'q') return 0;
@@ -8418,7 +8423,7 @@ private int ved_normal_down (buf_t *this, int count, int adjust_col, int draw) {
 }
 
 private int ved_normal_page_down (buf_t *this, int count) {
-  $myroots(record_cb) ($my(root), str_fmt ("buf_normal_page_down (buf, %d)", count));
+  ed_record ($my(root), "buf_normal_page_down (buf, %d)", count);
 
   if (this->num_items < ONE_PAGE
       or this->num_items - $my(video_first_row_idx) < ONE_PAGE + 1)
@@ -8455,7 +8460,7 @@ private int ved_normal_page_down (buf_t *this, int count) {
 }
 
 private int ved_normal_page_up (buf_t *this, int count) {
-  $myroots(record_cb) ($my(root), str_fmt ("buf_normal_page_up (buf, %d)", count));
+  ed_record ($my(root), "buf_normal_page_up (buf, %d)", count);
 
   if ($my(video_first_row_idx) is 0 or this->num_items < ONE_PAGE)
     return NOTHING_TODO;
@@ -8549,8 +8554,7 @@ draw:
 }
 
 private int ved_normal_goto_linenr (buf_t *this, int lnr, int draw) {
-  $myroots(record_cb) ($my(root),
-  	str_fmt ("buf_normal_goto_linenr (buf, %d, %d)", lnr, draw));
+  ed_record ($my(root), "buf_normal_goto_linenr (buf, %d, %d)", lnr, draw);
 
   int currow_idx = this->cur_idx;
 
@@ -14841,10 +14845,8 @@ private void ed_free (ed_t *this) {
       register_free (&$my(regs)[i]);
     }
 
-    for (int i = 0; i < NUM_RECORDS; i++)
+    for (int i = 0; i <= NUM_RECORDS; i++)
       vstr_free ($my(records)[i]);
-
-    string_free ($my(last_record));
 
     for (int i = 0; i < $my(num_syntaxes); i++) {
       free ($my(syntaxes)[i].keywords_len);
@@ -14887,23 +14889,36 @@ private void ed_init_special_win (ed_t *this) {
   $my(num_special_win) = 4;
 }
 
-private void ed_deinit_record (ed_t *this) {
-  $my(record) = 0;
+private int ed_i_record_default (ed_t *this, vstr_t *str) {
+  (void) this; (void) str;
+  return NOTOK;
 }
 
 private void ed_record_default (ed_t *this, char *bytes) {
+  if ($my(repeat_mode)) return;
+
   if ($my(record))
     vstr_append_with ($my(records)[$my(record_idx)], bytes);
   else
-    My(String).replace_with ($my(last_record), bytes);
+    My(String).replace_with ($my(records)[NUM_RECORDS]->head->next->data, bytes);
 }
 
-private int ed_i_record_default (ed_t *this, vstr_t *record) {
-  (void) this; (void) record;
-  return OK;
+private void ed_record (ed_t *this, char *fmt, ...) {
+  size_t len = VA_ARGS_FMT_SIZE(fmt);
+  char bytes[len+1];
+  VA_ARGS_GET_FMT_STR(bytes, len, fmt);
+  $my(record_cb) (this, bytes);
 }
 
-private void ed_init_record_default (ed_t *this, int idx) {
+private char *ed_init_record_default (void) {
+  return
+    "var ed = e_get_ed_current ()\n"
+    "var win = ed_get_current_win (ed)\n"
+    "var buf = win_get_current_buf (win)\n"
+    "var draw = 1";
+}
+
+private void ed_init_record (ed_t *this, int idx) {
   if (0 > idx or idx > NUM_RECORDS - 1) idx = 0;
   $my(record_idx) = idx;
   $my(record) = 1;
@@ -14914,36 +14929,41 @@ private void ed_init_record_default (ed_t *this, int idx) {
   else
     rec = vstr_new ();
 
-   vstr_append_with (rec,
-      "var ed = e_get_ed_current ()\n"
-      "var win = ed_get_current_win (ed)\n"
-      "var buf = win_get_current_buf (win)\n"
-      "var draw = 1"
-  );
+  vstr_append_with (rec, $my(init_record_cb) ());
 
   $my(records)[$my(record_idx)] = rec;
 }
 
-private int ved_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int *range, int regidx) {
-  int count = 1;
+private int ed_interpr_record (ed_t *this, int idx) {
+  if ($my(record))
+    return NOTHING_TODO;
 
+  if (0 > idx or idx > NUM_RECORDS) idx = 0;
+
+  if (NULL is $my(records)[idx])
+    return NOTHING_TODO;
+
+  $my(repeat_mode) = 1;
+  int retval = $my(i_record_cb) (this, $my(records)[idx]);
+  $my(repeat_mode) = 0;
+  return retval;
+}
+
+private void ed_deinit_record (ed_t *this) {
+  $my(record) = 0;
+}
+
+private int ved_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int count, int regidx) {
   buf_t *this = *thisp;
 
-  if (range[0] <= 0) {
-    if (range[0] is 0)
-      return INDEX_ERROR;
-  } else {
-    if (range[0] > this->num_items)
-      if (range[1] >= 0)
-        return INDEX_ERROR;
-    count = range[0];
-  }
+  if (0 >= count or count > this->num_items)
+     return NOTHING_TODO;
 
   if (regidx < 0 or regidx >= NUM_REGISTERS)
     regidx = REG_UNAMED;
 
   int retval = NOTHING_TODO;
-  switch (this->on_normal_beg (thisp, com, range, regidx)) {
+  switch (this->on_normal_beg (thisp, com, count, regidx)) {
     case -1: goto theend;
     case  1: goto atend;
     case EXIT_THIS: return EXIT_THIS;
@@ -14972,14 +14992,15 @@ handle_com:
       if ($from(ed, record))
         ed_deinit_record (ed);
       else
-        $from(ed, init_record_cb) (ed, My(Input).get ($my(term_ptr)) - '1');
+        ed_init_record (ed, My(Input).get ($my(term_ptr)) - '1');
       break;
 
     case '@':
-      if ($from(ed, record) or $from(ed, record_idx) is -1)
-        break;
+      retval = ed_interpr_record (ed, My(Input).get ($my(term_ptr)) - '1');
+      break;
 
-      retval = $from(ed, i_record_cb) (ed, $from(ed, records)[$from(ed, record_idx)]);
+    case '.':
+      retval = ed_interpr_record (ed, NUM_RECORDS);
       break;
 
     case ':':
@@ -15212,16 +15233,11 @@ handle_com:
   }
 
 atend:
-  this->on_normal_end (thisp, com, range, regidx);
+  this->on_normal_end (thisp, com, count, regidx);
 
 theend:
   return retval;
 }
-
-#define ADD_RANGE(n) range[IS_FIRST_RANGE_OK] = n
-#define IS_FIRST_RANGE_OK range[0] != -1
-#define IS_SECOND_RANGE_OK range[1] != -1
-#define ARE_BOTH_RANGES_OK (IS_FIRST_RANGE_OK && IS_SECOND_RANGE_OK)
 
 #define NORMAL_GET_NUMBER                 \
   c = ({                                  \
@@ -15234,13 +15250,13 @@ theend:
       goto new_state;                     \
                                           \
     intbuf[i] = '\0';                     \
-    ADD_RANGE (atoi (intbuf));            \
+    count = atoi (intbuf);                \
     cc;                                   \
     })
 
 private int ved_loop (ed_t *ed, buf_t *this) {
   int retval = NOTOK;
-  int range[2];
+  int count = 1;
   utf8 c;
   int cmd_retv;
   int regidx = -1;
@@ -15248,7 +15264,7 @@ private int ved_loop (ed_t *ed, buf_t *this) {
   for (;;) {
  new_state:
     regidx = -1;
-    range[0] = range[1] = -1;
+    count = 1;
 
 get_char:
     ed_check_msg_status (ed);
@@ -15263,42 +15279,14 @@ handle_char:
         regidx = ed_register_get_idx (ed, My(Input).get ($my(term_ptr)));
         goto get_char;
 
-     case '0':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        //__fallthrough__;
-
       case '1'...'9':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
         NORMAL_GET_NUMBER;
         goto handle_char;
 
-      case '.':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ADD_RANGE (this->cur_idx + 1);
-        goto get_char;
-
-      case '$':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ADD_RANGE (this->num_items);
-        goto get_char;
-
-      case ',':
-        if (0 is (IS_FIRST_RANGE_OK)) goto exec_block;
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        ifnot (IS_FIRST_RANGE_OK) range[0] = this->cur_idx + 1;
-          goto get_char;
-
-      case '%':
-        if (ARE_BOTH_RANGES_OK) goto exec_block;
-        if (IS_FIRST_RANGE_OK) goto exec_block;
-        range[0] = 1; range[1] = this->num_items;
-        goto get_char;
-
       default:
 exec_block:
-        if (regidx is -1) regidx = REG_UNAMED;
-        cmd_retv = ved_normal_cmd (ed, &this, c, range, regidx);
+
+        cmd_retv = ved_normal_cmd (ed, &this, c, count, regidx);
 
         if (cmd_retv is DONE or cmd_retv is NOTHING_TODO)
           goto new_state;
@@ -15561,7 +15549,8 @@ private Class (ed) *editor_new (void) {
             .pager = buf_set_as_pager
           ),
           .normal = SubSelfInit (bufset, normal,
-            .at_beg_cb = buf_set_normal_cb
+            .at_beg_cb = buf_set_normal_beg_cb,
+            .at_end_cb = buf_set_normal_end_cb
           ),
           .row = SubSelfInit (bufset, row,
             .idx = buf_set_row_idx
@@ -15769,12 +15758,15 @@ private ed_t *ed_init (E_T *E) {
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
 
+  $my(repeat_mode) = 0;
   $my(record) = 0;
   $my(record_idx) = -1;
   $my(record_cb) = ed_record_default;
   $my(i_record_cb) = ed_i_record_default;
   $my(init_record_cb) = ed_init_record_default;
-  $my(last_record) = My(String).new (32);
+  $my(records)[NUM_RECORDS] = vstr_new ();
+  My(Vstring).append_with_len ($my(records)[NUM_RECORDS], " ", 1);
+  My(Vstring).append_with_len ($my(records)[NUM_RECORDS], " ", 1);
 
   this->name_gen = ('z' - 'a') + 1;
 
@@ -15824,6 +15816,10 @@ private ed_t *__ed_init__ (E_T *this, EdAtInit_cb init_cb) {
 
   $from(ed, root) = this;
   $from(ed, E) = this->self;
+
+  string_replace_with ($from(ed, records)[NUM_RECORDS]->head->data,
+      $from(ed, init_record_cb) ());
+
   return ed;
 }
 
