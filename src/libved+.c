@@ -238,6 +238,10 @@ private void e_set_at_exit_cb (Class (This) *this, EAtExit_cb cb) {
   __E.set.at_exit_cb (this->__E__, cb);
 }
 
+private void e_set_at_init_cb (Class (This) *this, EdAtInit_cb cb) {
+  __E.set.at_init_cb (this->__E__, cb);
+}
+
 private int e_get_num (Class (This) *this) {
   return __E.get.num (this->__E__);
 }
@@ -347,6 +351,7 @@ private void __init_self__ (Class (This) *this) {
     .main = e_main,
     .set = SubSelfInit (Thise, set,
       .at_exit_cb = e_set_at_exit_cb,
+      .at_init_cb = e_set_at_init_cb,
       .current = e_set_current,
       .next = e_set_next
     ),

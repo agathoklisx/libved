@@ -266,7 +266,9 @@ NewSubSelf (Thisparse, arg,
 );
 
 NewSubSelf (Thise, set,
-  void (*at_exit_cb) (Class (This) *, EAtExit_cb);
+  void
+    (*at_init_cb) (Class (This) *, EdAtInit_cb),
+    (*at_exit_cb) (Class (This) *, EAtExit_cb);
 
   ed_t
     *(*next) (Class (This) *),

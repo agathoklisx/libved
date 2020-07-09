@@ -76,6 +76,7 @@ int main (int argc, char **argv) {
 
   if (argc is -1) goto theend;
 
+  E(set.at_init_cb, __init_ext__);
   E(set.at_exit_cb, __deinit_ext__);
 
   ed_t *this = NULL;

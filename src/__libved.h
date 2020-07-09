@@ -255,6 +255,131 @@ enum {
 #define MSG_ERROR(fmt, ...) \
   My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
 
+/* interpreter */
+// symbols can take the following forms:
+#define INT      0x0  // integer
+#define STRING   0x1  // string
+#define OPERATOR 0x2  // operator; precedence in high 8 bits
+#define ARG      0x3  // argument; value is offset on stack
+#define BUILTIN  'B'  // builtin: number of operands in high 8 bits
+#define USRFUNC  'f'  // user defined a procedure; number of operands in high 8 bits
+#define TOK_BINOP 'o'
+
+#define STRING_TYPE_FUNC_ARGUMENT 1 << 8
+
+#define OUT_OF_FUNCTION_SCOPE     1 << 0
+#define FUNCTION_SCOPE            1 << 1
+#define FUNCTION_ARGUMENT_SCOPE   1 << 2
+
+#define BINOP(x) (((x) << 8) + TOK_BINOP)
+#define CFUNC(x) (((x) << 8) + BUILTIN)
+
+#define I_TOK_SYMBOL     'A'
+#define I_TOK_NUMBER     'N'
+#define I_TOK_HEX_NUMBER 'X'
+#define I_TOK_STRING     'S'
+#define I_TOK_IF         'i'
+#define I_TOK_IFNOT      'I'
+#define I_TOK_ELSE       'e'
+#define I_TOK_WHILE      'w'
+#define I_TOK_PRINT      'p'
+#define I_TOK_PRINTLN    'P'
+#define I_TOK_VAR        'v'
+#define I_TOK_VARDEF     'V'
+#define I_TOK_BUILTIN    'B'
+#define I_TOK_BINOP      'o'
+#define I_TOK_FUNCDEF    'F'
+#define I_TOK_SYNTAX_ERR 'Z'
+#define I_TOK_RETURN     'r'
+#define I_TOK_CHAR       'C'
+
+enum {
+  I_OK = 0,
+  I_ERR_NOMEM = -1,
+  I_ERR_SYNTAX = -2,
+  I_ERR_UNKNOWN_SYM = -3,
+  I_ERR_BADARGS = -4,
+  I_ERR_TOOMANYARGS = -5,
+  I_ERR_OK_ELSE = 1, // special internal condition
+};
+
+#define MAX_BUILTIN_PARAMS 4
+
+NewType (istring,
+  char *ibuf;
+  istring_t *next;
+);
+
+NewType (Istrings,
+  Type (istring) *head;
+);
+
+NewType (String,
+  unsigned len_;
+  const char *ptr_;
+);
+
+typedef struct symbol {
+  String_t name;
+  int type;      // symbol type
+  ival_t value;  // symbol value, or string ptr
+} Sym;
+
+typedef struct ufunc {
+  String_t body;
+  int nargs;
+  String_t argName[MAX_BUILTIN_PARAMS];
+} UserFunc;
+
+NewProp (I,
+  Class (E) *e;
+  int name_gen;
+  Type (i) *head;
+  int num_instances;
+  int current_idx;
+);
+
+NewType (i,
+  char name[32];
+  size_t
+    mem_size,
+    max_script_size;
+
+  char *arena;
+  int
+    linenum,
+    scope;
+
+  FILE
+    *err_fp,
+    *out_fp;
+
+  Type (Istrings) *strings;
+
+  Sym *symptr;
+  ival_t *valptr;
+
+  String_t parseptr;  // acts as instruction pointer
+
+  char ns[MAXLEN_NAME];
+  ival_t fArgs[MAX_BUILTIN_PARAMS];
+  ival_t fResult;
+
+  // variables for parsing
+  int curToken;  // what kind of token is current
+  int tokenArgs; // number of arguments for this token
+  String_t token;  // the actual string representing the token
+  ival_t tokenVal;  // for symbolic tokens, the symbol's value
+  Sym *tokenSym;
+
+  PrintByte_cb print_byte;
+  PrintBytes_cb print_bytes;
+  PrintFmtBytes_cb print_fmt_bytes;
+
+  Class (E) *e;
+  Type (i) *next;
+);
+
 NewProp (term,
   struct termios
     orig_mode,
@@ -561,7 +686,8 @@ NewType (hist,
   Class (path) *Path;            \
   Class (dir) *Dir;              \
   Class (rline) *Rline;          \
-  Class (vsys) *Vsys;
+  Class (vsys) *Vsys;            \
+  Class (I) *I;
 
 NewType (dim,
   int
@@ -871,7 +997,7 @@ NewProp (E,
    int  prev_idx;
 
   Self (ed) Ed;
-
+  Self (i) I;
   rg_t shared_reg[1];
 
   int num_at_exit_cbs;
@@ -885,13 +1011,13 @@ NewProp (E,
 
 private int win_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
 private int ved_quit (ed_t *, int, int);
-private int ved_normal_goto_linenr (buf_t *, int, int);
-private int ved_normal_left (buf_t *, int, int);
-private int ved_normal_right (buf_t *, int, int);
-private int ved_normal_down (buf_t *, int, int, int);
-private int ved_normal_bol (buf_t *);
-private int ved_normal_eol (buf_t *);
-private int ved_normal_eof (buf_t *, int);
+private int buf_normal_goto_linenr (buf_t *, int, int);
+private int buf_normal_left (buf_t *, int, int);
+private int buf_normal_right (buf_t *, int, int);
+private int buf_normal_down (buf_t *, int, int, int);
+private int buf_normal_bol (buf_t *);
+private int buf_normal_eol (buf_t *);
+private int buf_normal_eof (buf_t *, int);
 private int ved_insert (buf_t **, utf8, char *);
 private int ved_write_buffer (buf_t *, int);
 private int ved_split (buf_t **, char *);
@@ -928,8 +1054,10 @@ private string_t *vsys_which (char *, char *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
 private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);
-private int ved_normal_visual_lw (buf_t **);
+private int buf_normal_visual_lw (buf_t **);
 private void ed_record (ed_t *, char *, ...);
+private Class (I) *__init_i__ (Class (E) *);
+private void __deinit_i__ (Class (I) **);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {
