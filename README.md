@@ -915,6 +915,101 @@ Search:
       See an example at: src/lib/i/example.i
 
       Many many thanks to the above mentioned project.
+
+      [update: Thu 09 Jul 2020]: This was integrated into the library.
+
+      By integrating the interpreter to the library, we gain:
+
+        - one less indirection, as we have straight access to the library
+        - lesser complexity (lesser external code - easier binding)
+        - flexibility and inner capability to develop logic, by using a builtin
+          integrated machine, that know each other.
+        - ...
+
+      The added code is about 1500 of lines (counted with the abstraction part).
+
+      The other thing that it might be of interest, is that the mechanism might makes
+      easy to use the machine, probably with any PL. It works like this:
+
+      The library expose the capability to register two callback functions:
+
+      The first and the obvious, is simply a function that will interpret the given
+      code as an argument to that function (an arraylist of strings), at runtime.
+
+      For instance (and using as an example, the builtin way to do this kind of thing),
+      here we use 3 lines that initialize the essentials to control the machine:
+
+        var ed = e_get_ed_current ()
+        var win = ed_get_current_win (ed)
+        var buf = win_get_current_buf (win)
+
+      This is valid syntax for the ts(interpreter), as variables are just pointers, which
+      are typedef'ed as:
+
+        typedef intptr_t ival_t;
+
+      In C all the function parameters is of type ival_t, and this is very convenient.
+
+      In fact you can pass litteral strings to functions, and this is very convenient
+      when you create code that you want to be interpreted. It is almost really like
+      a 1000 lines of code, and original/upstream ts doesn't have this functionality.
+
+      So, with the above initialization code, we have the current buffer to work with,
+      which simply means, access to the whole machine.
+
+      Why? Because of the interconnection of those 4 following structures -
+
+        1)  ed: An instance of an editor, that holds windows, which they hold our buffers.
+            Can be unlimited. They do know nothing about each other, and so can not be
+            possible to influnce its other state.
+            Those can attached and reattached (with the exact state) with CTRL(j), or
+            with previous/next/prevFocused ways.
+
+        2) win: An instance of a window. Likewise with ed. It has of course, its own ways
+           to change the focus. Those are the main wised established vim ways, plus a
+           couple of extensions.
+
+        3) buf: Likewise with win.
+
+        4)   e: The kernel. It can be only one. It doesn't has code to influence any of the
+           above states. Sometimes though helps to share stuff between them.
+
+      All these pointers are part of a chain, that stores a reference to the kid and the
+      parent and|or to their root.
+
+      So we expose a schema, that a function name is the same to C and to the I, which is
+      stored as a symbol to the Imachine.
+
+      Then its up to the PL to parse the string and evaluate it with its VM.
+      For instance, here is what the builtin second callback function does (this cb
+      records user actions and writes them in this function argument arraylist, that
+      is passed then to the first above cb(). This is done with '@[123@]' in normal
+      mode. (note that for now. few functions records itself, as it needs time)
+
+  private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
+    ed_record ($my(root), "buf_normal_goto_linenr (buf, %d, %d)", lnr, draw);
+
+      So, a parser the only (probably) thing it has to do, is probably to break the
+      function name into tokens (e.g., in an OOP PL: Buf.normal.goto.linenr (...)),
+      or and in this case of our I, does has to do nothing, as it is simply the same name,
+      which is an object which was initialized at the instantiation, with:
+
+  { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
+
+      and the i_buf_normal_goto_linenr() registered function to the memory arena:
+
+  ival_t i_buf_normal_goto_linenr (ival_t i, buf_t *this, int linenum, int draw) {
+    (void) i;
+    return buf_normal_goto_linenr (this, linenum, draw);
+  }
+
+      The first function argument is always the instance of the interpreter, which can
+      be retrieved, casted as:
+
+  i_t *this = (i_t *) i;
+
+      Since this instance holds a pointer of the root E Class, then there is read|write
+      access to the machine functions.
    */
 
    /* C compiler
