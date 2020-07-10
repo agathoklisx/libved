@@ -14782,6 +14782,16 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
        retval = ved_com_validate_utf8 (thisp, NULL);
        break;
 
+     case '@':
+      retval = NOTOK;
+      if (0 is (($my(flags) & BUF_IS_SPECIAL)) and
+          0 is My(Cstring).eq ($my(basename), UNAMED)) {
+        vstr_t *lines = My(File).readlines ($my(fname), NULL, NULL, NULL);
+        retval = buf_interpret (thisp, My(Vstring).to.cstring (lines, ADD_NL));
+        My(Vstring).free (lines);
+      }
+      break;
+
     default:
       break;
   }
@@ -14790,9 +14800,12 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
 }
 
 private void ed_set_file_mode_actions_default (ed_t *this) {
-  utf8 chars[] = {'w', 'v'};
-  char actions[] = "write buffer\nvalidate file for invalid utf8 sequences";
+  utf8 chars[] = {'w', 'v', '@'};
+  char actions[] =
+     "write buffer\nvalidate file for invalid utf8 sequences\n"
+     "@evaluate buffer";
   self(set.file_mode_actions, chars, ARRLEN(chars), actions, buf_file_mode_actions_cb);
+
 }
 
 private void ed_free_at_exit_cbs (ed_t *this) {

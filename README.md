@@ -524,7 +524,8 @@ Visual mode:
  |             note: this requires HAS_USER_EXTENSIONS|HAS_SPELL          |
  | M                 | evaluate selected as a math expression [(char|line)wise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
- | I                 | interpret selected [linewise]
+ | @                 | interpret selected by the builtin interpreter [linewise]|
+ | I                 | interpret selected by Dictu PL [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_PROGRAMMING_LANGUAGE |
  | C                 | compile selected as C code [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_TCC |
@@ -590,11 +591,11 @@ Search:
      - validate current buffer for invalid sequences
      - write this file
      - compile this file with tcc C compiler
-     - interpret this file
+     - interpret this file with the builtin interpreter
+     - interpret this file with Dictu Programming Languaga
 
    As an extension and if elinks browser is installed, it can open this file
    in a running elinks instance.
-
 
   Command line mode:
    (note) Commands do not get a range as in vi[like], but from the command line
@@ -904,112 +905,118 @@ Search:
     __should__ work in any way, otherwise is a bug in the code).
   */
 
-   /* Scripting
-      The application offers a tiny scripting interface, which is based on Tinyscript:
-      https://github.com/totalspectrum
-      Copyright 2016 Total Spectrum Software Inc.
-      TERMS OF USE: MIT License
+  /* Scripting
+     The application offers a tiny scripting interface, which is based on Tinyscript:
+     https://github.com/totalspectrum
+     Copyright 2016 Total Spectrum Software Inc.
+     TERMS OF USE: MIT License
 
-      It is a really minimal scripting Language, with just a bit over 1000 lines of
-      code, but which has the absolute essentials, for this kind of job we want.
-      See an example at: src/lib/i/example.i
+     It is a really minimal scripting Language, with just a bit over 1000 lines of
+     code, but which has the absolute essentials, for this kind of job we want.
+     See an example at: src/lib/i/example.i
 
-      Many many thanks to the above mentioned project.
+     Many many thanks to the above mentioned project.
 
-      [update: Thu 09 Jul 2020]: This was integrated into the library.
+     [update: Thu 09 Jul 2020]: This was integrated into the library.
 
-      By integrating the interpreter to the library, we gain:
+     By integrating the interpreter to the library, we gain:
 
-        - one less indirection, as we have straight access to the library
-        - lesser complexity (lesser external code - easier binding)
-        - flexibility and inner capability to develop logic, by using a builtin
-          integrated machine, that know each other.
-        - ...
+       - one less indirection, as we have straight access to the library
+       - lesser complexity (lesser external code - no global variables - easier binding)
+       - flexibility and inner capability to develop logic, by using the builtin
+         integrated machine, that know each other.
 
-      The added code is about 1500 of lines (counted with the abstraction part).
+     The whole code is about 1500 of lines (counted with the abstraction part of code).
 
-      The other thing that it might be of interest, is that the mechanism might makes
-      easy to use the machine, probably with any PL. It works like this:
+     The other thing that it might be of interest, is that the mechanism might makes
+     easy to use the machine, probably with any PL. It works like this:
 
-      The library expose the capability to register two callback functions:
+     The library expose the capability to register two callback functions:
 
-      The first and the obvious, is simply a function that will interpret the given
-      code as an argument to that function (an arraylist of strings), at runtime.
+     The first and the obvious, is simply a function that will interpret the given
+     code as an argument to that function (an arraylist of strings), at runtime.
 
-      For instance (and using as an example, the builtin way to do this kind of thing),
-      here we use 3 lines that initialize the essentials to control the machine:
+     For instance (and using as an example, the builtin way to do this kind of thing):
 
         var ed = e_get_ed_current ()
         var win = ed_get_current_win (ed)
         var buf = win_get_current_buf (win)
 
-      This is valid syntax for the ts(interpreter), as variables are just pointers, which
-      are typedef'ed as:
+     Here we use 3 lines that initialize the essentials, so to control the machine.
+     This is valid syntax for the ts(interpreter), as variables are just pointers, which
+     are typedef'ed as:
 
         typedef intptr_t ival_t;
 
-      In C all the function parameters is of type ival_t, and this is very convenient.
+     In C all the function parameters is of type ival_t.
 
-      In fact you can pass litteral strings to functions, and this is very convenient
-      when you create code that you want to be interpreted. It is almost really like
-      a 1000 lines of code, and original/upstream ts doesn't have this functionality.
+     You can pass litteral strings to functions, and this is very convenient, when
+     you emit code that you want to be interpreted (the original/upstream ts doesn't
+     have this functionality).
 
-      So, with the above initialization code, we have the current buffer to work with,
-      which simply means, access to the whole machine.
+     So, with the above initialization code, we have a pointer to the current buffer,
+     which simply means, access to the whole machine.
 
-      Why? Because of the interconnection of those 4 following structures -
+     Why? Because of the interconnection of those 4 following structures -
 
-        1)  ed: An instance of an editor, that holds windows, which they hold our buffers.
-            Can be unlimited. They do know nothing about each other, and so can not be
-            possible to influnce its other state.
-            Those can attached and reattached (with the exact state) with CTRL(j), or
-            with previous/next/prevFocused ways.
+       1)  ed: An instance of an editor, that holds windows, which they hold our buffers.
+           Can be unlimited. They do know nothing about each other, and so can not be
+           possible to influnce its other state.
+           Those can attached and reattached (with the exact state) with CTRL(j), or
+           with previous/next/prevFocused ways.
 
-        2) win: An instance of a window. Likewise with ed. It has of course, its own ways
-           to change the focus. Those are the main wised established vim ways, plus a
-           couple of extensions.
+       2) win: An instance of a window. Likewise with ed. It has of course, its own ways
+          to change the focus. Those are the main wised established vim ways, plus a
+          couple of extensions.
 
-        3) buf: Likewise with win.
+       3) buf: Likewise with win.
 
-        4)   e: The kernel. It can be only one. It doesn't has code to influence any of the
-           above states. Sometimes though helps to share stuff between them.
+       4)   e: The kernel. It can be only one. It doesn't has code to influence any of the
+          above states. Sometimes though helps to share stuff between them.
 
-      All these pointers are part of a chain, that stores a reference to the kid and the
-      parent and|or to their root.
+     All these pointers are part of a chain, that stores a reference to the kid and the
+     parent and|or to their root. So there is an access to the enormous structure that
+     is exposed by the library.
 
-      So we expose a schema, that a function name is the same to C and to the I, which is
-      stored as a symbol to the Imachine.
+     The second callback is a function that gets a string that records user actions
+     (for now is only a couple of functions that are being used for testing), anytime
+     a relative function is called, and stores them to the arraylist.
 
-      Then its up to the PL to parse the string and evaluate it with its VM.
-      For instance, here is what the builtin second callback function does (this cb
-      records user actions and writes them in this function argument arraylist, that
-      is passed then to the first above cb(). This is done with '@[123@]' in normal
-      mode. (note that for now. few functions records itself, as it needs time)
+     In the case of the builtin interpreter, we do not change anything to the string,
+     as the exposed schema is valid code for us, as the function names are identical
+     in C and in the interpreter (as that is how is stored as a symbol).
+
+     So, its up to the PL to parse the string and evaluate it within its VM.
+
+     For instance, here is what the builtin second callback function does (this cb
+     records user actions and writes them in this function argument arraylist, that
+     is being passed then to the first above cb().
+     This call is being done with '@[123@]' in normal mode.
 
   private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
     ed_record ($my(root), "buf_normal_goto_linenr (buf, %d, %d)", lnr, draw);
 
-      So, a parser the only (probably) thing it has to do, is probably to break the
-      function name into tokens (e.g., in an OOP PL: Buf.normal.goto.linenr (...)),
-      or and in this case of our I, does has to do nothing, as it is simply the same name,
-      which is an object which was initialized at the instantiation, with:
+     So, a parser the only (probably) thing it has to do, is probably to break the
+     function name into tokens (e.g., in an OOP PL: Buf.normal.goto.linenr (...)),
+     or and in this case of our I, does has to do nothing, as it is simply the same name,
+     which is an object which was initialized at the instantiation, with:
 
   { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
 
-      and the i_buf_normal_goto_linenr() registered function to the memory arena:
+     and the i_buf_normal_goto_linenr() registered function to the memory arena:
 
   ival_t i_buf_normal_goto_linenr (ival_t i, buf_t *this, int linenum, int draw) {
     (void) i;
     return buf_normal_goto_linenr (this, linenum, draw);
   }
 
-      The first function argument is always the instance of the interpreter, which can
-      be retrieved, casted as:
+     The first function argument is always the instance of the interpreter, which can
+     be retrieved, casted as:
 
   i_t *this = (i_t *) i;
 
-      Since this instance holds a pointer of the root E Class, then there is read|write
-      access to the machine functions.
+     Since this instance holds a pointer of the root E Class, then there is read|write
+     access to the whole machine functions.
    */
 
    /* C compiler
