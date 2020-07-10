@@ -5,40 +5,39 @@ DeclareSelf (This);
 
 extern Class (This) *__THIS__;
 extern Self (This)  *__SELF__;
-extern Class (I) *__I__;
 
 /* avoid __SELF__ ? */
 //#define This(__f__, ...) (*(Self (This) *) (__THIS__->self)).__f__ (__THIS__, ## __VA_ARGS__)
 #define This(__f__, ...) (*__SELF__).__f__ (__THIS__, ## __VA_ARGS__)
 #define E(__f__, ...) This(e.__f__, ## __VA_ARGS__)
-#define I (*__I__).self
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 #define L (*__L__).self
 #define L_CUR_STATE  __L__->states[__L__->cur_state]
 #endif
 
 #define __E     __THIS__->__E__->self
-#define Ed      __THIS__->__E__->ed->self
-#define Cstring __THIS__->__E__->ed->Cstring.self
-#define Ustring __THIS__->__E__->ed->Ustring.self
-#define Vstring __THIS__->__E__->ed->Vstring.self
-#define String  __THIS__->__E__->ed->String.self
-#define Rline   __THIS__->__E__->ed->Rline.self
-#define Error   __THIS__->__E__->ed->Error.self
-#define Vsys    __THIS__->__E__->ed->Vsys.self
-#define Term    __THIS__->__E__->ed->Term.self
-#define Cursor  __THIS__->__E__->ed->Cursor.self
-#define Video   __THIS__->__E__->ed->Video.self
-#define Screen  __THIS__->__E__->ed->Screen.self
-#define Input   __THIS__->__E__->ed->Input.self
-#define File    __THIS__->__E__->ed->File.self
-#define Path    __THIS__->__E__->ed->Path.self
-#define Buf     __THIS__->__E__->ed->Buf.self
-#define Win     __THIS__->__E__->ed->Win.self
-#define Msg     __THIS__->__E__->ed->Msg.self
-#define Dir     __THIS__->__E__->ed->Dir.self
-#define Re      __THIS__->__E__->ed->Re.self
+#define Ed      __THIS__->__E__->__ED__->self
+#define Win     __THIS__->__E__->__ED__->Win.self
+#define Buf     __THIS__->__E__->__ED__->Buf.self
+#define I       __THIS__->__E__->__ED__->I.self
+#define Cstring __THIS__->__E__->__ED__->Cstring.self
+#define Ustring __THIS__->__E__->__ED__->Ustring.self
+#define Vstring __THIS__->__E__->__ED__->Vstring.self
+#define String  __THIS__->__E__->__ED__->String.self
+#define Rline   __THIS__->__E__->__ED__->Rline.self
+#define Error   __THIS__->__E__->__ED__->Error.self
+#define Vsys    __THIS__->__E__->__ED__->Vsys.self
+#define Term    __THIS__->__E__->__ED__->Term.self
+#define Cursor  __THIS__->__E__->__ED__->Cursor.self
+#define Video   __THIS__->__E__->__ED__->Video.self
+#define Screen  __THIS__->__E__->__ED__->Screen.self
+#define Input   __THIS__->__E__->__ED__->Input.self
+#define File    __THIS__->__E__->__ED__->File.self
+#define Path    __THIS__->__E__->__ED__->Path.self
+#define Msg     __THIS__->__E__->__ED__->Msg.self
+#define Dir     __THIS__->__E__->__ED__->Dir.self
+#define Re      __THIS__->__E__->__ED__->Re.self
 
 #if HAS_SHELL_COMMANDS
 #define Proc ((Self (This) *) __THIS__->self)->proc
@@ -187,7 +186,7 @@ NewClass (proc,
   private void __deinit_local__ (void);
 #endif
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 #include <stdbool.h>
 #include <lai.h>
 #include <led.h>
@@ -197,7 +196,7 @@ typedef l_table_t Thisltableself_t;
 typedef l_table_get_t Thisltablegetself_t;
 typedef l_module_t Thislmodulegetself_t;
 typedef lang_t L_T;
-#endif /* HAS_RUNTIME_INTERPRETER */
+#endif /* HAS_PROGRAMMING_LANGUAGE */
 
 #if HAS_TCC
 #include <libtcc.h>
@@ -288,6 +287,8 @@ NewSubSelf (Thise, get,
     (*state) (Class (This) *);
 
   string_t *(*env) (Class (This) *, char *);
+
+  Class (I) *(*iclass) (Class (This) *);
 );
 
 NewSubSelf (This, e,
@@ -307,20 +308,14 @@ NewSubSelf (This, parse,
   string_t *(*command) (Class (This) *, char *);
 );
 
-NewSubSelf (This, i,
-  i_t *(*init_instance) (Class (This) *, Class (I) *);
-  int (*load_file) (Class (This) *, char *);
-);
-
 NewSelf (This,
   SubSelf (This, e) e;
-  SubSelf (This, i) i;
   SubSelf (This, parse) parse;
 #if HAS_SHELL_COMMANDS
   Self (proc) proc;
 #endif
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   SubSelf (This, l) l;
 #endif
 );
@@ -328,7 +323,7 @@ NewSelf (This,
 NewProp (This,
   char *name;
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   Class (L) *__L__;
 #endif
 );

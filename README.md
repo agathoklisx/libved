@@ -277,7 +277,7 @@
    HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
    HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
    HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
-   HAS_RUNTIME_INTERPRETER=1|0 (en|dis)able runtime interpreter (default 0)
+   HAS_PROGRAMMING_LANGUAGE=1|0 (en|dis)able programming language (default 0)
    /* Implemented but used for now only in local code */
    HAS_JSON=1|0     (en|dis)able json support (defaulr 0)
 
@@ -525,7 +525,7 @@ Visual mode:
  | M                 | evaluate selected as a math expression [(char|line)wise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
  | I                 | interpret selected [linewise]
- |             note: this requires HAS_USER_EXTENSIONS|HAS_RUNTIME_INTERPRETER |
+ |             note: this requires HAS_USER_EXTENSIONS|HAS_PROGRAMMING_LANGUAGE |
  | C                 | compile selected as C code [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_TCC |
  | TAB               | triggers a completion menu with the correspondent to the
@@ -1022,7 +1022,7 @@ Search:
       system.
    */
 
-   /* Runtime interpreter
+   /* Programming Language
       The application can interpret code (using the Dictu programming language with
       a couple of modifications) in two ways:
          - in visual linewise mode
@@ -1031,6 +1031,9 @@ Search:
       Notes:
          - System.exit() is disabled
          - without HAS_CURL=1 the HTTP module is disabled
+         - the language is at early stage but usable, and i serve to its development,
+           so this is also being used as a test took, for further development
+
    */
 
    /* Unified Diff
@@ -1312,9 +1315,9 @@ Search:
     two files can use the following compilation options.
       HAS_REGEXP, HAS_SHELL_COMMANDS, HAS_HISTORY, HAS_SHELL_COMMANDS,
       HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
-      HAS_RUNTIME_INTERPRETER (the building of the language is handled by the
+      HAS_PRPGTAMMING_LANGUAGE (the building of the language is handled by the
       this Makefile automatically, otherwise it should be compiled explicitly:
-      note that this target it can use libcurl)
+      note that this specific target language, it can use libcurl)
       HAS_TCC (this option requires libtcc installed)
 
     The code uses an object oriented style, though it is just for practical

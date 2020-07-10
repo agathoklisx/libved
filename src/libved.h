@@ -1801,9 +1801,9 @@ NewSubSelf (ed, sh,
 
 NewSubSelf (ed, history,
   void
-     (*add) (ed_t *, vstr_t *, int),
-     (*read) (ed_t *),
-     (*write) (ed_t *);
+    (*add) (ed_t *, vstr_t *, int),
+    (*read) (ed_t *),
+    (*write) (ed_t *);
 );
 
 NewSubSelf (ed, draw,
@@ -1837,10 +1837,10 @@ NewSelf (ed,
     (*resume) (ed_t *);
 
   int
-    (*scratch) (ed_t *, buf_t **, int),
-    (*messages) (ed_t *, buf_t **, int),
     (*quit) (ed_t *, int, int),
-    (*delete) (ed_t *, ed_T *, int, int);
+    (*delete) (ed_t *, ed_T *, int, int),
+    (*scratch) (ed_t *, buf_t **, int),
+    (*messages) (ed_t *, buf_t **, int);
 
   utf8 (*question) (ed_t *, char *, utf8 *, int);
 
@@ -1851,29 +1851,30 @@ NewSelf (ed,
 
 /* interpeter */
 NewSubSelf (i, get,
-  Type (i) *(*current) (Class (I) *);
+  i_t *(*current) (Class (I) *);
   int (*current_idx) (Class (I) *);
 );
 
 NewSubSelf (i, set,
-  Type (i) *(*current) (Class (I) *, int);
+  i_t *(*current) (Class (I) *, int);
 );
 
 NewSelf (i,
   SubSelf (i, get) get;
   SubSelf (i, set) set;
 
-  void (*free) (i_t **);
+  void
+    (*free) (i_t **),
+    (*remove_instance) (Class (I) *, Type (i) *);
+
   i_t
     *(*new) (void),
-    *(*init_instance) (Class (I) *);
-
-  void (*remove_instance) (Class (I) *, Type (i) *);
-  Type (i) *(*append_instance) (Class (I) *, Type (i) *);
+    *(*init_instance) (Class (I) *),
+    *(*append_instance) (Class (I) *, Type (i) *);
 
   int
+    (*def) (i_t *, const char *, int, ival_t),
     (*init) (Class (I) *, i_t *, I_INIT),
-    (*def)  (i_t *, const char *, int, ival_t),
     (*eval_file) (i_t *, const char *),
     (*load_file) (Class (I) *, char *),
     (*eval_string) (i_t *, const char *, int, int);
@@ -1892,6 +1893,8 @@ NewClass (ed,
   Self (ed)  self;
   Class (buf) Buf;
   Class (win) Win;
+  Class (I) I;
+
   Class (term) Term;
   Class (video) Video;
   Class (cstring) Cstring;
@@ -1909,7 +1912,6 @@ NewClass (ed,
   Class (dir) Dir;
   Class (rline) Rline;
   Class (vsys) Vsys;
-  Class (I) I;
 );
 
 NewSubSelf (E, set,
@@ -1938,6 +1940,8 @@ NewSubSelf (E, get,
     (*num) (E_T *);
 
   string_t *(*env) (E_T *, char *);
+
+  Class (I) *(*iclass) (E_T *);
 );
 
 NewSelf (E,
@@ -1963,10 +1967,7 @@ NewClass (This,
 NewClass (E,
   Self (E) self;
   Prop (E) *prop;
-  Class (ed) *ed;
-/* interpeter */
-  Class (I) *i;
-
+  Class (ed) *__ED__;
   Class (This) *__THIS__;
 );
 

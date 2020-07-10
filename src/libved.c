@@ -4691,6 +4691,46 @@ private int balanced_lw_mode_cb (buf_t **thisp, int fidx, int lidx, vstr_t *vstr
   return NO_CALLBACK_FUNCTION;
 }
 
+private int buf_interpret (buf_t **thisp, char *malloced) {
+  buf_t *this = *thisp;
+  char *str = malloced;
+
+  i_t *in = My(I).get.current ($my(I));
+  ifnot (in)
+    in = My(I).init_instance ($my(I));
+
+  My(Term).reset ($my(term_ptr));
+
+  int retval = My(I).eval_string (in, str, 1, 1);
+
+  free (malloced);
+
+  My(Term).set_mode ($my(term_ptr), 'r');
+  My(Input).get ($my(term_ptr));
+  My(Term).set ($my(term_ptr));
+
+  if (retval is I_ERR_SYNTAX)
+    My(Ed).messages ($my(root), thisp, AT_EOF);
+
+  this = *thisp;
+
+  My(Win).draw ($my(parent));
+
+  if (retval isnot OK or retval isnot NOTOK)
+    retval = NOTOK;
+  return retval;
+}
+
+private int  evaluate_lw_mode_cb (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
+  (void) fidx; (void) lidx; (void) action;
+
+  if (c isnot '@') return NO_CALLBACK_FUNCTION;
+
+  buf_t *this = *thisp;
+  char *str = My(Vstring).to.cstring (vstr, ADD_NL);
+  return buf_interpret (thisp, str);
+}
+
 private string_t *buf_ftype_autoindent (buf_t *this, row_t *row) {
   (void) row;
   $my(shared_int) = 0; // needed by the caller
@@ -5424,7 +5464,7 @@ private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
 }
 
 private string_t *venv_get (Class (E) *__e__, char *name) {
-  ed_T *this = __e__->ed;
+  ed_T *this = __e__->__ED__;
   if (str_eq (name, "group_name"))  return __venv_get__ (this, $my(env)->group_name);
   if (str_eq (name, "user_name"))  return __venv_get__ (this, $my(env)->user_name);
   if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
@@ -6237,29 +6277,29 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   buf_t *this = AllocType (buf);
   $myprop = AllocProp (buf);
 
-  $my(parent) = w;
-  $my(root) = $myparents(parent);
-
-  $my(Ed) = $myparents(Ed);
-  $my(Me) = $myparents(Buf);
-  $my(Win)= $myparents(Me);
+  $my(parent)  = w;
+  $my(root)    = $myparents(parent);
+  $my(Ed)      = $myparents(Ed);
+  $my(Win)     = $myparents(Me);
+  $my(Me)      = $myparents(Buf);
+  $my(I)       = $myparents(I);
+  $my(Re)      = $myparents(Re);
+  $my(Msg)     = $myparents(Msg);
+  $my(Dir)     = $myparents(Dir);
+  $my(File)    = $myparents(File);
+  $my(Term)    = $myparents(Term);
+  $my(Path)    = $myparents(Path);
+  $my(Vsys)    = $myparents(Vsys);
+  $my(Error)   = $myparents(Error);
+  $my(Video)   = $myparents(Video);
+  $my(Input)   = $myparents(Input);
+  $my(Rline)   = $myparents(Rline);
+  $my(String)  = $myparents(String);
+  $my(Cursor)  = $myparents(Cursor);
+  $my(Screen)  = $myparents(Screen);
   $my(Cstring) = $myparents(Cstring);
   $my(Vstring) = $myparents(Vstring);
   $my(Ustring) = $myparents(Ustring);
-  $my(String) = $myparents(String);
-  $my(Re) = $myparents(Re);
-  $my(Msg) = $myparents(Msg);
-  $my(Error) = $myparents(Error);
-  $my(Video) = $myparents(Video);
-  $my(Term) = $myparents(Term);
-  $my(Input) = $myparents(Input);
-  $my(Cursor) = $myparents(Cursor);
-  $my(Screen)= $myparents(Screen);
-  $my(File) = $myparents(File);
-  $my(Path) = $myparents(Path);
-  $my(Dir) = $myparents(Dir);
-  $my(Rline) = $myparents(Rline);
-  $my(Vsys) = $myparents(Vsys);
 
   $my(term_ptr) = $myroots(term);
   $my(msg_row_ptr) = &$myroots(msg_row);
@@ -6553,26 +6593,27 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
 
   $my(parent) = ed;
 
-  $my(Ed) = $myparents(Me);
-  $my(Me) = &$myparents(Me)->Win;
-  $my(Buf) = &$myparents(Me)->Buf;
+  $my(Ed)      = $myparents(Me);
+  $my(Me)      = &$myparents(Me)->Win;
+  $my(Buf)     = &$myparents(Me)->Buf;
+  $my(I)       = $myparents(I);
+  $my(Re)      = $myparents(Re);
+  $my(Msg)     = $myparents(Msg);
+  $my(Dir)     = $myparents(Dir);
+  $my(File)    = $myparents(File);
+  $my(Term)    = $myparents(Term);
+  $my(Path)    = $myparents(Path);
+  $my(Vsys)    = $myparents(Vsys);
+  $my(Error)   = $myparents(Error);
+  $my(Video)   = $myparents(Video);
+  $my(Input)   = $myparents(Input);
+  $my(Rline)   = $myparents(Rline);
+  $my(String)  = $myparents(String);
+  $my(Cursor)  = $myparents(Cursor);
+  $my(Screen)  = $myparents(Screen);
   $my(Cstring) = $myparents(Cstring);
   $my(Vstring) = $myparents(Vstring);
   $my(Ustring) = $myparents(Ustring);
-  $my(String) =$myparents(String);
-  $my(Re) = $myparents(Re);
-  $my(Msg) = $myparents(Msg);
-  $my(Error) = $myparents(Error);
-  $my(Video) = $myparents(Video);
-  $my(Term) = $myparents(Term);
-  $my(Input) = $myparents(Input);
-  $my(Cursor) = $myparents(Cursor);
-  $my(Screen)= $myparents(Screen);
-  $my(File) = $myparents(File);
-  $my(Path) = $myparents(Path);
-  $my(Dir) = $myparents(Dir);
-  $my(Rline) = $myparents(Rline);
-  $my(Vsys) = $myparents(Vsys);
 
   $my(video) = $myparents(video);
   $my(min_rows) = 1;
@@ -14673,10 +14714,15 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     "`send selected lines to the shared register";
 
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
+
   utf8 bc[] = {'b'}; char bact[] = "balanced objects";
   self(set.lw_mode_actions, bc, 1, bact, balanced_lw_mode_cb);
+
   utf8 vc[] = {'v'}; char vact[] = "validate string for invalid utf8 sequences";
   self(set.lw_mode_actions, vc, 1, vact, validate_utf8_lw_mode_cb);
+
+  utf8 ev[] = {'@'}; char evact[] = "@evaluate selected lines";
+  self(set.lw_mode_actions, ev, 1, evact, evaluate_lw_mode_cb);
 }
 
 private void ved_free_file_mode_cbs (ed_t *this) {
@@ -14892,18 +14938,20 @@ private void ed_init_special_win (ed_t *this) {
 private int ed_i_record_default (ed_t *this, vstr_t *rec) {
   char *str = My(Vstring).to.cstring (rec, ADD_NL);
 
-  i_t *in = My(I).get.current ($my(root)->i);
+  i_t *in = My(I).get.current ($my(I));
   ifnot (in)
-    in = My(I).init_instance ($my(root)->i);
+    in = My(I).init_instance ($my(I));
 
   int retval = My(I).eval_string (in, str, 1, 1);
 
   free (str);
 
   if (retval is I_ERR_SYNTAX) {
-     buf_t *buf = this->current->current;
-     ved_messages (this, &buf, AT_EOF);
+    buf_t *buf = this->current->current;
+    ved_messages (this, &buf, AT_EOF);
   }
+
+  My(Msg).send_fmt (this, COLOR_MSG, "Executed record [%d]", $my(record_idx) + 1);
 
   if (retval isnot OK or retval isnot NOTOK)
     retval = NOTOK;
@@ -15727,7 +15775,7 @@ private ed_t *ed_init (E_T *E) {
   ed_t *this = AllocType (ed);
   $myprop = AllocProp (ed);
 
-  $my(Me) = E->ed;
+  $my(Me) = E->__ED__;
 
   $my(term) = $from($my(Me), term);
   $my(env)  = $from($my(Me), env);
@@ -15735,26 +15783,26 @@ private ed_t *ed_init (E_T *E) {
   $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
   $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
 
-  $my(Cstring) = &E->ed->Cstring;
-  $my(Vstring) = &E->ed->Vstring;
-  $my(Ustring) = &E->ed->Ustring;
-  $my(String) = &E->ed->String;
-  $my(Re) = &E->ed->Re;
-  $my(Term) = &E->ed->Term;
-  $my(Input) = &E->ed->Input;
-  $my(Screen) = &E->ed->Screen;
-  $my(Cursor) = &E->ed->Cursor;
-  $my(Video) = &E->ed->Video;
-  $my(Win) = &E->ed->Win;
-  $my(Buf) = &E->ed->Buf;
-  $my(Msg) = &E->ed->Msg;
-  $my(Error) = &E->ed->Error;
-  $my(File) = &E->ed->File;
-  $my(Path) = &E->ed->Path;
-  $my(Dir) =  &E->ed->Dir;
-  $my(Rline) = &E->ed->Rline;
-  $my(Vsys) = &E->ed->Vsys;
-  $my(I) = E->i;
+  $my(Win)     = &E->__ED__->Win;
+  $my(Buf)     = &E->__ED__->Buf;
+  $my(I)       = &E->__ED__->I;
+  $my(Re)      = &E->__ED__->Re;
+  $my(Msg)     = &E->__ED__->Msg;
+  $my(Dir)     = &E->__ED__->Dir;
+  $my(Term)    = &E->__ED__->Term;
+  $my(File)    = &E->__ED__->File;
+  $my(Path)    = &E->__ED__->Path;
+  $my(Vsys)    = &E->__ED__->Vsys;
+  $my(Video)   = &E->__ED__->Video;
+  $my(Rline)   = &E->__ED__->Rline;
+  $my(Input)   = &E->__ED__->Input;
+  $my(Error)   = &E->__ED__->Error;
+  $my(Screen)  = &E->__ED__->Screen;
+  $my(Cursor)  = &E->__ED__->Cursor;
+  $my(String)  = &E->__ED__->String;
+  $my(Cstring) = &E->__ED__->Cstring;
+  $my(Vstring) = &E->__ED__->Vstring;
+  $my(Ustring) = &E->__ED__->Ustring;
 
   $my(video) = My(Video).new (OUTPUT_FD, $from($my(term), lines),
       $from($my(term), columns), 1, 1);
@@ -15933,6 +15981,10 @@ private void __ed_set_state__ (E_T *this, int state) {
   $my(state) = state;
 }
 
+private Class(I) *__ed_get_i_class__ (E_T *this) {
+  return $my(I);
+}
+
 private int __ed_get_state__ (E_T *this) {
   return $my(state);
 }
@@ -16103,25 +16155,25 @@ main:
 }
 
 private ed_T *ed_init_prop (ed_T *this) {
+  $my(Win)     = &this->Win;
+  $my(Buf)     = &this->Buf;
+  $my(I)       = &this->I;
+  $my(Re)      = &this->Re;
+  $my(Msg)     = &this->Msg;
+  $my(Dir)     = &this->Dir;
+  $my(Path)    = &this->Path;
+  $my(File)    = &this->File;
+  $my(Vsys)    = &this->Vsys;
+  $my(Term)    = &this->Term;
+  $my(Input)   = &this->Input;
+  $my(Error)   = &this->Error;
+  $my(Rline)   = &this->Rline;
+  $my(Video)   = &this->Video;
+  $my(Screen)  = &this->Screen;
+  $my(Cursor)  = &this->Cursor;
+  $my(String)  = &this->String;
   $my(Cstring) = &this->Cstring;
-  $my(String) = &this->String;
   $my(Vstring) = &this->Vstring;
-  $my(Re) = &this->Re;
-  $my(Term) = &this->Term;
-  $my(Input) = &this->Input;
-  $my(Screen) = &this->Screen;
-  $my(Cursor) = &this->Cursor;
-  $my(Video) = &this->Video;
-  $my(Win) = &this->Win;
-  $my(Buf) = &this->Buf;
-  $my(Msg) = &this->Msg;
-  $my(Error) = &this->Error;
-  $my(File) = &this->File;
-  $my(Path) = &this->Path;
-  $my(Dir) = &this->Dir;
-  $my(Rline) = &this->Rline;
-  $my(Vsys) = &this->Vsys;
-  $my(I) = &this->I;
 
   $my(Me) = this;
   $my(video) = NULL;
@@ -16165,7 +16217,8 @@ public Class (E) *__init_ed__ (char *name) {
         .num = __ed_get_num__,
         .error_state = __ed_get_error_state__,
         .state = __ed_get_state__,
-        .env = venv_get
+        .env = venv_get,
+        .iclass = __ed_get_i_class__
       ),
       .set = SubSelfInit (E, set,
         .state = __ed_set_state__,
@@ -16177,26 +16230,25 @@ public Class (E) *__init_ed__ (char *name) {
       )
     ),
     .prop = $myprop,
-    .ed =  editor_new ()
+    .__ED__ =  editor_new ()
    );
 
   $my(Me) = this;
 
-  if (NOTOK is init_ed (this->ed)) {
+  if (NOTOK is init_ed (this->__ED__)) {
     __deinit_ed__ (&this);
     return NULL;
   }
 
-  $my(Ed) = this->ed->self;
+  $my(Ed) = this->__ED__->self;
+  $my(I) = __init_i__ (this);
+  this->__ED__->I = *$my(I);
 
   str_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
   $my(name_gen) = ('z' - 'a') + 1;
   $my(cur_idx) = $my(prev_idx) = -1;
   $my(state) = 0;
   $my(shared_reg)[0] = (rg_t) {.reg = REG_SHARED_CHR};
-
-  this->i = __init_i__ (this);
-  $my(I) = this->i->self;
 
   return this;
 }
@@ -16226,11 +16278,11 @@ public void __deinit_ed__ (Class (E) **thisp) {
 
   register_free (&$my(shared_reg)[0]);
 
-  deinit_ed (this->ed);
+  deinit_ed (this->__ED__);
 
-  free (this->ed);
+  free (this->__ED__);
 
-  __deinit_i__ (&this->i);
+  __deinit_i__ (&$my(I));
 
   if ($my(num_at_exit_cbs)) free ($my(at_exit_cbs));
 
@@ -17761,7 +17813,7 @@ private i_t *i_init_instance (Class (I) *__i__) {
   FILE *err_fp = stderr;
 
 #if DEBUG_INTERPRETER
-  string_t *tdir =venv_get ($from(__i__, e), "tmp_dir");
+  string_t *tdir = venv_get ($from(__i__, e), "tmp_dir");
   size_t len = tdir->num_bytes + 1 + 7;
   char tmp[len + 1 ];
   str_cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);

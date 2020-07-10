@@ -998,8 +998,9 @@ NewProp (E,
    int  prev_idx;
 
   Self (ed) Ed;
-  Self (i) I;
   rg_t shared_reg[1];
+
+  Class (I) *I;
 
   int num_at_exit_cbs;
   EAtExit_cb *at_exit_cbs;

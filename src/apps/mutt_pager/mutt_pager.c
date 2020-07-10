@@ -46,7 +46,7 @@
 #include <libved.h>
 #include <libved+.h>
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 #include <lai.h>
 #endif
 

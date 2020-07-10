@@ -83,7 +83,7 @@ int main (int argc, char **argv) {
   win_t *w = NULL;
 
   if (load_file isnot NULL) {
-    ifnot (OK is I.load_file (__I__, load_file))
+    ifnot (OK is I.load_file (E(get.iclass), load_file))
       goto theend;
 
     signal (SIGWINCH, sigwinch_handler);

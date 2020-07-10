@@ -16,9 +16,8 @@
 
 public Class (This) *__THIS__ = NULL;
 public Self (This)  *__SELF__ = NULL;
-public Class (I)    *__I__    = NULL;
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 public Class (L)    *__L__    = NULL;
 #endif
 
@@ -270,6 +269,10 @@ private string_t *e_get_env (Class (This) *this, char *name) {
   return __E.get.env (this->__E__, name);
 }
 
+private Class(I) *e_get_i_class (Class (This) *this) {
+  return __E.get.iclass (this->__E__);
+}
+
 private int e_get_state (Class (This) *this) {
   return __E.get.state (this->__E__);
 }
@@ -294,7 +297,7 @@ private int e_main (Class (This) *this, buf_t *buf) {
   return __E.main (this->__E__, buf);
 }
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 
 private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
   Lstate *this = initVM (0, src, argc, argv);
@@ -331,7 +334,7 @@ public void __deinit_l__ (Class (L) **thisp) {
   *thisp = NULL;
 }
 
-#endif /* HAS_RUNTIME_INTERPRETER */
+#endif /* HAS_PROGRAMMING_LANGUAGE */
 
 private void __init_self__ (Class (This) *this) {
   this->self = AllocSelf (This);
@@ -363,13 +366,14 @@ private void __init_self__ (Class (This) *this) {
       .current_idx = e_get_current_idx,
       .head = e_get_head,
       .next = e_get_next,
-      .env = e_get_env
+      .env = e_get_env,
+      .iclass = e_get_i_class
     )
   );
 
   ((Self (This) *) this->self)->e = e;
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   SubSelf (This, l) l = SubSelfInit (This, l,
     .init = __init_lstate__,
     .deinit = __deinit_lstate__,
@@ -434,9 +438,7 @@ public Class (This) *__init_this__ (void) {
   __init_self__ (__THIS__);
   __SELF__ = __THIS__->self;
 
-  __I__ = __e__->i;
-
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   __init_l__ (1);
   ((Prop (This) *) $myprop)->__L__ = __L__;
   L_CUR_STATE = L.init ("__global__", 0, NULL);
@@ -454,7 +456,7 @@ public void __deinit_this__ (Class (This) **thisp) {
 
   free (__SELF__);
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   __deinit_l__ (&__L__);
 #endif
 
