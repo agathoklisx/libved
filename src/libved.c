@@ -14900,6 +14900,11 @@ private int ed_i_record_default (ed_t *this, vstr_t *rec) {
 
   free (str);
 
+  if (retval is I_ERR_SYNTAX) {
+     buf_t *buf = this->current->current;
+     ved_messages (this, &buf, AT_EOF);
+  }
+
   if (retval isnot OK or retval isnot NOTOK)
     retval = NOTOK;
   return retval;
@@ -16423,6 +16428,13 @@ private int i_syntax_error (i_t *this, const char *msg) {
   return i_err_ptr (this, I_ERR_SYNTAX);
 }
 
+private int i_syntax_error_to_ed (i_t *i, const char *msg) {
+  ed_t *this = $from(i->e, current);
+  const char *ptr = (const char *) StringGetPtr (i->parseptr);
+  My(Msg).write_fmt (this, "\nSYNTAX ERROR: %s\nbefore:\n%s\n", msg, ptr);
+  return I_ERR_SYNTAX;
+}
+
 private int i_arg_mismatch (i_t *this) {
   this->print_fmt_bytes (this->err_fp, "\n" ERROR_COLOR "argument mismatch before:");
   return i_err_ptr (this, I_ERR_BADARGS);
@@ -16795,7 +16807,7 @@ private int i_parse_expr_list (i_t *this) {
 private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
   const char *ptr = StringGetPtr (token);
 
-  if (ptr[0] is '\'') return i_syntax_error (this, "error while getting a char token ");
+  if (ptr[0] is '\'') return this->syntax_error (this, "error while getting a char token ");
   if (ptr[0] is '\\') {
     /* if (StringGetLen(token) != 2) return SyntaxError(); */
     if (ptr[1] is 'n') { *vp = '\n'; return I_OK; }
@@ -16803,7 +16815,7 @@ private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
     if (ptr[1] is 'r') { *vp = '\r'; return I_OK; }
     if (ptr[1] is '\\') { *vp = '\\'; return I_OK; }
     if (ptr[1] is '\'') { *vp = '\''; return I_OK; }
-    return i_syntax_error (this, "unkown escape sequence");
+    return this->syntax_error (this, "unkown escape sequence");
   }
 
   if (ptr[0] >= ' ' and ptr[0] <= '~') {
@@ -16811,7 +16823,7 @@ private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
       *vp = ptr[0];
       return I_OK;
     } else {
-      return i_syntax_error (this, "error while taking character literal");
+      return this->syntax_error (this, "error while taking character literal");
     }
   }
 
@@ -16819,7 +16831,7 @@ private int i_parse_char (i_t *this, ival_t *vp, String_t token) {
   utf8 c = ustring_get_code_at ((char *) ptr, 4, 0, &len);
 
   if ('\'' isnot ptr[len])
-    return i_syntax_error (this, "error while taking character literal");
+    return this->syntax_error (this, "error while taking character literal");
 
   *vp = c;
   return I_OK;
@@ -16851,7 +16863,7 @@ private int i_parse_string (i_t *this, String_t str, int saveStrings, int topLev
       continue;
     }
     else
-      return i_syntax_error (this, "evaluated string failed, unkown token");
+      return this->syntax_error (this, "evaluated string failed, unkown token");
   }
 
   this->parseptr = savepc;
@@ -16873,7 +16885,7 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
     expectargs = this->tokenArgs;
 
   c = i_next_token (this);
-  if (c isnot '(') return i_syntax_error (this, "expected open parentheses");
+  if (c isnot '(') return this->syntax_error (this, "expected open parentheses");
 
   this->scope = FUNCTION_ARGUMENT_SCOPE;
 
@@ -16887,7 +16899,7 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
   this->scope = OUT_OF_FUNCTION_SCOPE;
 
   if (c isnot ')')
-    return i_syntax_error (this, "expected closed parentheses");
+    return this->syntax_error (this, "expected closed parentheses");
 
   if (expectargs isnot paramCount)
     return i_arg_mismatch (this);
@@ -16970,7 +16982,7 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
 
   } else if (c is USRFUNC) {
     Sym *sym = this->tokenSym;
-    ifnot (sym) return i_syntax_error (this, "user defined function, not declared");
+    ifnot (sym) return this->syntax_error (this, "user defined function, not declared");
 
     err = i_parse_func_call (this, NULL, vp, (UserFunc *)sym->value);
     i_next_token (this);
@@ -16993,7 +17005,7 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
     return I_OK;
 
   } else
-    return i_syntax_error (this, "syntax error");
+    return this->syntax_error (this, "syntax error");
 }
 
 /* parse one statement
@@ -17012,7 +17024,7 @@ private int i_parse_stmt (i_t *this, int saveStrings) {
   if (c is I_TOK_VARDEF) {
     // a definition var a=x
     c = i_next_raw_token (this); // we want to get VAR_SYMBOL directly
-    if (c isnot I_TOK_SYMBOL) return i_syntax_error (this, "expected symbol");
+    if (c isnot I_TOK_SYMBOL) return this->syntax_error (this, "expected symbol");
 
     if (saveStrings)
       name = i_dup_string (this, this->token);
@@ -17037,7 +17049,7 @@ private int i_parse_stmt (i_t *this, int saveStrings) {
     // verify that it is "="
     if (StringGetPtr (this->token)[0] isnot '=' or
         StringGetLen(this->token) isnot 1)
-      return i_syntax_error (this, "expected =");
+      return this->syntax_error (this, "expected =");
 
     ifnot (s) {
       i_print_string (this, this->err_fp, name);
@@ -17058,7 +17070,7 @@ private int i_parse_stmt (i_t *this, int saveStrings) {
     int (*func) (i_t *, int) = (void *) this->tokenVal;
     err = (*func) (this, saveStrings);
 
-  } else return i_syntax_error (this, "unknown token");
+  } else return this->syntax_error (this, "unknown token");
 
   if (err is I_ERR_OK_ELSE)
     err = I_OK;
@@ -17124,13 +17136,13 @@ private int i_parse_if_rout (i_t *this, ival_t *cond, int *haveelse, String_t *i
   if (err isnot I_OK) return err;
 
   c = this->curToken;
-  if (c isnot I_TOK_STRING) return i_syntax_error (this, "parsing if, not a string");
+  if (c isnot I_TOK_STRING) return this->syntax_error (this, "parsing if, not a string");
 
   *ifpart = this->token;
   c = i_next_token (this);
   if (c is I_TOK_ELSE) {
     c = i_next_token (this);
-    if (c isnot I_TOK_STRING) return i_syntax_error (this, "parsing else, not a string");
+    if (c isnot I_TOK_STRING) return this->syntax_error (this, "parsing else, not a string");
 
     *elsepart = this->token;
     *haveelse = 1;
@@ -17200,7 +17212,7 @@ private int i_parse_var_list (i_t *this, UserFunc *uf, int saveStrings) {
       break;
 
     else
-      return i_syntax_error (this, "var definition, unxpected token");
+      return this->syntax_error (this, "var definition, unxpected token");
   }
 
   uf->nargs = nargs;
@@ -17216,7 +17228,7 @@ private int i_parse_func_def (i_t *this, int saveStrings) {
   UserFunc *uf;
 
   c = i_next_raw_token (this); // do not interpret the symbol
-  if (c isnot I_TOK_SYMBOL) return i_syntax_error (this, "fun definition, not a symbol");
+  if (c isnot I_TOK_SYMBOL) return this->syntax_error (this, "fun definition, not a symbol");
 
   name = this->token;
   c = i_next_token (this);
@@ -17231,7 +17243,7 @@ private int i_parse_func_def (i_t *this, int saveStrings) {
     c = i_next_token (this);
   }
 
-  if (c isnot I_TOK_STRING) return i_syntax_error (this, "fun definition, not a string");
+  if (c isnot I_TOK_STRING) return this->syntax_error (this, "fun definition, not a string");
 
   body = this->token;
 
@@ -17712,6 +17724,7 @@ private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
   this->print_byte = opts.print_byte;
   this->print_fmt_bytes = opts.print_fmt_bytes;
   this->print_bytes = opts.print_bytes;
+  this->syntax_error = opts.syntax_error;
   this->err_fp = opts.err_fp;
   this->out_fp = opts.out_fp;
   this->max_script_size = opts.max_script_size;
@@ -17760,6 +17773,7 @@ private i_t *i_init_instance (Class (I) *__i__) {
     .print_bytes = i_print_bytes,
     .print_byte  = i_print_byte,
     .print_fmt_bytes = i_print_fmt_bytes,
+    .syntax_error = i_syntax_error_to_ed,
     .err_fp = err_fp
   ));
 

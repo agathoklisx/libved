@@ -372,9 +372,10 @@ NewType (i,
   ival_t tokenVal;  // for symbolic tokens, the symbol's value
   Sym *tokenSym;
 
-  PrintByte_cb print_byte;
-  PrintBytes_cb print_bytes;
-  PrintFmtBytes_cb print_fmt_bytes;
+  IPrintByte_cb print_byte;
+  IPrintBytes_cb print_bytes;
+  IPrintFmtBytes_cb print_fmt_bytes;
+  ISyntaxError_cb syntax_error;
 
   Class (E) *e;
   Type (i) *next;

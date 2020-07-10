@@ -686,14 +686,17 @@ typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *);
+
+/* in between */
 typedef void (*Record_cb) (ed_t *, char *);
 typedef int  (*IRecord_cb) (ed_t *, vstr_t *);
 typedef char *(*InitRecord_cb) (void);
 
 /* interpeter */
-typedef void (*PrintByte_cb) (FILE *, int);
-typedef void (*PrintBytes_cb) (FILE *, const char *);
-typedef void (*PrintFmtBytes_cb) (FILE *, const char *, ...);
+typedef void (*IPrintByte_cb) (FILE *, int);
+typedef void (*IPrintBytes_cb) (FILE *, const char *);
+typedef void (*IPrintFmtBytes_cb) (FILE *, const char *, ...);
+typedef int  (*ISyntaxError_cb) (i_t *, const char *);
 
 #define NULL_REF NULL
 
@@ -982,9 +985,10 @@ NewType (i_options,
   size_t max_script_size;
   FILE  *err_fp;
   FILE  *out_fp;
-  PrintByte_cb print_byte;
-  PrintBytes_cb print_bytes;
-  PrintFmtBytes_cb print_fmt_bytes;
+  IPrintByte_cb print_byte;
+  IPrintBytes_cb print_bytes;
+  IPrintFmtBytes_cb print_fmt_bytes;
+  ISyntaxError_cb syntax_error;
 );
 
 #define I_INIT Type (i_options)
@@ -993,6 +997,7 @@ NewType (i_options,
   .print_byte = NULL,                    \
   .print_bytes = NULL,                   \
   .print_fmt_bytes = NULL,               \
+  .syntax_error = i_syntax_error_to_ed,  \
   .err_fp = stderr,                      \
   .out_fp = stdout,                      \
   .name = NULL,                          \
