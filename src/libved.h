@@ -195,6 +195,9 @@
 #define NO_NL  0
 #define ADD_NL 1
 
+#define NO  0
+#define YES 1
+
 #define RLINE_HISTORY  0
 #define SEARCH_HISTORY 1
 
@@ -1238,9 +1241,9 @@ NewClass (vstring,
 
 NewSubSelf (rline, set,
   void
+     (*visibility) (rline_t *, int),
      (*prompt_char) (rline_t *, char),
      (*line) (rline_t *, char *, size_t);
-
 );
 
 NewSubSelf (rline, get,
@@ -1425,7 +1428,6 @@ NewSubSelf (bufget, row,
      *(*bytes_at) (buf_t *, int);
 
   int
-    (*current_col_idx) (buf_t *),
     (*col_idx) (buf_t *, row_t *);
 );
 
@@ -1458,7 +1460,8 @@ NewSubSelf (buf, get,
 
   int
     (*flags) (buf_t *),
-    (*cur_idx) (buf_t *),
+    (*current_col_idx) (buf_t *),
+    (*current_row_idx) (buf_t *),
     (*current_video_row) (buf_t *),
     (*current_video_col) (buf_t *);
 

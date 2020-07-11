@@ -269,18 +269,13 @@
     * HAS_USER_EXTENSIONS option.
     * For an example, see the Spelling section below in this same document */
 
-   HAS_SPELL=1|0    (en|dis)able spelling capability (default 0)
    HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
    HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
    HAS_PROGRAMMING_LANGUAGE=1|0 (en|dis)able programming language (default 0)
+   HAS_CURL=1|0     (en|dis)able libcurl, used by the PL above (default 0)
    /* Implemented but used for now only in local code */
    HAS_JSON=1|0     (en|dis)able json support (defaulr 0)
 
-   /* The following options can control, the relative above options */
-
-   HAS_CURL=1|0     (en|dis)able libcurl, used by the interpreter (default 0)
-   SPELL_DICTIONARY="path/to/spell_dictionary" (default $(SYSDATADIR)/spell/spell.txt)
-   SPELL_DICTIONARY_NUM_ENTRIES=num_words     (default 10000)
 
    /* The following options can change/control the editor behavior. */
     * They used to be set the defaults during filetype initialization. */
@@ -516,7 +511,6 @@ Visual mode:
  | v                 | check line[s] for invalid UTF-8 byte sequences [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|
  | S                 | Spell line[s] [(char|line)wise]
- |             note: this requires HAS_USER_EXTENSIONS|HAS_SPELL          |
  | M                 | evaluate selected as a math expression [(char|line)wise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
  | @                 | interpret selected by the builtin interpreter [linewise]|
@@ -581,11 +575,12 @@ Search:
 
   File operation mode.
    This is triggered with 'F' in normal mode and for now can:
-     - validate current buffer for invalid sequences
+     - validate current buffer for invalid UTF8 byte sequences
      - write this file
      - compile this file with tcc C compiler
+     - spell this file
      - interpret this file with the builtin interpreter
-     - interpret this file with Dictu Programming Languaga
+     - interpret this file with Dictu Programming Language
 
    As an extension and if elinks browser is installed, it can open this file
    in a running elinks instance.
@@ -705,7 +700,7 @@ Search:
    :`man     manpage   (display man page on the scratch buffer)
    :`stat    file      (display file status information)
    :~battery           (display battery status to the message line)
-   :~spell --range=`range' (without range default current line)
+   :spell --range=`range' (without range default current line)
    :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
    :@info [--buf,--win,--ed] (with no arguments defaults to --buf) (this prints
                        details to the scratch buffer of the corresponded arguments)
@@ -814,10 +809,12 @@ Search:
   The above dictionary contains the 10000 most frequently used english words,
   and can be extended through the application by pressing 'a' on the dialog.
 
-  This implementation offers three ways to check for mispelling words.
-  1. using the command line :~spell --range=`range'
+  This implementation offers ways to check for mispelling words.
+  1. using the command line :spell --range=`range'
   2. on visual linewise mode, by pressing `S' or by using tab completion
-  3. on 'W' in normal mode
+  3. on visual characterize mode, by pressing `S' or by using tab completion
+  4. on 'W' in normal mode
+  5. on 'F' in normal mode (file operation mode)
 
   As it is a very simple approach with really few lines of code, it it is obvious
   that there is not guarantee, that will find and correct all the mispelled words

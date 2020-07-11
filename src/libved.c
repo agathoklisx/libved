@@ -2134,7 +2134,9 @@ private regexp_t *re_new (char *pat, int flags, int num_caps, ReCompile_cb compi
   return re;
 }
 
-/* slre */
+/* slre:
+   https://github.com/cesanta/slre
+ */
 
 /*
  * Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
@@ -5336,7 +5338,7 @@ private int ved_com_buf_substitute (buf_t *this, rline_t *rl, int *retval) {
   if (NULL is range and rl->com is VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE) {
     rl->range[0] = 0; rl->range[1] = this->num_items - 1;
   } else
-    if (NOTOK is ved_rline_parse_range (this, rl, range))
+    if (NOTOK is buf_rline_parse_range (this, rl, range))
       return *retval;
 
   if (rline_arg_exists (rl, "remove-tabs")) {
@@ -5523,7 +5525,11 @@ private row_t *buf_get_row_current (buf_t *this) {
   return this->current;
 }
 
-private int buf_get_row_current_col_idx (buf_t *this) {
+private int buf_get_current_row_idx (buf_t *this) {
+  return this->cur_idx;
+}
+
+private int buf_get_current_col_idx (buf_t *this) {
   return $mycur(cur_col_idx);
 }
 
@@ -6648,10 +6654,6 @@ private size_t buf_get_size (buf_t *this) {
   }
 
   return size;
-}
-
-private int buf_get_cur_idx (buf_t *this) {
-  return this->cur_idx;
 }
 
 private void buf_free_info (buf_t *this, bufinfo_t **info) {
@@ -10824,13 +10826,13 @@ handle_char:
       case 's':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+          rline_t *rl = ed_rline_new ($my(root), $my(term_ptr), My(Input).get,
               *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
           string_t *str = My(String).new_with_fmt ("substitute --range=%d,%d --global -i --pat=",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
           rline_write_and_break (rl);
-          ved_rline (&this, rl);
+          buf_rline (&this, rl);
           My(String).free (str);
         }
         goto theend;
@@ -10838,13 +10840,13 @@ handle_char:
       case 'w':
         VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
-          rline_t *rl = ved_rline_new ($my(root), $my(term_ptr), My(Input).get,
+          rline_t *rl = ed_rline_new ($my(root), $my(term_ptr), My(Input).get,
               *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
           string_t *str = My(String).new_with_fmt ("write --range=%d,%d ",
               $my(vis)[0].fidx + 1, $my(vis)[0].lidx + 1);
           BYTES_TO_RLINE (rl, str->bytes, (int) str->num_bytes);
           rline_write_and_break (rl);
-          ved_rline (&this, rl);
+          buf_rline (&this, rl);
           My(String).free (str);
         }
         goto theend;
@@ -12606,7 +12608,7 @@ theend:
   return rl;
 }
 
-private void ved_rline_history_push (rline_t *rl) {
+private void rline_history_push (rline_t *rl) {
   ed_t *this = rl->ed;
   if ($my(max_num_hist_entries) < $my(history)->rline->num_items) {
     h_rlineitem_t *tmp = list_pop_tail ($my(history)->rline, h_rlineitem_t);
@@ -12619,13 +12621,13 @@ private void ved_rline_history_push (rline_t *rl) {
   current_list_prepend ($my(history)->rline, hrl);
 }
 
-private void ved_rline_history_push_api (rline_t *rl) {
+private void rline_history_push_api (rline_t *rl) {
   rline_clear (rl);
   rl->state &= ~RL_CLEAR_FREE_LINE;
-  ved_rline_history_push (rl);
+  rline_history_push (rl);
 }
 
-private void ved_rline_last_component_push (rline_t *rl) {
+private void rline_last_component_push (rline_t *rl) {
   if (rl->tail is NULL) return;
   if (rl->tail->argval is NULL) return;
 
@@ -12639,7 +12641,7 @@ private void ved_rline_last_component_push (rline_t *rl) {
   }
 }
 
-private vstring_t *ved_rline_parse_command (rline_t *rl) {
+private vstring_t *rline_parse_command (rline_t *rl) {
   vstring_t *it = rl->line->head;
   char com[MAXLEN_COM]; com[0] = '\0';
   int com_idx = 0;
@@ -12670,16 +12672,16 @@ get_command:
   return it;
 }
 
-private void ved_rline_set_line (rline_t *rl, char *bytes, size_t len) {
+private void rline_set_line (rline_t *rl, char *bytes, size_t len) {
   BYTES_TO_RLINE (rl, bytes, (int) len);
   rline_write_and_break (rl);
 }
 
-private string_t *ved_rline_get_line (rline_t *rl) {
+private string_t *rline_get_line (rline_t *rl) {
   return vstr_join (rl->line, "");
 }
 
-private string_t *ved_rline_get_command (rline_t *rl) {
+private string_t *rline_get_command (rline_t *rl) {
   string_t *str = string_new (8);
   vstring_t *it = rl->line->head;
 
@@ -12691,7 +12693,7 @@ private string_t *ved_rline_get_command (rline_t *rl) {
   return str;
 }
 
-private int ved_rline_tab_completion (rline_t *rl) {
+private int rline_tab_completion (rline_t *rl) {
   ifnot (rl->line->num_items) return RL_OK;
   int retval = RL_OK;
   ed_t *this = rl->ed;
@@ -12717,7 +12719,7 @@ redo:;
   if (fidx is 0) {
     type |= RL_TOK_COMMAND;
   } else {
-    ved_rline_parse_command (rl);
+    rline_parse_command (rl);
 
     $from(curbuf, shared_int) = rl->com;
     My(String).replace_with ($from(curbuf, shared_str), currline->bytes);
@@ -12836,7 +12838,7 @@ private int rline_break (rline_t **rl) {
   return RL_BREAK;
 }
 
-private int rline_tab_completion (rline_t *rl) {
+private int rline_tab_completion_void (rline_t *rl) {
   (void) rl;
   return NOTHING_TODO;
 }
@@ -13128,7 +13130,7 @@ private rline_t *rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   rl->getch = getch;
   rl->at_beg = rline_call_at_beg;
   rl->at_end = rline_call_at_end;
-  rl->tab_completion = rline_tab_completion;
+  rl->tab_completion = rline_tab_completion_void;
 
   rl->prompt_char = DEFAULT_PROMPT_CHAR;
   rl->prompt_row = prompt_row;
@@ -13148,18 +13150,18 @@ private rline_t *rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   return rl;
 }
 
-private rline_t *ved_rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
+private rline_t *ed_rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
    int prompt_row, int first_col, int num_cols, video_t *video) {
   rline_t *rl = rline_new (ed, this, getch , prompt_row, first_col, num_cols, video) ;
   if ($from (ed, commands) is NULL) ved_init_commands (ed);
   rl->commands = $from(ed, commands);
   rl->commands_len = $from(ed, num_commands);
-  rl->tab_completion = ved_rline_tab_completion;
+  rl->tab_completion = rline_tab_completion;
   return rl;
 }
 
-private rline_t *ved_rline_new_api (ed_t *this) {
-   return ved_rline_new (this, $my(term), My(Input).get, $my(prompt_row), 1,
+private rline_t *ed_rline_new_api (ed_t *this) {
+   return ed_rline_new (this, $my(term), My(Input).get, $my(prompt_row), 1,
      $my(dim)->num_cols, $my(video));
 }
 
@@ -13230,7 +13232,7 @@ private void rline_write (rline_t *rl) {
   rl->state &= ~RL_WRITE;
 }
 
-private void ved_rline_reg (rline_t *rl) {
+private void rline_reg (rline_t *rl) {
   ed_t *this = rl->ed;
   int regidx = ed_register_get_idx (this, My(Input).get ($my(term)));
   if (NOTOK is regidx) return;
@@ -13368,7 +13370,7 @@ process_char:
         goto post_process;
 
       case CTRL('r'):
-        ved_rline_reg (rl);
+        rline_reg (rl);
         goto post_process;
 
       case '\t':
@@ -13434,8 +13436,8 @@ theend:;
   return rl;
 }
 
-private rline_t *ved_rline_parse (buf_t *this, rline_t *rl) {
-  vstring_t *it = ved_rline_parse_command (rl);
+private rline_t *buf_rline_parse (buf_t *this, rline_t *rl) {
+  vstring_t *it = rline_parse_command (rl);
 
   while (it) {
     int type = 0;
@@ -13741,7 +13743,7 @@ private int rline_arg_exists (rline_t *rl, char *argname) {
   return 0;
 }
 
-private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
+private int buf_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
   if (arg is NULL) {
     rl->range[0] = rl->range[1] = this->cur_idx;
     return OK;
@@ -13837,7 +13839,7 @@ private int ved_rline_parse_range (buf_t *this, rline_t *rl, arg_t *arg) {
 
 private int rline_get_range (rline_t  *rl, buf_t *this, int *range) {
   arg_t *arg = rline_get_arg (rl, RL_ARG_RANGE);
-  if (NULL is arg or (NOTOK is ved_rline_parse_range (this, rl, arg))) {
+  if (NULL is arg or (NOTOK is buf_rline_parse_range (this, rl, arg))) {
     range[0] = -1; range[1] = -1;
     return NOTOK;
   }
@@ -13987,9 +13989,9 @@ int validate_utf8_lw_mode_cb (buf_t **thisp, int fidx, int lidx,
   return retval;
 }
 
-private int ed_rline_exec (rline_t *this, buf_t **thisp) {
+private int rline_exec (rline_t *this, buf_t **thisp) {
   this->state |= RL_EXEC;
-  return ved_rline (thisp, this);
+  return buf_rline (thisp, this);
 }
 
 private rline_t *ed_rline_new_with (ed_t *this, char *bytes) {
@@ -13998,8 +14000,15 @@ private rline_t *ed_rline_new_with (ed_t *this, char *bytes) {
   return rl;
 }
 
-private void ed_rline_set_prompt_char (rline_t *rl, char c) {
+private void rline_set_prompt_char (rline_t *rl, char c) {
   rl->prompt_char = c;
+}
+
+private void rline_set_visibility (rline_t *rl, int visible) {
+  if (YES is visible)
+    rl->state |= RL_IS_VISIBLE;
+  else if (NO is visible)
+    rl->state &= ~RL_IS_VISIBLE;
 }
 
 public rline_T __init_rline__ (void) {
@@ -14007,29 +14016,30 @@ public rline_T __init_rline__ (void) {
     .self = SelfInit (rline,
       .edit = rline_edit,
       .get = SubSelfInit (rline, get,
-        .line = ved_rline_get_line,
-        .command = ved_rline_get_command,
+        .line = rline_get_line,
+        .command = rline_get_command,
         .arg_fnames = rline_get_arg_fnames,
         .anytype_arg = rline_get_anytype_arg,
         .arg = rline_get_arg,
         .range = rline_get_range
       ),
       .set = SubSelfInit (rline, set,
-        .prompt_char = ed_rline_set_prompt_char,
-        .line = ved_rline_set_line
+        .prompt_char = rline_set_prompt_char,
+        .line = rline_set_line,
+        .visibility = rline_set_visibility
       ),
       .arg = SubSelfInit (rline, arg,
        .exists = rline_arg_exists
       ),
       .history = SubSelfInit (rline, history,
-        .push = ved_rline_history_push
+        .push = rline_history_push
       ),
       .clear_line = rline_clear_line,
-      .new = ved_rline_new_api,
+      .new = ed_rline_new_api,
       .new_with = ed_rline_new_with,
       .free = rline_free_api,
-      .exec = ed_rline_exec,
-      .parse = ved_rline_parse
+      .exec = rline_exec,
+      .parse = buf_rline_parse
     )
   );
 }
@@ -14095,7 +14105,7 @@ private void ved_free_expr_register_cbs (ed_t *this) {
   free ($my(expr_register_cbs));
 }
 
-private int ved_rline (buf_t **thisp, rline_t *rl) {
+private int buf_rline (buf_t **thisp, rline_t *rl) {
   int retval = NOTHING_TODO;
 
   buf_t *this = *thisp;
@@ -14113,7 +14123,7 @@ exec:
   if (rl->line->head is NULL or rl->line->head->data->bytes[0] is ' ')
     goto theend;
 
-  ved_rline_parse  (this, rl);
+  buf_rline_parse  (this, rl);
 
   switch (rl->com) {
     case VED_COM_WRITE_FORCE_ALIAS:
@@ -14134,7 +14144,7 @@ exec:
             rl->range[0] = 0;
             rl->range[1] = this->num_items - 1;
           } else
-            if (NOTOK is ved_rline_parse_range (this, rl, range))
+            if (NOTOK is buf_rline_parse_range (this, rl, range))
               goto theend;
           retval = ved_write_to_fname (this, fname->argval->bytes, NULL isnot append,
             rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com, VERBOSE_ON);
@@ -14449,8 +14459,8 @@ theend:
     rline_free (rl);
   else {
     rl->state &= ~RL_CLEAR_FREE_LINE;
-    ved_rline_history_push (rl);
-    ved_rline_last_component_push (rl);
+    rline_history_push (rl);
+    rline_last_component_push (rl);
   }
 
   return retval;
@@ -14946,12 +14956,12 @@ private void ved_history_add (ed_t *this, vstr_t *hist, int what) {
   if (what is RLINE_HISTORY) {
     vstring_t *it = hist->head;
     while (it) {
-      rline_t *rl = ved_rline_new (this, $my(term), My(Input).get,
+      rline_t *rl = ed_rline_new (this, $my(term), My(Input).get,
            $my(prompt_row), 1, $my(dim)->num_cols, $my(video));
       char *sp = str_trim_end (it->data->bytes, '\n');
       sp = str_trim_end (sp, ' ');
       BYTES_TO_RLINE (rl, it->data->bytes, (int) bytelen (sp));
-      ved_rline_history_push (rl);
+      rline_history_push (rl);
       it = it->next;
     }
     return;
@@ -15573,9 +15583,9 @@ handle_com:
 
     case ':':
       {
-      rline_t *rl = ved_rline_new (ed, $my(term_ptr), My(Input).get,
+      rline_t *rl = ed_rline_new (ed, $my(term_ptr), My(Input).get,
           *$my(prompt_row_ptr), 1, $my(dim)->num_cols, $my(video));
-      retval = ved_rline (thisp, rl);
+      retval = buf_rline (thisp, rl);
       this = *thisp;
       }
 
@@ -16087,8 +16097,7 @@ private Class (ed) *editor_new (void) {
             .current = buf_get_row_current,
             .current_bytes = buf_get_row_current_bytes,
             .bytes_at = buf_get_row_bytes_at,
-            .current_col_idx = buf_get_row_current_col_idx,
-            .col_idx = buf_get_row_col_idx,
+            .col_idx = buf_get_row_col_idx
           ),
           .parent = buf_get_parent,
           .basename = buf_get_basename,
@@ -16098,7 +16107,8 @@ private Class (ed) *editor_new (void) {
           .flags = buf_get_flags,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,
-          .cur_idx = buf_get_cur_idx,
+          .current_row_idx = buf_get_current_row_idx,
+          .current_col_idx = buf_get_current_col_idx,
           .current_video_row = buf_get_current_video_row,
           .current_video_col = buf_get_current_video_col,
         ),

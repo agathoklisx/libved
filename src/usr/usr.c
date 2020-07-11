@@ -39,10 +39,6 @@ static uenv_t *Uenv = NULL;
 that since explore[s] the API, this unit is also a vehicle to understand
 the needs and establish this application layer */
 
-#if HAS_SPELL
-#include "../ext/if_has_spell.c"
-#endif
-
 #ifdef WORD_LEXICON_FILE
 #include "../ext/if_has_lexicon.c"
 #endif
@@ -75,12 +71,6 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
       break;
 #endif
 
-#if HAS_SPELL
-    case 'S':
-      retval = __spell_word__ (thisp, fidx, lidx, it, word);
-      break;
-#endif
-
     default:
       break;
    }
@@ -91,10 +81,7 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
 private void __u_add_word_actions__ (ed_t *this) {
   utf8 chr[] = {'m'};
   Ed.set.word_actions (this, chr, 1, "man page", __u_word_actions_cb__);
-#if HAS_SPELL
-  chr[0] = 'S';
-  Ed.set.word_actions (this, chr, 1, "Spell word", __u_word_actions_cb__);
-#endif
+
 #ifdef WORD_LEXICON_FILE
   chr[0] =  't';
   Ed.set.word_actions (this, chr, 1, "translate word", __u_word_actions_cb__);
@@ -322,31 +309,17 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 }
 
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
-  (void) vstr;
+  (void) vstr; (void) fidx; (void) lidx;
 
   int retval = NO_CALLBACK_FUNCTION;
   if (Cstring.eq_n (action, "Math", 4)) c = 'm';
 
   switch (c) {
-#if HAS_SPELL
-    case 'S': {
-      rline_t *rl = Rline.new (E(get.current));
-      string_t *str = String.new_with_fmt ("~spell --range=%d,%d",
-         fidx + 1, lidx + 1);
-      Rline.set.line (rl, str->bytes, str->num_bytes);
-      String.free (str);
-      Rline.parse (*thisp, rl);
-      if (SPELL_OK is (retval = __buf_spell__ (thisp, rl)))
-        Rline.history.push (rl);
-      else
-        Rline.free (rl);
-    }
-#endif
 
 #ifdef HAS_TCC
     case 'C': {
       return __tcc_compile__ (thisp, Vstring.join (vstr, "\n"));
-    }
+      }
       break;
 #endif
 
@@ -377,9 +350,6 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
 
 private void __u_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 0;
-#if HAS_SPELL
-  num_actions++;
-#endif
 
 #if HAS_TCC
   num_actions++;
@@ -396,9 +366,6 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
 ifnot (num_actions) return;
 
   utf8 chars[] = {
-#if HAS_SPELL
-  'S',
-#endif
 #if HAS_TCC
   'C',
 #endif
@@ -411,9 +378,6 @@ ifnot (num_actions) return;
   };
 
   char actions[] =
-#if HAS_SPELL
-     "Spell line[s]\n"
-#endif
 #if HAS_TCC
   "Compile lines with tcc\n"
 #endif
@@ -429,17 +393,9 @@ ifnot (num_actions) return;
 }
 
 private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c, char *action) {
+  (void) fidx; (void) lidx; (void) action;
   int retval = NO_CALLBACK_FUNCTION;
   switch (c) {
-#if HAS_SPELL
-    case 'S': {
-      bufiter_t *iter = Buf.iter.new (*thisp, -1);
-      retval = __u_word_actions_cb__ (thisp, fidx, lidx, iter, str->bytes, c, action);
-      Buf.iter.free (*thisp, iter);
-      break;
-    }
-#endif
-
 #if HAS_EXPR
     case 'm': {
       retval = __math_expr_evaluate__ (thisp, str->bytes);
@@ -455,27 +411,17 @@ private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, 
 private void __u_add_cw_mode_actions__ (ed_t *this) {
   int num_actions = 0;
 
-#if HAS_SPELL
-  num_actions++;
-#endif
-
 #if HAS_EXPR
   num_actions++;
 #endif
 
   utf8 chars[] = {
-#if HAS_SPELL
-  'S',
-#endif
 #if HAS_EXPR
   'm'
 #endif
   };
 
  char actions[] = ""
-#if HAS_SPELL
-   "Spell selected\n"
-#endif
 #if HAS_EXPR
   "math expression"
 #endif
@@ -488,11 +434,6 @@ private void __u_add_cw_mode_actions__ (ed_t *this) {
 private void __u_add_rline_user_commands__ (ed_t *this) {
 /* user defined commands can begin with '~': associated in mind with '~' as $HOME */
   Ed.append.rline_command (this, "~battery", 0, 0);
-
-#if HAS_SPELL
-  Ed.append.rline_command (this, "~spell", 1, RL_ARG_RANGE);
-  Ed.append.command_arg (this, "~spell", "--edit", 6);
-#endif
 
 #ifdef WORD_LEXICON_FILE
   Ed.append.rline_command (this, "~translate", 0, 0);
@@ -573,10 +514,6 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     retval = (retval > 0 ? OK : NOTOK);
 #endif
 
-#if HAS_SPELL
-  } else if (Cstring.eq (com->bytes, "~spell")) {
-    retval = __buf_spell__ (thisp, rl);
-#endif
   } else
     retval = RLINE_NO_COMMAND;
 
@@ -679,7 +616,7 @@ private int i_save_image (buf_t **thisp, rline_t *rl) {
          String.append_fmt (img, "buf_init_fname (buf, \"%s\")\n", bufname);
          char *ftype_name = Buf.get.ftype_name  (buf);
          String.append_fmt (img, "buf_set_ftype (buf, \"%s\")\n", ftype_name);
-         int cur_row_idx = Buf.get.cur_idx (buf);
+         int cur_row_idx = Buf.get.current_row_idx (buf);
          String.append_fmt (img, "buf_set_row_idx (buf, %d)\n", cur_row_idx);
          String.append (img, "win_append_buf (cwin, buf)\n");
 
@@ -966,7 +903,7 @@ private int __u_open_link_on_browser (buf_t *this) {
 
   if (retval < 0) goto theerror;
 
-  int idx = Buf.get.row.current_col_idx (this);
+  int idx = Buf.get.current_col_idx (this);
   if (idx < re->match_idx or re->match_idx + re->match_len < idx)
     goto theerror;
 
@@ -1078,12 +1015,6 @@ private void __init_usr__ (ed_t *this) {
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
 
-  ImapClass = __init_int_map__ ();
-
-#if HAS_SPELL
-  SpellClass = __init_spell__ ();
-#endif
-
 #if HAS_JSON
   JsonClass = __init_json__ ();
 #endif
@@ -1106,10 +1037,6 @@ private void __deinit_usr__ (void) {
   String.free (Uenv->man_exec);
   String.free (Uenv->elinks_exec);
   free (Uenv);
-
-#if HAS_SPELL
-  __deinit_spell__ (&SpellClass);
-#endif
 
 #if HAS_JSON
   __deinit_json__ (&JsonClass);

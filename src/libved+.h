@@ -40,10 +40,12 @@ extern Self (This)  *__SELF__;
 #define Re      __THIS__->__E__->__ED__->Re.self
 
 #define Argparse ((Self (This) *) __THIS__->self)->argparse
+#define Imap     ((Self (This) *) __THIS__->self)->imap
+#define Spell    ((Self (This) *) __THIS__->self)->spell
+
 #if HAS_SHELL_COMMANDS
 #define Proc ((Self (This) *) __THIS__->self)->proc
 #endif
-
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
@@ -106,6 +108,87 @@ NewType (argparse,
   const char **out;
   int cpidx;
   const char *optvalue;
+);
+
+NewType (mint,
+  char *key;
+  int   val;
+  mint_t *next;
+);
+
+NewType (intmap,
+  mint_t **slots;
+  size_t
+    num_slots,
+    num_keys;
+);
+
+NewSelf (intmap,
+  void
+    (*free) (intmap_t *),
+    (*clear) (intmap_t *);
+
+  intmap_t *(*new) (int);
+
+  int
+    (*get) (intmap_t *, char *),
+    (*key_exists) (intmap_t *, char *);
+
+  uint
+    (*set) (intmap_t *, char *, int),
+    (*set_with_keylen) (intmap_t *, char *);
+);
+
+NewClass (intmap,
+  Self (intmap) self;
+);
+
+typedef intmap_t spelldic_t;
+NewType (spell,
+  char
+    word[MAXLEN_WORD];
+
+  int
+    retval;
+
+  utf8 c;
+
+  size_t
+    num_dic_words,
+    min_word_len,
+    word_len;
+
+  string_t
+    *tmp,
+    *dic_file;
+
+  spelldic_t
+    *dic,
+    *ign_words;
+
+  vstr_t
+    *words,
+    *guesses,
+    *messages;
+);
+
+NewSelf (spell,
+  spell_t *(*new) (void);
+  void
+    (*free) (spell_t *, int),
+    (*clear) (spell_t *, int),
+    (*add_word_to_dictionary) (spell_t *, char *);
+
+  int
+    (*init_dictionary) (spell_t *, string_t *, int, int),
+    (*correct) (spell_t *);
+);
+
+NewClass (spell,
+  Self (spell) self;
+  spelldic_t *current_dic;
+  string_t *dic_file;
+  int num_entries;
 );
 
 #if HAS_SHELL_COMMANDS
@@ -300,6 +383,10 @@ NewSubSelf (This, argparse,
 NewSelf (This,
   SubSelf (This, e) e;
   SubSelf (This, argparse) argparse;
+
+  Self (intmap) imap;
+  Self (spell) spell;
+
   string_t *(*parse_command) (Class (This) *, char *);
 
 #if HAS_SHELL_COMMANDS
@@ -313,6 +400,8 @@ NewSelf (This,
 
 NewProp (This,
   char *name;
+
+  Class (spell) spell;
 
 #if HAS_PROGRAMMING_LANGUAGE
   Class (L) *__L__;

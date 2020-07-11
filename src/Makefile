@@ -23,6 +23,8 @@ SYSKERNEL     := $(shell uname -s)
 SYSARCH       := $(shell uname -m)
 SYS           := $(SYSKERNEL)-$(SYSARCH)
 
+DATADIR    =  $(THISDIR)/data
+
 SYSDIR    := $(THISDIR)/sys
 SYSLIBDIR  = $(SYSDIR)/lib
 SYSBINDIR  = $(SYSDIR)/bin
@@ -206,7 +208,6 @@ APPFLAGS  :=
 HAS_PROGRAMMING_LANGUAGE := 0
 
 REQOBJS    =  libved+.c
-REQOBJS   +=  lib/map/int_map.c
 
 ifneq ($(HAS_JSON), 0)
   REQOBJS += lib/json/json.c
@@ -270,19 +271,11 @@ endif
 HAS_USER_EXTENSIONS := 0
 USER_EXTENSIONS_FLAGS :=
 
-HAS_SPELL := 0
-SPELL_DICTIONARY := $(SYSDATADIR)/spell/spell.txt
-SPELL_DICTIONARY_NUM_ENTRIES := 10000
-
 HAS_CURL := 0
 HAS_JSON := 0
 HAS_EXPR := 0
 
 WORD_LEXICON_FILE :=
-
-ifneq ($(HAS_SPELL), 0)
-  HAS_USER_EXTENSIONS = 1
-endif
 
 ifneq ($(HAS_JSON), 0)
   HAS_USER_EXTENSIONS = 1
@@ -307,12 +300,6 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
 
   ifdef USER_EXTENSIONS_FLAGS
     APPFLAGS += $(USER_EXTENSIONS_FLAGS)
-  endif
-
-  ifneq ($(HAS_SPELL), 0)
-    APPFLAGS += -DHAS_SPELL
-    APPFLAGS += -DSPELL_DICTIONARY='"$(SPELL_DICTIONARY)"'
-    APPFLAGS += -DSPELL_DICTIONARY_NUM_ENTRIES=$(SPELL_DICTIONARY_NUM_ENTRIES)
   endif
 
   ifneq ($(HAS_JSON), 0)
@@ -344,7 +331,13 @@ clean_veda_shared:
 clean_veda_static:
 	@$(TEST) ! -f $(SYSEDSTATIC) || $(RM) $(SYSEDSTATIC)
 
-veda-shared: shared $(REQ_SHARED_LIBS) $(SYSEDSHARED)
+spell-dictionary:
+	@$(TEST) -d $(SYSDATADIR)/spell || $(MKDIR) $(SYSDATADIR)/spell
+	@$(CP) $(DATADIR)/spell/spell.txt $(SYSDATADIR)/spell
+	@$(CP) $(DATADIR)/spell/Readme    $(SYSDATADIR)/spell
+
+veda-shared: shared $(REQ_SHARED_LIBS) $(SYSEDSHARED) spell-dictionary
+
 $(SYSEDSHARED):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(SHARED_APP_FLAGS) -o $(EDSHARED)
 	@$(INSTALL) -v $(EDSHARED) $(SYSBINDIR)
@@ -353,7 +346,7 @@ $(SYSEDSHARED):
 	@$(PRINTF) "LD_LIBRARY_PATH=$(SYSLIBDIR) $(SYSEDSHARED) \"\$$@\"\n" >> $(SYSEDSHAREDSH)
 	@$(CHMOD_X) $(SYSEDSHAREDSH)
 
-veda-static: static $(REQ_STATIC_LIBS) $(SYSEDSTATIC)
+veda-static: static $(REQ_STATIC_LIBS) $(SYSEDSTATIC) spell-dictionary
 $(SYSEDSTATIC):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) -o $(EDSTATIC)
 	@$(INSTALL) -v $(EDSTATIC) $(SYSBINDIR)
