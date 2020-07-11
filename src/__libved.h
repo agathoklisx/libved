@@ -255,6 +255,64 @@ enum {
 #define MSG_ERROR(fmt, ...) \
   My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
 
+/* slre */
+
+#define MAX_BRANCHES 100
+#define MAX_BRACKETS 100
+
+struct re_cap {
+  const char *ptr;
+  int len;
+};
+
+struct bracket_pair {
+  const char *ptr;  /* Points to the first char after '(' in regex  */
+  int len;          /* Length of the text between '(' and ')'       */
+  int branches;     /* Index in the branches array for this pair    */
+  int num_branches; /* Number of '|' in this bracket pair           */
+};
+
+struct branch {
+  int bracket_index;    /* index for 'struct bracket_pair brackets' */
+                        /* array defined below                      */
+  const char *schlong;  /* points to the '|' character in the regex */
+};
+
+struct regex_info {
+  /*
+   * Describes all bracket pairs in the regular expression.
+   * First entry is always present, and grabs the whole regex.
+   */
+  struct bracket_pair brackets[MAX_BRACKETS];
+  int num_brackets;
+
+  /*
+   * Describes alternations ('|' operators) in the regular expression.
+   * Each branch falls into a specific branch pair.
+   */
+  struct branch branches[MAX_BRANCHES];
+  int num_branches;
+
+  /* Array of captures provided by the user */
+  struct re_cap *caps;
+  int num_caps;
+
+  /* E.g. RE_IGNORE_CASE */
+  int flags;
+
+  /* EXTENSION: 
+   * the start byte index that occured the match */
+  int match_idx;
+
+  /* EXTENSION: 
+   * byte length of the full match */
+  int match_len;
+
+  /* EXTENSION: 
+   * total final captured substrings */
+  int total_caps;
+};
+
 /* interpreter */
 // symbols can take the following forms:
 #define INT      0x0  // integer
@@ -1060,6 +1118,8 @@ private int buf_normal_visual_lw (buf_t **);
 private void ed_record (ed_t *, char *, ...);
 private Class (I) *__init_i__ (Class (E) *);
 private void __deinit_i__ (Class (I) **);
+
+private int isspace (int);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

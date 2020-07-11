@@ -153,10 +153,6 @@
    # the executable that links against the shared object
    make veda-shared
 
-   # to enable a basic subset of perl compatible regular expression support
-
-   make HAS_REGEXP=1 veda-shared
-
    # by default writing is disabled unless in DEBUG mode or with:
 
    make ENABLE_WRITING=1 veda-shared
@@ -238,7 +234,6 @@
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
-   HAS_REGEXP=1|0         (en|dis)able regular expression support (default 1)
    HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
 
@@ -562,14 +557,12 @@ Search:
    In this implementation while performing a search, the focus do not change
    until user accepts the match. The results and the dialog, are shown at the
    bottom lines (the message line as the last line on screen).
-   Also by default, pattern is just string literal and the code is using strstr()
-   to perform the searching. The sample application can use a subset of perl like
-   regular expressions.
    It searches just once in a line, and it should highlight the captured string
    with a proper message composed as:
 
      |line_nr byte_index| matched line
 
+  See at Regexp section for details.
  */
 
 /* On Normal mode, it is possible to map native language to normal mode commands.
@@ -640,18 +633,10 @@ Search:
    --interactive,-i  is like the c flag on vim substitute
    --append          is like  >> redirection (used when writing to another file)
 
-   --pat=`pat'       a string describes the pattern which by default is a literal
-                     string; the sample application can use a subset (the most basic)
-                     of perl regular expressions: in that case pattern can start with
-                     (?i) to denote `ignore case` and for syntax support see at:
-                     modules/slre/docs/syntax.md
+   --pat=`pat'       pat is a string that describes the pattern.
+                     For more details see at Regexp section below to this document.
 
-   --sub=`replacement string'
-                     - '&' can be used to mean the full captured string
-                     -  to include a white space, the string should be (double) quoted,
-                        and in that case and to include a '"' it should be escaped.
-                     -  if has regular expression support, then \1\2... can be used
-                        to mean, `nth' captured substring numbering from one.
+   --sub=`replacement string' but see at Regexp section for details.
 
    Commands:
    ! as the last character indicates force, unless is a shell command
@@ -1069,23 +1054,53 @@ Search:
                 any key can bring back the focus)
    */
 
-   /* Regexp
-      This application adds regular expression support, by using a slightly modified
-      version of the slre machine, which is an ISO C library that implements a subset
-      of Perl regular expression syntax, see and clone at:
+   /* Regexp:
+      This library uses a slightly modified version of the slre machine, which is an
+      ISO C library that implements a subset of Perl regular expression syntax, see
+      and clone at:
 
       https://github.com/cesanta/slre.git
       Many thanks.
 
-      It is implemented outside of the library by overriding methods from the Re structure
-      and that api is what is actually being used for a long time now, so it is enabled
-      by default.
-
       The substitution string in the ":substitute command", can use '&' to denote the
-      full captured matched string, but also captures of which denoted with \nth.
+      full captured matched string.
+
+      For captured substring a \1\2... can be used to mean, `nth' captured substring
+      numbering from one.
+
       It is also possible to force caseless searching, by using (like pcre) (?i) in front
       of the pattern. This option won't work with multibyte characters. Searching for
       multibyte characters it should work properly though.
+
+      To include a white space, the string should be (double) quoted. In that case a
+      literal double quote '"', should be escaped. Alternatively a \s can be used to
+      include a white space.
+
+      Re Syntax.
+        ^       Match beginning of a buffer
+        $       Match end of a buffer
+        ()      Grouping and substring capturing
+        \s      Match whitespace
+        \S      Match non-whitespace
+        \d      Match decimal digit
+        \n      Match new line character
+        \r      Match line feed character
+        \f      Match form feed character
+        \v      Match vertical tab character
+        \t      Match horizontal tab character
+        \b      Match backspace character
+        +       Match one or more times (greedy)
+        +?      Match one or more times (non-greedy)
+        *       Match zero or more times (greedy)
+        *?      Match zero or more times (non-greedy)
+        ?       Match zero or once (non-greedy)
+        x|y     Match x or y (alternation operator)
+        \meta   Match one of the meta character: ^$().[]*+?|\
+        \xHH    Match byte with hex value 0xHH, e.g. \x4a
+        [...]   Match any character from set. Ranges like [a-z] are supported
+        [^...]  Match any character but ones from set
+
+        A pattern can start with (?i) to denote `ignore case`
    */
 
    /* Shell Commands
@@ -1320,7 +1335,7 @@ Search:
 
     It can optionally include libved+.h and libved+.c (recommended). Those
     two files can use the following compilation options.
-      HAS_REGEXP, HAS_SHELL_COMMANDS, HAS_HISTORY, HAS_SHELL_COMMANDS,
+      HAS_SHELL_COMMANDS, HAS_HISTORY, HAS_SHELL_COMMANDS,
       HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
       HAS_PRPGTAMMING_LANGUAGE (the building of the language is handled by the
       this Makefile automatically, otherwise it should be compiled explicitly:

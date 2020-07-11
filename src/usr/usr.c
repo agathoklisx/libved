@@ -140,7 +140,7 @@ private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
 }
 #endif /* HAS_EXPR */
 
-#ifdef HAS_RUNTIME_INTERPRETER
+#ifdef HAS_PROGRAMMING_LANGUAGE
 private int __interpret__ (buf_t **thisp, char *bytes) {
   (void) thisp;
   ed_t *ed = E(get.current);
@@ -157,7 +157,7 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
   Win.draw (w);
   return OK;
 }
-#endif /* HAS_RUNTIME_INTERPRETER */
+#endif /* HAS_PROGRAMMING_LANGUAGE */
 
 #ifdef HAS_TCC
 private void c_tcc_error_cb (void *obj, const char *msg) {
@@ -255,7 +255,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       }
       break;
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
     case 'I': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
@@ -295,7 +295,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 
 private void __u_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
 #if HAS_TCC
@@ -303,7 +303,7 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 #endif
 
   utf8 chars[] = {
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   'I',
 #endif
 #if HAS_TCC
@@ -311,8 +311,8 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 #endif
  'B'};
   char actions[] =
-#if HAS_RUNTIME_INTERPRETER
- "Interpret: Interpret file\n"
+#if HAS_PROGRAMMING_LANGUAGE
+ "Interpret file with Dictu\n"
 #endif
 #if HAS_TCC
  "Compile file with tcc compiler\n"
@@ -359,7 +359,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, u
       break;
 #endif
 
-#ifdef HAS_RUNTIME_INTERPRETER
+#ifdef HAS_PROGRAMMING_LANGUAGE
     case 'I': {
       string_t *expression = Vstring.join (vstr, "\n");
       retval = __interpret__ (thisp, expression->bytes);
@@ -389,7 +389,7 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   num_actions++;
 #endif
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
 
@@ -402,7 +402,7 @@ ifnot (num_actions) return;
 #if HAS_TCC
   'C',
 #endif
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   'I',
 #endif
 #if HAS_EXPR
@@ -417,8 +417,8 @@ ifnot (num_actions) return;
 #if HAS_TCC
   "Compile lines with tcc\n"
 #endif
-#if HAS_RUNTIME_INTERPRETER
-     "Interpret\n"
+#if HAS_PROGRAMMING_LANGUAGE
+     "Interpret line[s] with Dictu\n"
 #endif
 #if HAS_EXPR
      "math expression\n"
@@ -997,7 +997,7 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
   return NO_CALLBACK_FUNCTION;
 }
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
 
 private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
   (void) this; (void) buf; (void) regidx;
@@ -1052,7 +1052,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
 private void __u_add_expr_register_cb__ (ed_t *this) {
   Ed.set.expr_register_cb (this, __u_expr_register_cb__);
 }
-#endif /* HAS_RUNTIME_INTERPRETER */
+#endif /* HAS_PROGRAMMING_LANGUAGE */
 
 private void __init_usr__ (ed_t *this) {
   if (NULL is Uenv) {
@@ -1072,7 +1072,7 @@ private void __init_usr__ (ed_t *this) {
 
   __u_add_file_mode_actions__ (this);
 
-#if HAS_RUNTIME_INTERPRETER
+#if HAS_PROGRAMMING_LANGUAGE
   __u_add_expr_register_cb__ (this);
 #endif
 

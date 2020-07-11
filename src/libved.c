@@ -2043,27 +2043,44 @@ tokenize:;
  * }
  */
 
-/* primitive search, based on strstr(), based on kilo editor */
-private int re_exec (regexp_t *re, char *bytes, size_t buf_len) {
-  (void) buf_len;
-  char *sp = strstr (bytes, re->pat->bytes);
-
-  if (NULL is sp) {
-    re->retval = RE_NO_MATCH;
-    goto theend;
-  }
-
-  re->match_idx = sp - bytes;
-  re->match_len = re->pat->num_bytes;
-  re->match_ptr = bytes + re->match_idx;
-  re->retval = re->match_idx + re->match_len;
-  re->match = re->pat;
-
-theend:
-  return re->retval;
+/* used by slre and ts */
+private int isdigit (int c) {
+  return (c >= '0' and c <= '9');
 }
 
-/* following re code should work transparently with the external re implementation */
+private int ishexchar (int c) {
+  return (c >= '0' and c <= '9') or byte_in_str ("abcdefABCDEF", c);
+}
+
+private int islower (int c) {
+  return (c >= 'a' and c <= 'z');
+}
+
+private int isspace (int c) {
+  return (c is ' ') or (c is '\t');
+}
+
+private int isupper (int c) {
+  return (c >= 'A' and c <= 'Z');
+}
+
+private int isalpha (int c) {
+  return islower (c) or isupper (c);
+}
+
+private int isidpunct (int c) {
+  return NULL isnot byte_in_str (".:_", c);
+}
+
+private int isidentifier (int c) {
+  return isalpha (c) or isidpunct (c);
+}
+
+private int notquote (int chr) {
+  uchar c = (unsigned char) chr;
+  return NULL is byte_in_str ("\"\n", c);
+}
+
 private void re_reset_captures (regexp_t *re) {
   re->match_len = re->match_idx = 0;
   re->match_ptr = NULL;
@@ -2107,11 +2124,6 @@ private void re_free (regexp_t *re) {
   free (re);
 }
 
-private int re_compile (regexp_t *re) {
-  re->flags |= RE_PATTERN_IS_STRING_LITERAL;
-  return OK;
-}
-
 private regexp_t *re_new (char *pat, int flags, int num_caps, ReCompile_cb compile) {
   regexp_t *re = AllocType (regexp);
   re->flags |= flags;
@@ -2122,8 +2134,463 @@ private regexp_t *re_new (char *pat, int flags, int num_caps, ReCompile_cb compi
   return re;
 }
 
+/* slre */
+
+/*
+ * Copyright (c) 2004-2013 Sergey Lyubka <valenok@gmail.com>
+ * Copyright (c) 2013 Cesanta Software Limited
+ * All rights reserved
+ *
+ * This library is dual-licensed: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. For the terms of this
+ * license, see <http://www.gnu.org/licenses/>.
+ *
+ * You are free to use this library under the terms of the GNU General
+ * Public License, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * Alternatively, you can license this library under a commercial
+ * license, as set out in <http://cesanta.com/products.html>.
+ */
+
+#define FAIL_IF(condition, error_code) if (condition) return (error_code)
+
+#define ARRAY_SIZE ARRLEN
+
+#ifdef RE_DEBUG
+#define DBG(x) printf x
+#else
+#define DBG(x)
+#endif
+
+private int is_metacharacter (const unsigned char *s) {
+  static const char *metacharacters = "^$().[]*+?|\\Ssdbfnrtv";
+  return byte_in_str (metacharacters, *s) != NULL;
+}
+
+private int op_len (const char *re) {
+  return re[0] == '\\' && re[1] == 'x' ? 4 : re[0] == '\\' ? 2 : 1;
+}
+
+private int set_len (const char *re, int re_len) {
+  int len = 0;
+
+  while (len < re_len && re[len] != ']') {
+    len += op_len (re + len);
+  }
+
+  return len <= re_len ? len + 1 : -1;
+}
+
+private int get_op_len (const char *re, int re_len) {
+  return re[0] == '[' ? set_len (re + 1, re_len - 1) + 1 : op_len (re);
+}
+
+private int is_quantifier (const char *re) {
+  return re[0] == '*' || re[0] == '+' || re[0] == '?';
+}
+
+private int toi (int x) {
+  return isdigit (x) ? x - '0' : x - 'W';
+}
+
+private int hextoi (const unsigned char *s) {
+  return (toi (ustring_to_lower (s[0])) << 4) | toi (ustring_to_lower (s[1]));
+}
+
+private int match_op (const unsigned char *re, const unsigned char *s,
+                    struct regex_info *info) {
+  int result = 0;
+  switch (*re) {
+    case '\\':
+      /* Metacharacters */
+      switch (re[1]) {
+        case 'S': FAIL_IF(isspace (*s), RE_NO_MATCH); result++; break;
+        case 's': FAIL_IF(!isspace (*s), RE_NO_MATCH); result++; break;
+        case 'd': FAIL_IF(!isdigit (*s), RE_NO_MATCH); result++; break;
+        case 'b': FAIL_IF(*s != '\b', RE_NO_MATCH); result++; break;
+        case 'f': FAIL_IF(*s != '\f', RE_NO_MATCH); result++; break;
+        case 'n': FAIL_IF(*s != '\n', RE_NO_MATCH); result++; break;
+        case 'r': FAIL_IF(*s != '\r', RE_NO_MATCH); result++; break;
+        case 't': FAIL_IF(*s != '\t', RE_NO_MATCH); result++; break;
+        case 'v': FAIL_IF(*s != '\v', RE_NO_MATCH); result++; break;
+
+        case 'x':
+          /* Match byte, \xHH where HH is hexadecimal byte representaion */
+          FAIL_IF(hextoi (re + 2) != *s, RE_NO_MATCH);
+          result++;
+          break;
+
+        default:
+          /* Valid metacharacter check is done in bar() */
+          FAIL_IF(re[1] != s[0], RE_NO_MATCH);
+          result++;
+          break;
+      }
+      break;
+
+    case '|': FAIL_IF(1, RE_INTERNAL_ERROR); break;
+    case '$': FAIL_IF(1, RE_NO_MATCH); break;
+    case '.': result++; break;
+
+    default:
+      if (info->flags & RE_IGNORE_CASE) {
+        FAIL_IF(ustring_to_lower (*re) != ustring_to_lower (*s), RE_NO_MATCH);
+      } else {
+        FAIL_IF(*re != *s, RE_NO_MATCH);
+      }
+      result++;
+      break;
+  }
+
+  return result;
+}
+
+private int match_set (const char *re, int re_len, const char *s,
+                     struct regex_info *info) {
+  int len = 0, result = -1, invert = re[0] == '^';
+
+  if (invert) re++, re_len--;
+
+  while (len <= re_len && re[len] != ']' && result <= 0) {
+    /* Support character range */
+    if (re[len] != '-' && re[len + 1] == '-' && re[len + 2] != ']' &&
+        re[len + 2] != '\0') {
+      result = info->flags &  RE_IGNORE_CASE ?
+        ustring_to_lower (*s) >= ustring_to_lower (re[len]) && ustring_to_lower (*s) <= ustring_to_lower (re[len + 2]) :
+        *s >= re[len] && *s <= re[len + 2];
+      len += 3;
+    } else {
+      result = match_op ((const unsigned char *) re + len, (const unsigned char *) s, info);
+      len += op_len (re + len);
+    }
+  }
+  return (!invert && result > 0) || (invert && result <= 0) ? 1 : -1;
+}
+
+private int doh (const char *s, int s_len, struct regex_info *info, int bi);
+
+private int bar (const char *re, int re_len, const char *s, int s_len,
+               struct regex_info *info, int bi) {
+  /* i is offset in re, j is offset in s, bi is brackets index */
+  int i, j, n, step;
+
+  for (i = j = 0; i < re_len && j <= s_len; i += step) {
+
+    /* Handle quantifiers. Get the length of the chunk. */
+    step = re[i] == '(' ? info->brackets[bi + 1].len + 2 :
+      get_op_len (re + i, re_len - i);
+
+    DBG(("%s [%.*s] [%.*s] re_len=%d step=%d i=%d j=%d\n", __func__,
+         re_len - i, re + i, s_len - j, s + j, re_len, step, i, j));
+
+    FAIL_IF(is_quantifier (&re[i]), RE_UNEXPECTED_QUANTIFIER_ERROR);
+    FAIL_IF(step <= 0, RE_INVALID_CHARACTER_SET_ERROR);
+
+    if (i + step < re_len && is_quantifier (re + i + step)) {
+      DBG(("QUANTIFIER: [%.*s]%c [%.*s]\n", step, re + i,
+           re[i + step], s_len - j, s + j));
+      if (re[i + step] == '?') {
+        int result = bar (re + i, step, s + j, s_len - j, info, bi);
+        j += result > 0 ? result : 0;
+        i++;
+      } else if (re[i + step] == '+' || re[i + step] == '*') {
+        int j2 = j, nj = j, n1, n2 = -1, ni, non_greedy = 0;
+
+        /* Points to the regexp code after the quantifier */
+        ni = i + step + 1;
+        if (ni < re_len && re[ni] == '?') {
+          non_greedy = 1;
+          ni++;
+        }
+
+        do {
+          if ((n1 = bar (re + i, step, s + j2, s_len - j2, info, bi)) > 0) {
+            j2 += n1;
+          }
+          if (re[i + step] == '+' && n1 < 0) break;
+
+          if (ni >= re_len) {
+            /* After quantifier, there is nothing */
+            nj = j2;
+          } else if ((n2 = bar (re + ni, re_len - ni, s + j2,
+                               s_len - j2, info, bi)) >= 0) {
+            /* Regex after quantifier matched */
+            nj = j2 + n2;
+          }
+          if (nj > j && non_greedy) break;
+        } while (n1 > 0);
+
+        /*
+         * Even if we found one or more pattern, this branch will be executed,
+         * changing the next captures.
+         */
+        if (n1 < 0 && n2 < 0 && re[i + step] == '*' &&
+            (n2 = bar (re + ni, re_len - ni, s + j, s_len - j, info, bi)) > 0) {
+          nj = j + n2;
+        }
+
+        DBG(("STAR/PLUS END: %d %d %d %d %d\n", j, nj, re_len - ni, n1, n2));
+        FAIL_IF(re[i + step] == '+' && nj == j, RE_NO_MATCH);
+
+        /* If while loop body above was not executed for the * quantifier,  */
+        /* make sure the rest of the regex matches                          */
+        FAIL_IF(nj == j && ni < re_len && n2 < 0, RE_NO_MATCH);
+
+        /* Returning here cause we've matched the rest of RE already */
+        return nj;
+      }
+      continue;
+    }
+
+    if (re[i] == '[') {
+      n = match_set (re + i + 1, re_len - (i + 2), s + j, info);
+      DBG(("SET %.*s [%.*s] -> %d\n", step, re + i, s_len - j, s + j, n));
+      FAIL_IF(n <= 0, RE_NO_MATCH);
+      j += n;
+    } else if (re[i] == '(') {
+      n = RE_NO_MATCH;
+      bi++;
+      FAIL_IF(bi >= info->num_brackets, RE_INTERNAL_ERROR);
+      DBG(("CAPTURING [%.*s] [%.*s] [%s]\n",
+           step, re + i, s_len - j, s + j, re + i + step));
+
+      if (re_len - (i + step) <= 0) {
+        /* Nothing follows brackets */
+        n = doh (s + j, s_len - j, info, bi);
+      } else {
+        int j2;
+        for (j2 = 0; j2 <= s_len - j; j2++) {
+          if ((n = doh (s + j, s_len - (j + j2), info, bi)) >= 0 &&
+              bar (re + i + step, re_len - (i + step),
+                  s + j + n, s_len - (j + n), info, bi) >= 0) break;
+        }
+      }
+
+      DBG(("CAPTURED [%.*s] [%.*s]:%d\n", step, re + i, s_len - j, s + j, n));
+      FAIL_IF(n < 0, n);
+      if (info->caps != NULL && n > 0) {
+        info->caps[bi - 1].ptr = s + j;
+        info->caps[bi - 1].len = n;
+        info->total_caps++;
+      }
+      j += n;
+    } else if (re[i] == '^') {
+      FAIL_IF(j != 0, RE_NO_MATCH);
+    } else if (re[i] == '$') {
+      FAIL_IF(j != s_len, RE_NO_MATCH);
+    } else {
+      FAIL_IF(j >= s_len, RE_NO_MATCH);
+      n = match_op ((const unsigned char *) (re + i), (const unsigned char *) (s + j), info);
+      FAIL_IF(n <= 0, n);
+      j += n;
+    }
+  }
+
+  return j;
+}
+
+/* Process branch points */
+private int doh (const char *s, int s_len, struct regex_info *info, int bi) {
+  const struct bracket_pair *b = &info->brackets[bi];
+  int i = 0, len, result;
+  const char *p;
+
+  do {
+    p = i == 0 ? b->ptr : info->branches[b->branches + i - 1].schlong + 1;
+    len = b->num_branches == 0 ? b->len :
+      i == b->num_branches ? (int) (b->ptr + b->len - p) :
+      (int) (info->branches[b->branches + i].schlong - p);
+    DBG(("%s %d %d [%.*s] [%.*s]\n", __func__, bi, i, len, p, s_len, s));
+    result = bar (p, len, s, s_len, info, bi);
+    DBG(("%s <- %d\n", __func__, result));
+  } while (result <= 0 && i++ < b->num_branches);  /* At least 1 iteration */
+
+  return result;
+}
+
+private int baz (const char *s, int s_len, struct regex_info *info) {
+  int i, result = -1, is_anchored = info->brackets[0].ptr[0] == '^';
+
+  for (i = 0; i <= s_len; i++) {
+    result = doh (s + i, s_len - i, info, 0);
+
+    if (result >= 0) {
+      /* EXTENSION */
+      info->match_idx = i;
+      info->match_len = result;
+      /**/
+      result += i;
+      break;
+    }
+    if (is_anchored) break;
+  }
+
+  return result;
+}
+
+private void setup_branch_points (struct regex_info *info) {
+  int i, j;
+  struct branch tmp;
+
+  /* First, sort branches. Must be stable, no qsort. Use bubble algo. */
+  for (i = 0; i < info->num_branches; i++) {
+    for (j = i + 1; j < info->num_branches; j++) {
+      if (info->branches[i].bracket_index > info->branches[j].bracket_index) {
+        tmp = info->branches[i];
+        info->branches[i] = info->branches[j];
+        info->branches[j] = tmp;
+      }
+    }
+  }
+
+  /*
+   * For each bracket, set their branch points. This way, for every bracket
+   * (i.e. every chunk of regex) we know all branch points before matching.
+   */
+  for (i = j = 0; i < info->num_brackets; i++) {
+    info->brackets[i].num_branches = 0;
+    info->brackets[i].branches = j;
+    while (j < info->num_branches && info->branches[j].bracket_index == i) {
+      info->brackets[i].num_branches++;
+      j++;
+    }
+  }
+}
+
+private int foo (const char *re, int re_len, const char *s, int s_len,
+               struct regex_info *info) {
+  int i, step, depth = 0;
+
+  /* First bracket captures everything */
+  info->brackets[0].ptr = re;
+  info->brackets[0].len = re_len;
+  info->num_brackets = 1;
+
+  /* Make a single pass over regex string, memorize brackets and branches */
+  for (i = 0; i < re_len; i += step) {
+    step = get_op_len (re + i, re_len - i);
+
+    if (re[i] == '|') {
+      FAIL_IF(info->num_branches >= (int) ARRAY_SIZE(info->branches),
+              RE_TOO_MANY_BRANCHES_ERROR);
+      info->branches[info->num_branches].bracket_index =
+        info->brackets[info->num_brackets - 1].len == -1 ?
+        info->num_brackets - 1 : depth;
+      info->branches[info->num_branches].schlong = &re[i];
+      info->num_branches++;
+    } else if (re[i] == '\\') {
+      FAIL_IF(i >= re_len - 1, RE_INVALID_METACHARACTER_ERROR);
+      if (re[i + 1] == 'x') {
+        /* Hex digit specification must follow */
+        FAIL_IF(re[i + 1] == 'x' && i >= re_len - 3, RE_INVALID_METACHARACTER_ERROR);
+        FAIL_IF(re[i + 1] ==  'x' && !(ishexchar (re[i + 2]) &&
+                ishexchar (re[i + 3])), RE_INVALID_METACHARACTER_ERROR);
+      } else {
+        FAIL_IF(!is_metacharacter ((const unsigned char *) re + i + 1),
+                RE_INVALID_METACHARACTER_ERROR);
+      }
+    } else if (re[i] == '(') {
+      FAIL_IF(info->num_brackets >= (int) ARRAY_SIZE(info->brackets),
+              RE_TOO_MANY_BRACKETS_ERROR);
+      depth++;  /* Order is important here. Depth increments first. */
+      info->brackets[info->num_brackets].ptr = re + i + 1;
+      info->brackets[info->num_brackets].len = -1;
+      info->num_brackets++;
+      FAIL_IF(info->num_caps > 0 && info->num_brackets - 1 > info->num_caps,
+              RE_CAPS_ARRAY_TOO_SMALL_ERROR);
+    } else if (re[i] == ')') {
+      int ind = info->brackets[info->num_brackets - 1].len == -1 ?
+        info->num_brackets - 1 : depth;
+      info->brackets[ind].len = (int) (&re[i] - info->brackets[ind].ptr);
+      DBG(("SETTING BRACKET %d [%.*s]\n",
+           ind, info->brackets[ind].len, info->brackets[ind].ptr));
+      depth--;
+      FAIL_IF(depth < 0, RE_UNBALANCED_BRACKETS_ERROR);
+      FAIL_IF(i > 0 && re[i - 1] == '(', RE_NO_MATCH);
+    }
+  }
+
+  FAIL_IF(depth != 0, RE_UNBALANCED_BRACKETS_ERROR);
+  setup_branch_points(info);
+
+  return baz (s, s_len, info);
+}
+
+/* this is like slre_match(), with an aditional argument and three extra fields
+ * in the slre regex_info structure */
+private int re_match (regexp_t *re, const char *regexp, const char *s, int s_len,
+                            struct re_cap *caps, int num_caps, int flags) {
+  struct regex_info info;
+
+  info.flags = flags;
+  info.num_brackets = info.num_branches = 0;
+  info.num_caps = num_caps;
+  info.caps = caps;
+
+  info.match_idx = info.match_len = -1;
+  info.total_caps = 0;
+
+  int retval = foo (regexp, (int) strlen(regexp), s, s_len, &info);
+  if (0 <= retval) {
+    re->match_idx = info.match_idx;
+    re->match_len = info.match_len;
+    re->total_caps = info.total_caps;
+    re->match_ptr = (char *) s + info.match_idx;
+  }
+
+  return retval;
+}
+
+private int re_compile (regexp_t *re) {
+  ifnot (str_cmp_n (re->pat->bytes, "(?i)", 4)) {
+    re->flags |= RE_IGNORE_CASE;
+    string_delete_numbytes_at (re->pat, 4, 0);
+  }
+
+  return OK;
+}
+
+private int re_exec (regexp_t *re, char *buf, size_t buf_len) {
+  re->retval = RE_NO_MATCH;
+  if (re->pat->num_bytes is 1 and
+     (re->pat->bytes[0] is '^' or
+      re->pat->bytes[0] is '$' or
+      re->pat->bytes[0] is '|'))
+    return re->retval;
+  do {
+    struct re_cap cap[re->num_caps];
+    for (int i = 0; i < re->num_caps; i++) cap[i].len = 0;
+    re->retval = re_match (re, re->pat->bytes, buf, buf_len,
+        cap, re->num_caps, re->flags);
+
+    if (re->retval is RE_CAPS_ARRAY_TOO_SMALL_ERROR) {
+      re_free_captures (re);
+      re_allocate_captures (re, re->num_caps + (re->num_caps / 2));
+
+      continue;
+    }
+
+    if (0 > re->retval) goto theend;
+    re->match = string_new_with (re->match_ptr);
+    string_clear_at (re->match, re->match_len);
+
+    for (int i = 0; i < re->total_caps; i++) {
+      re->cap[i] = AllocType (capture);
+      re->cap[i]->ptr = cap[i].ptr;
+      re->cap[i]->len = cap[i].len;
+    }
+  } while (0);
+
+theend:
+  return re->retval;
+}
+
 private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_buf) {
-  string_t *substr = string_new (16);
+  string_t *substr = string_new (64);
+
   char *sub_p = sub;
   while (*sub_p) {
     switch (*sub_p) {
@@ -2139,18 +2606,36 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
             sub_p++;
             continue;
 
+          case 's':
+            string_append_byte (substr, ' ');
+            sub_p++;
+            continue;
+
           case '\\':
             string_append_byte (substr, '\\');
             sub_p++;
             continue;
 
-          case 's': /* not sure but is convienent, though readline should handle */
-            string_append_byte (substr, ' ');  /* "quoted strings", can be empty */
-            sub_p++;
+          case '1'...'9':
+            {
+              int idx = 0;
+              while (*sub_p and ('0' <= *sub_p and *sub_p <= '9')) {
+                idx = (10 * idx) + (*sub_p - '0');
+                sub_p++;
+              }
+              idx--;
+              if (0 > idx or idx + 1 > re->total_caps) goto theerror;
+
+              char buf[re->cap[idx]->len + 1];
+              str_cp (buf, re->cap[idx]->len + 1, re->cap[idx]->ptr, re->cap[idx]->len);
+              string_append (substr, buf);
+            }
+
             continue;
 
           default:
-            snprintf (re->errmsg, 256, "awaiting \\,&,s, got %d [%c]", *sub_p, *sub_p);
+            snprintf (re->errmsg, 256, "awaiting \\,&,s[0..9,...], got %d [%c]",
+                *sub_p, *sub_p);
             goto theerror;
         }
 
@@ -2161,6 +2646,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
       default:
         string_append_byte (substr, *sub_p);
      }
+
     sub_p++;
   }
 
@@ -16566,48 +17052,6 @@ private void i_unget_char (i_t *this) {
   i_ignore_last_char (this);
 }
 
-private int char_in (int c, const char *str) {
-  while (*str) if (c is *str++) return 1;
-  return 0;
-}
-
-private int isspace (int c) {
-  return (c is ' ') or (c is '\t');
-}
-
-private int isdigit (int c) {
-  return (c >= '0' and c <= '9');
-}
-
-private int ishexchar (int c) {
-  return (c >= '0' and c <= '9') or char_in (c, "abcdefABCDEF");
-}
-
-private int islower (int c) {
-  return (c >= 'a' and c <= 'z');
-}
-
-private int isupper (int c) {
-  return (c >= 'A' and c <= 'Z');
-}
-
-private int isalpha (int c) {
-  return islower (c) or isupper (c);
-}
-
-private int isidpunct (int c) {
-  return char_in (c, ".:_");
-}
-
-private int isidentifier (int c) {
-  return isalpha (c) or isidpunct (c);
-}
-
-private int notquote (int chr) {
-  uchar c = (unsigned char) chr;
-  return 0 is char_in (c, "\"\n");
-}
-
 private void i_get_span (i_t *this, int (*testfn) (int)) {
   int c;
   do c = i_get_char (this);  while (testfn (c));
@@ -16615,7 +17059,7 @@ private void i_get_span (i_t *this, int (*testfn) (int)) {
 }
 
 private int isoperator (int c) {
-  return char_in (c, "+-/*=<>&|^");
+  return NULL isnot byte_in_str ("+-/*=<>&|^", c);
 }
 
 private Sym * i_lookup_sym (i_t *this, String_t name) {
@@ -16661,8 +17105,8 @@ private int i_do_next_token (i_t *this, int israw) {
 
     r = c;
 
-  } else if (isdigit (c)) {
-    if (c is '0' and char_in (i_peek_char (this, 0), "xX")
+  } else if (IS_DIGIT (c)) {
+    if (c is '0' and NULL isnot byte_in_str ("xX", i_peek_char (this, 0))
         and ishexchar (i_peek_char(this, 1))) {
       i_get_char (this);
       i_ignore_first_char (this);

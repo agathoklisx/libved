@@ -109,12 +109,6 @@ NewType (argparse,
   const char *optvalue;
 );
 
-#if HAS_REGEXP
-  private int ext_re_compile (regexp_t *);
-  private int ext_re_exec (regexp_t *, char *, size_t);
-  private string_t *ext_re_parse_substitute (regexp_t *, char *, char *);
-#endif
-
 #if HAS_SHELL_COMMANDS
 NewProp (proc,
   pid_t  pid;

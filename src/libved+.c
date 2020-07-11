@@ -36,10 +36,6 @@ public Class (L)    *__L__    = NULL;
   #include "local/local.c"
 #endif
 
-#if HAS_REGEXP
-  #include "ext/if_has_regexp.c"
-#endif
-
 private string_t *__ex_buf_serial_info__ (bufinfo_t *info) {
   string_t *sinfo = String.new_with ("BUF_INFO_STRUCTURE\n");
   String.append_fmt (sinfo,
@@ -165,12 +161,6 @@ private void __ex_add_rline_commands__ (ed_t *this) {
 
 private void __init_ext__ (Type (ed) *this) {
   __ex_add_rline_commands__ (this);
-
-#if HAS_REGEXP
-  Re.exec = ext_re_exec;
-  Re.parse_substitute =ext_re_parse_substitute;
-  Re.compile = ext_re_compile;
-#endif
 
 #if HAS_SHELL_COMMANDS
   Ed.sh.popen = ext_ed_sh_popen;
