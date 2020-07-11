@@ -206,7 +206,6 @@ APPFLAGS  :=
 HAS_PROGRAMMING_LANGUAGE := 0
 
 REQOBJS    =  libved+.c
-REQOBJS   +=  lib/argparse/argparse.c
 REQOBJS   +=  lib/map/int_map.c
 
 ifneq ($(HAS_JSON), 0)

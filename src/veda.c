@@ -71,8 +71,8 @@ int main (int argc, char **argv) {
   };
 
   argparse_t argparser;
-  This(parse.arg.init, &argparser, options, usage, 0);
-  argc = This(parse.arg.run, &argparser, argc, (const char **) argv);
+  Argparse.init (&argparser, options, usage, 0);
+  argc = Argparse.exec (&argparser, argc, (const char **) argv);
 
   if (argc is -1) goto theend;
 
@@ -151,7 +151,7 @@ int main (int argc, char **argv) {
   signal (SIGWINCH, sigwinch_handler);
 
   if (exec_com isnot NULL) {
-    string_t *com = This(parse.command, exec_com);
+    string_t *com = This(parse_command, exec_com);
     rline_t *rl = Rline.new_with (this, com->bytes);
     buf_t *buf = Ed.get.current_buf (this);
     retval = Rline.exec (rl, &buf);

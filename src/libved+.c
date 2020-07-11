@@ -190,6 +190,391 @@ private void __deinit_ext__ (void) {
 #endif
 }
 
+/* Argparse:
+  https://github.com/cofyc/argparse
+
+  forked commit: fafc503d23d077bda40c29e8a20ea74707452721
+  (HEAD -> master, origin/master, origin/HEAD)
+*/
+
+/**
+ * Copyright (C) 2012-2015 Yecheng Fu <cofyc.jackson at gmail dot com>
+ * All rights reserved.
+ *
+ * Use of this source code is governed by a MIT-style license that can be found
+ * in the LICENSE file.
+ */
+
+#define OPT_UNSET 1
+#define OPT_LONG  (1 << 1)
+
+private const char *prefix_skip (const char *str, const char *prefix) {
+  size_t len = bytelen (prefix);
+  return Cstring.cmp_n (str, prefix, len) ? NULL : str + len;
+}
+
+private int argparse_error (argparse_t *self, const argparse_option_t *opt,
+                                            const char *reason, int flags) {
+  (void) self;
+  if (flags & OPT_LONG) {
+    fprintf(stderr, "error: option `--%s` %s\n", opt->long_name, reason);
+  } else {
+    fprintf(stderr, "error: option `-%c` %s\n", opt->short_name, reason);
+  }
+  return -1;
+}
+
+private int argparse_getvalue (argparse_t *self, const argparse_option_t *opt, int flags) {
+  const char *s = NULL;
+  if (!opt->value)
+    goto skipped;
+
+  switch (opt->type) {
+    case ARGPARSE_OPT_BOOLEAN:
+      if (flags & OPT_UNSET) {
+        *(int *)opt->value = *(int *)opt->value - 1;
+      } else {
+        *(int *)opt->value = *(int *)opt->value + 1;
+      }
+      if (*(int *)opt->value < 0) {
+        *(int *)opt->value = 0;
+      }
+      break;
+
+    case ARGPARSE_OPT_BIT:
+      if (flags & OPT_UNSET) {
+        *(int *)opt->value &= ~opt->data;
+      } else {
+        *(int *)opt->value |= opt->data;
+      }
+      break;
+
+    case ARGPARSE_OPT_STRING:
+      if (self->optvalue) {
+        *(const char **)opt->value = self->optvalue;
+        self->optvalue             = NULL;
+      } else if (self->argc > 1) {
+        self->argc--;
+        *(const char **)opt->value = *++self->argv;
+      } else {
+        return argparse_error (self, opt, "requires a value", flags);
+      }
+      break;
+
+    case ARGPARSE_OPT_INTEGER:
+      errno = 0;
+      if (self->optvalue) {
+        *(int *)opt->value = strtol(self->optvalue, (char **)&s, 0);
+        self->optvalue     = NULL;
+      } else if (self->argc > 1) {
+        self->argc--;
+        *(int *)opt->value = strtol (*++self->argv, (char **)&s, 0);
+      } else {
+        return argparse_error (self, opt, "requires a value", flags);
+      }
+      if (errno)
+        return argparse_error (self, opt, strerror(errno), flags);
+      if (s[0] != '\0')
+        return argparse_error (self, opt, "expects an integer value", flags);
+      break;
+
+    case ARGPARSE_OPT_FLOAT:
+      errno = 0;
+      if (self->optvalue) {
+        *(float *)opt->value = strtof (self->optvalue, (char **)&s);
+        self->optvalue       = NULL;
+      } else if (self->argc > 1) {
+        self->argc--;
+        *(float *)opt->value = strtof (*++self->argv, (char **)&s);
+      } else {
+        return argparse_error (self, opt, "requires a value", flags);
+        }
+      if (errno)
+        return argparse_error (self, opt, strerror(errno), flags);
+      if (s[0] != '\0')
+        return argparse_error (self, opt, "expects a numerical value", flags);
+      break;
+
+    default:
+      exit (0);
+    }
+
+skipped:
+  if (opt->callback) {
+    return opt->callback(self, opt);
+  }
+
+  return 0;
+}
+
+private void argparse_options_check (const argparse_option_t *options) {
+  for (; options->type != ARGPARSE_OPT_END; options++) {
+    switch (options->type) {
+    case ARGPARSE_OPT_END:
+    case ARGPARSE_OPT_BOOLEAN:
+    case ARGPARSE_OPT_BIT:
+    case ARGPARSE_OPT_INTEGER:
+    case ARGPARSE_OPT_FLOAT:
+    case ARGPARSE_OPT_STRING:
+    case ARGPARSE_OPT_GROUP:
+      continue;
+    default:
+      fprintf(stderr, "wrong option type: %d", options->type);
+      break;
+    }
+  }
+}
+
+private int argparse_short_opt (argparse_t *self, const argparse_option_t *options) {
+  for (; options->type != ARGPARSE_OPT_END; options++) {
+    if (options->short_name == *self->optvalue) {
+      self->optvalue = self->optvalue[1] ? self->optvalue + 1 : NULL;
+      return argparse_getvalue (self, options, 0);
+    }
+  }
+  return -2;
+}
+
+private int argparse_long_opt (argparse_t *self, const argparse_option_t *options) {
+  for (; options->type != ARGPARSE_OPT_END; options++) {
+    const char *rest;
+    int opt_flags = 0;
+    if (!options->long_name)
+      continue;
+
+    rest = prefix_skip (self->argv[0] + 2, options->long_name);
+    if (!rest) {
+      // negation disabled?
+      if (options->flags & OPT_NONEG) {
+        continue;
+      }
+      // only OPT_BOOLEAN/OPT_BIT supports negation
+      if (options->type != ARGPARSE_OPT_BOOLEAN && options->type !=  ARGPARSE_OPT_BIT) {
+        continue;
+      }
+
+      ifnot (Cstring.eq_n (self->argv[0] + 2, "no-", 3)) {
+        continue;
+      }
+
+      rest = prefix_skip (self->argv[0] + 2 + 3, options->long_name);
+      if (!rest)
+        continue;
+
+      opt_flags |= OPT_UNSET;
+    }
+
+    if (*rest) {
+      if (*rest != '=')
+        continue;
+      self->optvalue = rest + 1;
+    }
+    return argparse_getvalue (self, options, opt_flags | OPT_LONG);
+  }
+
+  return -2;
+}
+
+private int argparse_init (argparse_t *self, argparse_option_t *options,
+                                  const char *const *usages, int flags) {
+  memset (self, 0, sizeof(*self));
+  self->options     = options;
+  self->usages      = usages;
+  self->flags       = flags;
+  self->description = NULL;
+  self->epilog      = NULL;
+  return 0;
+}
+
+private void argparse_describe (argparse_t *self, const char *description,
+                                                      const char *epilog) {
+  self->description = description;
+  self->epilog      = epilog;
+}
+
+private void argparse_usage (argparse_t *self) {
+  if (self->usages) {
+    fprintf(stdout, "Usage: %s\n", *self->usages++);
+    while (*self->usages && **self->usages)
+      fprintf(stdout, "   or: %s\n", *self->usages++);
+  } else {
+    fprintf(stdout, "Usage:\n");
+  }
+
+  // print description
+  if (self->description)
+    fprintf(stdout, "%s\n", self->description);
+
+  fputc('\n', stdout);
+
+  const argparse_option_t *options;
+
+  // figure out best width
+  size_t usage_opts_width = 0;
+  size_t len;
+  options = self->options;
+  for (; options->type != ARGPARSE_OPT_END; options++) {
+    len = 0;
+    if ((options)->short_name) {
+      len += 2 - ((options)->flags & SHORT_OPT_HAS_NO_DASH);
+    }
+    if ((options)->short_name && (options)->long_name) {
+      len += 2;           // separator ", "
+    }
+    if ((options)->long_name) {
+      len += bytelen ((options)->long_name) + 2;
+    }
+    if (options->type == ARGPARSE_OPT_INTEGER) {
+      len += bytelen ("=<int>");
+    }
+    if (options->type == ARGPARSE_OPT_FLOAT) {
+      len += bytelen ("=<flt>");
+    } else if (options->type == ARGPARSE_OPT_STRING) {
+      len += bytelen ("=<str>");
+    }
+    len = (len + 3) - ((len + 3) & 3);
+    if (usage_opts_width < len) {
+      usage_opts_width = len;
+    }
+  }
+  usage_opts_width += 4;      // 4 spaces prefix
+
+  options = self->options;
+  for (; options->type != ARGPARSE_OPT_END; options++) {
+    size_t pos = 0;
+    int pad    = 0;
+    if (options->type == ARGPARSE_OPT_GROUP) {
+      fputc('\n', stdout);
+      fprintf(stdout, "%s", options->help);
+      fputc('\n', stdout);
+      continue;
+    }
+    pos = fprintf(stdout, "    ");
+    if (options->short_name) {
+      pos += fprintf(stdout, "%s%c", // extension
+      (options)->flags & SHORT_OPT_HAS_NO_DASH ? "" : "-",
+      options->short_name);
+    }
+    if (options->long_name && options->short_name) {
+      pos += fprintf (stdout, ", ");
+    }
+    if (options->long_name) {
+      pos += fprintf (stdout, "--%s", options->long_name);
+    }
+    if (options->type == ARGPARSE_OPT_INTEGER) {
+      pos += fprintf (stdout, "=<int>");
+    } else if (options->type == ARGPARSE_OPT_FLOAT) {
+      pos += fprintf (stdout, "=<flt>");
+    } else if (options->type == ARGPARSE_OPT_STRING) {
+      pos += fprintf (stdout, "=<str>");
+    }
+    if (pos <= usage_opts_width) {
+      pad = usage_opts_width - pos;
+    } else {
+      fputc('\n', stdout);
+      pad = usage_opts_width;
+    }
+    fprintf (stdout, "%*s%s\n", pad + 2, "", options->help);
+  }
+
+  // print epilog
+  if (self->epilog)
+    fprintf (stdout, "%s\n", self->epilog);
+}
+
+private int argparse_parse (argparse_t *self, int argc, const char **argv) {
+  self->argc = argc - 1;
+  self->argv = argv + 1;
+  self->out  = argv;
+
+  argparse_options_check (self->options);
+
+  for (; self->argc; self->argc--, self->argv++) {
+    const char *arg = self->argv[0];
+    int opt_has_no_dash = 0;
+    if (arg[0] != '-' || !arg[1]) {
+      if (self->flags & ARGPARSE_STOP_AT_NON_OPTION) {
+        goto end;
+      }
+
+      if (!arg[1]) {  /* extension */
+        for (int i = 0; self->options[i].type != ARGPARSE_OPT_END; i++) {
+          if (self->options[i].short_name == arg[0] &&
+            self->options[i].flags & SHORT_OPT_HAS_NO_DASH) {
+            opt_has_no_dash = 1;
+            break;
+          }
+        }
+      }
+
+      if (!opt_has_no_dash) {
+        // if it's not option or is a single char '-', copy verbatim
+        self->out[self->cpidx++] = self->argv[0];
+        continue;
+      }
+    }
+
+    // short option
+    if (arg[1] != '-') {
+      self->optvalue = arg + 1 - opt_has_no_dash;
+      switch (argparse_short_opt (self, self->options)) {
+        case -1:
+          return -1;
+
+         case -2:
+           goto unknown;
+      }
+
+      while (self->optvalue) {
+        switch (argparse_short_opt (self, self->options)) {
+          case -1:
+            return -1;
+
+          case -2:
+            goto unknown;
+        }
+      }
+
+      continue;
+    }
+
+    // if '--' presents
+    if (!arg[2]) {
+      self->argc--;
+      self->argv++;
+      break;
+    }
+
+    // long option
+    switch (argparse_long_opt (self, self->options)) {
+      case -1:
+        return -1;
+
+      case -2:
+        goto unknown;
+    }
+    continue;
+
+unknown:
+    fprintf (stderr, "error: unknown option `%s`\n", self->argv[0]);
+    argparse_usage (self);
+    return -1;
+  }
+
+end:
+  memmove (self->out + self->cpidx, self->argv,
+           self->argc * sizeof(*self->out));
+  self->out[self->cpidx + self->argc] = NULL;
+
+  return self->cpidx + self->argc;
+}
+
+private int argparse_help_cb (argparse_t *self, const argparse_option_t *option) {
+  (void)option;
+  argparse_usage (self);
+  return -1;
+}
+
 private string_t *this_parse_command (Class (This) *this, char *bytes) {
   (void) this;
   string_t *com = String.new (256);
@@ -209,18 +594,6 @@ private string_t *this_parse_command (Class (This) *this, char *bytes) {
   }
 
   return com;
-}
-
-private int parse_arg_init (Class (This) *this, argparse_t *argparser,
-   argparse_option_t *argparser_options, const char *const *usage_cb, int flags) {
-  (void) this;
-  return argparse_init (argparser, argparser_options, usage_cb, flags);
-}
-
-private int parse_arg_run (Class (This) *this, argparse_t *argparser, int argc,
-                                                             const char **argv) {
-  (void) this;
-  return argparse_parse (argparser, argc, argv);
 }
 
 private void e_set_at_exit_cb (Class (This) *this, EAtExit_cb cb) {
@@ -329,14 +702,13 @@ public void __deinit_l__ (Class (L) **thisp) {
 private void __init_self__ (Class (This) *this) {
   this->self = AllocSelf (This);
 
-  SubSelf (This, parse) parse = SubSelfInit (This, parse,
-    .command = this_parse_command,
-    .arg = SubSelfInit (Thisparse, arg,
-      .init = parse_arg_init,
-      .run =  parse_arg_run
-    )
+  ((Self (This) *) this->self)->parse_command = this_parse_command;
+
+  SubSelf (This, argparse) argparse = SubSelfInit (This, argparse,
+    .init = argparse_init,
+    .exec =  argparse_parse
   );
-  ((Self (This) *) this->self)->parse = parse;
+  ((Self (This) *) this->self)->argparse = argparse;
 
   SubSelf (This, e) e = SubSelfInit (This, e,
     .init = e_init,

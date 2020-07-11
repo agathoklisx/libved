@@ -39,9 +39,11 @@ extern Self (This)  *__SELF__;
 #define Dir     __THIS__->__E__->__ED__->Dir.self
 #define Re      __THIS__->__E__->__ED__->Re.self
 
+#define Argparse ((Self (This) *) __THIS__->self)->argparse
 #if HAS_SHELL_COMMANDS
 #define Proc ((Self (This) *) __THIS__->self)->proc
 #endif
+
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
@@ -52,8 +54,6 @@ DeclareType (argparse_option);
 
 typedef int argparse_callback (argparse_t *, const argparse_option_t *);
 int argparse_help_cb (argparse_t *, const argparse_option_t *);
-int argparse_init (argparse_t *, argparse_option_t *, const char *const *, int);
-int argparse_parse (argparse_t *, int, const char **);
 
 enum argparse_flag {
   ARGPARSE_STOP_AT_NON_OPTION = 1,
@@ -84,7 +84,6 @@ enum argparse_option_flags {
 #define OPT_HELP()       OPT_BOOLEAN('h', "help", NULL,                 \
                                      "show this help message and exit", \
                                      argparse_help_cb, 0, OPT_NONEG)
-
 NewType (argparse_option,
   enum argparse_option_type type;
   const char short_name;
@@ -253,11 +252,6 @@ private void __deinit_ext__ (void);
 
 /* ************************************************ */
 
-NewSubSelf (Thisparse, arg,
-  int (*init) (Class (This) *, argparse_t *, argparse_option_t *, const char *const *, int);
-  int (*run) (Class (This) *, argparse_t *, int, const char **);
-);
-
 NewSubSelf (Thise, set,
   void
     (*at_init_cb) (Class (This) *, EdAtInit_cb),
@@ -297,14 +291,17 @@ NewSubSelf (This, e,
      (*main) (Class (This) *, buf_t *);
 );
 
-NewSubSelf (This, parse,
-  SubSelf (Thisparse, arg) arg;
-  string_t *(*command) (Class (This) *, char *);
+NewSubSelf (This, argparse,
+  int
+    (*init) (argparse_t *, argparse_option_t *, const char *const *, int),
+    (*exec) (argparse_t *, int, const char **);
 );
 
 NewSelf (This,
   SubSelf (This, e) e;
-  SubSelf (This, parse) parse;
+  SubSelf (This, argparse) argparse;
+  string_t *(*parse_command) (Class (This) *, char *);
+
 #if HAS_SHELL_COMMANDS
   Self (proc) proc;
 #endif
