@@ -69,10 +69,6 @@
 #define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #endif
 
-#ifndef READ_FROM_SHELL
-#define READ_FROM_SHELL 1
-#endif
-
 #ifndef NUM_SYNTAXES
 #define NUM_SYNTAXES 32
 #endif
@@ -974,7 +970,7 @@ NewType (ed_init_opts,
   .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
   .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
-  .read_from_shell = READ_FROM_SHELL,            \
+  .read_from_shell = 1,                          \
   .autoindent = NULL,                            \
   .on_open_fname_under_cursor = NULL,            \
   .balanced = NULL,                              \

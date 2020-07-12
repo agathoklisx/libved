@@ -42,10 +42,7 @@ extern Self (This)  *__SELF__;
 #define Argparse ((Self (This) *) __THIS__->self)->argparse
 #define Imap     ((Self (This) *) __THIS__->self)->imap
 #define Spell    ((Self (This) *) __THIS__->self)->spell
-
-#if HAS_SHELL_COMMANDS
-#define Proc ((Self (This) *) __THIS__->self)->proc
-#endif
+#define Proc     ((Self (This) *) __THIS__->self)->proc
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
@@ -191,7 +188,6 @@ NewClass (spell,
   int num_entries;
 );
 
-#if HAS_SHELL_COMMANDS
 NewProp (proc,
   pid_t  pid;
 
@@ -243,14 +239,6 @@ NewSelf (proc,
 NewClass (proc,
   Self (proc) self;
 );
-
-#define PIPE_READ_END  0
-#define PIPE_WRITE_END 1
-  public Class (proc) __init_proc__ (void);
-  public void __deinit_proc__ (Class (proc) **);
-
-  private int ext_ed_sh_popen (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
-#endif /* HAS_SHELL_COMMANDS */
 
 #if HAS_USER_EXTENSIONS
   private void __init_usr__ (ed_t *);
@@ -374,24 +362,25 @@ NewSubSelf (This, e,
      (*main) (Class (This) *, buf_t *);
 );
 
-NewSubSelf (This, argparse,
+NewSelf (argparse,
   int
     (*init) (argparse_t *, argparse_option_t *, const char *const *, int),
     (*exec) (argparse_t *, int, const char **);
 );
 
+NewClass (argparse,
+  Self (argparse) self;
+);
+
 NewSelf (This,
   SubSelf (This, e) e;
-  SubSelf (This, argparse) argparse;
 
+  Self (argparse) argparse;
   Self (intmap) imap;
   Self (spell) spell;
+  Self (proc) proc;
 
   string_t *(*parse_command) (Class (This) *, char *);
-
-#if HAS_SHELL_COMMANDS
-  Self (proc) proc;
-#endif
 
 #if HAS_PROGRAMMING_LANGUAGE
   SubSelf (This, l) l;

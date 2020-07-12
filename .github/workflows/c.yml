@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  linux:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-16.04, ubuntu-20.04]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Make on linux
+        run: |
+          make DEBUG=1 HAS_PROGRAMMING_LANGUAGE=1 HAS_USER_EXTENSIONS=1 HAS_EXPR=1 HAS_TCC=0 HAS_LOCAL_EXTENSIONS=0 HAS_HISTORY=1 CLEAR_BLANKLINES=1 TAB_ON_INSERT_MODE_INDENTS=0 TABWIDTH=8 CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=1 SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1 SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1 BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1 veda-shared
+      - name: clean
+        run: |
+          rm -rf sys
+  macos:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macOS-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Make on macOS
+        run: |
+          make DEBUG=1 HAS_PROGRAMMING_LANGUAGE=1 HAS_USER_EXTENSIONS=1 HAS_EXPR=1 HAS_TCC=0 HAS_LOCAL_EXTENSIONS=0 HAS_HISTORY=1 CLEAR_BLANKLINES=1 TAB_ON_INSERT_MODE_INDENTS=0 TABWIDTH=8 CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=1 SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1 SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1 BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1 veda-shared
+      - name: clean
+        run: |
+          rm -rf sys

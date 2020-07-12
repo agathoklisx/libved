@@ -8514,9 +8514,6 @@ private void buf_draw (buf_t *this) {
 }
 
 private int ved_diff (buf_t **thisp, int to_stdout) {
-#if (HAS_SHELL_COMMANDS == 0)
-  return NOTOK;
-#endif
   buf_t *this = *thisp;
   if (NULL is $myroots(env)->diff_exec) {
     My(Msg).error ($my(root), "diff executable can not be found in $PATH");

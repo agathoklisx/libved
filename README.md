@@ -234,7 +234,6 @@
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
-   HAS_SHELL_COMMANDS=1|0 (en|dis)able shell commands (default 1)
    HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
 
    SYSDIR="dir"           this sets the system directory (default src/sys)
@@ -295,9 +294,6 @@ C_TAB_ON_INSERT_MODE_INDENTS  (1|0) the wrong indentation here is by purpose (de
                           first column, backspace removes trailing ws (default 1)
    SMALL_E_ON_NORMAL_GOES_INSERT_MODE (1|0) 'e' in normal mode after operation
                           enters insert mode (default 1)
-   READ_FROM_SHELL (1|0)  this option enables reading from the standard output
-                          of a shell command (default 1), note: that this option
-                          activates HAS_SHELL_COMMANDS
 
    /* The following options extend the compiler flags (intended for -llib) and
     * intended to be used mainly by the local namespace, but also to give some
@@ -1103,8 +1099,7 @@ Search:
    /* Shell Commands
       The application can also run shell commands or to read into current buffer
       the standard output of a shell command. Interactive applications might have
-      unexpected behavior in this implementation. To disable these features (as they
-      are enabled by default) use "HAS_SHELL_COMMANDS=0" during compilation.
+      unexpected behavior in this implementation.
    */
 
    /* Filetypes
@@ -1332,9 +1327,8 @@ Search:
 
     It can optionally include libved+.h and libved+.c (recommended). Those
     two files can use the following compilation options.
-      HAS_SHELL_COMMANDS, HAS_HISTORY, HAS_SHELL_COMMANDS,
-      HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
-      HAS_PRPGTAMMING_LANGUAGE (the building of the language is handled by the
+      HAS_HISTORY, HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
+      HAS_PROGRAMMING_LANGUAGE (the building of the language is handled by the
       this Makefile automatically, otherwise it should be compiled explicitly:
       note that this specific target language, it can use libcurl)
       HAS_TCC (this option requires libtcc installed)

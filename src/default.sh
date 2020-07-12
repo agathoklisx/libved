@@ -42,9 +42,7 @@ make                                                \
     DEBUG=0                                         \
     DEBUG_INTERPRETER=1                             \
     HAS_PROGRAMMING_LANGUAGE=0                      \
-    HAS_SHELL_COMMANDS=1                            \
     HAS_USER_EXTENSIONS=0                           \
-    HAS_SPELL=0                                     \
     HAS_JSON=0                                      \
     HAS_EXPR=0                                      \
     HAS_TCC=0                                       \
@@ -58,5 +56,4 @@ make                                                \
     SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \
     BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
     BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
-    READ_FROM_SHELL=1                               \
     veda-shared
