@@ -46,7 +46,7 @@ make                                                \
     SYSDIR=$SYSDIR                                  \
     SYSDATADIR=$SYSDATADIR                          \
     SYSTMPDIR=$SYSTMPDIR                            \
-    DEBUG=1                                         \
+    ENABLE_WRITING=1                                \
     DEBUG_INTERPRETER=1                             \
     HAS_PROGRAMMING_LANGUAGE=1                      \
     HAS_USER_EXTENSIONS=1                           \

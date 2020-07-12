@@ -1145,7 +1145,8 @@ NewSelf (cstring,
     *(*extract_word_at) (char *, size_t, char *, size_t, char *, size_t, int, int *, int *),
     *(*itoa) (int, char *, int),
     *(*dup) (const char *, size_t),
-    *(*byte_in_str) (const char *, int);
+    *(*byte_in_str) (const char *, int),
+    *(*byte_in_str_r) (const char *, int);
 
   int
     (*eq) (const char *, const char *),

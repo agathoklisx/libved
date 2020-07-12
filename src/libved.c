@@ -59,18 +59,39 @@ private char *byte_in_str (const char *s, int c) {
     if (*sp == 0) return NULL;
     sp++;
   }
-  return (char *)sp;
+  return (char *) sp;
 }
 
 private char *nullbyte_in_str (const char *s) {
   return byte_in_str (s, 0);
 }
 
+private char *byte_in_str_r (const char *s, int c) {
+  const char *sp = nullbyte_in_str (s);
+  if (sp == s) return NULL;
+  while (*--sp != c)
+    if (sp == s) return NULL;
+
+  return (char *) sp;
+}
+
 private size_t byte_cp (char *dest, const char *src, size_t nelem) {
   const char *sp = src;
   size_t len = 0;
 
-  while (len < nelem and *sp) {
+  while (len < nelem and *sp) { // this differs in memcpy()
+    dest[len] = *sp++;
+    len++;
+  }
+
+  return len;
+}
+
+private size_t byte_cp_all (char *dest, const char *src, size_t nelem) {
+  const char *sp = src;
+  size_t len = 0;
+
+  while (len < nelem) {
     dest[len] = *sp++;
     len++;
   }
@@ -250,18 +271,19 @@ private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t
 public cstring_T __init_cstring__ (void) {
   return ClassInit (cstring,
     .self = SelfInit (cstring,
-      .cmp_n = str_cmp_n,
-      .dup = str_dup,
+      .cp = str_cp,
       .eq = str_eq,
+      .itoa = itoa,
+      .cat = str_cat,
+      .dup = str_dup,
       .eq_n = str_eq_n,
       .chop = str_chop,
-      .itoa = itoa,
-      .extract_word_at = str_extract_word_at,
+      .cmp_n = str_cmp_n,
       .substr = str_substr,
-      .byte_in_str = byte_in_str,
-      .cp = str_cp,
       .cp_fmt = str_cp_fmt,
-      .cat = str_cat,
+      .byte_in_str = byte_in_str,
+      .byte_in_str_r = byte_in_str_r,
+      .extract_word_at = str_extract_word_at,
       .trim = SubSelfInit (cstring, trim,
         .end = str_trim_end,
       ),
@@ -3180,7 +3202,9 @@ private int path_is_absolute (char *path) {
   return IS_DIR_ABS (path);
 }
 
-/* adapt realpath from OpenBSD to this environment */
+/* adapt realpath() from OpenBSD to this environment
+ * while the algorithm is from the above implementation,
+ * we use our functions to do the actual work */
 
 /* $OpenBSD: realpath.c,v 1.13 2005/08/08 08:05:37 espie Exp $
  * Copyright (c) 2003 Constantin S. Svintsoff <kostik@iclub.nsu.ru>
@@ -3255,12 +3279,21 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       return NULL;
     }
 
-    memcpy (next_token, left, s - left);
+    /* in the case of ../../tmp/../home/../usr/lib/../../home/../tmp/a  and in the
+     * last iteration (s - left) gives 16 bytes to copy, when it is just one [a].
+     * memcpy() does what it told to do, so copies more than one byte, but since the
+     * second byte in "a" is the null byte, the function works, but the statement:
+     * next_token[s - left] = '\0'; does it wrong.
+     * So i had to introduce byte_cp_all, that behaves as memcpy behaves.
+     * The next line is the original implementation
+     * memcpy (next_token, left, s - left); 
+     */
+    byte_cp_all (next_token, left, s - left);
     next_token[s - left] = '\0';
     left_len -= s - left;
 
     if (p isnot NULL)
-      memmove (left, s + 1, left_len + 1);
+      str_byte_mv (left, PATH_MAX, 0, s + 1 - left, left_len + 1);
 
     if (resolved[resolved_len - 1] isnot '/') {
       if (resolved_len + 1 >= PATH_MAX)  {
@@ -3280,7 +3313,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       /* Strip the last path component except when we have single "/" */
       if (resolved_len > 1) {
         resolved[resolved_len - 1] = '\0';
-        q = strrchr (resolved, '/') + 1;
+        q = byte_in_str_r (resolved, '/') + 1;
         *q = '\0';
         resolved_len = q - resolved;
       }
@@ -3320,7 +3353,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       } else if (resolved_len > 1) {
         /* Strip the last path component. */
         resolved[resolved_len - 1] = '\0';
-        q = strrchr (resolved, '/') + 1;
+        q = byte_in_str_r (resolved, '/') + 1;
         *q = '\0';
         resolved_len = q - resolved;
       }
@@ -17155,7 +17188,7 @@ private String_t i_dup_string (i_t *this, String_t orig) {
   unsigned len = StringGetLen (orig);
   ptr = i_stack_alloc (this, len);
   if (ptr)
-    memcpy (ptr, StringGetPtr (orig), len);
+    byte_cp (ptr, StringGetPtr (orig), len);
 
   StringSetLen (&x, len);
   StringSetPtr (&x, ptr);
