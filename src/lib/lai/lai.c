@@ -15,9 +15,12 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <curl/curl.h>
 #include <errno.h>
 #include <assert.h>
+
+#ifndef DISABLE_HTTP
+#include <curl/curl.h>
+#endif
 
 #include "__lai.h"
 

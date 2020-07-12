@@ -36,6 +36,7 @@ ENABLE_HTTP := 1
 ifneq ($(ENABLE_HTTP), 0)
   SHARED_FLAGS += -lcurl
 else
+  SHARED_FLAGS =-DDISABLE_HTTP
 endif
 
 shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
