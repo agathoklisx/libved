@@ -230,11 +230,10 @@
   /* But see at the very last section of this document (ERRORS - WARNINGS - BUGS),
      for issues/details. */
 
-  /* All the compilation options: */
+  /* All the compilation options (options that are passing to make): */
 
    DEBUG=1|0              (en|dis)able debug and also writing (default 0)
    ENABLE_WRITING=1|0     (en|dis)able writing (default 0) (also enabled with DEBUG)
-   HAS_HISTORY=1|0        (en|dis)able persistent history (default 0)
 
    SYSDIR="dir"           this sets the system directory (default src/sys)
    VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
@@ -1327,7 +1326,7 @@ Search:
 
     It can optionally include libved+.h and libved+.c (recommended). Those
     two files can use the following compilation options.
-      HAS_HISTORY, HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
+      HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
       HAS_PROGRAMMING_LANGUAGE (the building of the language is handled by the
       this Makefile automatically, otherwise it should be compiled explicitly:
       note that this specific target language, it can use libcurl)

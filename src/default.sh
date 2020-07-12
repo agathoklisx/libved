@@ -47,7 +47,6 @@ make                                                \
     HAS_EXPR=0                                      \
     HAS_TCC=0                                       \
     HAS_LOCAL_EXTENSIONS=0                          \
-    HAS_HISTORY=1                                   \
     CLEAR_BLANKLINES=1                              \
     TAB_ON_INSERT_MODE_INDENTS=0                    \
     TABWIDTH=8                                      \

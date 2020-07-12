@@ -1736,10 +1736,8 @@ private void __init_ext__ (Type (ed) *this) {
   __init_local__ (this);
 #endif
 
-#ifdef HAS_HISTORY
   Ed.history.read (this);
   Ed.set.at_exit_cb (this, Ed.history.write);
-#endif
 }
 
 private void __deinit_ext__ (void) {

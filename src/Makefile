@@ -80,12 +80,6 @@ else
   endif
 endif
 
-HAS_HISTORY := 1
-
-ifneq ($(HAS_HISTORY), 0)
-  FLAGS += -DHAS_HISTORY
-endif
-
 TABWIDTH := 8
 UNDO_NUM_ENTRIES := 40
 RLINE_HISTORY_NUM_ENTRIES := 20
