@@ -30,7 +30,8 @@ int main (int argc, char **argv) {
   ifnot (isatty (fileno (stdin))) {
     /* this looks sufficient but time will tell */
     ifd = dup (fileno (stdin));
-    freopen ("/dev/tty", "r", stdin);
+    if (NULL is freopen ("/dev/tty", "r", stdin))
+      exit (1);
   }
 
   if (NULL is __init_this__ ())

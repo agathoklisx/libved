@@ -655,8 +655,10 @@ private int proc_open (proc_t *this) {
 
     if ($my(dup_stdin)) {
       dup2 ($my(stdin_fds)[PIPE_READ_END], STDIN_FILENO);
-      ifnot (NULL is $my(stdin_buf))
-        write ($my(stdin_fds)[PIPE_WRITE_END], $my(stdin_buf), $my(stdin_buf_size));
+      ifnot (NULL is $my(stdin_buf)) {
+        int ign = write ($my(stdin_fds)[PIPE_WRITE_END], $my(stdin_buf), $my(stdin_buf_size));
+        (void) ign;
+      }
 
       close ($my(stdin_fds)[PIPE_WRITE_END]);
     }
