@@ -1153,6 +1153,7 @@ NewSelf (cstring,
     (*cmp_n) (const char *, const char *, size_t);
 
   size_t
+    (*cat) (char *, size_t, const char *),
     (*cp) (char *, size_t, const char *, size_t),
     (*cp_fmt) (char *, size_t, char *, ...);
 
@@ -1360,6 +1361,7 @@ NewClass (file,
 
 NewSelf (path,
   char
+    *(*real) (const char *, char *),
     *(*basename) (char *),
     *(*extname) (char *),
     *(*dirname) (char *);
