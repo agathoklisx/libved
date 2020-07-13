@@ -729,24 +729,25 @@ NewType (hist,
 
 #define MY_CLASSES(__me__)       \
   Class (__me__) *Me;            \
-  Class (video) *Video;          \
-  Class (term) *Term;            \
-  Class (cstring) *Cstring;      \
-  Class (vstring) *Vstring;      \
-  Class (ustring) *Ustring;      \
-  Class (string) *String;        \
+  Class (I) *I;                  \
   Class (re) *Re;                \
-  Class (input) *Input;          \
-  Class (screen) *Screen;        \
-  Class (cursor) *Cursor;        \
   Class (msg) *Msg;              \
-  Class (error) *Error;          \
+  Class (dir) *Dir;              \
+  Class (vsys) *Vsys;            \
+  Class (term) *Term;            \
   Class (file) *File;            \
   Class (path) *Path;            \
-  Class (dir) *Dir;              \
+  Class (Imap) *Imap;            \
+  Class (input) *Input;          \
+  Class (video) *Video;          \
+  Class (error) *Error;          \
   Class (rline) *Rline;          \
-  Class (vsys) *Vsys;            \
-  Class (I) *I;
+  Class (string) *String;        \
+  Class (screen) *Screen;        \
+  Class (cursor) *Cursor;        \
+  Class (cstring) *Cstring;      \
+  Class (vstring) *Vstring;      \
+  Class (ustring) *Ustring;
 
 NewType (dim,
   int

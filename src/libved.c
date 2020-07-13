@@ -92,8 +92,8 @@ private size_t byte_cp_all (char *dest, const char *src, size_t nelem) {
   size_t len = 0;
 
   while (len < nelem) {
-    dest[len] = *sp++;
-    len++;
+    dest[len] = *sp++; // like memcpy (needed in one case in the code)
+    len++;             // i'm not sure if it is wise
   }
 
   return len;
@@ -104,6 +104,7 @@ private size_t str_cat (char *dest, size_t dest_sz, const char *src) {
   size_t len = dp - dest;
   size_t i = 0;
 
+  // do not change it for *src - it is confirmed that doesn't provide the expected
   while (src[i] and i + len < dest_sz - 1) *dp++ = src[i++];
   *dp = '\0';
   return len + i;
@@ -193,7 +194,7 @@ private char *str_substr (char *dest, size_t len, char *src, size_t src_len, siz
  * Original Source:  http://www.strudel.org.uk/itoa/
  */
 
-/* this is for integers (i wonder maybe is better to use *printf(), but i hate to
+/* this is for integers (i wonder maybe is better to use *printf() - but i hate to
    do it, because of the short code and its focus to this specific functionality) */
 private char *itoa (int value, char *result, int base) {
   if (base < 2 || base > 36) {
@@ -225,8 +226,9 @@ private char *itoa (int value, char *result, int base) {
   return result;
 }
 
-private char *str_extract_word_at (char *bytes, size_t bsize, char *word, size_t wsize,
-   char *Nwtype, size_t Nwsize, int cur_idx, int *fidx, int *lidx) {
+private char *str_extract_word_at (
+char *bytes,  size_t bsize, char *word, size_t wsize, char *Nwtype, size_t Nwsize,
+                                               int cur_idx, int *fidx, int *lidx) {
   if (NULL is bytes or 0 is bsize or (int) bsize <= cur_idx) {
     *lidx = cur_idx;
     return NULL;
@@ -2076,6 +2078,122 @@ tokenize:;
  *   return ts;
  * }
  */
+
+#define MAP_DEFAULT_LENGTH 32
+#define MAP_HASH_KEY(__map__, __key__) ({           \
+  ssize_t hs = 5381; int i = 0;                     \
+  while (key[i]) hs = ((hs << 5) + hs) + key[i++];  \
+  hs % __map__->num_slots;                          \
+})
+
+private void imap_free_slot (imap_t *item) {
+  while (item) {
+    imap_t *tmp = item->next;
+    free (item->key);
+    free (item);
+    item = tmp;
+  }
+}
+
+private void imap_clear (Imap_t *map) {
+  for (size_t i = 0; i < map->num_slots; i++)
+    imap_free_slot (map->slots[i]);
+
+  map->num_keys = 0;
+}
+
+private void imap_free (Imap_t *map) {
+  if (map is NULL) return;
+  for (size_t i = 0; i < map->num_slots; i++)
+    imap_free_slot (map->slots[i]);
+
+  free (map->slots);
+  free (map);
+}
+
+private Imap_t *imap_new (int num_slots) {
+  Imap_t *imap = AllocType (Imap);
+
+  if (1 > num_slots) num_slots = MAP_DEFAULT_LENGTH;
+
+  imap->slots = Alloc (sizeof (imap_t *) * num_slots);
+  imap->num_slots = num_slots;
+  imap->num_keys = 0;
+  for (;--num_slots >= 0;) imap->slots[num_slots] = 0;
+  return imap;
+}
+
+private imap_t *__imap_get__ (Imap_t *imap, char *key, uint idx) {
+  imap_t *slot = imap->slots[idx];
+  while (slot) {
+    if (str_eq (slot->key, key)) return slot;
+    slot = slot->next;
+  }
+  return NULL;
+}
+
+private int imap_get (Imap_t *imap, char *key) {
+  uint idx = MAP_HASH_KEY (imap, key);
+  imap_t *im = __imap_get__ (imap, key, idx);
+  ifnot (NULL is im) return im->val;
+  return 0;
+}
+
+private uint imap_set (Imap_t *imap, char *key, int val) {
+  uint idx = MAP_HASH_KEY (imap, key);
+  imap_t *item = __imap_get__ (imap, key, idx);
+  ifnot (NULL is item) {
+    item->val = val;
+    return idx;
+  } else {
+    item = AllocType (imap);
+    item->key = str_dup (key, bytelen (key));
+    item->val = val;
+    item->next = imap->slots[idx];
+
+    imap->slots[idx] = item;
+    imap->num_keys++;
+  }
+  return idx;
+}
+
+private uint imap_set_with_keylen (Imap_t *imap, char *key) {
+  uint idx = MAP_HASH_KEY (imap, key);
+  imap_t *item = __imap_get__ (imap, key, idx);
+  if (NULL is item) {
+    item = AllocType (imap);
+    size_t len = bytelen (key);
+    item->key = str_dup (key, len);
+    item->val = len;
+    item->next = imap->slots[idx];
+
+    imap->slots[idx] = item;
+    imap->num_keys++;
+  } else
+    item->val = bytelen (key);
+
+  return idx;
+}
+
+private int imap_key_exists (Imap_t *imap, char *key) {
+  uint idx = MAP_HASH_KEY (imap, key);
+  imap_t *item = __imap_get__ (imap, key, idx);
+  return (NULL isnot item);
+}
+
+private Class (Imap) __init_imap__ (void) {
+  return ClassInit (Imap,
+    .self = SelfInit (Imap,
+      .new = imap_new,
+      .free = imap_free,
+      .clear = imap_clear,
+      .get = imap_get,
+      .set = imap_set,
+      .set_with_keylen = imap_set_with_keylen,
+      .key_exists = imap_key_exists
+    )
+  );
+}
 
 /* used by slre and ts */
 private int isdigit (int c) {
@@ -5579,7 +5697,7 @@ private int ved_com_buf_substitute (buf_t *this, rline_t *rl, int *retval) {
   return *retval;
 }
 
-private int ved_com_buf_set (buf_t *this, rline_t *rl, int *retval) {
+private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
   string_t *arg = rline_get_anytype_arg (rl, "ftype");
   ifnot (NULL is arg) {
     int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
@@ -6120,24 +6238,24 @@ private venv_t *venv_new (void) {
   if (hdir[env->home_dir->num_bytes - 1] is DIR_SEP)
     string_clear_at (env->home_dir, env->home_dir->num_bytes - 1);
 
-#ifndef VED_DIR
+#ifndef LIBVED_DIR
   env->my_dir = string_new_with_fmt ("%s/.libved", env->home_dir->bytes);
 #else
-  env->my_dir = string_new_with (VED_DIR);
+  env->my_dir = string_new_with (LIBVED_DIR);
 #endif
   __env_check_directory__ (env->my_dir->bytes, "libved directory", 1, 0, 0);
 
-#ifndef VED_TMPDIR
+#ifndef LIBVED_TMPDIR
   env->tmp_dir = string_new_with_fmt ("%s/tmp", env->my_dir->bytes);
 #else
-  env->tmp_dir = string_new_with (VED_TMPDIR);
+  env->tmp_dir = string_new_with (LIBVED_TMPDIR);
 #endif
   __env_check_directory__ (env->tmp_dir->bytes, "temp directory", 1, 1, 0);
 
-#ifndef VED_DATADIR
+#ifndef LIBVED_DATADIR
   env->data_dir = string_new_with_fmt ("%s/data", env->my_dir->bytes);
 #else
-  env->data_dir = string_new_with (VED_DATADIR);
+  env->data_dir = string_new_with (LIBVED_DATADIR);
 #endif
   __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
 
@@ -6623,7 +6741,7 @@ private ssize_t ed_readline_from_fp (char **line, size_t *len, FILE *fp) {
   return nread;
 }
 
-private int buf_backupfile (buf_t *this) {
+private int buf_com_backupfile (buf_t *this) {
   // RECENT WORDS
   if (NULL is $my(backupfile)) return NOTHING_TODO;
 
@@ -6998,9 +7116,10 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(Term)    = $myparents(Term);
   $my(Path)    = $myparents(Path);
   $my(Vsys)    = $myparents(Vsys);
+  $my(Imap)    = $myparents(Imap);
+  $my(Input)   = $myparents(Input);
   $my(Error)   = $myparents(Error);
   $my(Video)   = $myparents(Video);
-  $my(Input)   = $myparents(Input);
   $my(Rline)   = $myparents(Rline);
   $my(String)  = $myparents(String);
   $my(Cursor)  = $myparents(Cursor);
@@ -7312,9 +7431,10 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   $my(Term)    = $myparents(Term);
   $my(Path)    = $myparents(Path);
   $my(Vsys)    = $myparents(Vsys);
+  $my(Imap)    = $myparents(Imap);
+  $my(Input)   = $myparents(Input);
   $my(Error)   = $myparents(Error);
   $my(Video)   = $myparents(Video);
-  $my(Input)   = $myparents(Input);
   $my(Rline)   = $myparents(Rline);
   $my(String)  = $myparents(String);
   $my(Cursor)  = $myparents(Cursor);
@@ -7874,10 +7994,10 @@ theend:
   return nb;
 }
 
-private char *get_current_word (buf_t *this, char *word, char *Nwtype,
-                                  int Nwtypelen, int *fidx, int *lidx) {
+private char *buf_get_current_word (buf_t *this,
+          char *word, char *NotWord, int NotWordlen, int *fidx, int *lidx) {
   return str_extract_word_at ($mycur(data)->bytes, $mycur(data)->num_bytes,
-    word, MAXLEN_WORD, Nwtype, Nwtypelen, $mycur (cur_col_idx), fidx, lidx);
+    word, MAXLEN_WORD, NotWord, NotWordlen, $mycur (cur_col_idx), fidx, lidx);
 }
 
 #define SEARCH_UPDATE_ROW(idx)                    \
@@ -7981,12 +8101,12 @@ private int rline_search_at_beg (rline_t **rl) {
 private void ved_search_history_push (ed_t *this, char *bytes, size_t len) {
   if ($my(max_num_hist_entries) < $my(history)->search->num_items) {
     histitem_t *tmp = list_pop_tail ($my(history)->search, histitem_t);
-    string_free (tmp->data);
+    My(String).free (tmp->data);
     free (tmp);
   }
 
   histitem_t *h = AllocType (histitem);
-  h->data = string_new_with_len (bytes, len);
+  h->data = My(String).new_with_len (bytes, len);
   list_push ($my(history)->search, h);
 }
 
@@ -8025,7 +8145,7 @@ private int ved_search (buf_t *this, char com) {
 
     char word[MAXLEN_WORD]; word[0] = '\0';
     int fidx, lidx;
-    get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
+    buf_get_current_word (this, word, Notword, Notword_len, &fidx, &lidx);
     sch->pat = My(String).new_with (word);
     if (sch->pat->num_bytes) {
       BYTES_TO_RLINE (rl, sch->pat->bytes, (int) sch->pat->num_bytes);
@@ -8609,7 +8729,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
     case REG_CURWORD:
       {
         char word[MAXLEN_WORD]; int fidx, lidx;
-        ifnot (NULL is get_current_word (buf, word, Notword, Notword_len,
+        ifnot (NULL is buf_get_current_word (buf, word, Notword, Notword_len,
             &fidx, &lidx)) {
           ed_register_new (this, regidx);
           ed_register_push_with (this, regidx, CHARWISE, word, DEFAULT_ORDER);
@@ -8733,25 +8853,46 @@ private void buf_draw (buf_t *this) {
   self(flush);
 }
 
-private int ved_diff (buf_t **thisp, int to_stdout) {
+private int buf_com_diff (buf_t **thisp, rline_t *rl, int to_stdout) {
   buf_t *this = *thisp;
   if (NULL is $myroots(env)->diff_exec) {
     My(Msg).error ($my(root), "diff executable can not be found in $PATH");
     return NOTOK;
   }
 
-  ifnot (file_exists ($my(fname))) return NOTOK;
-  tmpfname_t *tmpn = tmpfname_new ($myroots(env)->tmp_dir->bytes, $my(basename));
-  if (NULL is tmpn or -1 is tmpn->fd) return NOTOK;
-  ved_write_to_fname (this, tmpn->fname->bytes, DONOT_APPEND, 0, this->num_items - 1, FORCE, VERBOSE_OFF);
-  size_t len = $myroots(env)->diff_exec->num_bytes + tmpn->fname->num_bytes +
-       bytelen ($my(fname)) + 6;
-  char com[len];
-  snprintf (com, len, "%s -u %s %s", $myroots(env)->diff_exec->bytes, tmpn->fname->bytes,
-    $my(fname));
-  com[len] = '\0';
+  char file[PATH_MAX]; file[0] = '\0';
+
+  ifnot (NULL is rl) {
+    int origin = My(Rline).arg.exists (rl, "origin");
+    ifnot (origin) goto thenext_condition;
+
+    if (NULL is $my(backupfile)) {
+      My(Msg).send ($my(root), COLOR_WARNING, "backupfile hasn't been set");
+      return NOTHING_TODO;
+    }
+
+    My(Cstring).cp (file, PATH_MAX, $my(backupfile), bytelen ($my(backupfile)));
+    goto thediff;
+  }
+
+thenext_condition:
+  ifnot (My(File).exists ($my(fname))) return NOTOK;
+
+  My(Cstring).cp (file, PATH_MAX, $my(fname), bytelen ($my(fname)));
+
+thediff:;
 
   int retval = NOTHING_TODO;
+
+  tmpfname_t *tmpn = My(File).tmpfname.new ($myroots(env)->tmp_dir->bytes, $my(basename));
+  if (NULL is tmpn or -1 is tmpn->fd) return NOTOK;
+
+  char com[MAXLEN_COM];
+  My(Cstring).cp_fmt (com, MAXLEN_COM, "%s -u %s %s", $myroots(env)->diff_exec->bytes,
+      tmpn->fname->bytes, file);
+
+  ved_write_to_fname (this, tmpn->fname->bytes, DONOT_APPEND, 0, this->num_items - 1, FORCE, VERBOSE_OFF);
+
   if (to_stdout)
     retval = My(Ed).sh.popen ($my(root), this, com, 0, 0, NULL);
   else {
@@ -8760,10 +8901,12 @@ private int ved_diff (buf_t **thisp, int to_stdout) {
       self(clear);
       retval = My(Ed).sh.popen ($my(root), this, com, 1, 0, NULL);
       retval = (retval == 1 ? OK : (retval == 0 ? 1 : retval));
-      ifnot (retval) {     // diff returns 1 when files differ
+      if (OK is retval) {     // diff returns 1 when files differ
         My(Ed).buf.change ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
         retval = OK;
-      }
+      } else
+        My(Msg).send_fmt ($my(root), COLOR_MSG, "No differences have been found");
+
     }
   }
 
@@ -8807,7 +8950,7 @@ thequest:;
           retval = NOTHING_TODO;
           goto theend;
         case 'd':
-          ved_diff (&this, 1);
+          buf_com_diff (&this, NULL, 1);
           goto thequest;
       }
 
@@ -9878,7 +10021,7 @@ private int buf_normal_handle_W (buf_t **thisp) {
   if (c is ESCAPE_KEY) return NOTHING_TODO;
 
   char word[MAXLEN_WORD]; int fidx, lidx;
-  if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
+  if (NULL is buf_get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
   int retval = NOTHING_TODO;
@@ -10122,7 +10265,7 @@ private int ved_delete_word (buf_t *this, int regidx) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   char word[MAXLEN_WORD]; int fidx, lidx;
-  if (NULL is get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
+  if (NULL is buf_get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
   action_t *action = AllocType (action);
@@ -11639,7 +11782,7 @@ theend:
 private int ved_open_fname_under_cursor (buf_t **thisp, int frame, int force_open, int reopen) {
   buf_t *this = *thisp;
   char fname[PATH_MAX]; int fidx, lidx;
-  if (NULL is get_current_word (this, fname, Notfname, Notfname_len, &fidx, &lidx))
+  if (NULL is buf_get_current_word (this, fname, Notfname, Notfname_len, &fidx, &lidx))
     return NOTHING_TODO;
 
   ifnot (NULL is $my(ftype)->on_open_fname_under_cursor)
@@ -12542,7 +12685,7 @@ private int ved_insert_complete_filename (buf_t **thisp) {
       $mycur(data)->num_bytes > 1 and 0 is IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx) - 1])))
     buf_normal_left (this, 1, DRAW);
 
-  get_current_word (this, word, Notfname, Notfname_len, &fidx, &lidx);
+  buf_get_current_word (this, word, Notfname, Notfname_len, &fidx, &lidx);
   size_t len = bytelen (word);
   size_t orig_len = len;
 
@@ -13312,6 +13455,7 @@ private void ved_init_commands (ed_t *this) {
   ved_append_command_arg (this, "set", "--tabwidth=", 11);
   ved_append_command_arg (this, "set", "--autosave=", 11);
   ved_append_command_arg (this, "set", "--ftype=", 8);
+  ved_append_command_arg (this, "diff", "--origin", 8);
   ved_append_command_arg (this, "substitute", "--remove-tabs", 13);
   ved_append_command_arg (this, "s%",         "--remove-tabs", 13);
   ved_append_command_arg (this, "substitute", "--shiftwidth=", 13);
@@ -14479,7 +14623,7 @@ exec:
       goto theend;
 
     case VED_COM_DIFF:
-      retval = ved_diff (thisp, 0);
+      retval = buf_com_diff (thisp, rl, 0);
       goto theend;
 
     case VED_COM_GREP:
@@ -14610,11 +14754,11 @@ exec:
       goto theend;
 
     case VED_COM_BUF_SET:
-      retval = ved_com_buf_set (*thisp, rl, &retval);
+      retval = buf_com_set (*thisp, rl, &retval);
       goto theend;
 
     case VED_COM_BUF_BACKUP:
-      retval = buf_backupfile (*thisp);
+      retval = buf_com_backupfile (*thisp);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
@@ -16414,7 +16558,7 @@ private Class (ed) *editor_new (void) {
         .substitute = buf_substitute,
         .input_box = buf_input_box,
         .init_fname = buf_init_fname,
-        .backupfile = buf_backupfile
+        .backupfile = buf_com_backupfile
       ),
     ),
     .Msg = ClassInit (msg,
@@ -16436,18 +16580,19 @@ private Class (ed) *editor_new (void) {
         .string = ed_error_string
       ),
     ),
-    .Video = __init_video__ (),
+    .Re = __init_re__ (),
+    .Dir = __init_dir__ (),
+    .File = __init_file__ (),
+    .Path = __init_path__ (),
+    .Vsys = __init_vsys__ (),
+    .Imap = __init_imap__ (),
     .Term = __init_term__ (),
+    .Video = __init_video__ (),
+    .Rline = __init_rline__ (),
     .String = __init_string__ (),
     .Cstring = __init_cstring__ (),
     .Vstring = __init_vstring__ (),
-    .Ustring = __init_ustring__ (),
-    .Re = __init_re__ (),
-    .File = __init_file__ (),
-    .Path = __init_path__ (),
-    .Dir = __init_dir__ (),
-    .Rline = __init_rline__ (),
-    .Vsys = __init_vsys__ ()
+    .Ustring = __init_ustring__ ()
   );
 
   this->Cursor.self = this->Term.self.Cursor;
@@ -16519,9 +16664,10 @@ private ed_t *ed_init (E_T *E) {
   $my(File)    = &E->__ED__->File;
   $my(Path)    = &E->__ED__->Path;
   $my(Vsys)    = &E->__ED__->Vsys;
+  $my(Imap)    = &E->__ED__->Imap;
+  $my(Input)   = &E->__ED__->Input;
   $my(Video)   = &E->__ED__->Video;
   $my(Rline)   = &E->__ED__->Rline;
-  $my(Input)   = &E->__ED__->Input;
   $my(Error)   = &E->__ED__->Error;
   $my(Screen)  = &E->__ED__->Screen;
   $my(Cursor)  = &E->__ED__->Cursor;
@@ -16889,8 +17035,9 @@ private ed_T *ed_init_prop (ed_T *this) {
   $my(Dir)     = &this->Dir;
   $my(Path)    = &this->Path;
   $my(File)    = &this->File;
-  $my(Vsys)    = &this->Vsys;
   $my(Term)    = &this->Term;
+  $my(Vsys)    = &this->Vsys;
+  $my(Imap)    = &this->Imap;
   $my(Input)   = &this->Input;
   $my(Error)   = &this->Error;
   $my(Rline)   = &this->Rline;

@@ -95,7 +95,7 @@
 #define MAXLEN_FTYPE_NAME  16
 #define MAXLEN_WORD_ACTION 512
 #define MAX_SCREEN_ROWS    256
-#define MAXLEN_COM         32
+#define MAXLEN_COM         512
 #define DIRWALK_MAX_DEPTH 1024
 
 #define MAXLEN_ED_NAME MAXLEN_NAME
@@ -719,6 +719,19 @@ NewType (vstr,
         int  num_items;
 );
 
+NewType (imap,
+  char *key;
+  int   val;
+  imap_t *next;
+);
+
+NewType (Imap,
+  imap_t **slots;
+  size_t
+    num_slots,
+    num_keys;
+);
+
 /* do not change order */
 NewType (syn,
   char
@@ -1235,6 +1248,26 @@ NewSelf (vstring,
 
 NewClass (vstring,
   Self (vstring) self;
+);
+
+NewSelf (Imap,
+  void
+    (*free) (Imap_t *),
+    (*clear) (Imap_t *);
+
+  Imap_t *(*new) (int);
+
+  int
+    (*get) (Imap_t *, char *),
+    (*key_exists) (Imap_t *, char *);
+
+  uint
+    (*set) (Imap_t *, char *, int),
+    (*set_with_keylen) (Imap_t *, char *);
+);
+
+NewClass (Imap,
+  Self (Imap) self;
 );
 
 NewSubSelf (rline, set,
@@ -1897,23 +1930,24 @@ NewClass (ed,
   Class (win) Win;
   Class (I) I;
 
+  Class (re) Re;
+  Class (msg) Msg;
+  Class (dir) Dir;
+  Class (vsys) Vsys;
   Class (term) Term;
+  Class (Imap) Imap;
+  Class (path) Path;
+  Class (file) File;
+  Class (rline) Rline;
   Class (video) Video;
+  Class (input) Input;
+  Class (error) Error;
+  Class (screen) Screen;
+  Class (cursor) Cursor;
+  Class (string) String;
   Class (cstring) Cstring;
   Class (vstring) Vstring;
   Class (ustring) Ustring;
-  Class (string) String;
-  Class (re) Re;
-  Class (input) Input;
-  Class (screen) Screen;
-  Class (cursor) Cursor;
-  Class (msg) Msg;
-  Class (error) Error;
-  Class (file) File;
-  Class (path) Path;
-  Class (dir) Dir;
-  Class (rline) Rline;
-  Class (vsys) Vsys;
 );
 
 NewSubSelf (E, set,

@@ -21,26 +21,26 @@ extern Self (This)  *__SELF__;
 #define Win     __THIS__->__E__->__ED__->Win.self
 #define Buf     __THIS__->__E__->__ED__->Buf.self
 #define I       __THIS__->__E__->__ED__->I.self
+#define Re      __THIS__->__E__->__ED__->Re.self
+#define Msg     __THIS__->__E__->__ED__->Msg.self
+#define Dir     __THIS__->__E__->__ED__->Dir.self
+#define File    __THIS__->__E__->__ED__->File.self
+#define Path    __THIS__->__E__->__ED__->Path.self
+#define Vsys    __THIS__->__E__->__ED__->Vsys.self
+#define Term    __THIS__->__E__->__ED__->Term.self
+#define Imap    __THIS__->__E__->__ED__->Imap.self
+#define Input   __THIS__->__E__->__ED__->Input.self
+#define Error   __THIS__->__E__->__ED__->Error.self
+#define Rline   __THIS__->__E__->__ED__->Rline.self
+#define Video   __THIS__->__E__->__ED__->Video.self
+#define Cursor  __THIS__->__E__->__ED__->Cursor.self
+#define Screen  __THIS__->__E__->__ED__->Screen.self
+#define String  __THIS__->__E__->__ED__->String.self
 #define Cstring __THIS__->__E__->__ED__->Cstring.self
 #define Ustring __THIS__->__E__->__ED__->Ustring.self
 #define Vstring __THIS__->__E__->__ED__->Vstring.self
-#define String  __THIS__->__E__->__ED__->String.self
-#define Rline   __THIS__->__E__->__ED__->Rline.self
-#define Error   __THIS__->__E__->__ED__->Error.self
-#define Vsys    __THIS__->__E__->__ED__->Vsys.self
-#define Term    __THIS__->__E__->__ED__->Term.self
-#define Cursor  __THIS__->__E__->__ED__->Cursor.self
-#define Video   __THIS__->__E__->__ED__->Video.self
-#define Screen  __THIS__->__E__->__ED__->Screen.self
-#define Input   __THIS__->__E__->__ED__->Input.self
-#define File    __THIS__->__E__->__ED__->File.self
-#define Path    __THIS__->__E__->__ED__->Path.self
-#define Msg     __THIS__->__E__->__ED__->Msg.self
-#define Dir     __THIS__->__E__->__ED__->Dir.self
-#define Re      __THIS__->__E__->__ED__->Re.self
 
 #define Argparse ((Self (This) *) __THIS__->self)->argparse
-#define Imap     ((Self (This) *) __THIS__->self)->imap
 #define Spell    ((Self (This) *) __THIS__->self)->spell
 #define Proc     ((Self (This) *) __THIS__->self)->proc
 
@@ -107,40 +107,7 @@ NewType (argparse,
   const char *optvalue;
 );
 
-NewType (mint,
-  char *key;
-  int   val;
-  mint_t *next;
-);
-
-NewType (intmap,
-  mint_t **slots;
-  size_t
-    num_slots,
-    num_keys;
-);
-
-NewSelf (intmap,
-  void
-    (*free) (intmap_t *),
-    (*clear) (intmap_t *);
-
-  intmap_t *(*new) (int);
-
-  int
-    (*get) (intmap_t *, char *),
-    (*key_exists) (intmap_t *, char *);
-
-  uint
-    (*set) (intmap_t *, char *, int),
-    (*set_with_keylen) (intmap_t *, char *);
-);
-
-NewClass (intmap,
-  Self (intmap) self;
-);
-
-typedef intmap_t spelldic_t;
+typedef Imap_t spelldic_t;
 NewType (spell,
   char
     word[MAXLEN_WORD];
@@ -376,7 +343,6 @@ NewSelf (This,
   SubSelf (This, e) e;
 
   Self (argparse) argparse;
-  Self (intmap) imap;
   Self (spell) spell;
   Self (proc) proc;
 

@@ -13,22 +13,22 @@
 # file, which anyway is here for demonstration and might not have any interest
 # except the author.
 
-if [ -z $VED_SYSDIR ]; then
+if [ -z $LIBVED_SYSDIR ]; then
   SYSDIR=$PWD/sys
 else
-  SYSDIR=$VED_SYSDIR
+  SYSDIR=$LIBVED_SYSDIR
 fi
 
-if [ -z $VED_DATADIR ]; then
+if [ -z $LIBVED_DATADIR ]; then
   SYSDATADIR=$SYSDIR/data
 else
-  SYSDATADIR=$VED_DATADIR
+  SYSDATADIR=$LIBVED_DATADIR
 fi
 
-if [ -z $VED_TMPDIR ]; then
+if [ -z $LIBVED_TMPDIR ]; then
   SYSTMPDIR=$SYSDIR/tmp
 else
-  SYSTMPDIR=$VED_TMPDIR
+  SYSTMPDIR=$LIBVED_TMPDIR
 fi
 
 if [ 0 = $# ]; then

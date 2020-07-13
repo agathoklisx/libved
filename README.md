@@ -143,7 +143,10 @@
 
 ```
 ```sh
+
    cd src
+
+   # Ordinary instructions (might bring some confusion):
 
    # build the shared library
    make shared
@@ -154,22 +157,21 @@
 
    make ENABLE_WRITING=1 shared
 
-   # now build the sample executable that links against the shared object
+   # to build the sample executable that links against the shared object, issue:
+
    make veda-shared
 
-   # to run the executable and open the source files from itself:
+   # for an easy and quick first impression, you can run the executable and open some
+   # of those source files included in this distribution, issue:
 
    make run_shared
 
    # otherwise the LD_LIBRARY_PATH should be used to find the installed shared library,
    # like:
 
-   LD_LIBRARY_PATH=sys/lib sys/bin/veda-101_shared
+   LD_LIBRARY_PATH=sys/lib sys/bin/veda-02_shared
 
-   # for static targets, replace "shared" with "static", but in that case setting
-   #  the LD_LIBRARY_PATH in the last step is not required.
-
-   # to run it under valgring (requires the shared targets):
+   # to run it under valgrind (works only with shared targets):
 
    make check_veda_memory_leaks
 
@@ -193,19 +195,52 @@
 
    make clean
 
+   # Alternative (just one) build instruction (probably the wisest choise):
+
+   sh ./convenience.sh
+
+   # to set the SYSDIR variable and use a custom directory
+
+   LIBVED_SYSDIR=$HOME/libved sh ./convenience.sh
+
+   # or|and to use another C compiler other than gcc:
+
+   CC=clang sh ./convenience.sh
+
+   # Note that because there isn't a separate make install target, if you install
+   # the distribution with SU rights, some of the touched files/directories quite
+   # possible, might bring some troubles at later time, if you try again to build
+   # with user rights. But the worst that can happen, is that during runtine, the
+   # application might need to write in, or to read from, one of those installed
+   # directories, like a temp directory (see below how to avoid this).
+
+   # Produced hierarhy (after installation) (output at Mon 13 Jul 2020):
+   $(SYSDIR)/bin/vedas
+   $(SYSDIR)/bin/veda-02_shared
+   $(SYSDIR)/include/libved+.h
+   $(SYSDIR)/include/libved.h
+   $(SYSDIR)/lib/libved.so
+   $(SYSDIR)/lib/libved-0.2.so
+   $(SYSDIR)/data/spell/Readme
+   $(SYSDIR)/data/spell/spell.txt
+   $(SYSDIR)/tmp
+
    # Notes:
-
-   # The libraries are installed under $SYSDIR/lib.
-   # The header files are installed under $SYSDIR/include.
-   # The applications are installed under $SYSDIR/bin.
-
-   # For convenience:
-   #  - a symbolic link is created to static installed application as veda
-   #  - a shell script is installed to call the shared application as vedas
-   #    having set also LD_LIBRARY_PATH to $SYSDIR/bin
+   #  - libved.so is a symbolic link to the corresponded version
    #
-   # both are installed under $SYSDIR/bin
-   # $(SYSDIR)/bin should be set in $PATH for convenience.
+   #  - vedas is a shell script wrapper, that calls the veda-02_shared executable,
+   #    setting also LD_LIBRARY_PATH
+   #
+   #  - the data and tmp directories can be set to a custom directory, by using
+   #    LIBVED_DATADIR and LIBVED_TMPDIR respectively
+   #
+   #  - if you build the static target, analogous library files will be produced,
+   #    and the executable is installed as veda-02_static. In that case a symbolic
+   #    link is created to static installed executable as veda (no LD_LIBRARY_PATH
+   #    is needed here).
+   #
+   #  - for static targets, replace in the instructions "shared" with "static"
+
 ```
 ```C
 /*
@@ -215,8 +250,8 @@
   ENABLE_WRITING=1|0     (en|dis)able writing (default 0)
 
   SYSDIR="dir"           this sets the system directory (default src/sys)
-  VED_DATADIR="dir"      this can be used for e.g., history (default $(SYSDIR)/data)
-  VED_TMPDIR="dir"       this sets the temp directory (default $(SYSDIR)/tmp)
+  LIBVED_DATADIR="dir"   this can be used for e.g., history (default $(SYSDIR)/data)
+  LIBVED_TMPDIR="dir"    this sets the temp directory (default $(SYSDIR)/tmp)
 
   The following options can change/control the librart behavior.
   They are being used, to set the defaults during filetype initialization.
@@ -224,7 +259,7 @@
   CLEAR_BLANKLINES (1|0) this clear lines with only spaces and when the cursor
                          is on those lines (default 1)
   TAB_ON_INSERT_MODE_INDENTS (1|0) tab in insert mode indents (default 0)
-  C_TAB_ON_INSERT_MODE_INDENTS (1|0) (default 1) (special case for me and C)
+  C_TAB_ON_INSERT_MODE_INDENTS (1|0) (default 1) (special case for C)
   TABWIDTH (width)       this set the default tabwidth (default 8)
   UNDO_NUM_ENTRIES (num) this set the undo entries (default 40)
   RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (default 20)
@@ -267,7 +302,7 @@
   HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
   HAS_PROGRAMMING_LANGUAGE=1|0 (en|dis)able programming language (default 0)
   HAS_CURL=1|0     (en|dis)able libcurl, used by the PL above (default 0)
-  Implemented but used for now only in local code.
+  Implemented, but used for now only in local code.
   HAS_JSON=1|0     (en|dis)able json support (defaulr 0)
 
   The following options extend the compiler flags (intended for -llib) and
@@ -285,16 +320,17 @@
     the default.sh, sets the default options and is pretty minimal and intended
     for testing, while the convenience.sh does the opposite and is intented for
     usage. You can use it to compile the library and the executable simply as:
+
     sh default.sh
     or
     sh convenience.sh
 
   Note: It is not guaranteed that these three compilers will produce the same
-  results. I didn't see any difference with gcc and tcc, but there is at least
-  an issue with clang on visual mode (i can not explain it, i didn't research
-  it as i'm developing with gcc and tcc (i need this code to be compiled with
-  tcc - tcc compiles this code (almost 12000++ lines) in less than a second,
-  while gcc takes 18 and clang 24, in this 5? years old chromebook, that runs
+  results. I didn't see any difference with gcc and tcc, but there was at least
+  some color artifacts, with clang on visual mode in the past (but haven't tried
+  recenctly). The fact is that i'm developing with gcc and tcc (i need this code
+  to be compiled with tcc - tcc compiles this code (almost 12000++ lines) in less
+  than a second, while gcc takes 18 and clang 24, in an old chromebook, that runs
   really low in power - because and of the nature of the application (fragile
   algorithms that might need just a single change, or because of a debug message,
   or just because of a tiny compilation error), compilations like these can
@@ -312,7 +348,7 @@
   for issues/details.
 
   Command line invocation:
-    Usage: veda [options] [filename]
+    Usage: veda[s] [options] [filename]
 
        -h, --help            show this help message and exit
 
@@ -665,7 +701,7 @@ Search:
   :r[ead] filename       (read filename into current buffer)
   :r! cmd                (read into buffer cmd's standard output)
   :!cmd                  (execute command)
-  :diff                  (shows a unified diff in a diff buffer, see Unified Diff)
+  :diff [--origin]       (shows a unified diff in a diff buffer, see Unified Diff)
   :diffbuf               (change focus to the `diff' window/buffer)
   :vgrep --pat=`pat' [--recursive] fname[s] (search for `pat' to fname[s])
   :redraw                (redraw current window)
@@ -1013,14 +1049,21 @@ Search:
 
   The :diff command open a dedicated "diff" buffer, with the results (if any) of
   the differences (in a unified format), between the buffer in memory with the one
-  that is written on the disk. This buffer can be quickly closed with 'q' as in a
-  pager (likewise for the other special buffers, like the message buffer).
-  Note that it first clears the previous diff.
+  that is written on the disk.
+  Note that it first clears the previous diff if any.
 
-  The :diffbuf command gives the focus to this same buffer.
+  The :diff command can take an "--origin" argument. In this case the command will
+  display any differences, between the backup file and and the buffer in memory.
+  For that to work the "backfile" option should be set (either on invocation or by
+  using the :set --backupfile command first with the conjunction with the :@bufbackup
+  command. Otherwise a warning message should be displayed.
 
-  Another usage of this feature is when quiting normally (without forcing) and
-  the buffer has been modified.
+  The :diffbuf command gives the focus to this "diff" buffer. Note, that this buffer
+  can be quickly closed with 'q', line in a pager (likewise for the other special
+  buffers, like the message buffer or the scratch buffer).
+
+  Another usage of this feature is when quiting normally with :quit (without forcing) 
+  and the buffer has been modified.
   In that case a dialog (below) presents some options:
 
     "[bufname] has been modified since last change
@@ -1286,7 +1329,7 @@ Search:
   The sample Application that provides the main() function, can also read
   from standard input to an unamed buffer. Thus it can be used as a pager:
 
-     git diff | veda-101_shared --ftype=diff --pager "$@"
+     git diff "$@" | vedas --ftype=diff --pager "$@"
 
   Application Interface:
   This library can be used with two ways.
