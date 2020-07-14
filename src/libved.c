@@ -26,7 +26,7 @@
 #include "libved.h"
 #include "__libved.h"
 
-private int str_eq (const char *sa, const char *sb) {
+private int cstring_eq (const char *sa, const char *sb) {
   const uchar *spa = (const uchar *) sa;
   const uchar *spb = (const uchar *) sb;
   for (; *spa == *spb; spa++, spb++)
@@ -35,7 +35,7 @@ private int str_eq (const char *sa, const char *sb) {
   return 0;
 }
 
-private int str_cmp_n (const char *sa, const char *sb, size_t n) {
+private int cstring_cmp_n (const char *sa, const char *sb, size_t n) {
   const uchar *spa = (const uchar *) sa;
   const uchar *spb = (const uchar *) sb;
   for (;n--; spa++, spb++) {
@@ -49,8 +49,8 @@ private int str_cmp_n (const char *sa, const char *sb, size_t n) {
 }
 
 /* just for clarity */
-private int str_eq_n  (const char *sa, const char *sb, size_t n) {
-  return (0 == str_cmp_n (sa, sb, n));
+private int cstring_eq_n  (const char *sa, const char *sb, size_t n) {
+  return (0 == cstring_cmp_n (sa, sb, n));
 }
 
 private char *byte_in_str (const char *s, int c) {
@@ -99,7 +99,7 @@ private size_t byte_cp_all (char *dest, const char *src, size_t nelem) {
   return len;
 }
 
-private size_t str_cat (char *dest, size_t dest_sz, const char *src) {
+private size_t cstring_cat (char *dest, size_t dest_sz, const char *src) {
   char *dp = nullbyte_in_str (dest);
   size_t len = dp - dest;
   size_t i = 0;
@@ -110,7 +110,7 @@ private size_t str_cat (char *dest, size_t dest_sz, const char *src) {
   return len + i;
 }
 
-private size_t str_byte_mv (char *str, size_t len, size_t to_idx,
+private size_t cstring_byte_mv (char *str, size_t len, size_t to_idx,
                                    size_t from_idx, size_t nelem) {
   if (from_idx is to_idx) return 0;
   while (to_idx + nelem > len) nelem--;
@@ -144,30 +144,30 @@ private size_t str_byte_mv (char *str, size_t len, size_t to_idx,
   return n - nelem;
 }
 
-private size_t str_cp (char *dest, size_t dest_len, const char *src, size_t nelem) {
+private size_t cstring_cp (char *dest, size_t dest_len, const char *src, size_t nelem) {
   size_t num = (nelem > (dest_len - 1) ? dest_len - 1 : nelem);
   size_t len = (NULL is src ? 0 : byte_cp (dest, src, num));
   dest[len] = '\0';
   return len;
 }
 
-private size_t str_cp_fmt (char *dest, size_t dest_len, char *fmt, ...) {
+private size_t cstring_cp_fmt (char *dest, size_t dest_len, char *fmt, ...) {
   size_t len = VA_ARGS_FMT_SIZE(fmt);
   char bytes[len + 1];
   VA_ARGS_GET_FMT_STR(bytes, len, fmt);
-  return str_cp (dest, dest_len, bytes, len);
+  return cstring_cp (dest, dest_len, bytes, len);
 }
 
 /* the signature changed as in this namespace, size has been already computed */
-private char *str_dup (const char *src, size_t len) {
+private char  *cstring_dup (const char *src, size_t len) {
   /* avoid recomputation */
   // size_t len = bytelen (src);
   char *dest = Alloc (len + 1);
-  str_cp (dest, len + 1, src, len);
+  cstring_cp (dest, len + 1, src, len);
   return dest;
 }
 
-private char *str_trim_end (char *bytes, char c) {
+private char  *cstring_trim_end (char *bytes, char c) {
   char *sp = nullbyte_in_str (bytes);
   sp--;
 
@@ -179,7 +179,7 @@ private char *str_trim_end (char *bytes, char c) {
   return bytes;
 }
 
-private char *str_substr (char *dest, size_t len, char *src, size_t src_len, size_t idx) {
+private char  *cstring_substr (char *dest, size_t len, char *src, size_t src_len, size_t idx) {
   if (src_len < idx + len) {
     dest[0] = '\0';
     return NULL;
@@ -226,7 +226,7 @@ private char *itoa (int value, char *result, int base) {
   return result;
 }
 
-private char *str_extract_word_at (
+private char  *cstring_extract_word_at (
 char *bytes,  size_t bsize, char *word, size_t wsize, char *Nwtype, size_t Nwsize,
                                                int cur_idx, int *fidx, int *lidx) {
   if (NULL is bytes or 0 is bsize or (int) bsize <= cur_idx) {
@@ -273,24 +273,24 @@ char *bytes,  size_t bsize, char *word, size_t wsize, char *Nwtype, size_t Nwsiz
 public cstring_T __init_cstring__ (void) {
   return ClassInit (cstring,
     .self = SelfInit (cstring,
-      .cp = str_cp,
-      .eq = str_eq,
+      .cp = cstring_cp,
+      .eq = cstring_eq,
       .itoa = itoa,
-      .cat = str_cat,
-      .dup = str_dup,
-      .eq_n = str_eq_n,
-      .chop = str_chop,
-      .cmp_n = str_cmp_n,
-      .substr = str_substr,
-      .cp_fmt = str_cp_fmt,
+      .cat = cstring_cat,
+      .dup = cstring_dup,
+      .eq_n = cstring_eq_n,
+      .chop = cstring_chop,
+      .cmp_n = cstring_cmp_n,
+      .substr = cstring_substr,
+      .cp_fmt = cstring_cp_fmt,
       .byte_in_str = byte_in_str,
       .byte_in_str_r = byte_in_str_r,
-      .extract_word_at = str_extract_word_at,
+      .extract_word_at = cstring_extract_word_at,
       .trim = SubSelfInit (cstring, trim,
-        .end = str_trim_end,
+        .end = cstring_trim_end,
       ),
       .byte = SubSelfInit (cstring, byte,
-        .mv = str_byte_mv
+        .mv = cstring_byte_mv
       ),
     )
   );
@@ -1544,7 +1544,7 @@ private string_t *string_new_with_len (const char *bytes, size_t len) {
   string_t *new = AllocType (string);
   size_t sz = string_align (len + 1);
   char *buf = Alloc (sz);
-  len = str_cp (buf, sz, bytes, len);
+  len = cstring_cp (buf, sz, bytes, len);
   new->bytes = buf;
   new->num_bytes = len;
   new->mem_size = sz;
@@ -1571,7 +1571,7 @@ private string_t *string_insert_at_with_len (string_t *this,
   if (idx is (int) this->num_bytes) {
     byte_cp (this->bytes + this->num_bytes, bytes, len);
   } else {
-    str_byte_mv (this->bytes, this->mem_size - 1, idx + len, idx, this->num_bytes - idx);
+    cstring_byte_mv (this->bytes, this->mem_size - 1, idx + len, idx, this->num_bytes - idx);
     byte_cp (this->bytes + idx, bytes, len);
   }
 
@@ -1585,7 +1585,7 @@ private string_t *string_insert_at (string_t *this, const char *bytes, int idx) 
   if (idx < 0 or idx > (int) this->num_bytes) {
     tostderr ("ERROR THAT SHOULD NOT HAPPEN:\n"
               "string_insert_at (): index is out of range\n");
-    tostderr (str_fmt ("this->bytes:\n%s\nlen: %zd\n(argument) index: %d\n",
+    tostderr (STR_FMT ("this->bytes:\n%s\nlen: %zd\n(argument) index: %d\n",
          this->bytes, this->num_bytes, idx));
     return this;
   }
@@ -1613,7 +1613,7 @@ private string_t *string_prepend_byte (string_t *this, char c) {
   int bts = this->mem_size - (this->num_bytes + 2);
   if (1 > bts) string_reallocate (this, 8);
 
-  str_byte_mv (this->bytes, this->num_bytes + 1, 1, 0, this->num_bytes);
+  cstring_byte_mv (this->bytes, this->num_bytes + 1, 1, 0, this->num_bytes);
 
   this->bytes[0] = c;
   this->bytes[++this->num_bytes] = '\0';
@@ -1858,7 +1858,7 @@ private void vstr_prepend_current_with (vstr_t *this, char *bytes) {
   current_list_prepend (this, vstr);
 }
 
-/* like str_dup(), as a new copy */
+/* like cstring_dup(), as a new copy */
 private vstr_t *vstr_dup (vstr_t *this) {
   vstr_t *vs = vstr_new ();
   vstring_t *it = this->head;
@@ -1948,7 +1948,7 @@ theend:
 private void vstr_append_uniq (vstr_t *this, char *bytes) {
   vstring_t *it = this->head;
   while (it) {
-    if (str_eq (it->data->bytes, bytes)) return;
+    if (cstring_eq (it->data->bytes, bytes)) return;
     it = it->next;
   }
 
@@ -2005,8 +2005,8 @@ public void __deinit_vstring__ (vstring_T *this) {
   (void) this;
 }
 
-/* this replaced str_tok() below */
-private vstr_t *str_chop (char *buf, char tok, vstr_t *tokstr,
+/* this replaced cstring_tok() below */
+private vstr_t *cstring_chop (char *buf, char tok, vstr_t *tokstr,
                                      StrChop_cb cb, void *obj) {
   vstr_t *ts = tokstr;
   int ts_isnull = (NULL is ts);
@@ -2032,7 +2032,7 @@ tokenize:;
       } when commented, this broke once the code */
 
       char s[len + 1];
-      str_cp (s, len + 1, p, len);
+      cstring_cp (s, len + 1, p, len);
 
       ifnot (NULL is cb) {
         int retval;
@@ -2059,12 +2059,12 @@ tokenize:;
 }
 
 /* unused (based on strtok(), but i do not want functions with static state) */
-/* private vstr_t *str_tok (char *buf, char *tok, vstr_t *tokstr,
+/* private vstr_t  *cstring_tok (char *buf, char *tok, vstr_t *tokstr,
  *     void (*cb) (vstr_t *, char *, void *), void *obj) {
  *   vstr_t *ts = tokstr;
  *   if (NULL is ts) ts = vstr_new ();
  *
- *   char *src = str_dup (buf, bytelen (buf));
+ *   char *src = cstring_dup (buf, bytelen (buf));
  *   char *sp = strtok (src, tok);
  *   while (sp) {
  *     ifnot (NULL is cb)
@@ -2126,7 +2126,7 @@ private Imap_t *imap_new (int num_slots) {
 private imap_t *__imap_get__ (Imap_t *imap, char *key, uint idx) {
   imap_t *slot = imap->slots[idx];
   while (slot) {
-    if (str_eq (slot->key, key)) return slot;
+    if (cstring_eq (slot->key, key)) return slot;
     slot = slot->next;
   }
   return NULL;
@@ -2147,7 +2147,7 @@ private uint imap_set (Imap_t *imap, char *key, int val) {
     return idx;
   } else {
     item = AllocType (imap);
-    item->key = str_dup (key, bytelen (key));
+    item->key = cstring_dup (key, bytelen (key));
     item->val = val;
     item->next = imap->slots[idx];
 
@@ -2163,7 +2163,7 @@ private uint imap_set_with_keylen (Imap_t *imap, char *key) {
   if (NULL is item) {
     item = AllocType (imap);
     size_t len = bytelen (key);
-    item->key = str_dup (key, len);
+    item->key = cstring_dup (key, len);
     item->val = len;
     item->next = imap->slots[idx];
 
@@ -2699,7 +2699,7 @@ private int re_match (regexp_t *re, const char *regexp, const char *s,
 }
 
 private int re_compile (regexp_t *re) {
-  ifnot (str_cmp_n (re->pat->bytes, "(?i)", 4)) {
+  ifnot (cstring_cmp_n (re->pat->bytes, "(?i)", 4)) {
     re->flags |= RE_IGNORE_CASE;
     string_delete_numbytes_at (re->pat, 4, 0);
   }
@@ -2750,7 +2750,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
     switch (*sub_p) {
       case '\\':
         if (*(sub_p + 1) is 0) {
-          str_cp (re->errmsg, RE_MAXLEN_ERR_MSG, "awaiting escaped char, found (null byte) 0", RE_MAXLEN_ERR_MSG - 1);
+          cstring_cp (re->errmsg, RE_MAXLEN_ERR_MSG, "awaiting escaped char, found (null byte) 0", RE_MAXLEN_ERR_MSG - 1);
           goto theerror;
         }
 
@@ -2781,7 +2781,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
               if (0 > idx or idx + 1 > re->total_caps) goto theerror;
 
               char buf[re->cap[idx]->len + 1];
-              str_cp (buf, re->cap[idx]->len + 1, re->cap[idx]->ptr, re->cap[idx]->len);
+              cstring_cp (buf, re->cap[idx]->len + 1, re->cap[idx]->ptr, re->cap[idx]->len);
               string_append (substr, buf);
             }
 
@@ -2856,9 +2856,9 @@ private int file_is_elf (const char *file) {
   char buf[8];
   ssize_t bts = fd_read (fd, buf, 7);
   buf[bts] = '\0';
-  retval = str_eq_n (buf + 1, "ELF", 3);
+  retval = cstring_eq_n (buf + 1, "ELF", 3);
   ifnot (retval) // static .a files magic number !<arch> (for archive)
-    retval = str_eq_n (buf, "!<arch>", 7);
+    retval = cstring_eq_n (buf, "!<arch>", 7);
 
   close (fd);
   return retval;
@@ -2972,7 +2972,7 @@ again:
 
     vstring_t *it = dlist->list->head;
     while (it) {
-      if (str_eq (name, it->data->bytes)) goto again;
+      if (cstring_eq (name, it->data->bytes)) goto again;
       it = it->next;
     }
 
@@ -3084,7 +3084,7 @@ private dirlist_t *dirlist (char *dir, int flags) {
   dirlist_t *dlist = AllocType (dirlist);
   dlist->free = dirlist_free;
   dlist->list = vstr_new ();
-  str_cp (dlist->dir, PATH_MAX, dir, PATH_MAX - 1);
+  cstring_cp (dlist->dir, PATH_MAX, dir, PATH_MAX - 1);
 
   while (1) {
     errno = 0;
@@ -3312,7 +3312,7 @@ private char *path_dirname (char *name) {
 
   len = sep - name + 1;
   dname = Alloc (len + 1);
-  str_cp (dname, len + 1, name, len);
+  cstring_cp (dname, len + 1, name, len);
   return dname;
 }
 
@@ -3370,15 +3370,15 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       return (resolved);
 
     resolved_len = 1;
-    left_len = str_cp (left, PATH_MAX, path + 1, PATH_MAX - 1);
+    left_len = cstring_cp (left, PATH_MAX, path + 1, PATH_MAX - 1);
   } else {
     if (getcwd (resolved, PATH_MAX) is NULL) {
-      str_cp (resolved, PATH_MAX,  ".", 1);
+      cstring_cp (resolved, PATH_MAX,  ".", 1);
       return NULL;
     }
 
     resolved_len = bytelen (resolved);
-    left_len = str_cp (left, PATH_MAX, path, PATH_MAX -1);
+    left_len = cstring_cp (left, PATH_MAX, path, PATH_MAX -1);
   }
 
   if (left_len >= PATH_MAX or resolved_len >= PATH_MAX) {
@@ -3411,7 +3411,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
     left_len -= s - left;
 
     if (p isnot NULL)
-      str_byte_mv (left, PATH_MAX, 0, s + 1 - left, left_len + 1);
+      cstring_byte_mv (left, PATH_MAX, 0, s + 1 - left, left_len + 1);
 
     if (resolved[resolved_len - 1] isnot '/') {
       if (resolved_len + 1 >= PATH_MAX)  {
@@ -3425,9 +3425,9 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
 
     if (next_token[0] is '\0')
       continue;
-    else if (str_eq (next_token, "."))
+    else if (cstring_eq (next_token, "."))
       continue;
-    else if (str_eq (next_token, "..")) {
+    else if (cstring_eq (next_token, "..")) {
       /* Strip the last path component except when we have single "/" */
       if (resolved_len > 1) {
         resolved[resolved_len - 1] = '\0';
@@ -3440,7 +3440,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
 
     /* Append the next path component and lstat() it. If lstat() fails we still
      * can return successfully if there are no more path components left */
-    resolved_len = str_cat (resolved, PATH_MAX, next_token);
+    resolved_len = cstring_cat (resolved, PATH_MAX, next_token);
     if (resolved_len >= PATH_MAX) {
       errno = ENAMETOOLONG;
       return NULL;
@@ -3488,13 +3488,13 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
           symlink[slen] = '/';
           symlink[slen + 1] = 0;
         }
-        left_len = str_cat (symlink, PATH_MAX, left);
+        left_len = cstring_cat (symlink, PATH_MAX, left);
         if (left_len >= PATH_MAX) {
           errno = ENAMETOOLONG;
           return NULL;
         }
       }
-     left_len = str_cp (left, PATH_MAX, symlink, PATH_MAX - 1);
+     left_len = cstring_cp (left, PATH_MAX, symlink, PATH_MAX - 1);
     }
   }
 
@@ -4230,7 +4230,7 @@ private menu_t *menu_new (ed_t *this, int first_row, int last_row, int first_col
   menu->this = self(get.current_buf);
   ifnot (NULL is pat) {
     menu->patlen = patlen;
-    str_cp (menu->pat, MAXLEN_PAT, pat, patlen);
+    cstring_cp (menu->pat, MAXLEN_PAT, pat, patlen);
   }
 
   menu->retval = menu->process_list (menu);
@@ -4364,7 +4364,7 @@ init_list:;
   menu->num_rows = rend_rows;
   menu->first_row = first_row;
 
-  char *fmt =  str_fmt ("\033[%%dm%%-%ds%%s", maxlen);
+  char *fmt = STR_FMT ("\033[%%dm%%-%ds%%s", maxlen);
 
   vrow_pos = first_row;
 
@@ -4396,7 +4396,7 @@ init_list:;
       for (iidx = 0; iidx < num and iidx + (ridx  * num) + (frow_idx * num) < menu->list->num_items; iidx++) {
         int len = ((int) it->data->num_bytes > maxlen ? maxlen : (int) it->data->num_bytes);
         char item[len + 1];
-        str_cp (item, len + 1, it->data->bytes, len);
+        cstring_cp (item, len + 1, it->data->bytes, len);
 
         int color = (iidx + (ridx * num) + (frow_idx * num) is cur_idx)
            ? COLOR_MENU_SEL : COLOR_MENU_BG;
@@ -4533,9 +4533,9 @@ insert_char:
           if (rl->line->tail->data->bytes[0] is ' ')
             string_clear_at (p, p->num_bytes - 1);
 
-          ifnot (str_eq (menu->pat, p->bytes)) {
+          ifnot (cstring_eq (menu->pat, p->bytes)) {
             menu->patlen = p->num_bytes;
-            str_cp (menu->pat, MAXLEN_PAT, p->bytes, p->num_bytes);
+            cstring_cp (menu->pat, MAXLEN_PAT, p->bytes, p->num_bytes);
           }
 
           string_free (p);
@@ -4968,7 +4968,7 @@ private int vundo_insert (buf_t *this, act_t *act, action_t *redoact) {
   ract->type = DELETE_LINE;
   vundo_set (ract, DELETE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  ract->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   self(cur.delete);
@@ -5028,7 +5028,7 @@ private int vundo_replace_line (buf_t *this, act_t *act, action_t *redoact) {
   self(set.row.idx, act->idx, act->row_pos - $my(dim)->first_row, act->col_pos);
   vundo_set (ract, REPLACE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  ract->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   My(String).replace_with ($mycur(data), act->bytes);
@@ -5085,7 +5085,7 @@ private void buf_action_set_current (buf_t *this, action_t *action, int type) {
   act_t *act = AllocType (act);
   vundo_set (act, type);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 }
 
@@ -5095,9 +5095,9 @@ private void buf_action_set_with (buf_t *this, action_t *action,
   vundo_set (act, type);
   act->idx = ((idx < 0 or idx >= this->num_items) ? this->cur_idx : idx);
   if (NULL is bytes)
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   else
-    act->bytes = str_dup (bytes, len);
+    act->bytes = cstring_dup (bytes, len);
   stack_push (action, act);
 }
 
@@ -5195,7 +5195,7 @@ private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
       }
 
     ifnot (NULL is $my(syn)->multiline_comment_continuation)
-      if (str_eq_n (it->data->bytes, $my(syn)->multiline_comment_continuation,
+      if (cstring_eq_n (it->data->bytes, $my(syn)->multiline_comment_continuation,
       	$my(syn)->multiline_comment_continuation_len)) {
         found = 1;
         break;
@@ -5363,7 +5363,7 @@ parse_char:
         int kw_len = $my(syn)->keywords_len[j];
         // int is_glob = $my(syn)->keywords[j][kw_len] is '*';if (is_glob) kw_len--;
 
-        if (str_eq_n (&line[idx], $my(syn)->keywords[j], kw_len) and
+        if (cstring_eq_n (&line[idx], $my(syn)->keywords[j], kw_len) and
            IsSeparator (line[idx + kw_len])) {
          // (0 is is_glob ? IsSeparator (line[idx + kw_len]) : 1)) {
           int color = $my(syn)->keywords_colors[j];
@@ -5393,7 +5393,7 @@ next_char:;
   }
 
 theend:
-  str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+  cstring_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
   return line;
 }
 
@@ -5600,7 +5600,7 @@ private string_t *buf_autoindent_c (buf_t *this, row_t *row) {
 
 private ftype_t *__ftype_new__ (syn_t *syn) {
   ftype_t *this = AllocType (ftype);
-  str_cp (this->name, MAXLEN_FTYPE_NAME, syn->filetype, MAXLEN_FTYPE_NAME - 1);
+  cstring_cp (this->name, MAXLEN_FTYPE_NAME, syn->filetype, MAXLEN_FTYPE_NAME - 1);
   return this;
 }
 
@@ -5615,7 +5615,7 @@ private int ed_syn_get_ftype_idx (ed_t *this, char *name) {
   if (NULL is name) return FTYPE_DEFAULT;
 
   for (int i = 0; i < $my(num_syntaxes); i++) {
-    if (str_eq ($my(syntaxes)[i].filetype, name))
+    if (cstring_eq ($my(syntaxes)[i].filetype, name))
       return i;
   }
 
@@ -5702,12 +5702,12 @@ private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
   ifnot (NULL is arg) {
     int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
     syn_t syn = $myroots(syntaxes)[idx];
-    if (str_eq (syn.filetype, $my(ftype)->name))
+    if (cstring_eq (syn.filetype, $my(ftype)->name))
       return *retval;
 
     buf_free_ftype (this);
     $my(ftype) = syn.init (this);
-    str_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
+    cstring_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
     goto theend;
   }
 
@@ -5800,7 +5800,7 @@ private void buf_set_ftype (buf_t *this, int ftype) {
   for (int i = 0; i < $myroots(num_syntaxes); i++) {
     int j = 0;
     while ($myroots(syntaxes)[i].filenames[j])
-      if (str_eq ($myroots(syntaxes)[i].filenames[j++], $my(basename))) {
+      if (cstring_eq ($myroots(syntaxes)[i].filenames[j++], $my(basename))) {
         $my(ftype) = $myroots(syntaxes)[i].init (this);
         return;
       }
@@ -5809,7 +5809,7 @@ private void buf_set_ftype (buf_t *this, int ftype) {
 
     j = 0;
     while ($myroots(syntaxes)[i].extensions[j])
-      if (str_eq ($myroots(syntaxes)[i].extensions[j++], $my(extname))) {
+      if (cstring_eq ($myroots(syntaxes)[i].extensions[j++], $my(extname))) {
         $my(ftype) = $myroots(syntaxes)[i].init (this);
         return;
       }
@@ -5818,7 +5818,7 @@ private void buf_set_ftype (buf_t *this, int ftype) {
 
     j = 0;
     while ($myroots(syntaxes)[i].shebangs[j]) {
-      if (str_eq_n ($myroots(syntaxes)[i].shebangs[j], this->head->data->bytes,
+      if (cstring_eq_n ($myroots(syntaxes)[i].shebangs[j], this->head->data->bytes,
           bytelen ($myroots(syntaxes)[i].shebangs[j]))) {
         $my(ftype) = $myroots(syntaxes)[i].init (this);
         return;
@@ -6181,7 +6181,7 @@ private int __env_check_directory__ (char *dir, char *dir_descr,
   if (warn) {
     char mode_string[12];
     vsys_stat_mode_to_string (mode_string, st.st_mode);
-    ifnot (str_eq (mode_string, "drwx------")) {
+    ifnot (cstring_eq (mode_string, "drwx------")) {
       fprintf (stderr, "Warning: (%s) directory |%s| permissions is not 0700 or drwx------\n",
          dir_descr, dir);
 
@@ -6286,26 +6286,6 @@ private void venv_free (venv_t **env) {
   string_free ((*env)->env_str);
 
   free (*env); *env = NULL;
-}
-
-private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
-  My(String).replace_with_len ($my(env)->env_str, v->bytes, v->num_bytes);
-  return $my(env)->env_str;
-}
-
-private string_t *venv_get (Class (E) *__e__, char *name) {
-  ed_T *this = __e__->__ED__;
-  if (str_eq (name, "group_name"))  return __venv_get__ (this, $my(env)->group_name);
-  if (str_eq (name, "user_name"))  return __venv_get__ (this, $my(env)->user_name);
-  if (str_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
-  if (str_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
-  if (str_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
-  if (str_eq (name, "my_dir")) return __venv_get__ (this,  $my(env)->my_dir);
-  if (str_eq (name, "tmp_dir")) return __venv_get__ (this, $my(env)->tmp_dir);
-  if (str_eq (name, "data_dir")) return __venv_get__ (this, $my(env)->data_dir);
-  if (str_eq (name, "diff_exec")) return __venv_get__ (this, $my(env)->diff_exec);
-  if (str_eq (name, "xclip_exec")) return __venv_get__ (this,  $my(env)->xclip_exec);
-  return NULL;
 }
 
 private void history_free (hist_t **hist) {
@@ -6540,7 +6520,7 @@ private int buf_current_set (buf_t *this, int idx) {
 }
 
 private void buf_set_mode (buf_t *this, char *mode) {
-  str_cp ($my(mode), MAXLEN_MODE, mode, MAXLEN_MODE - 1);
+  cstring_cp ($my(mode), MAXLEN_MODE, mode, MAXLEN_MODE - 1);
 }
 
 private void buf_set_autosave (buf_t *this, long minutes) {
@@ -6560,7 +6540,7 @@ private void buf_set_backup (buf_t *this, int backup, char *suffix) {
       or NULL isnot $my(backupfile)
       or NULL is suffix
       or ($my(flags) & BUF_IS_SPECIAL)
-      or str_eq ($my(fname), UNAMED))
+      or cstring_eq ($my(fname), UNAMED))
     return;
 
   size_t len = bytelen (suffix);
@@ -6618,7 +6598,7 @@ private void buf_set_as_unamed (buf_t *this) {
    * error: initializer element is not constant
    */
   $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-  str_cp ($my(fname), len + 1, UNAMED, len);
+  cstring_cp ($my(fname), len + 1, UNAMED, len);
   self(set.as.non_existant);
 }
 
@@ -6628,7 +6608,7 @@ private void buf_set_as_pager (buf_t *this) {
 
 private int buf_set_fname (buf_t *this, char *filename) {
   int is_null = (NULL is filename);
-  int is_unamed = (is_null ? 0 : str_eq (filename, UNAMED));
+  int is_unamed = (is_null ? 0 : cstring_eq (filename, UNAMED));
   size_t len = ((is_null or is_unamed) ? 0 : bytelen (filename));
 
   if (is_null or 0 is len or is_unamed) {
@@ -6655,7 +6635,7 @@ private int buf_set_fname (buf_t *this, char *filename) {
 
   if ($my(flags) & BUF_IS_SPECIAL) {
     $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-    str_cp ($my(fname), len + 1, fname->bytes, len);
+    cstring_cp ($my(fname), len + 1, fname->bytes, len);
     self(set.as.non_existant);
     return OK;
     /* this stays as a reference as tcc segfault'ed, when jumping to the label
@@ -6690,13 +6670,13 @@ private int buf_set_fname (buf_t *this, char *filename) {
       goto concat_with_cwd;
     else {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      str_cp ($my(fname), len + 1, fname->bytes, len);
+      cstring_cp ($my(fname), len + 1, fname->bytes, len);
     }
   } else {
     $my(flags) &= ~FILE_EXISTS;
     if (is_abs) {
       $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-      str_cp ($my(fname), len + 1, fname->bytes, len);
+      cstring_cp ($my(fname), len + 1, fname->bytes, len);
     } else {
 concat_with_cwd:;
       char *cwd = dir_current ();
@@ -6747,7 +6727,7 @@ private int buf_com_backupfile (buf_t *this) {
 
   if (file_exists ($my(backupfile))) {
     utf8 chars[] = {'y', 'Y', 'n', 'N'};
-    utf8 c =  quest (this, str_fmt ("backup file: %s exists\noverride? [yYnN]",
+    utf8 c =  quest (this, STR_FMT ("backup file: %s exists\noverride? [yYnN]",
         $my(backupfile)), chars, ARRLEN(chars));
 
       switch (c) {
@@ -6760,7 +6740,7 @@ private int buf_com_backupfile (buf_t *this) {
 }
 
 private ssize_t buf_read_fname (buf_t *this) {
-  if ($my(fname) is NULL or str_eq ($my(fname), UNAMED)) return NOTOK;
+  if ($my(fname) is NULL or cstring_eq ($my(fname), UNAMED)) return NOTOK;
 
   FILE *fp = fopen ($my(fname), "r");
 
@@ -7289,7 +7269,7 @@ private buf_t *win_get_buf_by_name (win_t *w, const char *fname, int *idx) {
   buf_t *this = w->head;
   while (this) {
     if ($my(fname) isnot NULL)
-      if (str_eq ($my(fname), fname)) return this;
+      if (cstring_eq ($my(fname), fname)) return this;
 
     this = this->next;
     *idx += 1;
@@ -7416,7 +7396,7 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   if (NULL is name) {
     $my(name) = ed_name_gen (&ed->name_gen, "win:", 4);
   } else
-    $my(name) = str_dup (name, bytelen (name));
+    $my(name) = cstring_dup (name, bytelen (name));
 
   $my(parent) = ed;
 
@@ -7578,7 +7558,7 @@ private void ved_append_toscratch (ed_t *this, int clear_first, char *bytes) {
 
   if (clear_first) My(Buf).clear (buf);
 
-  vstr_t *lines = str_chop (bytes, '\n', NULL, NO_CB_FN, NULL);
+  vstr_t *lines = cstring_chop (bytes, '\n', NULL, NO_CB_FN, NULL);
   vstring_t *it = lines->head;
 
   int ifclear = 0;
@@ -7600,9 +7580,9 @@ private void ved_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, .
 }
 
 private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
-  ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+  ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
     self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
-    ifnot (str_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+    ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
       ved_scratch_buf (this);
       self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
     }
@@ -7616,7 +7596,7 @@ private int ved_scratch (ed_t *this, buf_t **bufp, int at_eof) {
 
 private int ved_messages (ed_t *this, buf_t **bufp, int at_eof) {
   self(buf.change, bufp, VED_MSG_WIN, VED_MSG_BUF);
-  ifnot (str_eq ($from((*bufp), fname), VED_MSG_BUF))
+  ifnot (cstring_eq ($from((*bufp), fname), VED_MSG_BUF))
     return NOTHING_TODO;
 
   if (at_eof) buf_normal_eof (*bufp, DRAW);
@@ -7636,7 +7616,7 @@ private void ved_append_message (ed_t *this, char *msg) {
   buf_t *buf = self(buf.get, VED_MSG_WIN, VED_MSG_BUF);
   ifnot (buf) return;
   vstr_t unused;
-  str_chop (msg, '\n', &unused, ved_append_message_cb, (void *) buf);
+  cstring_chop (msg, '\n', &unused, ved_append_message_cb, (void *) buf);
 }
 
 private void ved_append_message_fmt (ed_t *this, char *fmt, ...) {
@@ -7996,7 +7976,7 @@ theend:
 
 private char *buf_get_current_word (buf_t *this,
           char *word, char *NotWord, int NotWordlen, int *fidx, int *lidx) {
-  return str_extract_word_at ($mycur(data)->bytes, $mycur(data)->num_bytes,
+  return cstring_extract_word_at ($mycur(data)->bytes, $mycur(data)->num_bytes,
     word, MAXLEN_WORD, NotWord, NotWordlen, $mycur (cur_col_idx), fidx, lidx);
 }
 
@@ -8060,11 +8040,11 @@ private int __ved_search__ (buf_t *this, search_t *sch) {
       sch->found = 1;
 
       sch->match = Alloc ((size_t) (re->match_len) + 1);
-      str_cp (sch->match, re->match_len + 1, re->match_ptr, re->match_len);
+      cstring_cp (sch->match, re->match_len + 1, re->match_ptr, re->match_len);
 
       sch->col = re->match_idx;
       sch->prefix = Alloc ((size_t) sch->col + 1);
-      str_cp (sch->prefix, sch->col + 1, sch->row->data->bytes, sch->col);
+      cstring_cp (sch->prefix, sch->col + 1, sch->row->data->bytes, sch->col);
 
       sch->end = sch->row->data->bytes + re->retval;
       retval = OK;
@@ -8173,7 +8153,7 @@ private int ved_search (buf_t *this, char com) {
     if (rl->line->tail->data->bytes[0] is ' ')
       string_clear_at (p, p->num_bytes - 1);
 
-    if (str_eq (sch->pat->bytes, p->bytes)) {
+    if (cstring_eq (sch->pat->bytes, p->bytes)) {
       string_free (p);
     } else {
       string_replace_with (sch->pat, p->bytes);
@@ -8374,7 +8354,7 @@ private int ved_grep (buf_t **thisp, char *pat, vstr_t *fnames) {
   $my(video)->row_pos = $my(cur_video_row);
   $my(video)->col_pos = $my(cur_video_col);
   buf_normal_down (this, 1, DONOT_ADJUST_COL, DONOT_DRAW);
-  ifnot (str_eq ($from((*thisp), fname), VED_SEARCH_BUF))
+  ifnot (cstring_eq ($from((*thisp), fname), VED_SEARCH_BUF))
     ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
   else
     self(draw);
@@ -8395,7 +8375,7 @@ int interactive, int fidx, int lidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   row_t *it = this->head;
@@ -8421,10 +8401,10 @@ searchandsub:;
     if (interactive) {
       size_t stacklen = bidx + re->match_idx + 1;
       char prefix[stacklen];
-      str_cp (prefix, stacklen, it->data->bytes, stacklen - 1);
+      cstring_cp (prefix, stacklen, it->data->bytes, stacklen - 1);
 
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A', 'c', 'C'};
-      char qu[MAXLEN_LINE]; /* using str_fmt (a statement expression) causes  */
+      char qu[MAXLEN_LINE]; /* using STR_FMT (a statement expression) causes  */
                         /* messages for uninitialized value[s] (on clang) */
       snprintf (qu, MAXLEN_LINE,
         "|match at line %d byte idx %d|\n"
@@ -8449,7 +8429,7 @@ searchandsub:;
     act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = idx - 1;
-    act->bytes = str_dup (it->data->bytes, it->data->num_bytes);
+    act->bytes = cstring_dup (it->data->bytes, it->data->num_bytes);
     stack_push (action, act);
     string_replace_numbytes_at_with (it->data, re->match_len, re->match_idx + bidx,
       substr->bytes);
@@ -8929,12 +8909,12 @@ private int ved_quit (ed_t *ed, int force, int global) {
       if ($my(flags) & BUF_IS_SPECIAL
           or 0 is ($my(flags) & BUF_IS_MODIFIED)
           or ($my(flags) & BUF_IS_PAGER)
-          or str_eq ($my(fname), UNAMED))
+          or cstring_eq ($my(fname), UNAMED))
         goto bufnext;
 
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C','d'};
 thequest:;
-      utf8 c = quest (this, str_fmt (
+      utf8 c = quest (this, STR_FMT (
          "%s has been modified since last change\n"
          "continue writing? [yY|nN], [cC]ansel, unified [d]iff?",
          $my(fname)), chars, ARRLEN (chars));
@@ -9465,7 +9445,7 @@ private int buf_normal_replace_char (buf_t *this) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
   vundo_push (this, action);
 
@@ -9491,13 +9471,13 @@ private int buf_normal_delete_eol (buf_t *this, int regidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
   vundo_push (this, action);
 
   int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
   char buf[len + 1];
-  str_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+  cstring_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
   ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
 
@@ -9575,14 +9555,14 @@ private int ved_join (buf_t *this) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   row_t *row = buf_current_pop_next (this);
   act_t *act2 = AllocType (act);
   vundo_set (act2, DELETE_LINE);
   act2->idx = this->cur_idx + 1;
-  act2->bytes = str_dup (row->data->bytes, row->data->num_bytes);
+  act2->bytes = cstring_dup (row->data->bytes, row->data->num_bytes);
 
   stack_push (action, act2);
   vundo_push (this, action);
@@ -9617,7 +9597,7 @@ private int buf_normal_delete (buf_t *this, int count, int regidx) {
     act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   }
 
   int clen = ustring_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
@@ -9641,7 +9621,7 @@ private int buf_normal_delete (buf_t *this, int count, int regidx) {
   }
 
   char buf[len + 1];
-  str_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+  cstring_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
   My(String).delete_numbytes_at ($mycur(data), len, $mycur(cur_col_idx));
 
   if (calc_width and 0 isnot width)
@@ -9693,7 +9673,7 @@ private int ved_inc_dec_char (buf_t *this, int count, utf8 com) {
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
   vundo_push (this, action);
 
@@ -9737,7 +9717,7 @@ private int ved_word_math (buf_t *this, int count, utf8 com) {
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
   vundo_push (this, action);
 
@@ -9841,7 +9821,7 @@ private int ved_complete_word (buf_t **thisp) {
     act_t *act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
     vundo_push (this, action);
     My(String).delete_numbytes_at ($mycur(data), orig_patlen, $my(shared_int));
@@ -9929,7 +9909,7 @@ private int ved_complete_line (buf_t *this) {
     act_t *act = AllocType (act);
     vundo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
     vundo_push (this, action);
     My(String).clear ($mycur(data));
@@ -9979,7 +9959,7 @@ private int ved_complete_word_actions_cb (menu_t *menu) {
     menu->list = vstr_new ();
     vstring_t *it = $myroots(word_actions)->head;
     while (it) {
-      if (str_eq_n (it->data->bytes, menu->pat, menu->patlen))
+      if (cstring_eq_n (it->data->bytes, menu->pat, menu->patlen))
         vstr_add_sort_and_uniq (menu->list, it->data->bytes);
       it = it->next;
     }
@@ -10038,7 +10018,7 @@ private int buf_normal_handle_W (buf_t **thisp) {
 private int ved_actions_token_cb (vstr_t *str, char *tok, void *menu_o) {
   menu_t *menu = (menu_t *) menu_o;
   if (menu->patlen)
-    ifnot (str_eq_n (tok, menu->pat, menu->patlen)) return OK;
+    ifnot (cstring_eq_n (tok, menu->pat, menu->patlen)) return OK;
 
   vstr_append_current_with (str, tok);
   return OK;
@@ -10053,7 +10033,7 @@ private int ved_complete_file_actions_cb (menu_t *menu) {
   buf_t *this = menu->this;
 
   vstr_t *items;
-  items = str_chop ($myroots(file_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
+  items = cstring_chop ($myroots(file_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
   menu->list = items;
   menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
   return DONE;
@@ -10182,7 +10162,7 @@ private int buf_normal_handle_g (buf_t **thisp, int count) {
       return buf_normal_bof (this, DRAW);
 
     case 'f':
-      return ved_open_fname_under_cursor (thisp, str_eq ($my(fname), VED_MSG_BUF)
+      return ved_open_fname_under_cursor (thisp, cstring_eq ($my(fname), VED_MSG_BUF)
          ? 0 : AT_CURRENT_FRAME, OPEN_FILE_IFNOT_EXISTS, DONOT_REOPEN_FILE_IF_LOADED);
 
     case 'v':
@@ -10272,11 +10252,11 @@ private int ved_delete_word (buf_t *this, int regidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   int len = $mycur(cur_col_idx) - fidx;
   char buf[len + 1];
-  str_cp (buf, len + 1, $mycur(data)->bytes + fidx, len);
+  cstring_cp (buf, len + 1, $mycur(data)->bytes + fidx, len);
 
   act->cur_col_idx = $mycur(cur_col_idx);
   act->first_col_idx = $mycur(first_col_idx);
@@ -10329,7 +10309,7 @@ private int ved_delete_line (buf_t *this, int count, int regidx) {
     act_t *act = AllocType (act);
     vundo_set (act, DELETE_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
 
     /* with large buffers, this really slowdown a lot the operation */
@@ -10421,7 +10401,7 @@ setaction:
   act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   My(String).replace_numbytes_at_with ($mycur(data), bytelen (buf), $mycur(cur_col_idx), buf);
   stack_push (action, act);
   vundo_push (this, action);
@@ -10438,14 +10418,14 @@ private int ved_indent (buf_t *this, int count, utf8 com) {
     if ($mycur(data)->num_bytes is 0 or (IS_SPACE ($mycur(data)->bytes[0]) is 0))
       return NOTHING_TODO;
   } else
-    if (str_eq (VISUAL_MODE_LW, $my(mode)))
+    if (cstring_eq (VISUAL_MODE_LW, $my(mode)))
       ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   int shiftwidth = ($my(ftype)->shiftwidth ? $my(ftype)->shiftwidth : DEFAULT_SHIFTWIDTH);
 
@@ -10597,7 +10577,7 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
     } else {
       vundo_set (act, REPLACE_LINE);
       act->idx = this->cur_idx;
-      act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+      act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
       My(String).insert_at ($mycur(data), reg->data->bytes, $mycur(cur_col_idx) +
         (('P' is com or 0 is $mycur(data)->num_bytes) ? 0 :
           ustring_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)])));
@@ -10699,7 +10679,7 @@ private int ved_delete_inner (buf_t *this, utf8 c, int regidx) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   act->cur_col_idx = $mycur(cur_col_idx);
   act->first_col_idx = $mycur(first_col_idx);
@@ -10784,10 +10764,10 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
     } else {
       char bytes[MAXLEN_LINE];
       int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
-      str_cp (bytes, MAXLEN_LINE, $mycur(data)->bytes + $mycur(cur_col_idx), len);
+      cstring_cp (bytes, MAXLEN_LINE, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
       My(String).clear_at ($mycur(data), $mycur(cur_col_idx));
-      self(cur.append_with, str_fmt ("%s%s",
+      self(cur.append_with, STR_FMT ("%s%s",
           $my(ftype)->autoindent (this, this->current)->bytes, bytes));
     }
 
@@ -10814,7 +10794,7 @@ private int insert_change_line (buf_t *this, utf8 c, action_t **action) {
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (*action, act);
   $my(flags) |= BUF_IS_MODIFIED;
   return DONE;
@@ -10921,7 +10901,7 @@ do {                                        \
 
 #define VISUAL_INIT_FUN(fmode, parse_fun)                                           \
   char prev_mode[MAXLEN_MODE];                                                      \
-  str_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);                      \
+  cstring_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);                      \
   self(set.mode, (fmode));                                                          \
   buf_set_draw_topline (this);                                                      \
   mark_t mark; state_set (&mark); mark.cur_idx = this->cur_idx;                     \
@@ -10996,7 +10976,7 @@ next:
     }
 
     My(String).append ($my(shared_str), TERM_COLOR_RESET);
-    str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+    cstring_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     return $my(shared_str)->bytes;
   }
 
@@ -11013,11 +10993,11 @@ private int ved_visual_complete_actions_cb (menu_t *menu) {
 
   vstr_t *items;
   if (IS_MODE(VISUAL_MODE_CW))
-    items = str_chop ($myroots(cw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
+    items = cstring_chop ($myroots(cw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
   else if (IS_MODE(VISUAL_MODE_LW))
-    items = str_chop ($myroots(lw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
+    items = cstring_chop ($myroots(lw_mode_actions), '\n', NULL, ved_actions_token_cb, menu);
   else
-    items = str_chop (
+    items = cstring_chop (
       "insert text in front of the selected block\n"
       "change/replace selected block\n"
       "delete selected block\n", '\n', NULL,
@@ -11360,7 +11340,7 @@ next:
     it = it->next;
   }
 
-  str_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+  cstring_cp (line, MAXLEN_LINE, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
   return $my(shared_str)->bytes;
 }
 
@@ -11420,7 +11400,7 @@ handle_char:
         {
           int len = $my(vis)[0].lidx - $my(vis)[0].fidx + 1;
           char fname[len + 1];
-          str_cp (fname, len + 1, $mycur(data)->bytes + $my(vis)[0].fidx, len);
+          cstring_cp (fname, len + 1, $mycur(data)->bytes + $my(vis)[0].fidx, len);
           ifnot (file_exists (fname)) goto theend;
           win_edit_fname ($my(parent), thisp, fname, $myparents(cur_frame), 0, 0, 0);
         }
@@ -11624,7 +11604,7 @@ handle_char:
               act_t *act = AllocType (act);
               vundo_set (act, REPLACE_LINE);
               act->idx = this->cur_idx;
-              act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+              act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
               stack_push (baction, act);
             }
 
@@ -11745,7 +11725,7 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
     act_t *act = AllocType (act);
     vundo_set (act, INSERT_LINE);
     act->idx = this->cur_idx;
-    act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
     if (NOTHING_TODO is buf_normal_down (this, 1, DONOT_ADJUST_COL, 0)) break;
   }
@@ -11869,7 +11849,7 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
   int cidx = idx;
 
   ifnot (NULL is name) {
-    if (str_eq ($from($from((*bufp), parent), name), name))
+    if (cstring_eq ($from($from((*bufp), parent), name), name))
       return NOTHING_TODO;
     win_t *w = self(get.win_by_name, name, &idx);
     if (NULL is w) return NOTHING_TODO;
@@ -11985,7 +11965,7 @@ theend:
 }
 
 private int buf_write (buf_t *this, int force) {
-  if (str_eq ($my(fname), UNAMED)) {
+  if (cstring_eq ($my(fname), UNAMED)) {
     VED_MSG_ERROR(MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER);
     return NOTHING_TODO;
   }
@@ -12007,14 +11987,14 @@ private int buf_write (buf_t *this, int force) {
     if (NOTOK is stat ($my(fname), &st)) {
       $my(flags) &= ~FILE_EXISTS;
       utf8 chars[] = {'y', 'Y', 'n', 'N'};
-      utf8 c = quest (this, str_fmt (
+      utf8 c = quest (this, STR_FMT (
           "[Warning]\n%s: removed from filesystem since last operation\n"
           "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
       switch (c) {case 'n': case 'N': return NOTHING_TODO;};
     } else {
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec) {
         utf8 chars[] = {'y', 'Y', 'n', 'N'};
-        utf8 c = quest (this, str_fmt (
+        utf8 c = quest (this, STR_FMT (
             "[Warning]%s: has been modified since last operation\n"
             "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
         switch (c) {case 'n': case 'N': return NOTHING_TODO;};
@@ -12102,7 +12082,7 @@ private string_t *vsys_which (char *ex, char *path) {
   ifnot (ex_len and p_len) return NULL;
   char sep[2]; sep[0] = PATH_SEP; sep[1] = '\0';
 
-  char *alpath = str_dup (path, p_len);
+  char *alpath = cstring_dup (path, p_len);
   char *sp = strtok (alpath, sep);
 
   string_t *ex_path = NULL;
@@ -12137,7 +12117,7 @@ private int ved_buf_read_from_shell (buf_t *this, char *com, int rlcom) {
 
 private int ved_buf_change_bufname (buf_t **thisp, char *bufname) {
   buf_t *this = *thisp;
-  if (str_eq ($my(fname), bufname)) return NOTHING_TODO;
+  if (cstring_eq ($my(fname), bufname)) return NOTHING_TODO;
   int idx;
   buf_t *buf = My(Win).get.buf_by_name ($my(parent), bufname, &idx);
   if (NULL is buf) return NOTHING_TODO;
@@ -12402,7 +12382,7 @@ private int ved_complete_digraph_callback (menu_t *menu) {
 
   for (int i = 0; i < (int) ARRLEN (digraphs); i++)
     if (menu->patlen) {
-      if (str_eq_n (digraphs[i], menu->pat, menu->patlen))
+      if (cstring_eq_n (digraphs[i], menu->pat, menu->patlen))
         vstr_append_current_with (items, digraphs[i]);
     } else
       vstr_append_current_with (items, digraphs[i]);
@@ -12447,7 +12427,7 @@ private int ved_complete_arg (menu_t *menu) {
 
   vstr_t *args = vstr_new ();
 
-  int patisopt = (menu->patlen ? str_eq (menu->pat, "--bufname=") : 0);
+  int patisopt = (menu->patlen ? cstring_eq (menu->pat, "--bufname=") : 0);
 
   if ((com >= VED_COM_BUF_DELETE_FORCE and com <= VED_COM_BUF_CHANGE_ALIAS) or
        patisopt) {
@@ -12455,9 +12435,9 @@ private int ved_complete_arg (menu_t *menu) {
 
     buf_t *it = $my(parent)->head;
     while (it) {
-      ifnot (str_eq (cur_fname, $from(it, fname))) {
+      ifnot (cstring_eq (cur_fname, $from(it, fname))) {
         if ((0 is menu->patlen or 1 is patisopt) or
-             str_eq_n ($from(it, fname), menu->pat, menu->patlen)) {
+             cstring_eq_n ($from(it, fname), menu->pat, menu->patlen)) {
           ifnot (patisopt) {
             size_t len = bytelen ($from(it, fname)) + 10 + 2;
             char bufn[len + 1];
@@ -12480,9 +12460,9 @@ private int ved_complete_arg (menu_t *menu) {
       vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i++]);
   } else {
     while ($myroots(commands)[com]->args[i]) {
-      if (str_eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
+      if (cstring_eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
         if (NULL is strstr (line, $myroots(commands)[com]->args[i]) or
-        	str_eq ($myroots(commands)[com]->args[i], "--fname="))
+        	cstring_eq ($myroots(commands)[com]->args[i], "--fname="))
           vstr_add_sort_and_uniq (args, $myroots(commands)[com]->args[i]);
       i++;
     }
@@ -12557,7 +12537,7 @@ private int ved_complete_filename (menu_t *menu) {
 
   if (NULL is sp) {
     char *cwd = dir_current ();
-    str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+    cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     end = NULL;
     goto getlist;
@@ -12571,14 +12551,14 @@ private int ved_complete_filename (menu_t *menu) {
       if (*end is DIR_SEP) { if (*(end + 1)) end++; else end = NULL; }
     }
 
-    str_cp (dir, PATH_MAX, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
+    cstring_cp (dir, PATH_MAX, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
 
     joinpath = 1;
     goto getlist;
   }
 
   if (is_directory (menu->pat) and bytelen (path_basename (menu->pat)) > 1) {
-    str_cp (dir, PATH_MAX, menu->pat, menu->patlen);
+    cstring_cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -12591,7 +12571,7 @@ private int ved_complete_filename (menu_t *menu) {
       end = NULL;
     } else {
       char *cwd = dir_current ();
-      str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+      cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
       free (cwd);
       end = sp;
     }
@@ -12600,7 +12580,7 @@ private int ved_complete_filename (menu_t *menu) {
   }
 
   if (*sp is DIR_SEP) {
-    str_cp (dir, PATH_MAX, menu->pat, menu->patlen);
+    cstring_cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -12610,7 +12590,7 @@ private int ved_complete_filename (menu_t *menu) {
   if (sp is menu->pat) {
     end = sp;
     char *cwd = dir_current ();
-    str_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+    cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     goto getlist;
   }
@@ -12638,7 +12618,7 @@ getlist:;
   My(String).replace_with ($my(shared_str), dir);
 
   while (it) {
-    if (end is NULL or (str_eq_n (it->data->bytes, end, endlen))) {
+    if (end is NULL or (cstring_eq_n (it->data->bytes, end, endlen))) {
       vstr_add_sort_and_uniq (vs, it->data->bytes);
     }
 
@@ -12701,7 +12681,7 @@ redo:;
     if (NULL is item) { retval = NOTHING_TODO; goto theend; }
 
     menu->patlen = bytelen (item);
-    str_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
+    cstring_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
     menu->state |= MENU_FINALIZE;
 
     ved_complete_filename (menu);
@@ -12709,7 +12689,7 @@ redo:;
     if (menu->state & MENU_DONE) break;
 
     len = $my(shared_str)->num_bytes;
-    str_cp (word, WORD_LEN, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+    cstring_cp (word, WORD_LEN, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     menu_free (menu);
     goto redo;
   }
@@ -12923,7 +12903,7 @@ thecheck:;
   string_t *cur = vstr_join (rl->line, "");
   if (cur->bytes[cur->num_bytes - 1] is ' ')
     My(String).clear_at (cur, cur->num_bytes - 1);
-  int match = (str_eq_n (str->bytes, cur->bytes, cur->num_bytes));
+  int match = (cstring_eq_n (str->bytes, cur->bytes, cur->num_bytes));
 
   if (0 is cur->num_bytes or $my(history)->rline->num_items is 1 or match) {
     __free_strings__;
@@ -13023,7 +13003,7 @@ get_command:
 
   int i = 0;
   for (i = 0; i < rl->commands_len; i++) {
-    if (str_eq (rl->commands[i]->com, com)) {
+    if (cstring_eq (rl->commands[i]->com, com)) {
       rl->com = i;
       break;
     }
@@ -13086,14 +13066,14 @@ redo:;
 
 
     if (rl->com isnot RL_NO_COMMAND) {
-      if (str_eq_n (tok, "--fname=", 8)) {
+      if (cstring_eq_n (tok, "--fname=", 8)) {
         type |= RL_TOK_ARG_FILENAME;
         int len = 8 + (tok[8] is '"');
         char tmp[toklen - len + 1];
         int i;
         for (i = len; i < toklen; i++) tmp[i-len] = tok[i];
         tmp[i-len] = '\0';
-        str_cp (tok, tok_stacklen, tmp, i-len);
+        cstring_cp (tok, tok_stacklen, tmp, i-len);
         toklen = i-len;
       } else if (tok[0] is '-') {
         type |= RL_TOK_ARG;
@@ -13141,7 +13121,7 @@ redo:;
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
 
     menu->patlen = bytelen (item);
-    str_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
+    cstring_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
 
     if (type & RL_TOK_ARG_FILENAME) menu->state |= MENU_FINALIZE;
 
@@ -13235,7 +13215,7 @@ private void ved_add_command_arg (rlcom_t *rlcom, int flags) {
 #define ADD_ARG(arg, len, idx) ({                             \
   if (idx is rlcom->num_args)                                 \
     ved_realloc_command_arg (rlcom, idx);                     \
-  rlcom->args[idx] = str_dup (arg, len);                      \
+  rlcom->args[idx] = cstring_dup (arg, len);                      \
   idx++;                                                      \
 })
 
@@ -13257,12 +13237,12 @@ private void ved_append_command_arg (ed_t *this, char *com, char *argname, size_
 
   int i = 0;
   while (i < $my(num_commands)) {
-    if (str_eq ($my(commands)[i]->com, com)) {
+    if (cstring_eq ($my(commands)[i]->com, com)) {
       int idx = 0;
       int found = 0;
       while (idx < $my(commands)[i]->num_args) {
         if (NULL is $my(commands)[i]->args[idx]) {
-          $my(commands)[i]->args[idx] = str_dup (argname, len);
+          $my(commands)[i]->args[idx] = cstring_dup (argname, len);
           found = 1;
           break;
         }
@@ -13271,7 +13251,7 @@ private void ved_append_command_arg (ed_t *this, char *com, char *argname, size_
 
       ifnot (found) {
         ved_realloc_command_arg ($my(commands)[i], $my(commands)[i]->num_args + 1);
-        $my(commands)[i]->args[$my(commands)[i]->num_args - 1] = str_dup (argname, len);
+        $my(commands)[i]->args[$my(commands)[i]->num_args - 1] = cstring_dup (argname, len);
       }
 
       return;
@@ -13295,7 +13275,7 @@ private void ved_append_rline_commands (ed_t *this, char **commands,
     $my(commands)[i] = AllocType (rlcom);
     size_t clen = bytelen (commands[j]);
     $my(commands)[i]->com = Alloc (clen + 1);
-    str_cp ($my(commands)[i]->com, clen + 1, commands[j], clen);
+    cstring_cp ($my(commands)[i]->com, clen + 1, commands[j], clen);
 
     ifnot (num_args[j]) {
       $my(commands)[i]->args = NULL;
@@ -13429,7 +13409,7 @@ private void ved_init_commands (ed_t *this) {
     $my(commands)[i] = AllocType (rlcom);
     size_t clen = bytelen (ved_commands[i]);
     $my(commands)[i]->com = Alloc (clen + 1);
-    str_cp ($my(commands)[i]->com, clen + 1, ved_commands[i], clen);
+    cstring_cp ($my(commands)[i]->com, clen + 1, ved_commands[i], clen);
 
     ifnot (num_args[i]) {
       $my(commands)[i]->args = NULL;
@@ -13802,7 +13782,7 @@ private rline_t *buf_rline_parse (buf_t *this, rline_t *rl) {
 
   while (it) {
     int type = 0;
-    if (str_eq (it->data->bytes, " ")) goto itnext;
+    if (cstring_eq (it->data->bytes, " ")) goto itnext;
 
     arg_t *arg = AllocType (arg);
     string_t *opt = NULL;
@@ -13886,15 +13866,15 @@ arg_type:
         arg->argname = My(String).new_with (opt->bytes);
 
       if (type & RL_TOK_ARG_OPTION) {
-        if (str_eq (opt->bytes, "pat"))
+        if (cstring_eq (opt->bytes, "pat"))
           arg->type |= RL_ARG_PATTERN;
-        else if (str_eq (opt->bytes, "sub"))
+        else if (cstring_eq (opt->bytes, "sub"))
           arg->type |= RL_ARG_SUB;
-        else if (str_eq (opt->bytes, "range"))
+        else if (cstring_eq (opt->bytes, "range"))
           arg->type |= RL_ARG_RANGE;
-        else if (str_eq (opt->bytes, "bufname"))
+        else if (cstring_eq (opt->bytes, "bufname"))
           arg->type |= RL_ARG_BUFNAME;
-        else if (str_eq (opt->bytes, "fname"))
+        else if (cstring_eq (opt->bytes, "fname"))
           arg->type |= RL_ARG_FILENAME;
         else {
           arg->type |= RL_ARG_ANYTYPE;
@@ -13903,7 +13883,7 @@ arg_type:
             int idx = 0;
             while (idx < rl->commands[rl->com]->num_args) {
               ifnot (NULL is rl->commands[rl->com]->args[idx]) {
-                if (str_eq_n (opt->bytes, rl->commands[rl->com]->args[idx]+2, opt->num_bytes)) {
+                if (cstring_eq_n (opt->bytes, rl->commands[rl->com]->args[idx]+2, opt->num_bytes)) {
                   found_arg = 1;
                   break;
                 }
@@ -13920,15 +13900,15 @@ arg_type:
 
         goto argtype_succeed;
       } else {
-        if (str_eq (opt->bytes, "i") or str_eq (opt->bytes, "interactive"))
+        if (cstring_eq (opt->bytes, "i") or cstring_eq (opt->bytes, "interactive"))
           arg->type |= RL_ARG_INTERACTIVE;
-        else if (str_eq (opt->bytes, "global"))
+        else if (cstring_eq (opt->bytes, "global"))
           arg->type |= RL_ARG_GLOBAL;
-        else if (str_eq (opt->bytes, "append"))
+        else if (cstring_eq (opt->bytes, "append"))
           arg->type |= RL_ARG_APPEND;
-        else if (str_eq (opt->bytes, "verbose"))
+        else if (cstring_eq (opt->bytes, "verbose"))
           arg->type |= RL_ARG_VERBOSE;
-        else if (str_eq (opt->bytes, "r") or str_eq (opt->bytes, "recursive"))
+        else if (cstring_eq (opt->bytes, "r") or cstring_eq (opt->bytes, "recursive"))
           arg->type |= RL_ARG_RECURSIVE;
         else
           arg->type |= RL_ARG_ANYTYPE;
@@ -13949,7 +13929,7 @@ argtype_succeed:
     } else {
       arg->argname = My(String).new_with (it->data->bytes);
       it = it->next;
-      while (it isnot NULL and 0 is (str_eq (it->data->bytes, " "))) {
+      while (it isnot NULL and 0 is (cstring_eq (it->data->bytes, " "))) {
         My(String).append (arg->argname, it->data->bytes);
         it = it->next;
       }
@@ -14004,7 +13984,7 @@ getlist:
           if (fname[fit->data->num_bytes - 1] is DIR_SEP) goto next_fname;
 
           if (pre isnot NULL)
-            ifnot (str_eq_n (fname, pre->bytes, pre->num_bytes)) goto next_fname;
+            ifnot (cstring_eq_n (fname, pre->bytes, pre->num_bytes)) goto next_fname;
 
           if (post isnot NULL) {
             int pi; int fi = fit->data->num_bytes - 1;
@@ -14014,7 +13994,7 @@ getlist:
             if (pi isnot -1) goto next_fname;
           }
           arg_t *larg = AllocType (arg);
-          ifnot (str_eq (dir->bytes, "."))
+          ifnot (cstring_eq (dir->bytes, "."))
             larg->argval = My(String).new_with_fmt ("%s/%s", dir->bytes, fname);
           else
             larg->argval = My(String).new_with (fname);
@@ -14085,7 +14065,7 @@ private string_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
   arg_t *arg = rl->tail;
   while (arg) {
     if (arg->type & RL_ARG_ANYTYPE) {
-      if (str_eq (arg->argname->bytes, argname))
+      if (cstring_eq (arg->argname->bytes, argname))
         return arg->argval;
     }
     arg = arg->prev;
@@ -14097,7 +14077,7 @@ private string_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
 private int rline_arg_exists (rline_t *rl, char *argname) {
   arg_t *arg = rl->head;
   while (arg) {
-    if (str_eq (arg->argname->bytes, argname)) return 1;
+    if (cstring_eq (arg->argname->bytes, argname)) return 1;
     arg = arg->next;
   }
 
@@ -14931,14 +14911,14 @@ private int ved_insert (buf_t **thisp, utf8 com, char *bytes) {
   My(String).clear ($my(cur_insert));
 
   char prev_mode[MAXLEN_MODE];
-  str_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);
+  cstring_cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);
 
   action_t *action = AllocType (action);
   act_t *act = AllocType (act);
   vundo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
-  act->bytes = str_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
   action = stack_push (action, act);
 
@@ -14982,7 +14962,7 @@ private int ved_insert (buf_t **thisp, utf8 com, char *bytes) {
     goto theend;
   }
 
-  str_cp ($my(mode), MAXLEN_MODE, INSERT_MODE, MAXLEN_MODE - 1);
+  cstring_cp ($my(mode), MAXLEN_MODE, INSERT_MODE, MAXLEN_MODE - 1);
   self(set.mode, INSERT_MODE);
 
   if ($my(show_statusline) is UNSET) buf_set_draw_statusline (this);
@@ -15199,7 +15179,7 @@ private win_t *ed_get_win_by_name (ed_t *this, char *name, int *idx) {
   win_t *it = this->head;
   *idx = 0;
   while (it) {
-    if (str_eq ($from(it, name), name)) return it;
+    if (cstring_eq ($from(it, name), name)) return it;
     (*idx)++;
     it = it->next;
   }
@@ -15225,8 +15205,8 @@ private term_t *ed_get_term (ed_t *this) {
 
 private void *ed_get_callback_fun (ed_t *this, char *fun) {
   (void) this;
-  if (str_eq (fun, "autoindent_c")) return buf_autoindent_c;
-  if (str_eq (fun, "autoindent_default")) return buf_ftype_autoindent;
+  if (cstring_eq (fun, "autoindent_c")) return buf_autoindent_c;
+  if (cstring_eq (fun, "autoindent_default")) return buf_ftype_autoindent;
   return NULL;
 }
 
@@ -15319,8 +15299,8 @@ private void ved_history_add (ed_t *this, vstr_t *hist, int what) {
     while (it) {
       rline_t *rl = ed_rline_new (this, $my(term), My(Input).get,
            $my(prompt_row), 1, $my(dim)->num_cols, $my(video));
-      char *sp = str_trim_end (it->data->bytes, '\n');
-      sp = str_trim_end (sp, ' ');
+      char *sp = cstring_trim_end (it->data->bytes, '\n');
+      sp = cstring_trim_end (sp, ' ');
       BYTES_TO_RLINE (rl, it->data->bytes, (int) bytelen (sp));
       rline_history_push (rl);
       it = it->next;
@@ -15443,7 +15423,7 @@ private void ed_set_word_actions (ed_t *this, utf8 *chars, int len,
   }
 
   $my(word_actions_chars_len) = tlen;
-  $my(word_actions) = str_chop (actions, '\n', $my(word_actions), NULL, NULL);
+  $my(word_actions) = cstring_chop (actions, '\n', $my(word_actions), NULL, NULL);
 }
 
 private void ed_set_word_actions_default (ed_t *this) {
@@ -15468,7 +15448,7 @@ private void ed_set_cw_mode_actions (ed_t *this, utf8 *chars, int len,
 
   ifnot ($my(cw_mode_chars_len)) {
     $my(cw_mode_chars) = Alloc (sizeof (int *) * len);
-    $my(cw_mode_actions) = str_dup (actions, bytelen (actions));
+    $my(cw_mode_actions) = cstring_dup (actions, bytelen (actions));
   } else {
     $my(cw_mode_chars) = Realloc ($my(cw_mode_chars), sizeof (int *) * tlen);
     size_t alen = bytelen (actions);
@@ -15522,7 +15502,7 @@ private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
 
   ifnot ($my(lw_mode_chars_len)) {
     $my(lw_mode_chars) = Alloc (sizeof (int *) * len);
-    $my(lw_mode_actions) = str_dup (actions, bytelen (actions));
+    $my(lw_mode_actions) = cstring_dup (actions, bytelen (actions));
   } else {
     $my(lw_mode_chars) = Realloc ($my(lw_mode_chars), sizeof (int *) * tlen);
     size_t alen = bytelen (actions);
@@ -15596,7 +15576,7 @@ private void ed_set_file_mode_actions (ed_t *this, utf8 *chars, int len,
 
   ifnot ($my(file_mode_chars_len)) {
     $my(file_mode_chars) = Alloc (sizeof (int *) * len);
-    $my(file_mode_actions) = str_dup (actions, bytelen (actions));
+    $my(file_mode_actions) = cstring_dup (actions, bytelen (actions));
   } else {
     $my(file_mode_chars) = Realloc ($my(file_mode_chars), sizeof (int *) * tlen);
     size_t alen = bytelen (actions);
@@ -16620,7 +16600,7 @@ private int fp_tok_cb (vstr_t *unused, char *bytes, void *fp_type) {
 public mutable size_t tostderr (char *bytes) {
   vstr_t unused;
   fp_t fpt = {.fp = stderr};
-  str_chop (bytes, '\n', &unused, fp_tok_cb, &fpt);
+  cstring_chop (bytes, '\n', &unused, fp_tok_cb, &fpt);
   return fpt.num_bytes;
 }
 
@@ -16734,7 +16714,7 @@ private ed_t *ed_init (E_T *E) {
   return this;
 }
 
-private ed_t *__ed_init__ (E_T *this, EdAtInit_cb init_cb) {
+private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
   ed_t *ed = ed_init (this);
 
   int cur_idx = $my(cur_idx);
@@ -16765,8 +16745,8 @@ private ed_t *__ed_init__ (E_T *this, EdAtInit_cb init_cb) {
   return ed;
 }
 
-private ed_t *__ed_new__ (Class (E) *this, ED_INIT_OPTS opts) {
-  ed_t *ed = __ed_init__ (this, opts.init_cb);
+private ed_t *E_new (Class (E) *this, ED_INIT_OPTS opts) {
+  ed_t *ed = E_init (this, opts.init_cb);
 
   int num_win = opts.num_win;
   if (num_win <= 0) num_win = 1;
@@ -16784,7 +16764,7 @@ private ed_t *__ed_new__ (Class (E) *this, ED_INIT_OPTS opts) {
   return ed;
 }
 
-private int __ed_delete__ (E_T *this, int idx, int force_current) {
+private int E_delete (E_T *this, int idx, int force_current) {
   $my(error_state) = 0;
 
   if (1 is $my(num_items) and 0 is force_current) {
@@ -16817,7 +16797,27 @@ private int __ed_delete__ (E_T *this, int idx, int force_current) {
   return OK;
 }
 
-private ed_t *__ed_set_current__ (E_T *this, int idx) {
+private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
+  My(String).replace_with_len ($my(env)->env_str, v->bytes, v->num_bytes);
+  return $my(env)->env_str;
+}
+
+private string_t *E_venv_get (Class (E) *__e__, char *name) {
+  Class (ed) *this = __e__->__ED__;
+  if (cstring_eq (name, "group_name"))  return __venv_get__ (this, $my(env)->group_name);
+  if (cstring_eq (name, "user_name"))  return __venv_get__ (this, $my(env)->user_name);
+  if (cstring_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
+  if (cstring_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
+  if (cstring_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
+  if (cstring_eq (name, "my_dir")) return __venv_get__ (this,  $my(env)->my_dir);
+  if (cstring_eq (name, "tmp_dir")) return __venv_get__ (this, $my(env)->tmp_dir);
+  if (cstring_eq (name, "data_dir")) return __venv_get__ (this, $my(env)->data_dir);
+  if (cstring_eq (name, "diff_exec")) return __venv_get__ (this, $my(env)->diff_exec);
+  if (cstring_eq (name, "xclip_exec")) return __venv_get__ (this,  $my(env)->xclip_exec);
+  return NULL;
+}
+
+private ed_t *E_set_current (E_T *this, int idx) {
   int cur_idx = $my(cur_idx);
   if (cur_idx is idx) return $my(current);
 
@@ -16829,72 +16829,72 @@ private ed_t *__ed_set_current__ (E_T *this, int idx) {
   return $my(current);
 }
 
-private ed_t *__ed_set_next__ (E_T *this) {
+private ed_t *E_set_next (E_T *this) {
   int idx = $my(cur_idx);
   if (idx is $my(num_items) - 1)
     idx = 0;
   else
     idx++;
 
-  return __ed_set_current__ (this, idx);
+  return E_set_current (this, idx);
 }
 
-private ed_t *__ed_set_prev__ (E_T *this) {
+private ed_t *E_set_prev (E_T *this) {
   int idx = $my(cur_idx);
   if (idx is 0)
     idx = $my(num_items) - 1;
   else
     idx--;
 
-  return __ed_set_current__ (this, idx);
+  return E_set_current (this, idx);
 }
 
-private void __ed_set_state__ (E_T *this, int state) {
+private void E_set_state (E_T *this, int state) {
   $my(state) = state;
 }
 
-private Class(I) *__ed_get_i_class__ (E_T *this) {
+private Class(I) *E_get_i_class (E_T *this) {
   return $my(I);
 }
 
-private int __ed_get_state__ (E_T *this) {
+private int E_get_state (E_T *this) {
   return $my(state);
 }
 
-private ed_t *__ed_get_current__ (Class (E) *this) {
+private ed_t *E_get_current (Class (E) *this) {
   return $my(current);
 }
 
-private ed_t *__ed_get_head__ (Class (E) *this) {
+private ed_t *E_get_head (Class (E) *this) {
   return $my(head);
 }
 
-private ed_t *__ed_get_next__ (Class (E) *this, ed_t *ed) {
+private ed_t *E_get_next (Class (E) *this, ed_t *ed) {
   (void) this;
   return ed->next;
 }
 
-private int __ed_get_num__ (Class (E) *this) {
+private int E_get_num (Class (E) *this) {
   return $my(num_items);
 }
 
-private int __ed_get_current_idx__ (Class (E) *this) {
+private int E_get_current_idx (Class (E) *this) {
   return $my(cur_idx);
 }
 
-private int __ed_get_prev_idx__ (Class (E) *this) {
+private int E_get_prev_idx (Class (E) *this) {
   return $my(prev_idx);
 }
 
-private int __ed_get_error_state__ (Class (E) *this) {
+private int E_get_error_state (Class (E) *this) {
   return $my(error_state);
 }
 
-private void __ed_set_at_init_cb__ (Class (E) *this, EdAtInit_cb cb) {
+private void E_set_at_init_cb (Class (E) *this, EdAtInit_cb cb) {
   $my(at_init_cb) = cb;
 }
 
-private void __ed_set_at_exit_cb__ (Class (E) *this, EAtExit_cb cb) {
+private void E_set_at_exit_cb (Class (E) *this, EAtExit_cb cb) {
   if (NULL is cb) return;
   $my(num_at_exit_cbs)++;
   ifnot ($my(num_at_exit_cbs) - 1)
@@ -16905,34 +16905,34 @@ private void __ed_set_at_exit_cb__ (Class (E) *this, EAtExit_cb cb) {
   $my(at_exit_cbs)[$my(num_at_exit_cbs) -1] = cb;
 }
 
-private ed_t *__ed_next_editor__ (E_T *this, buf_t **thisp) {
+private ed_t *E_next_editor (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
-  ed_t *ed = __ed_set_next__ (this);
+  ed_t *ed = E_set_next (this);
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
   win_draw (w);
   return ed;
 }
 
-private ed_t *__ed_prev_editor__ (E_T *this, buf_t **thisp) {
+private ed_t *E_prev_editor (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
-  ed_t *ed = __ed_set_prev__ (this);
+  ed_t *ed = E_set_prev (this);
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
   win_draw (w);
   return ed;
 }
 
-private ed_t *__ed_prev_focused_editor__ (E_T *this, buf_t **thisp) {
+private ed_t *E_prev_focused_editor (E_T *this, buf_t **thisp) {
   ifnot ($my(num_items)) return $my(current);
-  ed_t *ed = __ed_set_current__ (this, $my(prev_idx));
+  ed_t *ed = E_set_current (this, $my(prev_idx));
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
   win_draw (w);
   return ed;
 }
 
-private ed_t *__ed_new_editor__ (E_T *this, buf_t **thisp, char *fname) {
+private ed_t *E_new_editor (E_T *this, buf_t **thisp, char *fname) {
   ed_t *ed = self(new, QUAL(ED_INIT));
   win_t *w = ed_get_current_win (ed);
 
@@ -16945,7 +16945,7 @@ private ed_t *__ed_new_editor__ (E_T *this, buf_t **thisp, char *fname) {
   return ed;
 }
 
-private int __ed_exit_all__ (Class (E) *this) {
+private int E_exit_all (Class (E) *this) {
   int force = ($my(state) & ED_EXIT_ALL_FORCE);
 
   for (;;) {
@@ -16964,7 +16964,7 @@ private int __ed_exit_all__ (Class (E) *this) {
   return OK;
 }
 
-private int __ed_main__ (E_T *this, buf_t *buf) {
+private int E_main (E_T *this, buf_t *buf) {
   ed_t *ed = $from(buf, root);
 
   ed_set_state (ed, $my(state));
@@ -16983,22 +16983,22 @@ main:
   }
 
   if ($my(state) & ED_NEW) {
-    ed = __ed_new_editor__ (this, &buf, $from(ed, ed_str)->bytes);
+    ed = E_new_editor (this, &buf, $from(ed, ed_str)->bytes);
     goto main;
   }
 
   if ($my(state) & ED_NEXT) {
-    ed = __ed_next_editor__ (this, &buf);
+    ed = E_next_editor (this, &buf);
     goto main;
   }
 
   if ($my(state) & ED_PREV) {
-    ed = __ed_prev_editor__ (this, &buf);
+    ed = E_prev_editor (this, &buf);
     goto main;
   }
 
   if ($my(state) & ED_PREV_FOCUSED) {
-    ed = __ed_prev_focused_editor__ (this, &buf);
+    ed = E_prev_focused_editor (this, &buf);
     goto main;
   }
 
@@ -17055,7 +17055,7 @@ private ed_T *ed_init_prop (ed_T *this) {
   return this;
 }
 
-private int init_ed (ed_T *this) {
+private int Ed_init (ed_T *this) {
   ed_init_prop (this);
 
   $my(term) = My(Term).new ();
@@ -17076,30 +17076,30 @@ public Class (E) *__init_ed__ (char *name) {
 
   *this = ClassInit (E,
     .self = SelfInit (E,
-      .init = __ed_init__,
-      .new = __ed_new__,
-      .delete = __ed_delete__,
-      .exit_all = __ed_exit_all__,
-      .main = __ed_main__,
+      .init = E_init,
+      .new = E_new,
+      .delete = E_delete,
+      .exit_all = E_exit_all,
+      .main = E_main,
       .get = SubSelfInit (E, get,
-        .current = __ed_get_current__,
-        .head = __ed_get_head__,
-        .next = __ed_get_next__,
-        .current_idx = __ed_get_current_idx__,
-        .prev_idx = __ed_get_prev_idx__,
-        .num = __ed_get_num__,
-        .error_state = __ed_get_error_state__,
-        .state = __ed_get_state__,
-        .env = venv_get,
-        .iclass = __ed_get_i_class__
+        .current = E_get_current,
+        .head = E_get_head,
+        .next = E_get_next,
+        .current_idx = E_get_current_idx,
+        .prev_idx = E_get_prev_idx,
+        .num = E_get_num,
+        .error_state = E_get_error_state,
+        .state = E_get_state,
+        .env = E_venv_get,
+        .iclass = E_get_i_class
       ),
       .set = SubSelfInit (E, set,
-        .state = __ed_set_state__,
-        .at_exit_cb = __ed_set_at_exit_cb__,
-        .at_init_cb = __ed_set_at_init_cb__,
-        .next = __ed_set_next__,
-        .prev = __ed_set_prev__,
-        .current = __ed_set_current__
+        .state = E_set_state,
+        .at_exit_cb = E_set_at_exit_cb,
+        .at_init_cb = E_set_at_init_cb,
+        .next = E_set_next,
+        .prev = E_set_prev,
+        .current = E_set_current
       )
     ),
     .prop = $myprop,
@@ -17108,7 +17108,7 @@ public Class (E) *__init_ed__ (char *name) {
 
   $my(Me) = this;
 
-  if (NOTOK is init_ed (this->__ED__)) {
+  if (NOTOK is Ed_init (this->__ED__)) {
     __deinit_ed__ (&this);
     return NULL;
   }
@@ -17117,7 +17117,7 @@ public Class (E) *__init_ed__ (char *name) {
   $my(I) = __init_i__ (this);
   this->__ED__->I = *$my(I);
 
-  str_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
+  cstring_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
   $my(name_gen) = ('z' - 'a') + 1;
   $my(cur_idx) = $my(prev_idx) = -1;
   $my(state) = 0;
@@ -17144,7 +17144,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
 
   Class (E) *this = *thisp;
 
-  __ed_exit_all__ (this);
+  E_exit_all (this);
 
   for (int i = 0; i < $my(num_at_exit_cbs); i++)
     $my(at_exit_cbs)[i] ();
@@ -18447,33 +18447,32 @@ private void i_print_byte (FILE *fp, int c) {
 
 ival_t i_e_get_ed_num (ival_t i) {
   i_t *this = (i_t *) i;
-  return __ed_get_num__ (this->e);
+  return E_get_num (this->e);
 }
 
 ival_t i_e_set_ed_next (ival_t i) {
   i_t *this = (i_t *) i;
-  return (ival_t) __ed_set_next__ (this->e);
+  return (ival_t) E_set_next (this->e);
 }
 
 ival_t i_e_set_ed_by_idx (ival_t i, int idx) {
   i_t *this = (i_t *) i;
-  return (ival_t) __ed_set_current__ (this->e, idx);
+  return (ival_t) E_set_current (this->e, idx);
 }
 
 ival_t i_e_get_ed_current_idx (ival_t i) {
   i_t *this = (i_t *) i;
-  return __ed_get_current_idx__ (this->e);
+  return E_get_current_idx (this->e);
 }
 
 ival_t i_e_get_ed_current (ival_t i) {
   i_t *this = (i_t *) i;
-  return (ival_t) __ed_get_current__ (this->e);
+  return (ival_t) E_get_current (this->e);
 }
 
 ival_t i_ed_new (ival_t i, int num_win) {
   i_t *this = (i_t *) i;
-  return (ival_t) __ed_new__ (this->e, QUAL(ED_INIT, .num_win = num_win));
-  // .init_cb = __init_ext__));
+  return (ival_t) E_new (this->e, QUAL(ED_INIT, .num_win = num_win));
 }
 
 ival_t i_ed_get_num_win (ival_t i, ed_t *ed) {
@@ -18600,7 +18599,7 @@ private int i_init (Class (I) *interp, i_t *this, I_INIT opts) {
   if (NULL is opts.name)
     i_name_gen (this->name, &interp->prop->name_gen, "i:", 2);
   else
-    str_cp (this->name, 32, opts.name, 31);
+    cstring_cp (this->name, 32, opts.name, 31);
 
   this->arena = (char *) Alloc (opts.mem_size);
   this->mem_size = opts.mem_size;
@@ -18644,10 +18643,10 @@ private i_t *i_init_instance (Class (I) *__i__) {
   FILE *err_fp = stderr;
 
 #if DEBUG_INTERPRETER
-  string_t *tdir = venv_get ($from(__i__, e), "tmp_dir");
+  string_t *tdir = E_venv_get ($from(__i__, e), "tmp_dir");
   size_t len = tdir->num_bytes + 1 + 7;
   char tmp[len + 1 ];
-  str_cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);
+  cstring_cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);
   err_fp = fopen (tmp, "w");
 #endif
 
@@ -18669,7 +18668,7 @@ private int i_load_file (Class (I) *__i__, char *fn) {
   ifnot (path_is_absolute (fn)) {
     size_t fnlen = bytelen (fn);
     char fname[fnlen+3];
-    str_cp (fname, fnlen + 1, fn, fnlen);
+    cstring_cp (fname, fnlen + 1, fn, fnlen);
     char *extname = path_extname (fname);
     ifnot (extname[0]) {
       fname[fnlen] = '.';
@@ -18680,10 +18679,10 @@ private int i_load_file (Class (I) *__i__, char *fn) {
     if (file_exists (fname))
       return i_eval_file (this, fname);
 
-    string_t *ddir = venv_get (this->e, "data_dir");
+    string_t *ddir = E_venv_get (this->e, "data_dir");
     size_t len = ddir->num_bytes + bytelen (fname) + 2 + 8;
     char tmp[len + 1];
-    str_cp_fmt (tmp, len + 1, "%s/profiles/%s", ddir->bytes, fname);
+    cstring_cp_fmt (tmp, len + 1, "%s/profiles/%s", ddir->bytes, fname);
     ifnot (file_exists (tmp))
       return NOTOK;
     return i_eval_file (this, tmp);
@@ -18725,10 +18724,10 @@ private Class (I) *__init_i__ (Class (E) *e) {
   $my(current_idx) = -1;
   $my(e) = e;
 
-  string_t *ddir = venv_get (e, "data_dir");
+  string_t *ddir = E_venv_get (e, "data_dir");
   size_t len = ddir->num_bytes + 1 + 8;
   char profiles[len + 1];
-  str_cp_fmt (profiles, len + 1, "%s/profiles", ddir->bytes);
+  cstring_cp_fmt (profiles, len + 1, "%s/profiles", ddir->bytes);
   ifnot (file_exists (profiles))
     mkdir (profiles, S_IRWXU);
 

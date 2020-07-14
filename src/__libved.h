@@ -1114,9 +1114,11 @@ private long      vsys_get_clock_sec (clockid_t clock_id);
 private string_t *vsys_which (char *, char *);
 private int is_directory (char *);
 private dirlist_t *dirlist (char *, int);
-private vstr_t *str_chop (char *, char, vstr_t *, StrChop_cb, void *);
 private int buf_normal_visual_lw (buf_t **);
 private void ed_record (ed_t *, char *, ...);
+
+private vstr_t *cstring_chop (char *, char, vstr_t *, StrChop_cb, void *);
+
 private Class (I) *__init_i__ (Class (E) *);
 private void __deinit_i__ (Class (I) **);
 
@@ -1140,7 +1142,7 @@ static const utf8 offsetsFromUTF8[6] = {
 
 #define debug_append(fmt, ...)                            \
 ({                                                        \
-  char *file_ = str_fmt ("/tmp/%s.debug", __func__);      \
+  char *file_ = STR_FMT ("/tmp/%s.debug", __func__);      \
   FILE *fp_ = fopen (file_, "a+");                        \
   if (fp_ isnot NULL) {                                   \
     fprintf (fp_, (fmt), ## __VA_ARGS__);                 \
@@ -1148,12 +1150,14 @@ static const utf8 offsetsFromUTF8[6] = {
   }                                                       \
 })
 
-#define str_fmt(fmt, ...)                                 \
+/* defined in libved.h
+#define STR_FMT(fmt, ...)                                 \
 ({                                                        \
   char buf_[MAXLEN_LINE];                                 \
   snprintf (buf_, MAXLEN_LINE, fmt, __VA_ARGS__);         \
   buf_;                                                   \
 })
+*/
 
 #define utf8_code(s_)                                     \
 ({                                                        \
@@ -1233,7 +1237,7 @@ do {                                                                      \
     }                                                                     \
 } while (0)
 
-#define IS_MODE(mode__) str_eq ($my(mode), (mode__))
+#define IS_MODE(mode__) cstring_eq ($my(mode), (mode__))
 
 #define HAS_THIS_LINE_A_TRAILING_NEW_LINE \
 ({$mycur(data)->bytes[$mycur(data)->num_bytes - 1] is '\n';})

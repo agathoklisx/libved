@@ -524,7 +524,7 @@ AllocErrorHandlerF AllocErrorHandler;
   size;                                                               \
 })
 /*
- * gcc complains on -Werror=alloc-size-larger-than= or -fsanitize=undefined,
+ * gcc used to complain on -Werror=alloc-size-larger-than= or -fsanitize=undefined,
  *  with:
  *  argument 1 range [18446744071562067968, 18446744073709551615]
  *  exceeds maximum object size 9223372036854775807
