@@ -595,34 +595,33 @@ AllocErrorHandlerF AllocErrorHandler;
   __s__;                                               \
 })
 
-DeclareType (term);
 DeclareType (string);
 DeclareType (vstring);
-DeclareType (vstr);
-DeclareType (vchar);
-DeclareType (line);
+DeclareType (Vstring);
+DeclareType (ustring);
+DeclareType (Ustring);
+DeclareType (search);
+DeclareType (Search);
+DeclareType (reg);
+DeclareType (Reg);
+DeclareType (action);
+DeclareType (Action);
+DeclareType (undo);
 DeclareType (regexp);
-DeclareType (vrow);
+DeclareType (term);
 DeclareType (video);
-DeclareType (dirlist);
 DeclareType (arg);
 DeclareType (rline);
-DeclareType (act);
-DeclareType (action);
-DeclareType (reg);
-DeclareType (rg);
-DeclareType (undo);
 DeclareType (hist);
 DeclareType (h_rlineitem);
 DeclareType (histitem);
 DeclareType (ftype);
 DeclareType (menu);
-DeclareType (sch);
 DeclareType (row);
 DeclareType (dim);
 DeclareType (syn);
 DeclareType (fp);
-
+DeclareType (dirlist);
 DeclareType (dirwalk);
 
 DeclareType (bufiter);
@@ -650,23 +649,20 @@ DeclareClass (E);
 DeclareProp (E);
 DeclareSelf (E);
 
-typedef vchar_t u8char_t;
-typedef line_t u8_t;
-
 /* this might make things harder for the reader, because hides details, but if
  * something is gonna change in future, if it's not just a signle change it is
  * certainly (easier) searchable */
 
 typedef utf8 (*InputGetch_cb) (term_t *);
 typedef int  (*Rline_cb) (buf_t **, rline_t *, utf8);
-typedef int  (*StrChop_cb) (vstr_t *, char *, void *);
-typedef int  (*FileReadLines_cb) (vstr_t *, char *, size_t, int, void *);
+typedef int  (*StrChop_cb) (Vstring_t *, char *, void *);
+typedef int  (*FileReadLines_cb) (Vstring_t *, char *, size_t, int, void *);
 typedef int  (*RlineAtBeg_cb) (rline_t **);
 typedef int  (*RlineAtEnd_cb) (rline_t **);
 typedef int  (*RlineTabCompletion_cb) (rline_t *);
 typedef int  (*PopenRead_cb) (buf_t *, FILE *stream, fp_t *);
 typedef int  (*MenuProcessList_cb) (menu_t *);
-typedef int  (*VisualLwMode_cb) (buf_t **, int, int, vstr_t *, utf8, char *);
+typedef int  (*VisualLwMode_cb) (buf_t **, int, int, Vstring_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
 typedef int  (*WordActions_cb)  (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
 typedef int  (*FileActions_cb)  (buf_t **, utf8, char *);
@@ -688,7 +684,7 @@ typedef void (*EdAtInit_cb) (ed_t *);
 
 /* in between */
 typedef void (*Record_cb) (ed_t *, char *);
-typedef int  (*IRecord_cb) (ed_t *, vstr_t *);
+typedef int  (*IRecord_cb) (ed_t *, Vstring_t *);
 typedef char *(*InitRecord_cb) (void);
 
 /* interpeter */
@@ -711,7 +707,7 @@ NewType (vstring,
   vstring_t *prev;
 );
 
-NewType (vstr,
+NewType (Vstring,
   vstring_t *head;
   vstring_t *tail;
   vstring_t *current;
@@ -788,7 +784,7 @@ NewType (ftype,
 );
 
 NewType (dirlist,
-  vstr_t *list;
+  Vstring_t *list;
   char dir[PATH_MAX];
   void (*free) (dirlist_t *);
 );
@@ -796,7 +792,7 @@ NewType (dirlist,
 NewType (dirwalk,
   string_t *dir;
 
-  vstr_t *files;
+  Vstring_t *files;
 
   int
     orig_depth,
@@ -855,22 +851,22 @@ NewType (bufiter,
   string_t *line;
 );
 
-NewType (vchar,
+NewType (ustring,
   utf8 code;
   char buf[5];
   int
     len,
     width;
 
-  vchar_t
+  ustring_t
     *next,
     *prev;
 );
 
-NewType (line,
-  vchar_t *head;
-  vchar_t *tail;
-  vchar_t *current;
+NewType (Ustring,
+  ustring_t *head;
+  ustring_t *tail;
+  ustring_t *current;
       int  cur_idx;
       int  num_items;
       int  len;
@@ -1132,9 +1128,9 @@ NewSelf (ustring,
     (*to_lower) (utf8),
     (*to_upper) (utf8);
 
-  void (*free) (u8_t *);
-  u8_t *(*new) (void);
-  u8char_t  *(*encode) (u8_t *, char *, size_t, int, int, int);
+  void (*free) (Ustring_t *);
+  Ustring_t *(*new) (void);
+  ustring_t *(*encode) (Ustring_t *, char *, size_t, int, int, int);
 );
 
 NewClass (ustring,
@@ -1171,7 +1167,7 @@ NewSelf (cstring,
     (*cp) (char *, size_t, const char *, size_t),
     (*cp_fmt) (char *, size_t, char *, ...);
 
-  vstr_t *(*chop) (char *, char, vstr_t *, StrChop_cb, void *);
+  Vstring_t *(*chop) (char *, char, Vstring_t *, StrChop_cb, void *);
 );
 
 NewClass (cstring,
@@ -1212,38 +1208,39 @@ NewClass (string,
   Self (string) self;
 );
 
-NewSubSelf (vstring, cur,
+NewSubSelf (vstring, current,
   void
-    (*append_with) (vstr_t *, char *),
-    (*append_with_len) (vstr_t *, char *, size_t);
+    (*append_with) (Vstring_t *, char *),
+    (*append_with_len) (Vstring_t *, char *, size_t);
 );
 
 NewSubSelf (vstring, add,
-  vstr_t *(*sort_and_uniq) (vstr_t *, char *bytes);
+  Vstring_t *(*sort_and_uniq) (Vstring_t *, char *bytes);
 );
 
 NewSubSelf (vstring, to,
-  char *(*cstring) (vstr_t *, int);
+  char *(*cstring) (Vstring_t *, int);
 );
 
 NewSelf (vstring,
-  SubSelf (vstring, cur) cur;
+  SubSelf (vstring, current) current;
   SubSelf (vstring, add) add;
   SubSelf (vstring, to) to;
 
-  vstr_t *(*new) (void);
+  Vstring_t *(*new) (void);
   void
-    (*free) (vstr_t *),
-    (*clear) (vstr_t *),
-    (*append) (vstr_t *, vstring_t *),
-    (*append_uniq) (vstr_t *, char *),
-    (*append_with_len) (vstr_t *, char *, size_t),
-    (*append_with_fmt) (vstr_t *, char *, ...);
+    (*free) (Vstring_t *),
+    (*clear) (Vstring_t *),
+    (*append) (Vstring_t *, vstring_t *),
+    (*append_uniq) (Vstring_t *, char *),
+    (*append_with) (Vstring_t *, char *),
+    (*append_with_len) (Vstring_t *, char *, size_t),
+    (*append_with_fmt) (Vstring_t *, char *, ...);
 
-  char **(*shallow_copy) (vstr_t *, char **);
+  char **(*shallow_copy) (Vstring_t *, char **);
 
-  vstring_t *(*pop_at) (vstr_t *, int);
-  string_t *(*join) (vstr_t *, char *sep);
+  vstring_t *(*pop_at) (Vstring_t *, int);
+  string_t *(*join) (Vstring_t *, char *sep);
 );
 
 NewClass (vstring,
@@ -1285,9 +1282,9 @@ NewSubSelf (rline, get,
 
   arg_t *(*arg) (rline_t *, int);
 
-  int (*range) (rline_t *, buf_t *, int *);
+  int (*buf_range) (rline_t *, buf_t *, int *);
 
-  vstr_t *(*arg_fnames) (rline_t *, int);
+  Vstring_t *(*arg_fnames) (rline_t *, int);
 );
 
 NewSubSelf (rline, arg,
@@ -1305,17 +1302,17 @@ NewSelf (rline,
   SubSelf (rline, history) history;
 
   rline_t
-     *(*new) (ed_t *),
-     *(*new_with) (ed_t *, char *),
-     *(*edit) (rline_t *);
+     *(*edit) (rline_t *),
+     *(*parse) (rline_t *, buf_t *);
 
   void
     (*free) (rline_t *),
-    (*clear_line) (rline_t *);
+    (*clear) (rline_t *),
+    (*write_and_break) (rline_t *);
 
-  int (*exec) (rline_t *, buf_t **);
+  int
+    (*exec) (rline_t *, buf_t **);
 
-  rline_t *(*parse) (buf_t *, rline_t *);
 );
 
 NewClass (rline,
@@ -1386,7 +1383,7 @@ NewSelf (file,
     (*write) (char *, char *, ssize_t),
     (*append) (char *, char *, ssize_t);
 
-  vstr_t *(*readlines) (char *, vstr_t *, FileReadLines_cb, void *);
+  Vstring_t *(*readlines) (char *, Vstring_t *, FileReadLines_cb, void *);
 );
 
 NewClass (file,
@@ -1480,7 +1477,8 @@ NewSubSelf (buf, get,
      *(*basename) (buf_t *),
      *(*fname) (buf_t *),
      *(*ftype_name) (buf_t *),
-     *(*info_string) (buf_t *);
+     *(*info_string) (buf_t *),
+     *(*current_word) (buf_t *, char *, char *, int, int *, int *);
 
   size_t
     (*size) (buf_t *),
@@ -1587,12 +1585,12 @@ NewSubSelf (buf, read,
 );
 
 NewSubSelf (buf, action,
-  action_t *(*new) (buf_t *);
+  Action_t *(*new) (buf_t *);
   void
-    (*free) (buf_t *, action_t *),
-    (*set_with) (buf_t *, action_t *, int, int, char *, size_t),
-    (*set_current) (buf_t *, action_t *, int),
-    (*push) (buf_t *this, action_t *);
+    (*free) (buf_t *, Action_t *),
+    (*set_with) (buf_t *, Action_t *, int, int, char *, size_t),
+    (*set_current) (buf_t *, Action_t *, int),
+    (*push) (buf_t *this, Action_t *);
 );
 
 NewSubSelf (buf, normal,
@@ -1789,7 +1787,7 @@ NewSubSelf (ed, syn,
 );
 
 NewSubSelf (ed, reg,
-  rg_t
+  Reg_t
      *(*set) (ed_t *, int, int, char *, int),
      *(*setidx) (ed_t *, int, int, char *, int);
 );
@@ -1809,6 +1807,12 @@ NewSubSelf (ed, append,
 
 NewSubSelf (ed, readjust,
   void (*win_size) (ed_t *, win_t *);
+);
+
+NewSubSelf (ed, rline,
+  rline_t
+    *(*new) (ed_t *),
+    *(*new_with) (ed_t *, char *);
 );
 
 NewSubSelf (ed, buf,
@@ -1836,7 +1840,7 @@ NewSubSelf (ed, sh,
 
 NewSubSelf (ed, history,
   void
-    (*add) (ed_t *, vstr_t *, int),
+    (*add) (ed_t *, Vstring_t *, int),
     (*read) (ed_t *),
     (*write) (ed_t *);
 );
@@ -1857,6 +1861,7 @@ NewSelf (ed,
   SubSelf (ed, reg) reg;
   SubSelf (ed, append) append;
   SubSelf (ed, readjust) readjust;
+  SubSelf (ed, rline) rline;
   SubSelf (ed, buf) buf;
   SubSelf (ed, win) win;
   SubSelf (ed, menu) menu;

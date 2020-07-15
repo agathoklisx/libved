@@ -154,7 +154,7 @@ private void c_tcc_error_cb (void *obj, const char *msg) {
   Msg.write (ed, (char *) msg);
 }
 
-private int c_tcc_string_add_lnums_cb (vstr_t *str, char *tok, void *obj) {
+private int c_tcc_string_add_lnums_cb (Vstring_t *str, char *tok, void *obj) {
   (void) str;
   ed_t *ed = E(get.current);
   int *lnr = (int *) obj;
@@ -163,7 +163,7 @@ private int c_tcc_string_add_lnums_cb (vstr_t *str, char *tok, void *obj) {
 }
 
 private void c_tcc_string_add_lnums (char *src) {
-  vstr_t unused;
+  Vstring_t unused;
   int lnr = 0;
   Cstring.chop (src, '\n', &unused, c_tcc_string_add_lnums_cb, &lnr);
 }
@@ -247,7 +247,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
           0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
-        vstr_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
+        Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
         ifnot (NULL is lines) {
           retval = __interpret__ (thisp, Vstring.join (lines, "\n")->bytes);
           Vstring.free (lines);
@@ -263,7 +263,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
           0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
-        vstr_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
+        Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
         ifnot (NULL is lines) {
           retval = __tcc_compile__ (thisp, Vstring.join (lines, "\n"));
           Vstring.free (lines);
@@ -308,7 +308,7 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
 }
 
-private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
+private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr, utf8 c, char *action) {
   (void) vstr; (void) fidx; (void) lidx;
 
   int retval = NO_CALLBACK_FUNCTION;
@@ -462,7 +462,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     retval = sys_battery_info (NULL, 1);
 
   } else if (Cstring.eq (com->bytes, "`mkdir")) {
-    vstr_t *dirs = Rline.get.arg_fnames (rl, 1);
+    Vstring_t *dirs = Rline.get.arg_fnames (rl, 1);
     if (NULL is dirs) goto theend;
 
     int is_verbose = Rline.arg.exists (rl, "verbose");
@@ -477,7 +477,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     Vstring.free (dirs);
 
   } else if (Cstring.eq (com->bytes, "`man")) {
-    vstr_t *names = Rline.get.arg_fnames (rl, 1);
+    Vstring_t *names = Rline.get.arg_fnames (rl, 1);
     if (NULL is names) goto theend;
 
     string_t *section = Rline.get.anytype_arg (rl, "section");
@@ -487,7 +487,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     Vstring.free (names);
 
   } else if (Cstring.eq (com->bytes, "`stat")) {
-    vstr_t *fnames = Rline.get.arg_fnames (rl, 1);
+    Vstring_t *fnames = Rline.get.arg_fnames (rl, 1);
     if (NULL is fnames) goto theend;
     retval = sys_stat (thisp, fnames->head->data->bytes);
     Vstring.free (fnames);
@@ -501,7 +501,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
       goto theend;
     }
 
-    vstr_t *words = Rline.get.arg_fnames (rl, 1);
+    Vstring_t *words = Rline.get.arg_fnames (rl, 1);
     if (NULL is words) goto theend;
 
     retval = __translate_word__ (thisp, words->head->data->bytes);
@@ -941,7 +941,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
 
   Msg.send (this, COLOR_NORMAL, "Expression Register");
 
-  rline_t *rl = Rline.new (this);
+  rline_t *rl = Ed.rline.new (this);
   Rline.set.prompt_char (rl, '=');
   Rline.edit (rl);
   string_t *line = Rline.get.line (rl);

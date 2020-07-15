@@ -5,7 +5,9 @@ EDNAME       := veda
 API := 0
 REV := 2
 
-THISDIR := $(shell realpath .)
+THISDIR := $(shell (cd . && pwd))
+# macOs doesn't have realpath by default (available through coreutils)
+# THISDIR := $(shell realpath .)
 
 THIS_LIBVERS  :=  $(API).$(REV)
 
@@ -64,7 +66,9 @@ ifneq ($(CHECK_PTR_BOUNDS), 0)
 endif
 
 ifeq (-$(CC), -gcc)
-  FLAGS += -Wimplicit-fallthrough=0
+  FLAGS += -Wno-implicit-fallthrough
+# for gcc < 7 version
+#  FLAGS += -Wimplicit-fallthrough=0
 endif
 
 DEBUG := 0
@@ -382,11 +386,12 @@ GDB_ARGS = --quiet -ex "set logging file /tmp/gdb.txt" -ex "set logging on" -ex 
 Env: makeenv checkenv
 makeenv:
 	@$(TEST) -d $(SYSDIR)     || $(MKDIR_P) $(SYSDIR)
-	@$(TEST) -d $(SYSLIBDIR)  || $(MKDIR) $(SYSLIBDIR)
-	@$(TEST) -d $(SYSINCDIR)  || $(MKDIR) $(SYSINCDIR)
-	@$(TEST) -d $(SYSBINDIR)  || $(MKDIR) $(SYSBINDIR)
-	@$(TEST) -d $(SYSDATADIR) || $(MKDIR_P) --mode=0700 $(SYSDATADIR)
-	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR_P) --mode=0700 $(SYSTMPDIR)
+	@$(TEST) -d $(SYSLIBDIR)  || $(MKDIR)   $(SYSLIBDIR)
+	@$(TEST) -d $(SYSINCDIR)  || $(MKDIR)   $(SYSINCDIR)
+	@$(TEST) -d $(SYSBINDIR)  || $(MKDIR)   $(SYSBINDIR)
+	@$(TEST) -d $(SYSDATADIR) || $(MKDIR_P) -m 0700 $(SYSDATADIR)
+	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR_P) -m 0700 $(SYSTMPDIR)
+#           macOS mkdir doesn't understand --mode=
 
 checkenv:
 	@$(TEST) -w $(SYSDIR)     || exit 1

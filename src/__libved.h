@@ -372,21 +372,21 @@ NewType (Istrings,
   Type (istring) *head;
 );
 
-NewType (String,
+NewType (Istring,
   unsigned len_;
   const char *ptr_;
 );
 
 typedef struct symbol {
-  String_t name;
+  Istring_t name;
   int type;      // symbol type
   ival_t value;  // symbol value, or string ptr
 } Sym;
 
 typedef struct ufunc {
-  String_t body;
+  Istring_t body;
   int nargs;
-  String_t argName[MAX_BUILTIN_PARAMS];
+  Istring_t argName[MAX_BUILTIN_PARAMS];
 } UserFunc;
 
 NewProp (I,
@@ -417,7 +417,7 @@ NewType (i,
   Sym *symptr;
   ival_t *valptr;
 
-  String_t parseptr;  // acts as instruction pointer
+  Istring_t parseptr;  // acts as instruction pointer
 
   char ns[MAXLEN_NAME];
   ival_t fArgs[MAX_BUILTIN_PARAMS];
@@ -426,7 +426,7 @@ NewType (i,
   // variables for parsing
   int curToken;  // what kind of token is current
   int tokenArgs; // number of arguments for this token
-  String_t token;  // the actual string representing the token
+  Istring_t token;  // the actual string representing the token
   ival_t tokenVal;  // for symbolic tokens, the symbol's value
   Sym *tokenSym;
 
@@ -526,7 +526,7 @@ NewType (rline,
 
   video_t *cur_video;
 
-  vstr_t *line;
+  Vstring_t *line;
    arg_t *head;
    arg_t *tail;
    arg_t *current;
@@ -547,7 +547,10 @@ NewType (rline,
 );
 
 NewType (menu,
+  char pat[MAXLEN_PAT];
+
   int
+    patlen,
     fd,
     next_key,
     num_cols,
@@ -568,14 +571,14 @@ NewType (menu,
     retval;
 
   utf8 c;
-  vstr_t  *list;
-    char   pat[MAXLEN_PAT];
-     int   patlen;
+
+  buf_t *this;
 
   string_t *header;
+  Vstring_t  *list;
   video_t *cur_video;
+
   int (*process_list) (menu_t *);
-  buf_t *this;
 );
 
 NewType (reg,
@@ -584,7 +587,7 @@ NewType (reg,
   reg_t *prev;
 );
 
-NewType (rg,
+NewType (Reg,
   reg_t *head;
   char reg;
   int  type;
@@ -596,6 +599,7 @@ NewType (rg,
 NewType (mark,
   char mark;
   int
+    idx,
     cur_idx,
     cur_col_idx,
     first_col_idx,
@@ -603,7 +607,6 @@ NewType (mark,
     col_pos,
     video_first_row_idx;
 
-  int idx;
   row_t *video_first_row;
 );
 
@@ -612,16 +615,16 @@ NewType (jump,
   mark_t *mark;
 );
 
-NewType (jumps,
+NewType (Jump,
   jump_t *head;
   int num_items;
   int cur_idx;
   int old_idx;
 );
 
-NewType (act,
-  act_t *next;
-  act_t *prev;
+NewType (action,
+  action_t *next;
+  action_t *prev;
 
   int
     num_bytes,
@@ -642,37 +645,39 @@ NewType (act,
   string_t *__bytes;
 );
 
-NewType (action,
-  act_t *head;
+NewType (Action,
+  action_t *head;
 
-  action_t *next;
-  action_t *prev;
+  Action_t *next;
+  Action_t *prev;
 );
 
 NewType (undo,
-  action_t *head;
-  action_t *current;
-  action_t *tail;
+  Action_t *head;
+  Action_t *current;
+  Action_t *tail;
        int  num_items;
        int  cur_idx;
        int  state;
 );
 
 NewType (vis,
-  int fidx;
-  int lidx;
-  int orig_idx;
+  int
+    fidx,
+    lidx,
+    orig_idx;
+
   char  *(*orig_syn_parser) (buf_t *, char *, int, int, row_t *);
 );
 
-NewType (sch,
-  row_t *row;
+NewType (search,
   int    idx;
-  sch_t *next;
+  row_t *row;
+  search_t *next;
 );
 
-NewType (search,
-  sch_t *head;
+NewType (Search,
+  search_t *head;
 
   string_t *pat;
   row_t *row;
@@ -822,25 +827,12 @@ NewType (row,
 NewProp (buf,
   MY_PROPERTIES;
   MY_CLASSES (buf);
+
   ed_T  *Ed;
   win_T *Win;
 
   ed_t  *root;
   win_t *parent;
-
-  term_t  *term_ptr;
-  row_t   *video_first_row;
-  syn_t   *syn;
-  ftype_t *ftype;
-  rg_t    *regs;
-  hist_t  *history;
-  mark_t   marks[NUM_MARKS];
-  vis_t    vis[2];
-  vis_t    lw_vis_prev[1];
-
-  undo_t
-    *undo,
-    *redo;
 
   char
     *fname,
@@ -864,9 +856,7 @@ NewProp (buf,
     cur_video_row,
     cur_video_col,
     statusline_row,
-    show_statusline;
-
-  int
+    show_statusline,
     *msg_row_ptr,
     *prompt_row_ptr;
 
@@ -876,14 +866,26 @@ NewProp (buf,
 
   size_t num_bytes;
 
-  line_t *line;
-  jumps_t *jumps;
-
   string_t
     *cur_insert,
     *last_insert,
     *statusline,
     *promptline;
+
+  term_t    *term_ptr;
+  row_t     *video_first_row;
+  syn_t     *syn;
+  ftype_t   *ftype;
+  Reg_t     *regs;
+  hist_t    *history;
+  mark_t     marks[NUM_MARKS];
+  vis_t      vis[2];
+  vis_t      lw_vis_prev[1];
+  Ustring_t *line;
+  Jump_t    *jumps;
+  undo_t
+    *undo,
+    *redo;
 
   struct stat st;
 
@@ -977,10 +979,10 @@ NewProp (ed,
     *topline,
     *ed_str;
 
-  vstr_t *rl_last_component;
+  Vstring_t *rl_last_component;
   term_t *term;
   hist_t *history;
-  rg_t regs[NUM_REGISTERS];
+  Reg_t regs[NUM_REGISTERS];
   rlcom_t **commands;
 
   char
@@ -995,7 +997,7 @@ NewProp (ed,
     *file_mode_chars,
     *word_actions_chars;
 
-  u8_t *uline;
+  Ustring_t *uline;
 
   int lmap[2][26];
 
@@ -1005,7 +1007,7 @@ NewProp (ed,
     file_mode_chars_len,
     word_actions_chars_len;
 
-  vstr_t *word_actions;
+  Vstring_t *word_actions;
   WordActions_cb *word_actions_cb;
 
   int num_file_mode_cbs;
@@ -1035,9 +1037,10 @@ NewProp (ed,
   int repeat_mode;
   int record;
   int record_idx;
-  vstr_t     *records[NUM_RECORDS + 1];
-  Record_cb   record_cb;
-  IRecord_cb  i_record_cb;
+  Vstring_t    *records[NUM_RECORDS + 1];
+
+  Record_cb     record_cb;
+  IRecord_cb    i_record_cb;
   InitRecord_cb init_record_cb;
 );
 
@@ -1057,7 +1060,7 @@ NewProp (E,
    int  prev_idx;
 
   Self (ed) Ed;
-  rg_t shared_reg[1];
+  Reg_t shared_reg[1];
 
   Class (I) *I;
 
@@ -1070,54 +1073,54 @@ NewProp (E,
 #undef MY_CLASSES
 #undef MY_PROPERTIES
 
-private int win_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
-private int ved_quit (ed_t *, int, int);
-private int buf_normal_goto_linenr (buf_t *, int, int);
-private int buf_normal_left (buf_t *, int, int);
-private int buf_normal_right (buf_t *, int, int);
-private int buf_normal_down (buf_t *, int, int, int);
-private int buf_normal_bol (buf_t *);
-private int buf_normal_eol (buf_t *);
-private int buf_normal_eof (buf_t *, int);
-private int ved_insert (buf_t **, utf8, char *);
-private int ved_write_buffer (buf_t *, int);
-private int ved_split (buf_t **, char *);
-private int ved_enew_fname (buf_t **, char *);
-private int ved_write_to_fname (buf_t *, char *, int, int, int, int, int);
-private int ved_open_fname_under_cursor (buf_t **, int, int, int);
-private int ved_buf_change_bufname (buf_t **, char *);
-private int ved_buf_change (buf_t **, int);
-private int ved_insert_complete_filename (buf_t **);
-private int ved_grep_on_normal (buf_t **, utf8, int, int);
-private int       buf_rline (buf_t **, rline_t *);
-private int       buf_rline_parse_range (buf_t *, rline_t *, arg_t *);
-private rline_t  *ed_rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
+private int  win_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
+
+private int  buf_normal_bol (buf_t *);
+private int  buf_normal_eol (buf_t *);
+private int  buf_normal_eof (buf_t *, int);
+private int  buf_normal_left (buf_t *, int, int);
+private int  buf_normal_right (buf_t *, int, int);
+private utf8 buf_quest (buf_t *, char *, utf8 *, int);
+private int  buf_normal_down (buf_t *, int, int, int);
+private int  buf_normal_goto_linenr (buf_t *, int, int);
+private int  buf_substitute (buf_t *, char *, char *, int, int, int, int);
+private int  buf_write_to_fname (buf_t *, char *, int, int, int, int, int);
+
+private int  buf_change (buf_t **, int);
+private int  buf_split (buf_t **, char *);
+private int  buf_rline (buf_t **, rline_t *);
+private int  buf_normal_visual_lw (buf_t **);
+private int  buf_enew_fname (buf_t **, char *);
+private int  buf_insert (buf_t **, utf8, char *);
+private int  buf_change_bufname (buf_t **, char *);
+private int  buf_insert_complete_filename (buf_t **);
+private int  buf_grep_on_normal (buf_t **, utf8, int, int);
+private int  buf_open_fname_under_cursor (buf_t **, int, int, int);
+
+private void ed_resume (ed_t *);
+private void ed_suspend (ed_t *);
+private void ed_record (ed_t *, char *, ...);
+private int  ed_win_change (ed_t *, buf_t **, int, char *, int, int);
+private rline_t *ed_rline_new (ed_t *);
+
 private rline_t  *rline_new (ed_t *, term_t *, utf8 (*getch) (term_t *), int, int, int, video_t *);
 private rline_t  *rline_edit (rline_t *);
-private void      rline_write_and_break (rline_t *);
-private void      rline_free (rline_t *);
 private void      rline_clear (rline_t *);
+private void      rline_release (rline_t *);
+private void      rline_write_and_break (rline_t *);
 private int       rline_break (rline_t **);
 private int       rline_arg_exists (rline_t *, char *);
+private int       rline_parse_arg_buf_range (rline_t *rl, arg_t *arg, buf_t *this);
 private arg_t    *rline_get_arg (rline_t *, int);
 private string_t *rline_get_string (rline_t *);
 private string_t *rline_get_anytype_arg (rline_t *, char *);
-private void      ed_suspend (ed_t *);
-private void      ed_resume (ed_t *);
-private int       ed_win_change (ed_t *, buf_t **, int, char *, int, int);
-private int       buf_substitute (buf_t *, char *, char *, int, int, int, int);
-private utf8      quest (buf_t *, char *, utf8 *, int);
-private void      vundo_clear (buf_t *);
-private action_t *vundo_pop (buf_t *);
-private int       fd_read (int, char *, size_t);
-private long      vsys_get_clock_sec (clockid_t clock_id);
-private string_t *vsys_which (char *, char *);
-private int is_directory (char *);
-private dirlist_t *dirlist (char *, int);
-private int buf_normal_visual_lw (buf_t **);
-private void ed_record (ed_t *, char *, ...);
 
-private vstr_t *cstring_chop (char *, char, vstr_t *, StrChop_cb, void *);
+private int        is_directory (char *);
+private int        fd_read (int, char *, size_t);
+private long       vsys_get_clock_sec (clockid_t clock_id);
+private string_t  *vsys_which (char *, char *);
+private Vstring_t    *cstring_chop (char *, char, Vstring_t *, StrChop_cb, void *);
+private dirlist_t *dir_list (char *, int);
 
 private Class (I) *__init_i__ (Class (E) *);
 private void __deinit_i__ (Class (I) **);

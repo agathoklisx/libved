@@ -186,7 +186,7 @@ struct buftypes {
   size_t num_cols;
 };
 
-private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
+private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
                                                                  void *obj) {
   (void) lines;
   struct buftypes *bufs = (struct buftypes *) obj;
@@ -264,11 +264,11 @@ private int __readlines_cb (vstr_t *lines, char *line, size_t len, int idx,
 
   int tabwidth = Buf.get.prop.tabwidth (cur_buf);
 
-  u8_t *uline = Ustring.new ();
+  Ustring_t *uline = Ustring.new ();
   Ustring.encode (uline, lline, len, DONOT_CLEAR, tabwidth, 0);
 
-  vchar_t *it = uline->head;
-  vchar_t *tmp = it;
+  ustring_t *it = uline->head;
+  ustring_t *tmp = it;
 
   if (cur_idx > 0) /* humanized expression */
     for (size_t i = 0; i < cur_idx; i++)
@@ -396,7 +396,7 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
   Win.append_buf (w, bbody);
   buffers.body = bbody;
 
-  vstr_t lines;
+  Vstring_t lines;
   File.readlines (fname, &lines, __readlines_cb, &buffers);
 
   Buf.set.row.idx (buf, 0, NO_OFFSET, 1);
@@ -404,7 +404,6 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
   Win.set.current_buf (w, 0, DONOT_DRAW);
   Win.set.current_buf (w, 1, DONOT_DRAW);
   Win.draw (w);
-
   return w;
 }
 

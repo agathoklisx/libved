@@ -4,7 +4,7 @@ THIS_LIBNAME := ved
 API := 0
 REV := 2
 
-THISDIR := $(shell realpath ../..)
+THISDIR := $(shell (cd ../.. && pwd))
 
 THIS_LIBVERS  :=  $(API).$(REV)
 
@@ -331,8 +331,8 @@ GDB_ARGS = --quiet -ex "set logging file /tmp/gdb.txt" -ex "set logging on" -ex 
 Env: makeenv checkenv
 makeenv:
 	@$(TEST) -d $(SYSBINDIR)  || $(MKDIR) $(SYSBINDIR)
-	@$(TEST) -d $(SYSDATADIR) || $(MKDIR_P) --mode=0700 $(SYSDATADIR)
-	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR_P) --mode=0700 $(SYSTMPDIR)
+	@$(TEST) -d $(SYSDATADIR) || $(MKDIR_P) -m 0700 $(SYSDATADIR)
+	@$(TEST) -d $(SYSTMPDIR)  || $(MKDIR_P) -m 0700 $(SYSTMPDIR)
 
 checkenv:
 	@$(TEST) -w $(SYSBINDIR)  || exit 1

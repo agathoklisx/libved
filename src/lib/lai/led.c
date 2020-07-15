@@ -53,11 +53,11 @@ private Value charU8Native(VM *vm, int argCount, Value *args) {
         return EMPTY_VAL;
     }
 
-    int c = AS_NUMBER(args[1]);
+    int c = AS_NUMBER(args[0]);
     int len = 0;
     char buf[8];
     Ustring.character (c, buf, &len);
-    return OBJ_VAL(copyString(vm, "buf", len));
+    return OBJ_VAL(copyString(vm, buf, len));
 }
 
 private void createU8Class(VM *vm) {

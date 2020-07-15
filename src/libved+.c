@@ -940,7 +940,7 @@ private int spell_guess (spell_t *spell) {
   vstring_t *that = spell->words->head;
   while (that) {
     if (Imap.key_exists (spell->dic, that->data->bytes))
-      Vstring.cur.append_with (spell->guesses, that->data->bytes);
+      Vstring.current.append_with (spell->guesses, that->data->bytes);
     that = that->next;
   }
 
@@ -964,7 +964,7 @@ private void spell_add_word_to_dictionary (spell_t *spell, char *word) {
   fclose (fp);
 }
 
-private int spell_file_readlines_cb (vstr_t *unused, char *line, size_t len,
+private int spell_file_readlines_cb (Vstring_t *unused, char *line, size_t len,
                                                          int lnr, void *obj) {
   (void) unused; (void) lnr; (void) len;
   spell_t *spell = (spell_t *) obj;
@@ -976,7 +976,7 @@ private int spell_file_readlines_cb (vstr_t *unused, char *line, size_t len,
 
 private int spell_read_dictionary (spell_t *spell) {
   Imap.clear (spell->dic);
-  vstr_t unused;
+  Vstring_t unused;
   File.readlines (spell->dic_file->bytes, &unused, spell_file_readlines_cb,
       (void *) spell);
   return spell->retval;
@@ -1043,7 +1043,7 @@ public void __deinit_spell__ (spell_T *this) {
 }
 
 private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
-        action_t **action, int fidx, int lidx, bufiter_t *iter) {
+        Action_t **action, int fidx, int lidx, bufiter_t *iter) {
   ed_t *ed = E(get.current);
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
@@ -1142,7 +1142,7 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
     return NOTOK;
   }
 
-  action_t *action = Buf.action.new (*thisp);
+  Action_t *action = Buf.action.new (*thisp);
   Buf.action.set_current (*thisp, action, REPLACE_LINE);
 
   int len = lidx - fidx + 1;
@@ -1210,7 +1210,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
 
   ed_t *ed = E(get.current);
 
-  int retval = Rline.get.range (rl, *thisp, range);
+  int retval = Rline.get.buf_range (rl, *thisp, range);
   if (NOTOK is retval) {
     range[0] = Buf.get.current_row_idx (*thisp);
     range[1] = range[0];
@@ -1226,7 +1226,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     return NOTOK;
   }
 
-  action_t *action = Buf.action.new (*thisp);
+  Action_t *action = Buf.action.new (*thisp);
   Buf.action.set_current (*thisp, action, REPLACE_LINE);
 
   int buf_changed = 0;
@@ -1374,20 +1374,20 @@ private void __ex_add_word_actions__ (ed_t *this) {
   Ed.set.word_actions (this, chr, 1, "Spell word", __ex_word_actions_cb__);
 }
 
-private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, vstr_t *vstr, utf8 c, char *action) {
+private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr, utf8 c, char *action) {
   (void) vstr; (void) action;
 
   int retval = NO_CALLBACK_FUNCTION;
 
   switch (c) {
     case 'S': {
-      rline_t *rl = Rline.new (E(get.current));
+      rline_t *rl = Ed.rline.new (E(get.current));
       string_t *str = String.new_with_fmt ("spell --range=%d,%d",
          fidx + 1, lidx + 1);
       Rline.set.visibility (rl, NO);
       Rline.set.line (rl, str->bytes, str->num_bytes);
       String.free (str);
-      Rline.parse (*thisp, rl);
+      Rline.parse (rl, *thisp);
       if (SPELL_OK is (retval = __buf_spell__ (thisp, rl)))
         Rline.history.push (rl);
       else
@@ -1446,12 +1446,12 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
           0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
-        rline_t *rl = Rline.new (E(get.current));
+        rline_t *rl = Ed.rline.new (E(get.current));
         string_t *str = String.new_with ("spell --range=%");
         Rline.set.visibility (rl, NO);
         Rline.set.line (rl, str->bytes, str->num_bytes);
         String.free (str);
-        Rline.parse (*thisp, rl);
+        Rline.parse (rl, *thisp);
         if (SPELL_OK is (retval = __buf_spell__ (thisp, rl)))
           Rline.history.push (rl);
         else

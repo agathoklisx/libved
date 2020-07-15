@@ -153,7 +153,7 @@ int main (int argc, char **argv) {
 
   if (exec_com isnot NULL) {
     string_t *com = This(parse_command, exec_com);
-    rline_t *rl = Rline.new_with (this, com->bytes);
+    rline_t *rl = Ed.rline.new_with (this, com->bytes);
     buf_t *buf = Ed.get.current_buf (this);
     retval = Rline.exec (rl, &buf);
     String.free (com);

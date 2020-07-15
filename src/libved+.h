@@ -130,7 +130,7 @@ NewType (spell,
     *dic,
     *ign_words;
 
-  vstr_t
+  Vstring_t
     *words,
     *guesses,
     *messages;
