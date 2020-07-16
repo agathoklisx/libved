@@ -11,7 +11,7 @@
 private int __translate_word__ (buf_t **thisp, char *word) {
   (void) thisp;
   char *lex = NULL;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
 #ifndef WORD_LEXICON_FILE
   Msg.error (ed, "%s(): lexikon has not been defined", __func__);
@@ -65,7 +65,7 @@ private int __edit_lexicon__ (buf_t **thisp) {
   char *lex = NULL;
 
 #ifndef WORD_LEXICON_FILE
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   Msg.error (ed, "%s(): lexikon has not been defined", __func__);
   return NOTOK;
 #else

@@ -2,7 +2,7 @@
  * this prints to the message line (through an over simplistic way and only
  * on Linux systems) the battery status and capacity */
 private int sys_battery_info (char *buf, int should_print) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   int retval = NOTOK;
 

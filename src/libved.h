@@ -642,8 +642,8 @@ DeclareClass (string);
 /* interpeter */
 DeclareType (i);
 DeclareSelf (i);
-DeclareProp (I);
-DeclareClass (I);
+DeclareProp (i);
+DeclareClass (i);
 
 DeclareClass (E);
 DeclareProp (E);
@@ -1083,9 +1083,9 @@ NewClass (input,
 );
 
 NewSelf (term,
-  SubSelf (term, screen) Screen;
-  SubSelf (term, cursor) Cursor;
-  SubSelf (term, input) Input;
+  SubSelf (term, screen) __Screen__;
+  SubSelf (term, cursor) __Cursor__;
+  SubSelf (term, input) __Input__;
   SubSelf (term, get) get;
 
   term_t *(*new) (void);
@@ -1247,7 +1247,7 @@ NewClass (vstring,
   Self (vstring) self;
 );
 
-NewSelf (Imap,
+NewSelf (imap,
   void
     (*free) (Imap_t *),
     (*clear) (Imap_t *);
@@ -1263,8 +1263,8 @@ NewSelf (Imap,
     (*set_with_keylen) (Imap_t *, char *);
 );
 
-NewClass (Imap,
-  Self (Imap) self;
+NewClass (imap,
+  Self (imap) self;
 );
 
 NewSubSelf (rline, set,
@@ -1551,7 +1551,7 @@ NewSubSelf (buf, isit,
   int (*special_type) (buf_t *);
 );
 
-NewSubSelf (buf, cur,
+NewSubSelf (buf, current,
   int
     (*set) (buf_t *, int);
 
@@ -1605,7 +1605,7 @@ NewSubSelf (buf, normal,
 );
 
 NewSelf (buf,
-  SubSelf (buf, cur) cur;
+  SubSelf (buf, current) current;
   SubSelf (buf, set) set;
   SubSelf (buf, get) get;
   SubSelf (buf, syn) syn;
@@ -1622,8 +1622,8 @@ NewSelf (buf,
   void
     (*draw) (buf_t *),
     (*flush) (buf_t *),
-    (*draw_cur_row) (buf_t *),
-    (*clear) (buf_t *);
+    (*clear) (buf_t *),
+    (*draw_current_row) (buf_t *);
 
   char
     *(*info) (buf_t *);
@@ -1891,12 +1891,12 @@ NewSelf (ed,
 
 /* interpeter */
 NewSubSelf (i, get,
-  i_t *(*current) (Class (I) *);
-  int (*current_idx) (Class (I) *);
+  i_t *(*current) (Class (i) *);
+  int (*current_idx) (Class (i) *);
 );
 
 NewSubSelf (i, set,
-  i_t *(*current) (Class (I) *, int);
+  i_t *(*current) (Class (i) *, int);
 );
 
 NewSelf (i,
@@ -1905,24 +1905,24 @@ NewSelf (i,
 
   void
     (*free) (i_t **),
-    (*remove_instance) (Class (I) *, Type (i) *);
+    (*remove_instance) (Class (i) *, Type (i) *);
 
   i_t
     *(*new) (void),
-    *(*init_instance) (Class (I) *),
-    *(*append_instance) (Class (I) *, Type (i) *);
+    *(*init_instance) (Class (i) *),
+    *(*append_instance) (Class (i) *, Type (i) *);
 
   int
     (*def) (i_t *, const char *, int, ival_t),
-    (*init) (Class (I) *, i_t *, I_INIT),
+    (*init) (Class (i) *, i_t *, I_INIT),
     (*eval_file) (i_t *, const char *),
-    (*load_file) (Class (I) *, char *),
+    (*load_file) (Class (i) *, char *),
     (*eval_string) (i_t *, const char *, int, int);
 );
 
-NewClass (I,
+NewClass (i,
   Self (i) self;
-  Prop (I) *prop;
+  Prop (i) *prop;
 );
 
 NewClass (ed,
@@ -1931,28 +1931,28 @@ NewClass (ed,
 
   Prop (ed) *prop;
   Self (ed)  self;
-  Class (buf) Buf;
-  Class (win) Win;
-  Class (I) I;
+  Class (buf) __Buf__;
+  Class (win) __Win__;
+  Class (i) __I__;
 
-  Class (re) Re;
-  Class (msg) Msg;
-  Class (dir) Dir;
-  Class (vsys) Vsys;
-  Class (term) Term;
-  Class (Imap) Imap;
-  Class (path) Path;
-  Class (file) File;
-  Class (rline) Rline;
-  Class (video) Video;
-  Class (input) Input;
-  Class (error) Error;
-  Class (screen) Screen;
-  Class (cursor) Cursor;
-  Class (string) String;
-  Class (cstring) Cstring;
-  Class (vstring) Vstring;
-  Class (ustring) Ustring;
+  Class (re) __Re__;
+  Class (msg) __Msg__;
+  Class (dir) __Dir__;
+  Class (vsys) __Vsys__;
+  Class (term) __Term__;
+  Class (imap) __Imap__;
+  Class (path) __Path__;
+  Class (file) __File__;
+  Class (rline) __Rline__;
+  Class (video) __Video__;
+  Class (input) __Input__;
+  Class (error) __Error__;
+  Class (screen) __Screen__;
+  Class (cursor) __Cursor__;
+  Class (string) __String__;
+  Class (cstring) __Cstring__;
+  Class (vstring) __Vstring__;
+  Class (ustring) __Ustring__;
 );
 
 NewSubSelf (E, set,
@@ -1982,7 +1982,7 @@ NewSubSelf (E, get,
 
   string_t *(*env) (E_T *, char *);
 
-  Class (I) *(*iclass) (E_T *);
+  Class (i) *(*iclass) (E_T *);
 );
 
 NewSelf (E,
@@ -1999,7 +1999,7 @@ NewSelf (E,
     (*delete) (E_T *, int, int);
 );
 
-NewClass (This,
+NewClass (this,
   void *self;
   void *prop;
   Class (E) *__E__;
@@ -2008,8 +2008,8 @@ NewClass (This,
 NewClass (E,
   Self (E) self;
   Prop (E) *prop;
-  Class (ed) *__ED__;
-  Class (This) *__THIS__;
+  Class (ed) *__Ed__;
+  Class (this) *__This__;
 );
 
 public Class (E) *__init_ed__ (char *);

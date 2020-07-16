@@ -1,5 +1,5 @@
 private int sys_mkdir (char *dir, mode_t mode, int verbose) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   if (OK is mkdir (dir, mode)) {
     if (verbose) {

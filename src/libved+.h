@@ -1,48 +1,56 @@
 #ifndef LIBVED_PLUS_H
 #define LIBVED_PLUS_H
 
-DeclareSelf (This);
+extern Class (this) *__This__;
 
-extern Class (This) *__THIS__;
-extern Self (This)  *__SELF__;
+#define THIS    __This__
+#define This    (*(Self (this) *) __This__->self)
 
-/* avoid __SELF__ ? */
-//#define This(__f__, ...) (*(Self (This) *) (__THIS__->self)).__f__ (__THIS__, ## __VA_ARGS__)
-#define This(__f__, ...) (*__SELF__).__f__ (__THIS__, ## __VA_ARGS__)
-#define E(__f__, ...) This(e.__f__, ## __VA_ARGS__)
+#define THIS_E  THIS->__E__
+#define E       THIS_E->self
+
+#define Ed      __This__->__E__->__Ed__->self
+#define Win     __This__->__E__->__Ed__->__Win__.self
+#define Buf     __This__->__E__->__Ed__->__Buf__.self
+#define I       __This__->__E__->__Ed__->__I__.self
+#define Re      __This__->__E__->__Ed__->__Re__.self
+#define Msg     __This__->__E__->__Ed__->__Msg__.self
+#define Dir     __This__->__E__->__Ed__->__Dir__.self
+#define File    __This__->__E__->__Ed__->__File__.self
+#define Path    __This__->__E__->__Ed__->__Path__.self
+#define Vsys    __This__->__E__->__Ed__->__Vsys__.self
+#define Term    __This__->__E__->__Ed__->__Term__.self
+#define Imap    __This__->__E__->__Ed__->__Imap__.self
+#define Input   __This__->__E__->__Ed__->__Input__.self
+#define Error   __This__->__E__->__Ed__->__Error__.self
+#define Rline   __This__->__E__->__Ed__->__Rline__.self
+#define Video   __This__->__E__->__Ed__->__Video__.self
+#define Cursor  __This__->__E__->__Ed__->__Cursor__.self
+#define Screen  __This__->__E__->__Ed__->__Screen__.self
+#define String  __This__->__E__->__Ed__->__String__.self
+#define Cstring __This__->__E__->__Ed__->__Cstring__.self
+#define Ustring __This__->__E__->__Ed__->__Ustring__.self
+#define Vstring __This__->__E__->__Ed__->__Vstring__.self
+
+#define Argparse ((Self (this) *) __This__->self)->argparse
+#define Spell    ((Self (this) *) __This__->self)->spell
+#define Proc     ((Self (this) *) __This__->self)->proc
 
 #if HAS_PROGRAMMING_LANGUAGE
+#define __L__ ((Prop (this) *) __This__->prop)->__L
 #define L (*__L__).self
-#define L_CUR_STATE  __L__->states[__L__->cur_state]
-#endif
+#define L_CUR_STATE __L__->states[__L__->cur_state]
 
-#define __E     __THIS__->__E__->self
-#define Ed      __THIS__->__E__->__ED__->self
-#define Win     __THIS__->__E__->__ED__->Win.self
-#define Buf     __THIS__->__E__->__ED__->Buf.self
-#define I       __THIS__->__E__->__ED__->I.self
-#define Re      __THIS__->__E__->__ED__->Re.self
-#define Msg     __THIS__->__E__->__ED__->Msg.self
-#define Dir     __THIS__->__E__->__ED__->Dir.self
-#define File    __THIS__->__E__->__ED__->File.self
-#define Path    __THIS__->__E__->__ED__->Path.self
-#define Vsys    __THIS__->__E__->__ED__->Vsys.self
-#define Term    __THIS__->__E__->__ED__->Term.self
-#define Imap    __THIS__->__E__->__ED__->Imap.self
-#define Input   __THIS__->__E__->__ED__->Input.self
-#define Error   __THIS__->__E__->__ED__->Error.self
-#define Rline   __THIS__->__E__->__ED__->Rline.self
-#define Video   __THIS__->__E__->__ED__->Video.self
-#define Cursor  __THIS__->__E__->__ED__->Cursor.self
-#define Screen  __THIS__->__E__->__ED__->Screen.self
-#define String  __THIS__->__E__->__ED__->String.self
-#define Cstring __THIS__->__E__->__ED__->Cstring.self
-#define Ustring __THIS__->__E__->__ED__->Ustring.self
-#define Vstring __THIS__->__E__->__ED__->Vstring.self
+#include <stdbool.h>
+#include <lai.h>
+#include <led.h>
 
-#define Argparse ((Self (This) *) __THIS__->self)->argparse
-#define Spell    ((Self (This) *) __THIS__->self)->spell
-#define Proc     ((Self (This) *) __THIS__->self)->proc
+typedef l_table_t ltableself_t;
+typedef l_table_get_t ltablegetself_t;
+typedef l_module_t lmodulegetself_t;
+typedef l_t lself_t;
+typedef lang_t l_T;
+#endif /* HAS_PROGRAMMING_LANGUAGE */
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
@@ -217,18 +225,6 @@ NewClass (proc,
   private void __deinit_local__ (void);
 #endif
 
-#if HAS_PROGRAMMING_LANGUAGE
-#include <stdbool.h>
-#include <lai.h>
-#include <led.h>
-
-typedef l_t Thislself_t;
-typedef l_table_t Thisltableself_t;
-typedef l_table_get_t Thisltablegetself_t;
-typedef l_module_t Thislmodulegetself_t;
-typedef lang_t L_T;
-#endif /* HAS_PROGRAMMING_LANGUAGE */
-
 #if HAS_TCC
 #include <libtcc.h>
 
@@ -290,45 +286,6 @@ private void __deinit_ext__ (void);
 
 /* ************************************************ */
 
-NewSubSelf (Thise, set,
-  void
-    (*at_init_cb) (Class (This) *, EdAtInit_cb),
-    (*at_exit_cb) (Class (This) *, EAtExit_cb);
-
-  ed_t
-    *(*next) (Class (This) *),
-    *(*current) (Class (This) *, int);
-);
-
-NewSubSelf (Thise, get,
-  ed_t
-    *(*next) (Class (This) *, ed_t *),
-    *(*head) (Class (This) *),
-    *(*current) (Class (This) *);
-
-  int
-    (*current_idx) (Class (This) *),
-    (*prev_idx) (Class (This) *),
-    (*num) (Class (This) *),
-    (*state) (Class (This) *);
-
-  string_t *(*env) (Class (This) *, char *);
-
-  Class (I) *(*iclass) (Class (This) *);
-);
-
-NewSubSelf (This, e,
-  SubSelf (Thise, set) set;
-  SubSelf (Thise, get) get;
-
-  ed_t
-    *(*new)  (Class (This) *, ED_INIT_OPTS),
-    *(*init) (Class (This) *, EdAtInit_cb);
-
-  int
-     (*main) (Class (This) *, buf_t *);
-);
-
 NewSelf (argparse,
   int
     (*init) (argparse_t *, argparse_option_t *, const char *const *, int),
@@ -339,30 +296,24 @@ NewClass (argparse,
   Self (argparse) self;
 );
 
-NewSelf (This,
-  SubSelf (This, e) e;
-
+NewSelf (this,
   Self (argparse) argparse;
   Self (spell) spell;
   Self (proc) proc;
 
-  string_t *(*parse_command) (Class (This) *, char *);
-
-#if HAS_PROGRAMMING_LANGUAGE
-  SubSelf (This, l) l;
-#endif
+  string_t *(*parse_command) (Class (this) *, char *);
 );
 
-NewProp (This,
+NewProp (this,
   char *name;
 
   Class (spell) spell;
 
 #if HAS_PROGRAMMING_LANGUAGE
-  Class (L) *__L__;
+  Class (l) *__L;
 #endif
 );
 
-public Class (This) *__init_this__ (void);
-public void __deinit_this__ (Class (This) **);
+public Class (this) *__init_this__ (void);
+public void __deinit_this__ (Class (this) **);
 #endif

@@ -122,14 +122,14 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
 }
 
 private ftype_t *__mail_hdrs_syn_init (buf_t *this) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail_hdrs"),
     QUAL(FTYPE, .tabwidth = 1, .on_emptyline = String.new (1)));
   return ft;
 }
 
 private ftype_t *__mail_syn_init (buf_t *this) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail"), QUAL(FTYPE,
     .tabwidth = 4, .on_emptyline = String.new (1)));
   return ft;
@@ -210,13 +210,13 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
     len--;
     ifnot (len) {
       if (bufs->isemptyline) return 0;
-      Buf.cur.append_with (cur_buf, NULL);
+      Buf.current.append_with (cur_buf, NULL);
       return 0;
     }
   }
 
   if (bufs->cur_buf is 0) {
-    Buf.cur.append_with (bufs->headers, lline);
+    Buf.current.append_with (bufs->headers, lline);
     goto theend;
   }
 
@@ -258,7 +258,7 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
       if (line[cur_idx] isnot ' ')
         quot_buf[quot_num++] = ' ';
       quot_buf[quot_num] = '\0';
-      Buf.cur.append_with_len (cur_buf, quot_buf, quot_num);
+      Buf.current.append_with_len (cur_buf, quot_buf, quot_num);
     }
   }
 
@@ -282,7 +282,7 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
 
     if (cur_buf is bufs->body) {
       if (num_iterations and quot_num) {
-        Buf.cur.append_with_len (cur_buf, quot_buf, quot_num);
+        Buf.current.append_with_len (cur_buf, quot_buf, quot_num);
         numchars += quot_num;
       }
     }
@@ -303,7 +303,7 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
     if (cur_buf is bufs->body and quot_num)
       String.append_with_len (Buf.get.row.current_bytes (cur_buf), sp, j);
     else
-      Buf.cur.append_with (cur_buf, sp);
+      Buf.current.append_with (cur_buf, sp);
   }
 
   k = j;
@@ -318,12 +318,12 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
 
   if (k isnot j) {
     sp[j] = '\0';
-    Buf.cur.replace_with (cur_buf, sp);
+    Buf.current.replace_with (cur_buf, sp);
     sp[0] = '\0';
     j = 0;
 
     if (cur_buf is bufs->body and quot_num) {
-      Buf.cur.append_with_len (cur_buf, quot_buf, quot_num);
+      Buf.current.append_with_len (cur_buf, quot_buf, quot_num);
       numchars += quot_num;
     }
 
@@ -333,7 +333,7 @@ private int __readlines_cb (Vstring_t *lines, char *line, size_t len, int idx,
     if (cur_buf is bufs->body)
       if (Cstring.eq (sp, quot_buf)) goto deallocate;
 
-    Buf.cur.append_with (cur_buf, sp);
+    Buf.current.append_with (cur_buf, sp);
   }
 
 deallocate:
@@ -351,7 +351,7 @@ private dim_t **__win_dim_calc_cb (win_t *this, int num_rows, int num_frames, in
 
   if (num_rows < rows) return NULL;
 
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   rows = num_rows - reserved;
   int num_cols = Win.get.num_cols (this);
@@ -408,13 +408,16 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
 }
 
 int main (int argc, char **argv) {
-  if (1 is argc or NULL is __init_this__ ()) return 1;
+  if (1 is argc) return 1;
+
+  if (NULL is __init_this__ ())
+    return 1;
 
   argc--; argv++;
 
-  E(set.at_exit_cb, __deinit_ext__);
+  E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
-  ed_t *this = E(init, __init_ext__);
+  ed_t *this = E.init (THIS_E, __init_ext__);
 
   int retval = 1;
 
@@ -425,24 +428,24 @@ int main (int argc, char **argv) {
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
 
-    retval = E(main, buf);
+    retval = E.main (THIS_E, buf);
 
-    int state = E(get.state);
+    int state = E.get.state (THIS_E);
 
     if ((state & ED_EXIT))
       break;
 
     if ((state & ED_SUSPENDED)) {
-      if (E(get.num) is 1) {
-        this = E(new, QUAL(ED_INIT, .init_cb = __init_ext__));
+      if (E.get.num (THIS_E) is 1) {
+        this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
         buf = Win.buf.new (w, BUF_INIT_QUAL());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {
-        int prev_idx = E(get.prev_idx);
-        this = E(set.current, prev_idx);
+        int prev_idx = E.get.prev_idx (THIS_E);
+        this = E.set.current (THIS_E, prev_idx);
         w = Ed.get.current_win (this);
       }
 
@@ -452,7 +455,7 @@ int main (int argc, char **argv) {
     break;
   }
 
-  __deinit_this__ (&__THIS__);
+  __deinit_this__ (&__This__);
 
   return retval;
 }

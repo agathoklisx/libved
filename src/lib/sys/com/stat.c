@@ -17,7 +17,7 @@ readthelink:
 }
 
 private int sys_stat (buf_t **thisp, char *obj) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   struct stat st;
   if (NOTOK is lstat (obj, &st)) {

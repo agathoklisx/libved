@@ -15,15 +15,7 @@
 #include "libved+.h"
 #include "lib/lib+.h"
 
-public Class (This) *__THIS__ = NULL;
-public Self (This)  *__SELF__ = NULL;
-
-#if HAS_PROGRAMMING_LANGUAGE
-public Class (L)    *__L__    = NULL;
-#endif
-
-#include "handlers/sigwinch_handler.c"
-#include "handlers/alloc_err_handler.c"
+public Class (this) *__This__ = NULL;
 
 #if HAS_USER_EXTENSIONS
   #include "usr/usr.c"
@@ -42,16 +34,31 @@ public Class (L)    *__L__    = NULL;
 
 /**
  * Copyright (C) 2012-2015 Yecheng Fu <cofyc.jackson at gmail dot com>
- * All rights reserved.
- *
- * Use of this source code is governed by a MIT-style license that can be found
- * in the LICENSE file.
+ * The MIT License (MIT)
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 
 #define OPT_UNSET 1
 #define OPT_LONG  (1 << 1)
 
-private const char *prefix_skip (const char *str, const char *prefix) {
+private const char *argparse_prefix_skip (const char *str, const char *prefix) {
   size_t len = bytelen (prefix);
   return Cstring.cmp_n (str, prefix, len) ? NULL : str + len;
 }
@@ -185,7 +192,7 @@ private int argparse_long_opt (argparse_t *self, const argparse_option_t *option
     if (!options->long_name)
       continue;
 
-    rest = prefix_skip (self->argv[0] + 2, options->long_name);
+    rest =  argparse_prefix_skip (self->argv[0] + 2, options->long_name);
     if (!rest) {
       // negation disabled?
       if (options->flags & OPT_NONEG) {
@@ -200,7 +207,7 @@ private int argparse_long_opt (argparse_t *self, const argparse_option_t *option
         continue;
       }
 
-      rest = prefix_skip (self->argv[0] + 2 + 3, options->long_name);
+      rest = argparse_prefix_skip (self->argv[0] + 2 + 3, options->long_name);
       if (!rest)
         continue;
 
@@ -427,7 +434,7 @@ private Class (argparse) __init_argparse__ (void) {
   );
 }
 
-private string_t *this_parse_command (Class (This) *this, char *bytes) {
+private string_t *this_parse_command (Class (this) *this, char *bytes) {
   (void) this;
   string_t *com = String.new (256);
   char *sp = bytes;
@@ -809,19 +816,19 @@ theend:
 #define SPELL_NOTWORD_LEN (Notword_len + 14)
 
 private string_t *spell_get_dictionary (void) {
-  return ((Prop (This) *) __THIS__->prop)->spell.dic_file;
+  return ((Prop (this) *) __This__->prop)->spell.dic_file;
 }
 
 private int spell_get_num_entries (void) {
-  return ((Prop (This) *) __THIS__->prop)->spell.num_entries;
+  return ((Prop (this) *) __This__->prop)->spell.num_entries;
 }
 
 private spelldic_t *spell_get_current_dic (void) {
-  return ((Prop (This) *) __THIS__->prop)->spell.current_dic;
+  return ((Prop (this) *) __This__->prop)->spell.current_dic;
 }
 
 private void spell_set_current_dic (spelldic_t *dic) {
-  ((Prop (This) *) __THIS__->prop)->spell.current_dic = dic;
+  ((Prop (this) *) __This__->prop)->spell.current_dic = dic;
 }
 
 private void spell_clear (spell_t *spell, int clear_ignored) {
@@ -997,7 +1004,7 @@ private int spell_init_dictionary (spell_t *spell, string_t *dic, int num_words,
     spell->retval = SPELL_ERROR;
     Vstring.append_with_fmt (spell->messages,
         "dictionary is not readable: |%s|\n" "errno: %d, error: %s",
-        dic->bytes, errno, Error.string (E(get.current), errno));
+        dic->bytes, errno, Error.string (E.get.current (THIS_E), errno));
     return spell->retval;
   }
 
@@ -1020,7 +1027,8 @@ private spell_t *spell_new (void) {
 }
 
 public spell_T __init_spell__ (void) {
-  string_t *dic = String.new_with_fmt ("%s/spell/spell.txt", E(get.env, "data_dir")->bytes);
+  string_t *dic = String.new_with_fmt ("%s/spell/spell.txt",
+      E.get.env (THIS_E, "data_dir")->bytes);
 
   return ClassInit (spell,
     .self = SelfInit (spell,
@@ -1044,7 +1052,7 @@ public void __deinit_spell__ (spell_T *this) {
 
 private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
         Action_t **action, int fidx, int lidx, bufiter_t *iter) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
 
@@ -1131,7 +1139,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
 private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
                                   bufiter_t *iter, char *word) {
   int retval = NOTOK;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   spell_t *spell = Spell.new ();
 
@@ -1208,7 +1216,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     return OK;
   }
 
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current(THIS_E);
 
   int retval = Rline.get.buf_range (rl, *thisp, range);
   if (NOTOK is retval) {
@@ -1285,70 +1293,6 @@ theend:
   return retval;
 }
 
-private void e_set_at_exit_cb (Class (This) *this, EAtExit_cb cb) {
-  __E.set.at_exit_cb (this->__E__, cb);
-}
-
-private void e_set_at_init_cb (Class (This) *this, EdAtInit_cb cb) {
-  __E.set.at_init_cb (this->__E__, cb);
-}
-
-private int e_get_num (Class (This) *this) {
-  return __E.get.num (this->__E__);
-}
-
-private int e_get_prev_idx (Class (This) *this) {
-  return __E.get.prev_idx (this->__E__);
-}
-
-private int e_get_current_idx (Class (This) *this) {
-  return __E.get.current_idx (this->__E__);
-}
-
-private ed_t *e_get_current (Class (This) *this) {
-  return __E.get.current (this->__E__);
-}
-
-private ed_t *e_get_head (Class (This) *this) {
-  return __E.get.head (this->__E__);
-}
-
-private ed_t *e_get_next (Class (This) *this, ed_t *ed) {
-  return __E.get.next (this->__E__, ed);
-}
-
-private string_t *e_get_env (Class (This) *this, char *name) {
-  return __E.get.env (this->__E__, name);
-}
-
-private Class(I) *e_get_i_class (Class (This) *this) {
-  return __E.get.iclass (this->__E__);
-}
-
-private int e_get_state (Class (This) *this) {
-  return __E.get.state (this->__E__);
-}
-
-private ed_t * e_set_current (Class (This) *this, int idx) {
-  return __E.set.current (this->__E__, idx);
-}
-
-private ed_t *e_set_next (Class (This) *this) {
-   return __E.set.next (this->__E__);
-}
-
-private ed_t *e_init (Class (This) *this, EdAtInit_cb cb) {
-  return __E.init (this->__E__, cb);
-}
-
-private ed_t* e_new (Class (This) *this, ED_INIT_OPTS opts) {
-  return __E.new (this->__E__, opts);
-}
-
-private int e_main (Class (This) *this, buf_t *buf) {
-  return __E.main (this->__E__, buf);
-}
-
 /* callbacks */
 
 private int __ex_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
@@ -1381,7 +1325,7 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
 
   switch (c) {
     case 'S': {
-      rline_t *rl = Ed.rline.new (E(get.current));
+      rline_t *rl = Ed.rline.new (E.get.current (THIS_E));
       string_t *str = String.new_with_fmt ("spell --range=%d,%d",
          fidx + 1, lidx + 1);
       Rline.set.visibility (rl, NO);
@@ -1446,7 +1390,7 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
           0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
-        rline_t *rl = Ed.rline.new (E(get.current));
+        rline_t *rl = Ed.rline.new (E.get.current (THIS_E));
         string_t *str = String.new_with ("spell --range=%");
         Rline.set.visibility (rl, NO);
         Rline.set.line (rl, str->bytes, str->num_bytes);
@@ -1530,7 +1474,7 @@ private string_t *__ex_ed_serial_info__ (edinfo_t *info) {
 
 private int __ex_com_info__ (buf_t **thisp, rline_t *rl) {
   (void) thisp; (void) rl;
-  ed_t *ced = E(get.current);
+  ed_t *ced = E.get.current (THIS_E);
 
   int
     buf = Rline.arg.exists (rl, "buf"),
@@ -1634,7 +1578,7 @@ private void __deinit_ext__ (void) {
   __deinit_local__ ();
 #endif
 
-  __deinit_spell__ ( &(((Prop (This) *) __THIS__->prop))->spell);
+  __deinit_spell__ ( &(((Prop (this) *) __This__->prop))->spell);
 }
 
 #if HAS_PROGRAMMING_LANGUAGE
@@ -1651,20 +1595,41 @@ private void __deinit_lstate__ (Lstate **thisp) {
   *thisp = NULL;
 }
 
-public Class (L) *__init_l__ (int num_states) {
-  Class (L) *this =  Alloc (sizeof (Class (L)));
-  this->self = __SELF__->l;
-  __L__ = this;
+private Class (l) *__init_l__ (int num_states) {
+  Class (l) *this =  Alloc (sizeof (Class (l)));
 
-  this->num_states = num_states;
-  this->states = Alloc (L.vmsize () * this->num_states);
-  this->cur_state = 0;
-  return this;
+  Self (l) l = SelfInit (l,
+    .init = __init_lstate__,
+    .deinit = __deinit_lstate__,
+    .compile = interpret,
+    .newString = copyString,
+    .defineFun = defineNative,
+    .defineProp = defineNativeProperty,
+    .vmsize = vm_sizeof,
+    .table = SubSelfInit (l, table,
+      .get = SubSelfInit (ltable, get,
+        .globals = vm_get_globals,
+        .module = vm_get_module_table,
+        .value = vm_table_get_value
+      )
+    ),
+    .module = SubSelfInit (lmodule, get,
+      .get = vm_module_get
+   )
+  );
+
+  __L__ = this;
+  __L__->self = l;
+  __L__->num_states = num_states;
+  __L__->cur_state = 0;
+  __L__->states = Alloc (L.vmsize () * __L__->num_states);
+  L_CUR_STATE = L.init ("__global__", 0, NULL);
+  return __L__;
 }
 
-public void __deinit_l__ (Class (L) **thisp) {
+public void __deinit_l__ (Class (l) **thisp) {
   if (NULL is *thisp) return;
-  Class (L) *this = *thisp;
+  Class (l) *this = *thisp;
 
   for (int i = 0; i < this->num_states; i++)
     __deinit_lstate__ (&this->states[i]);
@@ -1673,66 +1638,56 @@ public void __deinit_l__ (Class (L) **thisp) {
   free (this);
   *thisp = NULL;
 }
-
 #endif /* HAS_PROGRAMMING_LANGUAGE */
-private void __init_self__ (Class (This) *this) {
-  this->self = AllocSelf (This);
 
-  SubSelf (This, e) e = SubSelfInit (This, e,
-    .init = e_init,
-    .new = e_new,
-    .main = e_main,
-    .set = SubSelfInit (Thise, set,
-      .at_exit_cb = e_set_at_exit_cb,
-      .at_init_cb = e_set_at_init_cb,
-      .current = e_set_current,
-      .next = e_set_next
-    ),
-    .get = SubSelfInit (Thise, get,
-      .num = e_get_num,
-      .prev_idx = e_get_prev_idx,
-      .state = e_get_state,
-      .current = e_get_current,
-      .current_idx = e_get_current_idx,
-      .head = e_get_head,
-      .next = e_get_next,
-      .env = e_get_env,
-      .iclass = e_get_i_class
-    )
-  );
+private void __init_self__ (Class (this) *this) {
+  this->self = AllocSelf (this);
 
-  ((Self (This) *) this->self)->e = e;
-
-  ((Self (This) *) this->self)->parse_command = this_parse_command;
-  ((Self (This) *) this->self)->argparse = __init_argparse__ ().self;
-  ((Self (This) *) this->self)->proc = __init_proc__ ().self;
-
-#if HAS_PROGRAMMING_LANGUAGE
-  SubSelf (This, l) l = SubSelfInit (This, l,
-    .init = __init_lstate__,
-    .deinit = __deinit_lstate__,
-    .compile = interpret,
-    .newString = copyString,
-    .defineFun = defineNative,
-    .defineProp = defineNativeProperty,
-    .vmsize = vm_sizeof,
-    .table = SubSelfInit (Thisl, table,
-      .get = SubSelfInit (Thisltable, get,
-        .globals = vm_get_globals,
-        .module = vm_get_module_table,
-        .value = vm_table_get_value
-      )
-    ),
-    .module = SubSelfInit (Thislmodule, get,
-      .get = vm_module_get
-   )
-  );
-
-  ((Self (This) *) this->self)->l = l;
-#endif
-
+  ((Self (this) *) this->self)->parse_command = this_parse_command;
+  ((Self (this) *) this->self)->argparse = __init_argparse__ ().self;
+  ((Self (this) *) this->self)->proc = __init_proc__ ().self;
 }
 
+/* Surely not perfect handler. Never have the chance to test since
+ * my constant environ is fullscreen terminals. 
+ */
+private void sigwinch_handler (int sig) {
+  (void) sig;
+  ed_t *ed = E.get.head (THIS_E);
+  int cur_idx = E.get.current_idx (THIS_E);
+
+  while (ed) {
+    Ed.set.screen_size (ed);
+    win_t *w = Ed.get.win_head (ed);
+    while (w) {
+      Ed.readjust.win_size (ed, w);
+      w = Ed.get.win_next (ed, w);
+    }
+
+    ed = E.set.next (THIS_E);
+  }
+
+  E.set.current (THIS_E, cur_idx);
+}
+
+/* one idea is to hold with a question, to give some time to the
+ * user to free resources and retry; in that case the signature
+ * should change to an int as return value plus the Alloc* macros */
+mutable public void __alloc_error_handler__ (int err, size_t size,
+                           char *file, const char *func, int line) {
+  fprintf (stderr, "MEMORY_ALLOCATION_ERROR\n");
+  fprintf (stderr, "File: %s\nFunction: %s\nLine: %d\n", file, func, line);
+  fprintf (stderr, "Size: %zd\n", size);
+
+  if (err is INTEGEROVERFLOW_ERROR)
+    fprintf (stderr, "Error: Integer Overflow Error\n");
+  else
+    fprintf (stderr, "Error: Not Enouch Memory\n");
+
+  ifnot (NULL is __This__) __deinit_this__ (&__This__);
+
+  exit (1);
+}
 private int __initialize__ (void) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */
@@ -1752,48 +1707,45 @@ private int __initialize__ (void) {
   return OK;
 }
 
-public Class (This) *__init_this__ (void) {
+public Class (this) *__init_this__ (void) {
   E_T *__e__;
   if (NOTOK is __initialize__ () or
       NULL is (__e__ = __init_ed__ (MYNAME)))
     return NULL;
 
-  Class (This) *this = AllocClass (This);
+  Class (this) *this = AllocClass (this);
 
-  __THIS__ = this;
-  __THIS__->__E__ = __e__;
-  __THIS__->__E__->__THIS__ =  __THIS__;
+  __This__ = this;
+  __This__->__E__ = __e__;
+  __This__->__E__->__This__ =  __This__;
 
-  __init_self__ (__THIS__);
-  __SELF__ = __THIS__->self;
+  __init_self__ (__This__);
 
-  ((Prop (This) *) this->prop)->spell =  __init_spell__ ();
-  ((Self (This) *) this->self)->spell = ((Prop (This) *) __THIS__->prop)->spell.self;
+  ((Prop (this) *) this->prop)->spell =  __init_spell__ ();
+  ((Self (this) *) this->self)->spell = ((Prop (this) *) __This__->prop)->spell.self;
 
 #if HAS_PROGRAMMING_LANGUAGE
   __init_l__ (1);
-  ((Prop (This) *) $myprop)->__L__ = __L__;
-  L_CUR_STATE = L.init ("__global__", 0, NULL);
 #endif
 
-  return __THIS__;
+  return __This__;
 }
 
-public void __deinit_this__ (Class (This) **thisp) {
+public void __deinit_this__ (Class (this) **thisp) {
   if (*thisp is NULL) return;
 
-  Class (This) *this = *thisp;
+  Class (this) *this = *thisp;
 
   __deinit_ed__ (&this->__E__);
-
-  free (__SELF__);
 
 #if HAS_PROGRAMMING_LANGUAGE
   __deinit_l__ (&__L__);
 #endif
 
   free (this->prop);
+  free (this->self);
   free (this);
+
 
   *thisp = NULL;
 }

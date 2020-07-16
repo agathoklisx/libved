@@ -64,9 +64,9 @@ private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
     case 't':
       retval = __translate_word__ (thisp, word);
       if (0 is retval)
-        Msg.send_fmt (E(get.current), COLOR_ERROR, "Nothing matched the pattern [%s]", word);
+        Msg.send_fmt (E.get.current (THIS_E), COLOR_ERROR, "Nothing matched the pattern [%s]", word);
       else if (0 < retval)
-        Ed.scratch (E(get.current), thisp, NOT_AT_EOF);
+        Ed.scratch (E.get.current (THIS_E), thisp, NOT_AT_EOF);
       retval = (retval > 0 ? OK : NOTOK);
       break;
 #endif
@@ -92,7 +92,7 @@ private void __u_add_word_actions__ (ed_t *this) {
 private int __u_math_expr_interp__ (expr_t *expr) {
   int err = 0;
 
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   expr->ff_obj = (te_expr *) te_compile (expr->data->bytes, 0, 0, &err);
 
   ifnot (expr->ff_obj) {
@@ -130,7 +130,7 @@ private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
 #ifdef HAS_PROGRAMMING_LANGUAGE
 private int __interpret__ (buf_t **thisp, char *bytes) {
   (void) thisp;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   term_t *term = Ed.get.term (ed);
   Term.reset (term);
   InterpretResult retval = L.compile (L_CUR_STATE, bytes);
@@ -149,14 +149,14 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
 #ifdef HAS_TCC
 private void c_tcc_error_cb (void *obj, const char *msg) {
   (void) obj;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   Msg.write (ed, "====- Tcc Error Message -====\n");
   Msg.write (ed, (char *) msg);
 }
 
 private int c_tcc_string_add_lnums_cb (Vstring_t *str, char *tok, void *obj) {
   (void) str;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   int *lnr = (int *) obj;
   Ed.append.message_fmt (ed, "%d|%s", ++(*lnr), tok);
   return OK;
@@ -170,7 +170,7 @@ private void c_tcc_string_add_lnums (char *src) {
 
 private int c_tcc_string (buf_t **thisp, char *src) {
   (void) thisp;
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   tcc_t *this = Tcc.new ();
 
   Tcc.set.error_handler (this, NULL, c_tcc_error_cb);
@@ -195,7 +195,7 @@ theend:
 }
 
 private int __tcc_compile__ (buf_t **thisp, string_t *src) {
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
   term_t *term = Ed.get.term (ed);
   Term.reset (term);
   int exit_code = c_tcc_string (thisp, src->bytes);
@@ -225,7 +225,7 @@ private int __u_open_link_on_browser__ (buf_t *this, char *link) {
   string_t *com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
       Uenv->elinks_exec->bytes, link);
 
-  int retval = Ed.sh.popen (E(get.current), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+  int retval = Ed.sh.popen (E.get.current (THIS_E), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
   String.free (com);
   return retval;
 }
@@ -506,10 +506,10 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     retval = __translate_word__ (thisp, words->head->data->bytes);
     if (0 is retval)
-       Msg.send_fmt (E(get.current), COLOR_ERROR, "Nothing matched the pattern [%s]",
+       Msg.send_fmt (E.get.current (THIS_E), COLOR_ERROR, "Nothing matched the pattern [%s]",
            words->head->data->bytes);
       else if (0 < retval)
-        Ed.scratch (E(get.current), thisp, NOT_AT_EOF);
+        Ed.scratch (E.get.current (THIS_E), thisp, NOT_AT_EOF);
     Vstring.free (words);
     retval = (retval > 0 ? OK : NOTOK);
 #endif
@@ -552,7 +552,7 @@ private int i_save_image (buf_t **thisp, rline_t *rl) {
 
   ifnot (Path.is_absolute (img->bytes)) {
     String.prepend (img, "/profiles/");
-    String.prepend (img, E(get.env, "data_dir")->bytes);
+    String.prepend (img, E.get.env (THIS_E, "data_dir")->bytes);
   }
 
   String.append (img, "i");
@@ -572,7 +572,7 @@ private int i_save_image (buf_t **thisp, rline_t *rl) {
   int g_num_win = 0;
   int g_num_ed = 0;
 
-  ed_t *ed = E(get.head);
+  ed_t *ed = E.get.head (THIS_E);
 
   while (ed isnot NULL) {
     ifnot (g_num_ed) {
@@ -628,12 +628,12 @@ next_win:
       cwin = Ed.get.win_next (ed, cwin);
     }
 
-    ed = E(get.next, ed);
+    ed = E.get.next (THIS_E, ed);
     ifnot (NULL is ed)
       String.append (img, "ed = e_set_ed_next ()\n");
   }
 
-  int idx = E(get.current_idx);
+  int idx = E.get.current_idx (THIS_E);
   String.append_fmt (img, "ed = e_set_ed_by_idx (%d)\n", idx);
   String.append (img, "cwin = ed_get_current_win (ed)\n");
   String.append_fmt (img, "win_set_current_buf (cwin, %d, donot_draw)\n", cbidx);
@@ -781,7 +781,7 @@ theend:;
 }
 
 private ftype_t *__u_diff_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "diff"),
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "diff"),
     QUAL(FTYPE, .tabwidth = 0, .tab_indents = 0));
   return ft;
 }
@@ -791,52 +791,52 @@ private char *__u_syn_parser (buf_t *this, char *line, int len, int idx, row_t *
 }
 
 private string_t *__u_ftype_autoindent (buf_t *this, row_t *row) {
-  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_default");
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_default");
   return autoindent_fun (this, row);
 }
 
 private string_t *__u_c_ftype_autoindent (buf_t *this, row_t *row) {
-  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_c");
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_c");
   return autoindent_fun (this, row);
 }
 
 private string_t *__i_ftype_autoindent (buf_t *this, row_t *row) {
-  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E(get.current), "autoindent_c");
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_c");
   return autoindent_fun (this, row);
 }
 
 private ftype_t *__u_lai_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "lai"),
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lai"),
     QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
 private ftype_t *__u_lua_syn_init (buf_t *this) {
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "lua"),
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lua"),
     QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
 private ftype_t *__u_make_syn_init (buf_t *this) {
-  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "make"),
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "make"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_sh_syn_init (buf_t *this) {
-  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "sh"),
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "sh"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_zig_syn_init (buf_t *this) {
-  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E(get.current), "zig"),
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "zig"),
     QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __u_c_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__u_i_syn_init (buf_t *this) {
-  ftype_t *ft = Buf.ftype.set (this, Ed.syn.get_ftype_idx (E(get.current), "i"),
+  ftype_t *ft = Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "i"),
     QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
@@ -994,7 +994,7 @@ private void __u_add_expr_register_cb__ (ed_t *this) {
 private void __init_usr__ (ed_t *this) {
   if (NULL is Uenv) {
     Uenv = AllocType (uenv);
-    string_t *path = E(get.env, "path");
+    string_t *path = E.get.env (THIS_E, "path");
     Uenv->man_exec = Vsys.which ("man", path->bytes);
     Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
   }

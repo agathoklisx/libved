@@ -2,7 +2,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   if (NULL is Uenv->man_exec) return NOTOK;
   if (NULL is word) return NOTOK;
 
-  ed_t *ed = E(get.current);
+  ed_t *ed = E.get.current (THIS_E);
 
   int retval = NOTOK;
   string_t *com;

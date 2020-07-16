@@ -76,27 +76,26 @@ int main (int argc, char **argv) {
   argc = Argparse.exec (&argparser, argc, (const char **) argv);
 
   if (argc is -1) goto theend;
-
-  E(set.at_init_cb, __init_ext__);
-  E(set.at_exit_cb, __deinit_ext__);
+  E.set.at_init_cb (THIS_E, __init_ext__);
+  E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
   ed_t *this = NULL;
   win_t *w = NULL;
 
   if (load_file isnot NULL) {
-    ifnot (OK is I.load_file (E(get.iclass), load_file))
+    ifnot (OK is I.load_file (E.get.iclass (THIS_E), load_file))
       goto theend;
 
     signal (SIGWINCH, sigwinch_handler);
 
-    this = E(get.current);
+    this = E.get.current (THIS_E);
     w = Ed.get.current_win (this);
     goto theloop;
   }
 
   num_win = (num_win < argc ? num_win : argc);
 
-  this = E(new, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
+  this = E.new (THIS_E, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
 
@@ -152,7 +151,7 @@ int main (int argc, char **argv) {
   signal (SIGWINCH, sigwinch_handler);
 
   if (exec_com isnot NULL) {
-    string_t *com = This(parse_command, exec_com);
+    string_t *com = This.parse_command (__This__, exec_com);
     rline_t *rl = Ed.rline.new_with (this, com->bytes);
     buf_t *buf = Ed.get.current_buf (this);
     retval = Rline.exec (rl, &buf);
@@ -167,17 +166,17 @@ int main (int argc, char **argv) {
 theloop:;
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
-    retval = E(main, buf);
+    retval = E.main (THIS_E, buf);
 
-    int state = E(get.state);
+    int state = E.get.state (THIS_E);
 
     if ((state & ED_EXIT))
       break;
 
     if ((state & ED_SUSPENDED)) {
-      if (E(get.num) is 1) {
+      if (E.get.num (THIS_E) is 1) {
         /* as an example, we simply create another independed instance */
-        this = E(new, QUAL(ED_INIT, .init_cb = __init_ext__));
+        this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
         buf = Win.buf.new (w, BUF_INIT_QUAL());
@@ -185,8 +184,8 @@ theloop:;
         Win.set.current_buf (w, 0, DRAW);
       } else {
         /* else jump to the next or prev */
-        int prev_idx = E(get.prev_idx);
-        this = E(set.current, prev_idx);
+        int prev_idx = E.get.prev_idx (THIS_E);
+        this = E.set.current (THIS_E, prev_idx);
         w = Ed.get.current_win (this);
       }
 
@@ -197,6 +196,6 @@ theloop:;
   }
 
 theend:
-  __deinit_this__ (&__THIS__);
+  __deinit_this__ (&__This__);
   return retval;
 }

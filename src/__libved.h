@@ -244,16 +244,16 @@ enum {
 13:can not get current directory!!!."
 
 #define MSG_ERRNO(errno__) \
-  My(Msg).error ($my(root), My(Error).string ($my(root), errno__))
+  Msg.error ($my(root), Error.string ($my(root), errno__))
 
 #define VED_MSG_ERROR(err__, ...) \
-  My(Msg).error ($my(root), My(Msg).fmt ($my(root), err__, ##__VA_ARGS__))
+  Msg.error ($my(root), Msg.fmt ($my(root), err__, ##__VA_ARGS__))
 
 #define MSG(fmt, ...) \
-  My(Msg).set_fmt ($my(root), COLOR_NORMAL, MSG_SET_DRAW, fmt, ##__VA_ARGS__)
+  Msg.set_fmt ($my(root), COLOR_NORMAL, MSG_SET_DRAW, fmt, ##__VA_ARGS__)
 
 #define MSG_ERROR(fmt, ...) \
-  My(Msg).error ($my(root), fmt, ##__VA_ARGS__)
+  Msg.error ($my(root), fmt, ##__VA_ARGS__)
 
 /* slre */
 
@@ -389,8 +389,8 @@ typedef struct ufunc {
   Istring_t argName[MAX_BUILTIN_PARAMS];
 } UserFunc;
 
-NewProp (I,
-  Class (E) *e;
+NewProp (i,
+  Class (E) *__E__;
   int name_gen;
   Type (i) *head;
   int num_instances;
@@ -435,7 +435,7 @@ NewType (i,
   IPrintFmtBytes_cb print_fmt_bytes;
   ISyntaxError_cb syntax_error;
 
-  Class (E) *e;
+  Class (E) *__E__;
   Type (i) *next;
 );
 
@@ -732,27 +732,27 @@ NewType (hist,
   video_t *video;                \
     int  num_items
 
-#define MY_CLASSES(__me__)       \
-  Class (__me__) *Me;            \
-  Class (I) *I;                  \
-  Class (re) *Re;                \
-  Class (msg) *Msg;              \
-  Class (dir) *Dir;              \
-  Class (vsys) *Vsys;            \
-  Class (term) *Term;            \
-  Class (file) *File;            \
-  Class (path) *Path;            \
-  Class (Imap) *Imap;            \
-  Class (input) *Input;          \
-  Class (video) *Video;          \
-  Class (error) *Error;          \
-  Class (rline) *Rline;          \
-  Class (string) *String;        \
-  Class (screen) *Screen;        \
-  Class (cursor) *Cursor;        \
-  Class (cstring) *Cstring;      \
-  Class (vstring) *Vstring;      \
-  Class (ustring) *Ustring;
+#define MY_CLASSES(__me__)          \
+  Class (__me__) *Me;               \
+  Class (i) *__I__;                 \
+  Class (re) *__Re__;               \
+  Class (msg) *__Msg__;             \
+  Class (dir) *__Dir__;             \
+  Class (vsys) *__Vsys__;           \
+  Class (term) *__Term__;           \
+  Class (file) *__File__;           \
+  Class (path) *__Path__;           \
+  Class (imap) *__Imap__;           \
+  Class (input) *__Input__;         \
+  Class (video) *__Video__;         \
+  Class (error) *__Error__;         \
+  Class (rline) *__Rline__;         \
+  Class (screen) *__Screen__;       \
+  Class (cursor) *__Cursor__;       \
+  Class (string) *__String__;       \
+  Class (cstring) *__Cstring__;     \
+  Class (vstring) *__Vstring__;     \
+  Class (ustring) *__Ustring__;
 
 NewType (dim,
   int
@@ -828,8 +828,8 @@ NewProp (buf,
   MY_PROPERTIES;
   MY_CLASSES (buf);
 
-  ed_T  *Ed;
-  win_T *Win;
+  ed_T  *__Ed__;
+  win_T *__Win__;
 
   ed_t  *root;
   win_t *parent;
@@ -903,8 +903,8 @@ NewProp (win,
 
   MY_PROPERTIES;
   MY_CLASSES (win);
-  buf_T *Buf;
-  ed_T  *Ed;
+  buf_T *__Buf__;
+  ed_T  *__Ed__;
 
   int
     has_promptline,
@@ -951,8 +951,8 @@ NewProp (ed,
 
   MY_PROPERTIES;
   MY_CLASSES (ed);
-  buf_T *Buf;
-  win_T *Win;
+  buf_T *__Buf__;
+  win_T *__Win__;
 
   venv_t *env;
 
@@ -1059,10 +1059,10 @@ NewProp (E,
    int  num_items;
    int  prev_idx;
 
-  Self (ed) Ed;
+  Self (ed) __Ed__;
   Reg_t shared_reg[1];
 
-  Class (I) *I;
+  Class (i) *__I__;
 
   int num_at_exit_cbs;
   EAtExit_cb *at_exit_cbs;
@@ -1122,10 +1122,10 @@ private string_t  *vsys_which (char *, char *);
 private Vstring_t    *cstring_chop (char *, char, Vstring_t *, StrChop_cb, void *);
 private dirlist_t *dir_list (char *, int);
 
-private Class (I) *__init_i__ (Class (E) *);
-private void __deinit_i__ (Class (I) **);
+private Class (i) *__init_i__ (Class (E) *);
+private void __deinit_i__ (Class (i) **);
 
-private int isspace (int);
+//private int isspace (int);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {
@@ -1187,7 +1187,7 @@ static const utf8 offsetsFromUTF8[6] = {
 ({                                                        \
   utf8 cc__;                                              \
   while ((idx_) < 8) {                                    \
-    cc__ = My(Term).Input.get ($my(term_ptr));            \
+    cc__ = Input.get ($my(term_ptr));                     \
                                                           \
     if (IS_DIGIT (cc__))                                  \
       (intbuf_)[(idx_)++] = cc__;                         \
@@ -1203,24 +1203,24 @@ static const utf8 offsetsFromUTF8[6] = {
   int nr = 0;                                                             \
   string_t *ibuf = NULL, *sbuf = NULL;                                    \
   if (has_pop_pup) {                                                      \
-     ibuf = My(String).new_with (""); sbuf = My(String).new_with ("");    \
+     ibuf = String.new_with (""); sbuf = String.new_with ("");            \
   }                                                                       \
   while (1) {                                                             \
     if (has_pop_pup) {                                                    \
-      My(String).replace_with_fmt (sbuf, "%s %s", prefix, ibuf->bytes);   \
+      String.replace_with_fmt (sbuf, "%s %s", prefix, ibuf->bytes);       \
       video_paint_rows_with ($my(video), frow, fcol, lcol, sbuf->bytes);  \
       SEND_ESC_SEQ ($my(video)->fd, TERM_CURSOR_HIDE);                    \
     }                                                                     \
-    cc__ = My(Term).Input.get ($my(term_ptr));                            \
+    cc__ = Input.get ($my(term_ptr));                                     \
                                                                           \
     if (IS_DIGIT (cc__)) {                                                \
       nr = (10 * nr) + (cc__ - '0');                                      \
-      if (has_pop_pup) My(String).append_byte (ibuf, cc__);               \
+      if (has_pop_pup) String.append_byte (ibuf, cc__);                   \
     } else                                                                \
       break;                                                              \
   }                                                                       \
   if (has_pop_pup) {                                                      \
-    My(String).free (ibuf); My(String).free (sbuf);                       \
+    String.free (ibuf); String.free (sbuf);                               \
     video_resume_painted_rows ($my(video));                               \
     SEND_ESC_SEQ ($my(video)->fd, TERM_CURSOR_SHOW);                      \
   }                                                                       \
@@ -1248,11 +1248,11 @@ do {                                                                      \
 #define RM_TRAILING_NEW_LINE                                        \
   if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] is '\n' or   \
       $mycur(data)->bytes[$mycur(data)->num_bytes - 1] is 0)        \
-     My(String).clear_at ($mycur(data), $mycur(data)->num_bytes - 1)
+     String.clear_at ($mycur(data), $mycur(data)->num_bytes - 1)
 
 #define ADD_TRAILING_NEW_LINE                                        \
   if ($mycur(data)->bytes[$mycur(data)->num_bytes - 1] isnot '\n')   \
-    My(String).append ($mycur(data), "\n")
+    String.append ($mycur(data), "\n")
 
 #define stack_free(list, type)                                      \
 do {                                                                \
@@ -1509,3 +1509,27 @@ do {                                                                \
   } while (0);                                                      \
   node;                                                             \
 })
+
+#define Ed My(__Ed__)
+#define Win My(__Win__)
+#define Buf My(__Buf__)
+#define I My(__I__)
+#define Re My(__Re__)
+#define Dir My(__Dir__)
+#define Msg My(__Msg__)
+#define Dir My(__Dir__)
+#define File My(__File__)
+#define Term My(__Term__)
+#define Path My(__Path__)
+#define Vsys My(__Vsys__)
+#define Imap My(__Imap__)
+#define Input My(__Input__)
+#define Error My(__Error__)
+#define Video My(__Video__)
+#define Rline My(__Rline__)
+#define Cursor My(__Cursor__)
+#define Screen My(__Screen__)
+#define String My(__String__)
+#define Cstring My(__Cstring__)
+#define Vstring My(__Vstring__)
+#define Ustring My(__Ustring__)
