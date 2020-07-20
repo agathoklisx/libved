@@ -15750,6 +15750,8 @@ private void ed_init_special_win (ed_t *this) {
 private int ed_i_record_default (ed_t *this, Vstring_t *rec) {
   char *str = Vstring.to.cstring (rec, ADD_NL);
 
+  if (bytelen (str) is (size_t) $my(record_header_len)) return NOTOK;
+
   i_t *in = I.get.current ($my(__I__));
   ifnot (in)
     in = I.init_instance ($my(__I__));
@@ -15764,8 +15766,7 @@ private int ed_i_record_default (ed_t *this, Vstring_t *rec) {
   } else
     Msg.send_fmt (this, COLOR_MSG, "Executed record [%d]", $my(record_idx) + 1);
 
-  if (retval isnot OK or retval isnot NOTOK) retval = NOTOK;
-  return retval;
+  return (retval isnot OK ? NOTOK : OK);
 }
 
 private void ed_record_default (ed_t *this, char *bytes) {
@@ -15784,7 +15785,28 @@ private void ed_record (ed_t *this, char *fmt, ...) {
   $my(record_cb) (this, bytes);
 }
 
-private char *ed_init_record_default (void) {
+private char *ed_init_record_default (ed_t *);
+
+private ssize_t __record_header_len__ (ed_t *this) {
+  char *buf = ed_init_record_default (this);
+  char *sp = buf;
+
+  size_t len = bytelen (buf);
+
+  while (*sp and (buf = Cstring.byte_in_str (sp, '\n')) isnot NULL) {
+    len++;
+    sp = buf + 1;
+  }
+
+  return len;
+}
+
+private char *ed_init_record_default (ed_t *this) {
+  if ($my(record_header_len) is -1) {
+      $my(record_header_len) = 0;
+      $my(record_header_len) = __record_header_len__ (this);
+  }
+
   return
     "var ed = e_get_ed_current ()\n"
     "var win = ed_get_current_win (ed)\n"
@@ -15803,7 +15825,7 @@ private void ed_init_record (ed_t *this, int idx) {
   else
     rec = Vstring.new ();
 
-  Vstring.append_with (rec, $my(init_record_cb) ());
+  Vstring.append_with (rec, $my(init_record_cb) (this));
 
   $my(records)[$my(record_idx)] = rec;
 
@@ -15878,7 +15900,7 @@ handle_com:
 
     case '.':
       String.replace_with ($from(ed, records)[NUM_RECORDS]->head->data,
-          $from(ed, init_record_cb) ());
+          $from(ed, init_record_cb) (ed));
       retval = ed_interpr_record (ed, NUM_RECORDS);
       break;
 
@@ -16663,6 +16685,7 @@ private ed_t *ed_init (E_T *E) {
   $my(repeat_mode) = 0;
   $my(record) = 0;
   $my(record_idx) = -1;
+  $my(record_header_len) = -1;
   $my(record_cb) = ed_record_default;
   $my(i_record_cb) = ed_i_record_default;
   $my(init_record_cb) = ed_init_record_default;
@@ -16720,7 +16743,7 @@ private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
   $from(ed, E) = this->self;
 
   string_replace_with ($from(ed, records)[NUM_RECORDS]->head->data,
-      $from(ed, init_record_cb) ());
+      $from(ed, init_record_cb) (ed));
 
   return ed;
 }

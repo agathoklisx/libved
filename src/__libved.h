@@ -1027,6 +1027,9 @@ NewProp (ed,
   int repeat_mode;
   int record;
   int record_idx;
+
+  ssize_t record_header_len;
+
   Vstring_t    *records[NUM_RECORDS + 1];
 
   Record_cb     record_cb;

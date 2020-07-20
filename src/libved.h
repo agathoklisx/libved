@@ -685,7 +685,7 @@ typedef void (*EdAtInit_cb) (ed_t *);
 /* in between */
 typedef void (*Record_cb) (ed_t *, char *);
 typedef int  (*IRecord_cb) (ed_t *, Vstring_t *);
-typedef char *(*InitRecord_cb) (void);
+typedef char *(*InitRecord_cb) (ed_t *);
 
 /* interpeter */
 typedef void (*IPrintByte_cb) (FILE *, int);
