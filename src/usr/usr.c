@@ -432,12 +432,11 @@ private void __u_add_cw_mode_actions__ (ed_t *this) {
 
           /* user defined commands and|or actions */
 private void __u_add_rline_user_commands__ (ed_t *this) {
-/* user defined commands can begin with '~': associated in mind with '~' as $HOME */
-  Ed.append.rline_command (this, "~battery", 0, 0);
+  Ed.append.rline_command (this, "`battery", 0, 0);
 
 #ifdef WORD_LEXICON_FILE
-  Ed.append.rline_command (this, "~translate", 0, 0);
-  Ed.append.command_arg (this, "~translate", "--edit", 6);
+  Ed.append.rline_command (this, "@translate", 0, 0);
+  Ed.append.command_arg (this, "@translate", "--edit", 6);
 #endif
 }
 
@@ -458,7 +457,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   int retval = NOTOK;
   string_t *com = Rline.get.command (rl);
 
-  if (Cstring.eq (com->bytes, "~battery")) {
+  if (Cstring.eq (com->bytes, "`battery")) {
     retval = sys_battery_info (NULL, 1);
 
   } else if (Cstring.eq (com->bytes, "`mkdir")) {
@@ -493,7 +492,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     Vstring.free (fnames);
 
 #ifdef WORD_LEXICON_FILE
-  } else if (Cstring.eq (com->bytes, "~translate")) {
+  } else if (Cstring.eq (com->bytes, "@translate")) {
 
     int edit = Rline.arg.exists (rl, "edit");
     if (edit) {

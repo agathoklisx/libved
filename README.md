@@ -28,6 +28,7 @@
     - it doesn't do any validation of the incoming data (the data it produces
       is rather controllable, but it cannot handle (for instance) data which
       it might be malformed (UTF-8) byte sequences, or escape sequences).
+
       [update - end of August-2019] While still there is no check for invalid
       UTF-8 byte sequences when initially reading into the buffer structure, now
       it's possible to do it at any point, by using either a command or in visual
@@ -38,6 +39,7 @@
       a tab it takes one single cell, much like a space. To implement some of this
       functionality an expensive wcwidth() should be included and algorithms should
       adjust.
+
       [update - first days of September-2019] Both cases should be handled properly
       now, though the adjusted algorithms, complex as they are by nature, were quite
       invasive, and there is no certainity that handle all the conditions that can be
@@ -47,6 +49,7 @@
     - the code is young and fragile in places and some crude algorithms that had
       been used during this initiation, need revision and functions needs to catch
       more conditions.
+
       [update - last days of October-2019] While still many of those crude initial
       algorithms haven't been replaced, they happen to work! and probably will stay
       unchanged, though are quite complicated in places.
@@ -55,6 +58,7 @@
       a common workflow, and there is not really a desire to overflow the universe
       with conditional branches to catch conditions, that never met, and when met,
       there are ways to know where to meet them.
+
       [update - last days of October-2019] This is a philosophy that stands, but many
       conditions, especially during this last period, should be handled properly now
       (still should be quite more to catch, but most of them quite exotic, though still
@@ -151,12 +155,6 @@
    # build the shared library
    make shared
 
-   # by default writing is disabled, but the following will enable it (it also saws
-   # how we can pass options to make to control the behavior of the library and the
-   # sample application):
-
-   make ENABLE_WRITING=1 shared
-
    # to build the sample executable that links against the shared object, issue:
 
    make veda-shared
@@ -195,11 +193,11 @@
 
    make clean
 
-   # Alternative (just one) build instruction (probably the wisest choise):
+   # Alternative method with just one build instruction:
 
    sh ./convenience.sh
 
-   # to set the SYSDIR variable and use a custom directory
+   # to set the SYSDIR variable and use a custom directory:
 
    LIBVED_SYSDIR=$HOME/libved sh ./convenience.sh
 
@@ -226,20 +224,24 @@
    $(SYSDIR)/tmp
 
    # Notes:
+   #  - for static targets, replace in the instructions "shared" with "static"
+   #
    #  - libved.so is a symbolic link to the corresponded version
    #
    #  - vedas is a shell script wrapper, that calls the veda-02_shared executable,
    #    setting also LD_LIBRARY_PATH
    #
    #  - the data and tmp directories can be set to a custom directory, by using
-   #    LIBVED_DATADIR and LIBVED_TMPDIR respectively
+   #    LIBVED_DATADIR and LIBVED_TMPDIR respectively. This is a prerequisite if
+   #    you install the distribution with SU rights, as the application can write
+   #    in both of those directories.
    #
    #  - if you build the static target, analogous library files will be produced,
    #    and the executable is installed as veda-02_static. In that case a symbolic
    #    link is created to static installed executable as veda (no LD_LIBRARY_PATH
    #    is needed here).
    #
-   #  - for static targets, replace in the instructions "shared" with "static"
+   #
 
 ```
 ```C
@@ -247,7 +249,6 @@
   All the compilation options (options that are passing to make):
 
   DEBUG=1|0              (en|dis)able debug flags (default 0)
-  ENABLE_WRITING=1|0     (en|dis)able writing (default 0)
 
   SYSDIR="dir"           this sets the system directory (default src/sys)
   LIBVED_DATADIR="dir"   this can be used for e.g., history (default $(SYSDIR)/data)
@@ -399,7 +400,7 @@
 
     - There can be unlimited independent editor instances that can be (de|rea)tached¹.
 
-    and a little more detailed at the STRUCTURE section.
+    and a little more detailed at the Structure Details section.
 
   Modes:
 
@@ -723,30 +724,19 @@ Search:
                           --no-backupfile unset the backup option
                           --autosave=[int] set in minutes the interval, (used
                             at the end of insert mode to autosave buffer)
-                          --enable-writing this will enables writing (intented for
-                            those who test the application with the default options)
-  :q[!] [--global]       (quit (if force, do not check for modified buffers),
-                               (if global exit all editor instances))
-
-  Old Comment Stays as a Reference:
-  The test application provides a sample battery command to print the status and capacity
-  and which can be invoked as  :~battery  (i thought it makes sense to prefix
-  such commands with '~' as it is associated with $HOME (as a user stuff), and
-  mainly as a way to distinguish such commands from the core ones, as '~' is ascii
-  code 126, so these will be the last printed lines on tab completion or|and they
-  can be fast narrowed; but there isn't the prefixed '~' a prerequisite, but in the
-  future is logical to use this as pattern to map it in a group that might behave
-  with special ways).
+                          --enable-writing this will enable writing (buffer contents)
+  :q[!] [--global]       quit (if force[!], do not check for modified buffers),
+                              (if --global exit from all running editor instances)
 
   Application:
   The test application (which simply called veda for: visual editor application),
   can provide the following commands:
 
+  :spell --range=`range' (without range default current line)
   :`mkdir   dir       (create directory)
   :`man     manpage   (display man page on the scratch buffer)
   :`stat    file      (display file status information)
-  :~battery           (display battery status to the message line) (only for Linux)
-  :spell --range=`range' (without range default current line)
+  :`battery           (display battery status to the message line) (only for Linux)
   :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
   :@info [--buf,--win,--ed] (with no arguments defaults to --buf) (this prints
                       details to the scratch buffer of the corresponded arguments)
@@ -769,17 +759,367 @@ Search:
   permissions are: S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH (this command needs revision).
   (update: this command got a --mode= argument)
 
-  The ~battery command it should work only for Linux.
+  The :`battery command it should work only for Linux.
 
   note:
-  The `prefix is associated with shell syntax and is going to be used for internal
+  The "`" prefix is associated with shell syntax and is going to be used for internal
   implementations of system commands.
 
-  The ~prefix is associated with ~ ($HOME) and is intented for personal commands.
+  The "~" prefix is reserved for application specific commands.
 
-  Also the @prefix can not be associated with anything known, but is intented to
-  group functions, that either can manage/control the application behavior, or for
-  low level functions that have relation with the data/bytes.
+  The "@" prefix but is intented to group functions, that either can manage/control
+  the current buffer, and for functions that can be executed for that buffer.
+
+  Unified Diff:
+  This feature requires (for now) the `diff' utility.
+
+  The :diff command open a dedicated "diff" buffer, with the results (if any) of
+  the differences (in a unified format), between the buffer in memory with the one
+  that is written on the disk.
+  Note that it first clears the previous diff if any.
+
+  The :diff command can take an "--origin" argument. In this case the command will
+  display any differences, between the backup file and and the buffer in memory.
+  For that to work the "backfile" option should be set (either on invocation or by
+  using the :set --backupfile command first with the conjunction with the :@bufbackup
+  command. Otherwise a warning message should be displayed.
+
+  The :diffbuf command gives the focus to this "diff" buffer. Note, that this buffer
+  can be quickly closed with 'q', line in a pager (likewise for the other special
+  buffers, like the message buffer or the scratch buffer).
+
+  Another usage of this feature is when quiting normally with :quit (without forcing) 
+  and the buffer has been modified.
+  In that case a dialog (below) presents some options:
+
+    "[bufname] has been modified since last change
+     continue writing? [yY|nN], [cC]ansel, unified [d]iff?"
+
+    on 'y': write the buffer and continue
+    on 'n': continue without writing
+    on 'c': cancel operation at this point (some buffers might be closed already)
+    on 'd': print to the stdout the unified diff and redo the question (note that
+            when printing to the stdout, the previous terminal state is restored;
+            any key can bring back the focus)
+
+  UTF-8 Validation:
+  There are two ways to check for invalid UTF-8 byte sequences.
+  1. using the command :@validate_utf8 filename
+  2. in visual linewise mode, by pressing v or through tab completion
+
+  In both cases any error is redirected to the scratch buffer. It doesn't
+  and (probably) never is going to do any magic, so the function is mostly
+  only informational (at least for now).
+  Usually any such invalid byte sequence is visually inspected as it messes
+  up the screen.
+
+  The code for this functionality is from the is_utf8 project at:
+  https://github.com/JulienPalard/is_utf8
+  specifically the is_utf8.c unit and the is_utf8() function
+  Many Thanks.
+
+  Copyright (c) 2013 Palard Julien. All rights reserved.
+  but see src/lib/utf8/is_utf8.c for details.
+
+  Regexp:
+  This library uses a slightly modified version of the slre machine, which is an
+  ISO C library that implements a subset of Perl regular expression syntax, see
+  and clone at:
+
+  https://github.com/cesanta/slre.git
+  Many thanks.
+
+  The substitution string in the ":substitute command", can use '&' to denote the
+  full captured matched string.
+
+  For captured substring a \1\2... can be used to mean, `nth' captured substring
+  numbering from one.
+
+  It is also possible to force caseless searching, by using (like pcre) (?i) in front
+  of the pattern. This option won't work with multibyte characters. Searching for
+  multibyte characters it should work properly though.
+
+  To include a white space, the string should be (double) quoted. In that case a
+  literal double quote '"', should be escaped. Alternatively a \s can be used to
+  include a white space.
+
+  Re Syntax.
+    ^       Match beginning of a buffer
+    $       Match end of a buffer
+    ()      Grouping and substring capturing
+    \s      Match whitespace
+    \S      Match non-whitespace
+    \d      Match decimal digit
+    \n      Match new line character
+    \r      Match line feed character
+    \f      Match form feed character
+    \v      Match vertical tab character
+    \t      Match horizontal tab character
+    \b      Match backspace character
+    +       Match one or more times (greedy)
+    +?      Match one or more times (non-greedy)
+    *       Match zero or more times (greedy)
+    *?      Match zero or more times (non-greedy)
+    ?       Match zero or once (non-greedy)
+    x|y     Match x or y (alternation operator)
+    \meta   Match one of the meta character: ^$().[]*+?|\
+    \xHH    Match byte with hex value 0xHH, e.g. \x4a
+    [...]   Match any character from set. Ranges like [a-z] are supported
+    [^...]  Match any character but ones from set
+
+  A pattern can start with (?i) to denote `ignore case`
+
+  Registers and Marks:
+  Both are supported but with the minimal features (same with other myriad details
+  that needs care).
+
+    Mark set:
+    [abcdghjklqwertyuiopzxcvbnm1234567890]
+    Special Marks:
+    - unnamed mark [`] jumps to the previous position
+
+    Register set:
+    [abcdghjklqwertyuiopzxsvbnm1234567890ABCDGHJKLQWERTYUIOPZXSVBNM]
+
+    Special Registers:
+    - unnamed ["] register (default)
+    - current filename [%] register
+    - last search [/] register
+    - last command line [:] register
+    - registers [+*] send|receive text to|from X clipboard (if xclip is available)
+    - blackhole [_] register, which stores nothing
+    - expression [=] register (experimental) (runtime code evaluation)
+    - CTRL('w') current word
+    - shared [`] register (accessed by all the editor instances)
+
+  Note that for uppercase [A-Z], the content is appended to the current content,
+  while for the [a-z] set, any previous content is replaced.
+  An uppercase register can be cleared, by using in Normal mode the "-" command,
+  prefixed with '"' and the register letter, e.g., "Z- for the "Z" register.
+
+  History Completion Semantics (command line and search):
+   - the ARROW_UP key starts from the last entry set in history, and scrolls down
+     to the past entries
+
+   - the ARROW_DOWN key starts from the first entry, and scrolls up to most recent
+
+  Glob Support:
+    (for now)
+    - this is limited to just one directory depth
+    - it uses only '*'
+    - and understands (or should):
+      `*'
+      `/some/dir/*'
+      `*string' or `string*string' or `string*'
+        (likewise for directories)
+
+    Note: many commands have a --recursive option
+
+  Menus:
+  Many completions (and there are many) are based on menus.
+    Semantics and Keys:
+    Navigation keys:
+    - left and right (for left and right motions)
+      the left key should move the focus to the previous item on line, unless the
+      focus is on the first item in line, which in that case should focus to the
+      previous item (the last one on the previous line, unless is on the first line
+      which in that case should jump to the last item (the last item to the last
+      line))
+
+    - the right key should jump to the next item, unless the focus is on the last
+      item, which in that case should focus to the next item (the first one on the
+      next line, unless is on the last line, which in that case should jump to the
+      first item (the first item to the first line))
+
+    - page down/up keys for page down|up motions
+
+    - tab key is like the right key
+
+    Decision keys:
+    - Enter accepts selection; the function should return the focused item to the
+      caller
+
+    - Spacebar can also accept selection if it is enabled by the caller. That is
+      because a space can change the initial pattern|seed which calculates the
+      displayed results. But using the spacebar speeds a lot of those operations,
+      so in most cases is enabled, even in cases like CTRL('n') in insert mode.
+
+    - Escape key aborts the operation
+
+  In all the cases the window state should be restored afterwards.
+
+  The sample Application that provides the main() function, can also read
+  from standard input to an unamed buffer. Thus it can be used as a pager:
+
+     git diff "$@" | vedas --ftype=diff --pager "$@"
+
+  Shell Commands:
+  The application can also run shell commands or to read into the current buffer from
+  the standard output of a shell command. WARNING: Interactive applications that link
+  and use a curses UI, might have unexpected behavior in this implementation.
+
+  Searching Files:
+  This is a really quite basic emulation of quickfix vim's windows, written quite
+  early at the development, so there has to be some discipline when is being used,
+  as there a couple of things that need care.
+
+  The command :vgrep it takes a pattern and at least a filename as argument[s]:
+
+    :vgrep --pat=`pattern' [-r|--recursive] file[s]
+
+  This should open a unique window intended only for searches and re-accessible
+  with:
+
+    :searches  (though it might be wise a `:copen' alias (to match vim's expectation))
+
+  This window should open a frame at the bottom, with the results (if any) and it
+  will set the pointer to the first item from the sorted and unique in items list.
+
+  A carriage return should open the filename at the specific line number at the
+  frame 0.
+
+  A `q' on the results frame (the last one), will quit the window and focus again
+  to the previous state (as it acts like a pager).
+
+  This command can search recursively and skips (as a start) any object file.
+
+  Note that because it is a really basic implementation, some unexpected results
+  might occur, if there is no usage discipline of this feature (for instance :bd
+  can bring some confusion to the layout and the functionality).
+
+  Filetypes:
+  Work has been started on the Syntax and Filetypes, with the latter can be play
+  a very interesting role, with regards to personalization, but also can be quite
+  powerful of a tool, for all kind of things.
+
+  As it concerns the main visible code, there only few filetypes (C, sh, make, lua,
+  Dictu, Zig, ...) buf it is true that all but C, are poorly supported.
+
+  As far it conserns the highlighted stuff (which is yes important, because it helps
+  visually quite a lot, but performance shouldn't penaltized, so the implementation
+  is quite naive and doesn't allow extensibility or smart patterns, and should remain
+  at least in this level), one day i've to find the desire to enhance it a but with
+  less than today complexity (because the code is complex), but is fast and the rules
+  are simple.
+
+  The highlighted system and specifically the multiline comments has some rules,
+  stemming from sane practicing to simplify parsing, as the code is searching for
+  comments in previous lines, and if current line has no comment tokens of course
+  (by default 24), and the relative setting is:
+    MAX_BACKTRACK_LINES_FOR_ML_COMMENTS (default 24)
+
+  For instance in C files, backtracking is done with the following way:
+  If ("/*" is on index zero, or "/*" has a space before) and there is no "*/",
+  then it considered as line with a comment and the search it stops. It even
+  stops if " * " is encountered on the beginning of the line (note the spaces
+  surrounding "*").
+  Note: the relative syntax variable is:
+     multiline_comment_continuation as char[]
+
+  So this simply means that if someone do not want to penaltize performance then
+  it is wise to use " * " in the beginning of the line to force the code, as soon
+  as possible to search on previous lines (as this is expensive).
+
+  The other relative self explained settings:
+    - singleline_comment        as char[]
+    - multiline_comment_start   likewise
+    - multiline_comment_end     likewise
+
+  The code can set filetypes with the following ways and order.
+
+  1. The caller knows the filetype index and set it directly if the index is
+  between the bounds of the syntax array (note that the 0 index is the default
+  filetype (txt)).
+
+  2. Then is looking to the file extension (.c, .h, ...), and the relative variable:
+    - extensions   as *char[]
+
+  3. Then is looking to the file name (Makefile, ...) and the relative variable:
+    - filenames    as *char[]
+
+  4. Finally is looking for shebang (first bytes of the file), and the relative variable:
+    - shebangs     as *char[] e.g., #!/bin/sh or #!/bin/bash and so on
+
+  The rules and variables:
+
+  1. Keywords as *char[] (e.g., if, else, struct, ....), example:
+    char *c_keywords[] = {
+        "if I", "for I", "this V", "NULL K", "int T", ...
+    The capital letter after the keyword and a space, denotes the type and the
+    corresponding color:
+        I: identifier, K: keyword, C: comment,  O: operator, N: number, S: string
+        D:_delimiter   F: function V: variable, T: type,     M: macro,
+        E: error,      Q: quote
+
+  2. Operators as char[] e.g., +|*()[] ...
+
+  It can also highlight strings enclosed with double quotes and the relative variable:
+    hl_strings  as int (zero means do not highlight)
+    hl_numbers  likewise
+
+  The default parsing function is buf_syn_parser(), and can be set on the syntax
+  structure and has the following signature:
+
+       char  *(*parse) (buf_t *, char *, int, int, row_t *);
+
+  The default init function is buf_syn_init () and can be set on the syntax structure
+  with the following signature:
+
+       ftype_t *(*init) (buf_t *);
+
+  The default autoindent callback function does nothing and can be set during filetype
+  initialization with the following signature:
+
+       string_t *(*autoindent_fun) (buf_t *, char *);
+
+  In normal mode 'gf' (go to (or get) filename) can call a callback function, that
+  can be set during initialization with the following signature:
+
+        char *(*ftype_on_open_fname_under_cursor) (char *, size_t, size_t);
+
+  Note that the C filetype, implements the above two callbacks, and 'gf' and when
+  the cursor is on <sys/stat.h>, then it opens the /usr/include/sys/stat.h.
+
+  Tabwidth and Charwidth:
+  The library uses the wcwidth() implementation (with minor adjustments for the
+  environment) from the termux project:
+  https://github.com/termux/wcwidth
+  The MIT License (MIT)
+  Copyright (c) 2016 Fredrik Fornwall <fredrik@fornwall.net>
+
+  This license applies to parts originating from the
+  https://github.com/jquast/wcwidth repository:
+  The MIT License (MIT)
+  Copyright (c) 2014 Jeff Quast <contact@jeffquast.com>
+
+  Many Thanks.
+
+  The implementation is similar to Markus kuhn's, though looks more updated.
+  The code tries hard to avoid needless expensive calls to that function, as
+  in almost any movement, the code should account for the width of the character.
+  Same exactly goes for the tabwidth, the algorithm doesn't differ, though a tab
+  is handled usually earlier.
+  The thing is that the calculations are complex and quite possible there are
+  conditions that are not handled or improperly handled and because i do not
+  work with files (except Makefiles) that have tabs or chars which occupy more
+  than one cell, do not help to catch them.
+
+    The semantics:
+  In normal mode operations, the cursor should be placed at the end of the width
+  (one cell before the next character), while on insert mode to the beginning of
+  the width (one cell after the previous character).
+  The next or previous line (character) completions (CTRL('e') and CTRL('y') in
+  normal mode) are based on the byte index and not on the character position, and
+  this might seems that is not (visually) right and probably isn't, and could be
+  change in the future).
+  Speaking for tabs, by default when editing C file types, a tab can be inserted
+  only through CTRL('v') or (through CTRL('e') or CTRL('y')) in normal mode, or by
+  setting it to the filetype, or by simply setting C_TAB_ON_INSERT_MODE_INDENTS=0,
+  but itsnotgonnabebyme.
+
+  As for the tabwidth, as and all the (compilation) options, can be set individually
+  on the specific filetype, by editing it (nothing should matter for the code, as it
+  __should__ work in any way, otherwise is a bug in the code).
 
   As Utility:
   The introduction of the --ex-com="command" will/can allow to create utilities
@@ -849,66 +1189,6 @@ Search:
   This is the initial implementation and some more work is needed to make it more
   accurate, though for a start is serves its purpose quite satisfactory, plus there
   is no requirement and already helped me to this document.
-
-  UTF-8 Validation:
-  There are two ways to check for invalid UTF-8 byte sequences.
-  1. using the command :@validate_utf8 filename
-  2. in visual linewise mode, by pressing v or through tab completion
-
-  In both cases any error is redirected to the scratch buffer. It doesn't
-  and (probably) never is going to do any magic, so the function is mostly
-  only informational (at least for now).
-  Usually any such invalid byte sequence is visually inspected as it messes
-  up the screen.
-
-  The code for this functionality is from the is_utf8 project at:
-  https://github.com/JulienPalard/is_utf8
-  specifically the is_utf8.c unit and the is_utf8() function
-  Many Thanks.
-
-  Copyright (c) 2013 Palard Julien. All rights reserved.
-  but see src/lib/utf8/is_utf8.c for details.
-
-  Tabwidth and Charwidth:
-  The library uses the wcwidth() implementation (with minor adjustments for the
-  environment) from the termux project:
-  https://github.com/termux/wcwidth
-  The MIT License (MIT)
-  Copyright (c) 2016 Fredrik Fornwall <fredrik@fornwall.net>
-
-  This license applies to parts originating from the
-  https://github.com/jquast/wcwidth repository:
-  The MIT License (MIT)
-  Copyright (c) 2014 Jeff Quast <contact@jeffquast.com>
-
-  Many Thanks.
-
-  The implementation is similar to Markus kuhn's, though looks more updated.
-  The code tries hard to avoid needless expensive calls to that function, as
-  in almost any movement, the code should account for the width of the character.
-  Same exactly goes for the tabwidth, the algorithm doesn't differ, though a tab
-  is handled usually earlier.
-  The thing is that the calculations are complex and quite possible there are
-  conditions that are not handled or improperly handled and because i do not
-  work with files (except Makefiles) that have tabs or chars which occupy more
-  than one cell, do not help to catch them.
-
-    The semantics:
-  In normal mode operations, the cursor should be placed at the end of the width
-  (one cell before the next character), while on insert mode to the beginning of
-  the width (one cell after the previous character).
-  The next or previous line (character) completions (CTRL('e') and CTRL('y') in
-  normal mode) are based on the byte index and not on the character position, and
-  this might seems that is not (visually) right and probably isn't, and could be
-  change in the future).
-  Speaking for tabs, by default when editing C file types, a tab can be inserted
-  only through CTRL('v') or (through CTRL('e') or CTRL('y')) in normal mode, or by
-  setting it to the filetype, or by simply setting C_TAB_ON_INSERT_MODE_INDENTS=0,
-  but itsnotgonnabebyme.
-
-  As for the tabwidth, as and all the (compilation) options, can be set individually
-  on the specific filetype, by editing it (nothing should matter for the code, as it
-  __should__ work in any way, otherwise is a bug in the code).
 
   Scripting:
   The application offers a tiny scripting interface, which is based on Tinyscript:
@@ -1044,294 +1324,11 @@ Search:
     - the language is at early stage but usable, and i serve to its development,
       so this is also being used as a test took, for further development
 
-  Unified Diff:
-  This feature requires (for now) the `diff' utility.
-
-  The :diff command open a dedicated "diff" buffer, with the results (if any) of
-  the differences (in a unified format), between the buffer in memory with the one
-  that is written on the disk.
-  Note that it first clears the previous diff if any.
-
-  The :diff command can take an "--origin" argument. In this case the command will
-  display any differences, between the backup file and and the buffer in memory.
-  For that to work the "backfile" option should be set (either on invocation or by
-  using the :set --backupfile command first with the conjunction with the :@bufbackup
-  command. Otherwise a warning message should be displayed.
-
-  The :diffbuf command gives the focus to this "diff" buffer. Note, that this buffer
-  can be quickly closed with 'q', line in a pager (likewise for the other special
-  buffers, like the message buffer or the scratch buffer).
-
-  Another usage of this feature is when quiting normally with :quit (without forcing) 
-  and the buffer has been modified.
-  In that case a dialog (below) presents some options:
-
-    "[bufname] has been modified since last change
-     continue writing? [yY|nN], [cC]ansel, unified [d]iff?"
-
-    on 'y': write the buffer and continue
-    on 'n': continue without writing
-    on 'c': cancel operation at this point (some buffers might be closed already)
-    on 'd': print to the stdout the unified diff and redo the question (note that
-            when printing to the stdout, the previous terminal state is restored;
-            any key can bring back the focus)
-
-  Regexp:
-  This library uses a slightly modified version of the slre machine, which is an
-  ISO C library that implements a subset of Perl regular expression syntax, see
-  and clone at:
-
-  https://github.com/cesanta/slre.git
-  Many thanks.
-
-  The substitution string in the ":substitute command", can use '&' to denote the
-  full captured matched string.
-
-  For captured substring a \1\2... can be used to mean, `nth' captured substring
-  numbering from one.
-
-  It is also possible to force caseless searching, by using (like pcre) (?i) in front
-  of the pattern. This option won't work with multibyte characters. Searching for
-  multibyte characters it should work properly though.
-
-  To include a white space, the string should be (double) quoted. In that case a
-  literal double quote '"', should be escaped. Alternatively a \s can be used to
-  include a white space.
-
-  Re Syntax.
-    ^       Match beginning of a buffer
-    $       Match end of a buffer
-    ()      Grouping and substring capturing
-    \s      Match whitespace
-    \S      Match non-whitespace
-    \d      Match decimal digit
-    \n      Match new line character
-    \r      Match line feed character
-    \f      Match form feed character
-    \v      Match vertical tab character
-    \t      Match horizontal tab character
-    \b      Match backspace character
-    +       Match one or more times (greedy)
-    +?      Match one or more times (non-greedy)
-    *       Match zero or more times (greedy)
-    *?      Match zero or more times (non-greedy)
-    ?       Match zero or once (non-greedy)
-    x|y     Match x or y (alternation operator)
-    \meta   Match one of the meta character: ^$().[]*+?|\
-    \xHH    Match byte with hex value 0xHH, e.g. \x4a
-    [...]   Match any character from set. Ranges like [a-z] are supported
-    [^...]  Match any character but ones from set
-
-  A pattern can start with (?i) to denote `ignore case`
-
-  Shell Commands:
-  The application can also run shell commands or to read into current buffer
-  the standard output of a shell command. Interactive applications might have
-  unexpected behavior in this implementation.
-
-  Filetypes:
-  Work has been started on the Syntax and Filetypes, with the latter can be play
-  a very interesting role, with regards to personalization, but also can be quite
-  powerful of a tool, for all kind of things. As it had been said already it is an
-  ongoing work, so this section is quite empty for the moment.
-
-  So.
-  As it concerns the main visible code, only 3 filetypes (C, sh, make) and probably
-  a few more. But as far it conserns the highlighted stuff (which is yes important,
-  because it helps visually quite a lot, but performance shouldn't penaltized, so
-  the code should remain at least in this level (probably one day will find the
-  desire to check a bit, if we could enhance but with less than today complexity,
-  because the code is complex, but is fast and the rules are simple (maybe)).
-
-  The highlighted system and specifically the multiline comments has some rules,
-  stemming from sane practicing to simplify parsing, as the code is searching for
-  comments in previous lines, and if current line has no comment tokens of course
-  (by default 24), and the relative setting is:
-    MAX_BACKTRACK_LINES_FOR_ML_COMMENTS (default 24)
-
-  For instance in C files, backtracking is done with the following way:
-  If ("/*" is on index zero, or "/*" has a space before) and there is no "*/",
-  then it considered as line with a comment and the search it stops. It even
-  stops if " * " is encountered on the beginning of the line (note the spaces
-  surrounding "*").
-  Note: the relative syntax variable is:
-     multiline_comment_continuation as char[]
-
-  So this simply means that if someone do not want to penaltize performance then
-  it is wise to use " * " in the beginning of the line to force the code, as soon
-  as possible to search on previous lines (as this is expensive).
-
-  The other relative self explained settings:
-    - singleline_comment        as char[]
-    - multiline_comment_start   likewise
-    - multiline_comment_end     likewise
-
-  The code can set filetypes with the following ways and order.
-
-  1. The caller knows the filetype index and set it directly if the index is
-  between the bounds of the syntax array (note that the 0 index is the default
-  filetype (txt)).
-
-  2. Then is looking to the file extension (.c, .h, ...), and the relative variable:
-    - extensions   as *char[]
-
-  3. Then is looking to the file name (Makefile, ...) and the relative variable:
-    - filenames    as *char[]
-
-  4. Finally is looking for shebang (first bytes of the file), and the relative variable:
-    - shebangs     as *char[] e.g., #!/bin/sh or #!/bin/bash and so on
-
-  The rules and variables:
-
-  1. Keywords as *char[] (e.g., if, else, struct, ....), example:
-    char *c_keywords[] = {
-        "if I", "for I", "this V", "NULL K", "int T", ...
-    The capital letter after the keyword and a space, denotes the type and the
-    corresponding color:
-        I: identifier, K: keyword, C: comment,  O: operator, N: number, S: string
-        D:_delimiter   F: function V: variable, T: type,     M: macro,
-        E: error,      Q: quote
-
-  2. Operators as char[] e.g., +|*()[] ...
-
-  It can also highlight strings enclosed with double quotes and the relative variable:
-    hl_strings  as int (zero means do not highlight)
-    hl_numbers  likewise
-
-  The default parsing function is buf_syn_parser(), and can be set on the syntax
-  structure and has the following signature:
-
-       char  *(*parse) (buf_t *, char *, int, int, row_t *);
-
-  The default init function is buf_syn_init () and can be set on the syntax structure
-  with the following signature:
-
-       ftype_t *(*init) (buf_t *);
-
-  The default autoindent callback function does nothing and can be set during filetype
-  initialization with the following signature:
-
-       string_t *(*autoindent_fun) (buf_t *, char *);
-
-  In normal mode 'gf' (go to (or get) filename) can call a callback function, that
-  can be set during initialization with the following signature:
-
-        char *(*ftype_on_open_fname_under_cursor) (char *, size_t, size_t);
-
-  Note that the C filetype, implements the above two callbacks, and 'gf' and when
-  the cursor is on <sys/stat.h>, then it opens the /usr/include/sys/stat.h.
-
-  History Completion Semantics (command line and search):
-   - the ARROW_UP key starts from the last entry set in history, and scrolls down
-     to the past entries
-
-   - the ARROW_DOWN key starts from the first entry, and scrolls up to most recent
-
-  Searching on files (a really quite basic emulation of quickfix vim's windows).
-
-  The command :vgrep it takes a pattern and at least a filename as argument[s]:
-
-    :vgrep --pat=`pattern' [-r|--recursive] file[s]
-
-  This should open a unique window intended only for searches and re-accessible
-  with:
-
-    :searches  (though it might be wise a `:copen' alias (to match vim's expectation))
-
-  This window should open a frame at the bottom, with the results (if any) and it
-  will set the pointer to the first item from the sorted and unique in items list.
-
-  A carriage return should open the filename at the specific line number at the
-  frame 0.
-
-  A `q' on the results frame (the last one), will quit the window and focus again
-  to the previous state (as it acts like a pager).
-
-  This command can search recursively and skips (as a start) any object file.
-
-  Note that because it is a really basic implementation, some unexpected results
-  might occur, if there is no usage discipline of this feature (for instance :bd
-  can bring some confusion to the layout and the functionality).
-
-  Glob Support:
-    (for now)
-    - this is limited to just one directory depth
-    - it uses only '*'
-    - and understands (or should):
-      `*'
-      `/some/dir/*'
-      `*string' or `string*string' or `string*'
-        (likewise for directories)
-
-    Note: many commands have a --recursive option
-
-  Registers and Marks:
-  Both are supported but with the minimal features (same with other myriad details
-  that needs care).
-
-    Mark set:
-    [abcdghjklqwertyuiopzxcvbnm1234567890]
-    Special Marks:
-    - unnamed mark [`] jumps to the previous position
-
-    Register set:
-    [abcdghjklqwertyuiopzxsvbnm1234567890ABCDGHJKLQWERTYUIOPZXSVBNM]
-
-    Special Registers:
-    - unnamed ["] register (default)
-    - current filename [%] register
-    - last search [/] register
-    - last command line [:] register
-    - registers [+*] send|receive text to|from X clipboard (if xclip is available)
-    - blackhole [_] register, which stores nothing
-    - expression [=] register (experimental) (runtime code evaluation)
-    - CTRL('w') current word
-    - shared [`] register (accessed by all the editor instances)
-
-  Note that for uppercase [A-Z], the content is appended to the current content,
-  while for the [a-z] set, any previous content is replaced.
-  An uppercase register can be cleared, by using in Normal mode the "-" command,
-  prefixed with '"' and the register letter, e.g., "Z- for the "Z" register.
-
-  Menus:
-  Many completions (and there are many) are based on menus.
-    Semantics and Keys:
-    Navigation keys:
-    - left and right (for left and right motions)
-      the left key should move the focus to the previous item on line, unless the
-      focus is on the first item in line, which in that case should focus to the
-      previous item (the last one on the previous line, unless is on the first line
-      which in that case should jump to the last item (the last item to the last
-      line))
-
-    - the right key should jump to the next item, unless the focus is on the last
-      item, which in that case should focus to the next item (the first one on the
-      next line, unless is on the last line, which in that case should jump to the
-      first item (the first item to the first line))
-
-    - page down/up keys for page down|up motions
-
-    - tab key is like the right key
-
-    Decision keys:
-    - Enter accepts selection; the function should return the focused item to the
-      caller
-
-    - Spacebar can also accept selection if it is enabled by the caller. That is
-      because a space can change the initial pattern|seed which calculates the
-      displayed results. But using the spacebar speeds a lot of those operations,
-      so in most cases is enabled, even in cases like CTRL('n') in insert mode.
-
-    - Escape key aborts the operation
-
-  In all the cases the window state should be restored afterwards.
-
-  The sample Application that provides the main() function, can also read
-  from standard input to an unamed buffer. Thus it can be used as a pager:
-
-     git diff "$@" | vedas --ftype=diff --pager "$@"
-
   Application Interface:
+  The API state is on the second revision and if for the next one/two years doesn't
+  change drastically, it will be considered to completion. That means that probably
+  nothing is going to change, to the way that someone access the underlying machine.
+
   This library can be used with two ways.
 
     - copy libved.c libved.h and __libved.h to the project directory
@@ -1347,19 +1344,20 @@ Search:
     HAS_USER_EXTENSIONS, HAS_LOCAL_EXTENSIONS,
     HAS_PROGRAMMING_LANGUAGE (the building of the language is handled by the
     this Makefile automatically, otherwise it should be compiled explicitly:
-    note that this specific target language, it can use libcurl)
+    note that this specific target language (Dictu), it can use libcurl)
     HAS_TCC (this option requires libtcc installed)
 
-  The code uses an object oriented style, though it is just for practical
-  reasons as permits mostly code organization, simplicity, abstraction,
-  compactness, relationship, and especially quite a lot of freedom to develop
-  or overridde functionality.
+  The underlying code uses an object oriented style, though it is just for practical
+  reasons as permits mostly code organization, simplicity, abstraction, compactness,
+  relationship, and especially quite a lot of freedom to develop new or overridde the
+  existing functionality.
     A generic comment:
       But the main advantage of this approach is that there is no global state;
       the functions act on an instance of a type, or if not, simple their scope
       is narrow to a specific job that can not change state to the environment.
 
       In this whole library, there is neither one out of function scope variable.
+      In the sample application is one (as it is required by the signal handlers).
 
       In short, a compact, unified and controlled environment, under a root structure,
       with functions that act on an own and known type or|and expected and sanitized
@@ -1385,7 +1383,7 @@ Search:
       It could be a wise future path for C, if it will concentrate just to implement
       algorithms or standard interfaces.
 
-  StructurE Details:
+  Structure Details:
   A buffer instance is a child of a window instance and is responsible to manipulate
   a double linked list that hold the contents. The structure has references to the
   next and previous buffer (if any), to the window instance where belongs (parent)
@@ -1413,7 +1411,7 @@ Search:
   Since those three basic ones have references to it's other, that means everyone
   can use the others and all the domain specific sub-structures.
 
-  The macro My([class]).method (...) works uniform, as long there is a pointer which
+  The macro Class.method (...) works uniform, as long there is a pointer which
   is declared as: [buf_t|win_t|ed_t] *this.
 
   Only one "this", can exist in a function, either when is declared in the body of
@@ -1457,61 +1455,6 @@ Search:
   since a linked list might not be the best type for it's job. But insertion and
   deletion is superior to most of other containers.
 
-
-  [OLD NOTES THAT STAYING FOR REFERENCE]
-  The inner code it uses a couple of macros to ease the development, like:
-
-   self(method, [arg,...])
-
-  This awaits an accessible "this" declared variable and it passes the specific
-  type as the first argument to the calling function.
-  In this context "this" is an abstracted variable and works with objects with
-  specific fields. Types like these, have a "prop" field that holds object's
-  variables and as well a "self" dedicated field for methods (function pointers
-  that their function signature contains "this" type as their first argument).
-
-  The properties of such types are accessible with the following way:
-
-  $my(prop)
-
-  This reminds a lot of perl (i think) and allows great consistency and little
-  thought (you just have to know the properties and not how to access them
-  through the complicated real code). This should save a hell out of time,
-  during development and it gets very quickly a routine.
-
-  To access a nested structure there is also a very compact and easy to use way:
-
-  My(Class).method ([...])
-
-  This is just another syntactic sugar, to access quickly and with certainity that
-  you got the pointers right, nested structures. As "My" doesn't pass any argument,
-  any argument[s] should be given explicitly.
-
-  Generally speaking, those macros, are just syntactic sugar, no code optimization,
-  or the opposite, neither a single bit of penalty. It allows mainly expressionism
-  and focus to the intentions and not to __how__ to get right writing.
-
-  In that spirit, also available are macros, that their sole role is to abstract
-  the details over type creation/declaration/allocation, that assists to quick
-  development.
-  The significant ones: AllocType, NewType, DeclareType. The first argument on those
-  macros is the type name but without the _t extension, which is the actual type.
-
-  Finally, a couple of macros that access the root editor type or the parent's
-  (win structure) type. Either of these three main structures have access (with one
-  way or the other) to all the fields of the root structure, so My(Class) macro
-  as well the others too, works everywhere the same, if there is a proper
-  declared "this".
-
-  In the sample executable that uses the library, none of those macros should be
-  used anymore. All the Classes are accessed uniformily without the My or self
-  macro with the name (first letter capitalized) of the class, like:
-
-   Ed.[subclass or method] ([args, ...])
-
-  The underlying properties of the types are accesible through [gs]etters as none
-  of the types exposes their data.
-
   C:
   This compiles to C11 for two reasons:
     - the fvisibility flags that turns out the defaults, a global scope object
@@ -1547,6 +1490,48 @@ Search:
   Defined but not being used, though i could happily use it if it was enforced
   by a standard.
   #define forever for (;;)
+
+  C idiom:
+  The inner code it uses a couple of macros to ease the development, like:
+
+   self(method, [arg,...])
+
+  This awaits an accessible "this" declared variable and it passes the specific
+  type as the first argument to the calling function.
+
+  In this context "this" is an abstracted variable and works with objects with
+  specific fields. Types like these, have a "prop" field that holds object's
+  variables and as well a "self" dedicated field for methods (function pointers
+  that their function signature contains "this" type as their first argument).
+
+  The properties of such types are accessible with the following way:
+
+  $my(prop)
+
+  Calling a Class method:
+
+  Class.method ([...])
+
+  Note that in this case "Class" doesn't pass any argument[s] to the calling method,
+  so any argument[s] should be given explicitly.
+
+  Generally speaking, those macros, are just syntactic sugar, no code optimization,
+  or the opposite, neither a single bit of penalty. It allows mainly expressionism
+  and focus to the intentions.
+
+  In that spirit, also available are macros, that their sole role is to abstract
+  the details over type creation/declaration/allocation, that assists to quick
+  development.
+  The significant ones: AllocType, NewType, DeclareType. The first argument on those
+  macros is the type name but without the _t extension, which is the actual type.
+
+  Finally, a couple of macros that access the root editor type or the parent's
+  (win structure) type. Either of these three main structures have access (with one
+  way or the other) to all the fields of the root structure, so all the above macros
+  works everywhere the same, if there is a proper declared "this" with proper fields.
+
+  The underlying properties of the types are accesible through [gs]etters as none of
+  the types exposes their data.
 
   Memory Interface:
   The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
@@ -1592,12 +1577,14 @@ Search:
   frogs, a nice song or a terrible sound, an admirable work, or a chain of words,
   and especially the randomness - so who actually owe the copyrights?
 
+  So it is GPL2.
+
   Now.
   The work that someone put in a project, should be respected and should be mentioned
   without any second thought and with pleasure, as it is the marrow of the world,
   and it is so nice to be part of a continuation, both as receiver or as a producer.
 
-  Coding style:
+  Coding Style:
   Easy.
     - every little everything is separated with a space, except in some cases on
       array indexing
@@ -1615,12 +1602,6 @@ Search:
   This code it contains quite a lot of idiomatic C and (probably) in many cases it
   might do the wrong thing. It is written by a non programmer, that taughts himself
   C at his fifty two, and it is focused on the code intentionality (if such a word).
-  C was choosen because it is a high level language, but it is tighted up with the
-  machine so that can be considered primitive, and there shouldn't be any interpreter
-  in between, and finally because C is about algorithms and when implemented properly
-  the code happily lives for ever without a single change. Of course the properties
-  are machine properties and such endeavor it never ends and needs responsibility,
-  extensive study and so time. I do not know however if (time) is generous.
 
   TO DO:
   Seriously! Please do not use this on sensitive documents. There are many conditions
@@ -1640,36 +1621,38 @@ Search:
   opinion it should be used in the cases where is significant, as a delimiter, or
   in the Makefile's; the way it is being used by the coders is an abuse (imho).
   So, i'd rather give my time (with low priority though) to split those two different
-  concepts (though I should fix this thing!!! [update: and should be fixed, as from
-  the first (hard physical and mentally) days of September of 2019).
+  concepts (though I should fix this thing!!!
 
-  The first level or better the zero level, the actual editor code:
+    [update: and should be fixed, as from
+    the first (hard physical and mentally) days of September of 2019).
+
+    [update at Mon 20 Jul 2020] do not trust much the above statement (some glitches
+    exist under certain conditions with tabs in the current line).
+
+  My wish before some time is to work in the tiny abstraction level that will offer
+  the basic functionality of an editor:
 
     - inserting/deleting lines (this should meet or extend ed specifications)
-
     - line operations where line as:
       An array of characters that provide information or methods about the actual num
       bytes used to consist each character, the utf8 representation and the width of
       that character.
-
       Line operations: inserting/deleting/replacing..., based on that type.
-
     - /undo/redo
 
-    - basically the ed interface; which at the beginning coexisted happily with
-      the visual one (at some point too much code were written at once and which
-      it should have been adjusted to both interfaces; but the abstraction level
-      wasn't enough abstracted for this, so i had to move on).
-      But it is a much much simpler editor to implement, since there is absolutely
-      no need to handle the output or|and to set the pointer to the right line at
-      the current column, pointing to the right byte index of the edited byte[s]
-      (it is very natural such an interface to over complicate the code and such
-      code to have bugs).
-      From my humble experience, the worst bug that can happen is to have a false
-      interpretation of the position, so you actually edit something else than what
-      you thing you edit.
+  Basically the ed interface, which at the beginning coexisted with the visual one
+  (at some point too much code were written at once, and the abstraction level wans't
+   enough capable to handle both interfaces, so i had to move on).
+  But it is a much much much simpler editor to implement, since there is absolutely
+  no need to handle the output or|and to set the pointer to the exact right line at
+  the current column, pointing to the right byte index of the edited byte[s] (it is
+  very natural such an interface to over complicate the code and such code to have
+  then bugs).
 
-  And the second level the obvious one (the above mentioned bugged one).
+  From my humble experience and IMHO, the worst bug that can happen in an editor is
+  to give the false interpretation of the pointer position, so the user actually edit
+  something else than what he thinks he edit.
+
 
   Acknowledgments, references and inspiration (besides the already mentioned):
 
@@ -1833,56 +1816,47 @@ Search:
 
   These warnings can not and should not be hided, but the application at runtime,
   should work/behave correctly, as long this prerequisite/condition is true.
+
   [update: Last days of December 2019: The above is not quite correct. The static
   targets can produce (like in one case with getaddrinfo()) segfaults.
-
   So probably (they are not trustable). Plus they are not flexible (though there
   is a noticeable difference in memory usage that is reported by htop(1) and an
   unoticable (almost) better performance). So i lost a bit the desire to put the
-  mind to think this case when facing with the code.
+  mind to think much of this case when developing.
 
   This is where things could be improved a bit.
 
-  The flow is quite important for the programming mind when expressing (probably
-  much of the buggish code was written in some of those times).
-  So yes, probably it is time for C to start thinking to offer (which could be for
-  free), a more abstract communication for the human being mind, who while follows
-  a thought (which probably are complicated thoughts about conditions that can be
-  met and need handling), do not have to be penaltized about conditions that do not
-  have relation with the actual code, but has to do with details such: is size_t
+  I do not how but C has to be settle and offer a couple of warrantee's for common
+  requests like a string reprecentation of a double.
+  I do not use double and such code i will never write probably, but for this i've
+  read "today" in zsh mailing list a thread, with people (that are experts in that
+  domain) and they found that there is no an established standard way.
+  I guess is not totally C faults here, ar they are different approaches and languages
+  are free to do whatever they like.
+
+  C++17 added a to_chars() function to handle that case for good.
+
+  So those are small but quite important cases that the mind should think about.
+
+  But the flow is quite important for the programming mind when expressing (probably
+  much of the buggish code was written in some of those times that the syncronization
+  with the mind and with the actual code is lost).
+
+  So yes, coders do not have to be penaltized about conditions that do not have real
+  relation with the actual code, but has to do with details such (for C): is size_t
   enough suitable? Some argue for ptrdiff_t instead, as it helps the compiler to
   detect overflows as size_t is unsigned and ssize_t could be not as big as size_t,
   plus ssize_t (not sure though) is not standard.
 
-  I realize that this is a property of C and where C shines (as the golden peak of
-  the Macha-Puchare mountain in a glorious morning in a bathe of light), but perhaps
-  and this is emphasized:
-  I do not how but C has to be settle and offer a couple of warrantee's for common
-  requests like a string reprecentation of a double: i do not use double and such
-  code i would never write probably, but for this i've read today in zsh mailing
-  list with people that are experts in that domain and found that there is no an
-  established standard way. They are different approaches and languages are free
-  to do whatever they like. I guess is not totally C faults here. C++17 added a
-  to_chars() function so probably C can follow.
+  Probably some things should be really settled for good now at the next revision.
+
+  I realize that the knowledge of how the machine works, it is a property of C and
+  where C shines (like the golden peak of the Macha-Puchare mountain in a glorious
+  morning in a bathe of light).
 
   But in anycase there quite many of cases that, still today (in 2019?), fail in
   the quite big bucket of undefined behaviors, which is what make people to say
-  that C is unsafe, but and other common in 2019 expectations. So i do not how,
-  but what i know (mostly be feeling) that some of those warrantee's will bring
-  an instant satisfaction (and a huge relief) to the programmer, if there were
-  none of these backthoughts to hold the mind, and instead of coding the actual
-  program, fights with the language. I'm not totally in the position to prove it
-  (like many other things that holds trueth but can not be proved), but since we
-  can never live the moment (probably there is not such a thing as the now, since
-  the now is always past), the one and only thing we actually searching for, is a
-  fraction of time that is not countable (it's like a micro-nanosecond but less).
-  This is enough to work the life procedure (as we offer something by living, as
-  quite possible we have been created for a reason (to produce a thing)), so this
-  might give the self what it he needs to take, but after that, we are probably
-  free to use then the mechanics. So do not have to destroy our only chance from
-  the delibaration or at very least the only chance for an explanation.
-  (but see at CONCENTRATION section for related details or see the movie which in
-  my lang was translated as "The cycle of the lost poets").
+  that C is unsafe, but and other common in 2019 expectations.
 
   So as a resume, i think that shared targets release a burden when developing or
   the code should handle with #ifdef the case for static targets and exclude code,
@@ -1914,7 +1888,7 @@ Search:
 
   Also it has to be realized, that the intentions to use internal functions that have
   similar functionality with standard libc functions, are not obviously the speed (
-  which can not be compared with the optimized functions from libc (here we have to 
+  which can not be compared with the optimized functions from libc (here we have to
   deal with mostly small strings, that the difference in execution time, perhaps is
   negligible though)), but:
 

@@ -1,8 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 #define _DEFAULT_SOURCE
-/* This is for DT_* from dirent.h for readdir() as glibc defines these fields.
- * This is convenient as we avoid at least a lstat() and a couple of macro calls. */
+
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -5733,7 +5735,7 @@ private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
   }
 
   if (rline_arg_exists (rl, "enable-writing"))
-    $myroots(enable_writing) = 1;
+    $my(enable_writing) = 1;
 
   return *retval;
 
@@ -6071,7 +6073,6 @@ private char *vsys_stat_mode_to_string (char *mode_string, mode_t mode) {
 }
 
 private long vsys_get_clock_sec (clockid_t clock_id) {
-  if (clock_id is -1) clock_id = DEFAULT_CLOCK;
   struct timespec cspec;
   clock_gettime (clock_id, &cspec);
   return cspec.tv_sec;
@@ -6499,7 +6500,7 @@ private void buf_set_autosave (buf_t *this, long minutes) {
   if (minutes > (60 * 24)) minutes = (60 * 24);
   $my(autosave) = minutes * 60;
   ifnot ($my(saved_sec))
-    vsys_get_clock_sec (DEFAULT_CLOCK);
+    Vsys.get.clock_sec (DEFAULT_CLOCK);
 }
 
 private void buf_set_backup (buf_t *this, int backup, char *suffix) {
@@ -7095,6 +7096,8 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(flags) = flags;
   $my(flags) &= ~BUF_IS_MODIFIED;
   $my(flags) &= ~BUF_IS_VISIBLE;
+
+  $my(enable_writing) = 1;
 
   self(set.mode, NORMAL_MODE);
 
@@ -8330,7 +8333,10 @@ private int buf_grep (buf_t **thisp, char *pat, Vstring_t *fnames) {
 }
 
 private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
-int interactive, int fidx, int lidx) {
+                                     int interactive, int fidx, int lidx) {
+  ed_record ($my(root), "buf_substitute (buf, \"%s\", \"%s\", %d, %d, %d, %d)",
+    pat, sub, global, interactive, fidx, lidx);
+
   int retval = NOTHING_TODO;
   ifnot (this->num_items) return retval;
 
@@ -9451,7 +9457,9 @@ private int buf_normal_delete_eol (buf_t *this, int regidx) {
   String.delete_numbytes_at ($mycur(data),
      $mycur(data)->num_bytes - $mycur(cur_col_idx), $mycur(cur_col_idx));
 
-  $mycur(cur_col_idx) -= clen;
+  if ($mycur(cur_col_idx) isnot 0)
+    $mycur(cur_col_idx) -= clen;
+
   if ($mycur(cur_col_idx) is 0)
     $my(video)->col_pos = $my(cur_video_col) = $my(video)->first_col;
   else
@@ -10255,7 +10263,7 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
   Reg_t *rg = NULL;
   int reg_append = ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z');
                                        /* optimization for large buffers */
-  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 5)) and
+  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 20)) and
                     regidx isnot REG_INTERNAL;
 
   if (perfom_reg) {
@@ -14426,7 +14434,7 @@ exec:
     case VED_COM_WRITE_FORCE:
     case VED_COM_WRITE:
     case VED_COM_WRITE_ALIAS:
-      if ($myroots(enable_writing)) {
+      if ($my(enable_writing)) {
         arg_t *fname = Rline.get.arg (rl, RL_ARG_FILENAME);
         arg_t *range = Rline.get.arg (rl, RL_ARG_RANGE);
         arg_t *append = Rline.get.arg (rl, RL_ARG_APPEND);
@@ -14446,7 +14454,7 @@ exec:
             rl->range[0], rl->range[1], VED_COM_WRITE_FORCE is rl->com, VERBOSE_ON);
         }
       } else
-        Msg.error ($my(root), "writing is disabled, use ENABLE_WRITING=1 during compilation or the set command");
+        Msg.error ($my(root), "writing is disabled, use :set --enable_writing to enable");
 
       goto theend;
 
@@ -14542,11 +14550,11 @@ exec:
       goto theend;
 
     case VED_COM_MESSAGES:
-      retval = ed_messages ($my(root), thisp, AT_EOF);
+      retval = Ed.messages ($my(root), thisp, AT_EOF);
       goto theend;
 
     case VED_COM_SCRATCH:
-      retval = ed_scratch ($my(root), thisp, AT_EOF);
+      retval = Ed.scratch ($my(root), thisp, AT_EOF);
       goto theend;
 
     case VED_COM_SEARCHES:
@@ -15276,8 +15284,8 @@ private void ed_history_write (ed_t *this) {
    if (-1 is access ($my(env)->data_dir->bytes, F_OK|R_OK)) return;
    ifnot (Dir.is_directory ($my(env)->data_dir->bytes)) return;
    size_t dirlen = $my(env)->data_dir->num_bytes;
-   char fname[dirlen + 16];
-   snprintf (fname, dirlen + 16, "%s/.libved_h_search", $my(env)->data_dir->bytes);
+   char fname[dirlen + 32];
+   snprintf (fname, dirlen + 32, "%s/.libved_h_search", $my(env)->data_dir->bytes);
    FILE *fp = fopen (fname, "w");
    if (NULL is fp) return;
    histitem_t *it = $my(history)->search->tail;
@@ -15287,7 +15295,7 @@ private void ed_history_write (ed_t *this) {
    }
    fclose (fp);
 
-   snprintf (fname, dirlen + 16, "%s/.libved_h_rline", $my(env)->data_dir->bytes);
+   snprintf (fname, dirlen + 32, "%s/.libved_h_rline", $my(env)->data_dir->bytes);
    fp = fopen (fname, "w");
    if (NULL is fp) return;
 
@@ -15753,12 +15761,10 @@ private int ed_i_record_default (ed_t *this, Vstring_t *rec) {
   if (retval is I_ERR_SYNTAX) {
     buf_t *buf = this->current->current;
     ed_messages (this, &buf, AT_EOF);
-  }
+  } else
+    Msg.send_fmt (this, COLOR_MSG, "Executed record [%d]", $my(record_idx) + 1);
 
-  Msg.send_fmt (this, COLOR_MSG, "Executed record [%d]", $my(record_idx) + 1);
-
-  if (retval isnot OK or retval isnot NOTOK)
-    retval = NOTOK;
+  if (retval isnot OK or retval isnot NOTOK) retval = NOTOK;
   return retval;
 }
 
@@ -16249,6 +16255,7 @@ private Class (ed) *editor_new (void) {
       .messages = ed_messages,
       .resume = ed_resume,
       .suspend = ed_suspend,
+      .record = ed_record,
       .question = ed_question,
       .dim_calc = ed_dim_calc,
       .dims_init = ed_dims_init,
@@ -16641,7 +16648,6 @@ private ed_t *ed_init (E_T *E) {
   $my(rl_last_component) = Vstring.new ();
   $my(uline) = Ustring.new ();
 
-  $my(enable_writing) = ENABLE_WRITING;
   $my(msg_tabwidth) = 2;
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
@@ -17156,7 +17162,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
  * - add is, isnot, true, false, ifnot, OK and NOTOK keywords
  * - add println (that emit a newline character, while print does not)
  * - add the ability to pass literal strings when calling C defined functions
- *     (i_pop_string() gets these strings from C)
+ *   (note that they should be free'd after usage)
  * - print functions can print multibyte characters
  * - quite of many changes that integrates Tinyscript to this environment
  */
@@ -17191,38 +17197,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
 
 #define ERROR_COLOR "\033[31m"
 #define TERM_RESET  "\033[m"
-#define mystrings this->strings
 #define MAX_EXPR_LEVEL 5
-
-#define i_string_pop()                        \
-({                                           \
-  char *ibuf_ = NULL;                        \
-  istring_t *node_ = mystrings->head;        \
-  if (node_ != NULL) {                       \
-    mystrings->head = mystrings->head->next; \
-    ibuf_ = node_->ibuf;                     \
-    free (node_);                            \
-  }                                          \
-  ibuf_;                                     \
-})
-
-#define i_string_push(alloc_bytes_)           \
-({                                           \
-  istring_t *node_ = AllocType (istring);    \
-  node_->ibuf = alloc_bytes_;                \
-  if (this->strings->head == NULL) {         \
-    this->strings->head = node_;             \
-    this->strings->head->next = NULL;        \
-  } else {                                   \
-    node_->next = this->strings->head;       \
-    this->strings->head = node_;             \
-  }                                          \
-})
-
-private char *i_pop_string (ival_t instance) {
-  i_t *this = (i_t *) instance;
-  return i_string_pop ();
-}
 
 private int i_parse_stmt (i_t *, int);
 private int i_parse_expr (i_t *, ival_t *);
@@ -17522,13 +17497,16 @@ private int i_do_next_token (i_t *this, int israw) {
     r = I_TOK_STRING;
 
   } else if (c is '"') {
-    if (this->scope isnot FUNCTION_ARGUMENT_SCOPE) {
+    if (0 is (this->state & FUNCTION_ARGUMENT_SCOPE) or
+        (this->state & FUNC_CALL_USRFUNC)) {
+      this->state &= ~(FUNC_CALL_USRFUNC);
       i_reset_token (this);
       i_get_span (this, is_notquote);
       c = i_get_char (this);
       if (c < 0) return I_TOK_SYNTAX_ERR;
       i_ignore_last_char (this);
     } else {
+      this->state &= ~(FUNC_CALL_BUILTIN);
       size_t len = 0;
       while ('"' isnot i_peek_char (this, len)) len++;
       char *ibuf = Alloc (len + 1);
@@ -17538,9 +17516,8 @@ private int i_do_next_token (i_t *this, int israw) {
       }
       ibuf[len] = '\0';
 
-      i_string_push (ibuf);
       c = i_get_char (this);
-      this->tokenVal = STRING_TYPE_FUNC_ARGUMENT;
+      this->tokenVal = (ival_t) ibuf;
       i_reset_token (this);
     }
 
@@ -17548,12 +17525,6 @@ private int i_do_next_token (i_t *this, int israw) {
 
   } else
     r = c;
-
-#ifdef DEBUG_INTERPRETER
-  this->print_fmt_bytes (this->err_fp, "Token[%c / %x] = ", r & 0xff, r);
-  i_print_string (this, this->err_fp, this->token);
-  this->print_byte (this->err_fp, '\n');
-#endif
 
   this->curToken = r;
   return r;
@@ -17644,9 +17615,6 @@ private int i_parse_expr_list (i_t *this) {
     err = i_parse_expr (this, &v);
     if (err isnot I_OK) return err;
 
-    if (v is STRING_TYPE_FUNC_ARGUMENT) {
-      err = i_push (this, (ival_t) this);
-    } else
       err = i_push (this, v);
 
     if (err isnot I_OK) return err;
@@ -17743,16 +17711,19 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
   c = i_next_token (this);
   if (c isnot '(') return this->syntax_error (this, "expected open parentheses");
 
-  this->scope = FUNCTION_ARGUMENT_SCOPE;
+  this->state |= FUNCTION_ARGUMENT_SCOPE;
 
   c = i_next_token (this);
   if (c isnot ')') {
     paramCount = i_parse_expr_list (this);
     c = this->curToken;
-    if (paramCount < 0) return paramCount;
+    if (paramCount < 0) {
+      this->state &= ~(OUT_OF_FUNCTION_ARGUMENT_SCOPE);
+      return paramCount;
+    }
   }
 
-  this->scope = OUT_OF_FUNCTION_SCOPE;
+  this->state &= ~(OUT_OF_FUNCTION_ARGUMENT_SCOPE);
 
   if (c isnot ')')
     return this->syntax_error (this, "expected closed parentheses");
@@ -17779,10 +17750,15 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
     err = i_parse_string (this, uf->body, 0, 0);
     *vp = this->fResult;
     this->symptr = savesymptr;
+    this->state &= ~(FUNC_CALL_USRFUNC);
     return err;
-  } else
-    *vp = op ((ival_t) this, this->fArgs[0], this->fArgs[1], this->fArgs[2]);
-    //, this->fArgs[3]);
+  } else {
+    *vp = op ((ival_t) this, this->fArgs[0], this->fArgs[1], this->fArgs[2],
+                             this->fArgs[3], this->fArgs[4], this->fArgs[5],
+                             this->fArgs[6], this->fArgs[7]);
+
+    this->state &= ~(FUNC_CALL_BUILTIN);
+  }
 
   i_next_token (this);
   return I_OK;
@@ -17796,7 +17772,7 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
 
   c = this->curToken;
   if (c is '(') {
-    this->scope = FUNCTION_ARGUMENT_SCOPE;
+    this->state |= FUNCTION_ARGUMENT_SCOPE;
     i_next_token (this);
     err = i_parse_expr (this, vp);
 
@@ -17805,7 +17781,7 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
 
       if (c is ')') {
         i_next_token (this);
-        this->scope = OUT_OF_FUNCTION_SCOPE;
+        this->state &= ~(OUT_OF_FUNCTION_ARGUMENT_SCOPE);
         return I_OK;
       }
     }
@@ -17834,12 +17810,13 @@ private int i_parse_primary (i_t *this, ival_t *vp) {
 
   } else if (c is I_TOK_BUILTIN) {
     Cfunc op = (Cfunc) this->tokenVal;
+    this->state |= FUNC_CALL_BUILTIN;
     return i_parse_func_call (this, op, vp, NULL);
 
-  } else if (c is USRFUNC) {
+  } else if (c is I_TOK_USRFUNC) {
     Sym *sym = this->tokenSym;
     ifnot (sym) return this->syntax_error (this, "user defined function, not declared");
-
+    this->state |= FUNC_CALL_USRFUNC;
     err = i_parse_func_call (this, NULL, vp, (UserFunc *)sym->value);
     i_next_token (this);
     return err;
@@ -18283,26 +18260,7 @@ private void i_free (i_t **thisp) {
   *thisp = NULL;
 }
 
-private void i_free_strings (Type (i) *this) {
-  Type (istring) *it = mystrings->head;
-  while (it) {
-    Type (istring) *next = it->next;
-    free (it->ibuf);
-    free (it);
-    it = next;
-  }
-}
-
 private void i_free_instance (i_t **thisp) {
-  i_t *this = *thisp;
-
-  i_free_strings (this);
-  free (this->strings);
-
-#if DEBUG_INTERPRETER
-  fclose (this->err_fp);
-#endif
-
   i_free (thisp);
 }
 
@@ -18464,16 +18422,15 @@ ival_t i_ed_get_win_next (ival_t i, ed_t *ed, win_t *win) {
   return (ival_t) ed_get_win_next (ed, win);
 }
 
-ival_t i_buf_init_fname (ival_t i, buf_t *this) {
-  char *fn = i_pop_string (i);
+ival_t i_buf_init_fname (ival_t i, buf_t *this, char *fn) {
+  (void) i;
   buf_init_fname (this, fn);
   free (fn);
   return OK;
 }
 
-ival_t i_buf_set_ftype (ival_t i, buf_t *buf) {
+ival_t i_buf_set_ftype (ival_t i, buf_t *buf, char *ftype) {
   i_t *this = (i_t *) i;
-  char *ftype = i_pop_string (i);
   buf_set_ftype (buf, ed_syn_get_ftype_idx ($from(this->__E__, current), ftype));
   free (ftype);
   return OK;
@@ -18489,6 +18446,17 @@ ival_t i_buf_draw (ival_t i, buf_t *this) {
   (void) i;
   buf_draw (this);
   return OK;
+}
+
+ival_t i_buf_substitute (ival_t i, buf_t *this, char *pat, char *sub, int global,
+                                            int interactive, int fidx, int lidx) {
+  (void) i;
+  if (fidx is lidx) fidx = lidx = this->cur_idx;
+
+  ival_t val = buf_substitute (this, pat, sub, global, interactive, fidx, lidx);
+  free (sub);
+  free (pat);
+  return val;
 }
 
 ival_t i_win_buf_init (ival_t i, win_t *this, int frame, int flags) {
@@ -18557,6 +18525,7 @@ struct ifun_t {
   { "buf_normal_page_down",(ival_t) i_buf_normal_page_down, 2},
   { "buf_normal_page_up",  (ival_t) i_buf_normal_page_up, 2},
   { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
+  { "buf_substitute",      (ival_t) i_buf_substitute, 7},
   { "win_buf_init",        (ival_t) i_win_buf_init, 3},
   { "win_draw",            (ival_t) i_win_draw, 1},
   { "win_append_buf",      (ival_t) i_win_append_buf, 2},
@@ -18584,10 +18553,11 @@ private int i_init (Class (i) *interp, i_t *this, I_INIT opts) {
   this->err_fp = opts.err_fp;
   this->out_fp = opts.out_fp;
   this->max_script_size = opts.max_script_size;
+  this->state = 0;
 
   this->symptr = (Sym *) this->arena;
   this->valptr = (ival_t *) (this->arena + this->mem_size);
-  this->strings = AllocType (Istrings);
+
   this->__E__ = $from(interp, __E__);
 
   for (i = 0; idefs[i].name; i++) {
@@ -18615,14 +18585,6 @@ private i_t *i_init_instance (Class (i) *__i__) {
   i_t *this = i_new ();
 
   FILE *err_fp = stderr;
-
-#if DEBUG_INTERPRETER
-  string_t *tdir = E_venv_get ($from(__i__, e), "tmp_dir");
-  size_t len = tdir->num_bytes + 1 + 7;
-  char tmp[len + 1 ];
-  cstring_cp_fmt (tmp, len + 1, "%s/i.debug", tdir->bytes);
-  err_fp = fopen (tmp, "w");
-#endif
 
   i_init (__i__, this, QUAL(I_INIT,
     .mem_size = 8192,

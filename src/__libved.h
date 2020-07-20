@@ -323,11 +323,11 @@ struct regex_info {
 #define USRFUNC  'f'  // user defined a procedure; number of operands in high 8 bits
 #define TOK_BINOP 'o'
 
-#define STRING_TYPE_FUNC_ARGUMENT 1 << 8
-
-#define OUT_OF_FUNCTION_SCOPE     1 << 0
-#define FUNCTION_SCOPE            1 << 1
-#define FUNCTION_ARGUMENT_SCOPE   1 << 2
+#define OUT_OF_FUNCTION_ARGUMENT_SCOPE 1 << 0
+#define FUNCTION_SCOPE                 1 << 1
+#define FUNCTION_ARGUMENT_SCOPE        1 << 2
+#define FUNC_CALL_BUILTIN              1 << 3
+#define FUNC_CALL_USRFUNC              1 << 4
 
 #define BINOP(x) (((x) << 8) + TOK_BINOP)
 #define CFUNC(x) (((x) << 8) + BUILTIN)
@@ -347,6 +347,7 @@ struct regex_info {
 #define I_TOK_BUILTIN    'B'
 #define I_TOK_BINOP      'o'
 #define I_TOK_FUNCDEF    'F'
+#define I_TOK_USRFUNC    'f'
 #define I_TOK_SYNTAX_ERR 'Z'
 #define I_TOK_RETURN     'r'
 #define I_TOK_CHAR       'C'
@@ -361,16 +362,7 @@ enum {
   I_ERR_OK_ELSE = 1, // special internal condition
 };
 
-#define MAX_BUILTIN_PARAMS 4
-
-NewType (istring,
-  char *ibuf;
-  istring_t *next;
-);
-
-NewType (Istrings,
-  Type (istring) *head;
-);
+#define MAX_BUILTIN_PARAMS 9
 
 NewType (Istring,
   unsigned len_;
@@ -406,13 +398,11 @@ NewType (i,
   char *arena;
   int
     linenum,
-    scope;
+    state;
 
   FILE
     *err_fp,
     *out_fp;
-
-  Type (Istrings) *strings;
 
   Sym *symptr;
   ival_t *valptr;
@@ -857,6 +847,7 @@ NewProp (buf,
     cur_video_col,
     statusline_row,
     show_statusline,
+    enable_writing,
     *msg_row_ptr,
     *prompt_row_ptr;
 
@@ -970,8 +961,7 @@ NewProp (ed,
     msg_row,
     msg_send,
     msg_numchars,
-    msg_tabwidth,
-    enable_writing;
+    msg_tabwidth;
 
   string_t
     *last_insert,

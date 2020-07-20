@@ -40,8 +40,6 @@ make                                                \
     SYSDATADIR=$SYSDATADIR                          \
     SYSTMPDIR=$SYSTMPDIR                            \
     DEBUG=0                                         \
-    ENABLE_WRITING=0                                \
-    DEBUG_INTERPRETER=1                             \
     HAS_PROGRAMMING_LANGUAGE=0                      \
     HAS_USER_EXTENSIONS=0                           \
     HAS_JSON=0                                      \

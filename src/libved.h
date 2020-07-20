@@ -4,10 +4,6 @@
 #define MYNAME "veda"
 #define ED_INSTANCES 252
 
-#ifndef ENABLE_WRITING
-#define ENABLE_WRITING 0
-#endif
-
 #define MAX_FRAMES 3
 #define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
@@ -278,7 +274,11 @@
 #define PAGE_DOWN_KEY   0522
 #define PAGE_UP_KEY     0523
 #define END_KEY         0550
-#define CTRL_(X)        (X - '@')
+
+#ifndef CTRL
+#define CTRL(X) (X & 037)
+#endif
+
 //#define ALT(x)          (0551 + (x - 'a'))
 
 #define COLOR_RED         31
@@ -453,7 +453,7 @@ typedef ptrdiff_t msize_t;
 
 /* interpeter */
 typedef intptr_t ival_t;
-typedef ival_t (*Cfunc) (ival_t, ival_t, ival_t, ival_t);
+typedef ival_t (*Cfunc) (ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t);
 typedef ival_t (*Opfunc) (ival_t, ival_t);
 
 #define public __attribute__((visibility ("default")))
@@ -1873,6 +1873,7 @@ NewSelf (ed,
   void
     (*free) (ed_t *),
     (*free_info) (ed_t *, edinfo_t **),
+    (*record) (ed_t *, char *, ...),
     (*suspend) (ed_t *),
     (*resume) (ed_t *);
 
