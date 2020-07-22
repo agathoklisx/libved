@@ -505,7 +505,6 @@
  | (extended by the test application)                    |
  |   - interpret `word' as a man page and display it to  |
  |     the scratch buffer (requires the man utility)     |
- |   - translate `word' (a personal function for demonstration)|
  |   - spell `word' (check if '`word' is mispelled)      |
  |                                                       |
  | F                 | File operations mode (via a selection menu)|
@@ -709,12 +708,6 @@ Search:
   :searches              (change focus to the `search' window/buffer)
   :messages              (change focus to the message window/buffer)
   :testkey               (test keyboard keys)
-  :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
-                         whole file is assumed)
-  :@bufbackup            backup file as (dirname(fname)/.basename(fname)`suffix',
-                         but it has to be set first (with :set or with --backupfile),
-                         if backupfile exists, it raises a question, same if this is
-                         true at the initialization
   :set options           (set options for current buffer
                           --ftype=[string] set filetype
                           --tabwidth=[int] set tabwidth
@@ -725,6 +718,16 @@ Search:
                           --autosave=[int] set in minutes the interval, (used
                             at the end of insert mode to autosave buffer)
                           --enable-writing this will enable writing (buffer contents)
+  :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
+                          whole file is assumed)
+  :@bufbackup             backup file as (dirname(fname)/.basename(fname)`suffix',
+                          but it has to be set first (with :set or with --backupfile),
+                          if backupfile exists, it raises a question, same if this is
+                          true at the initialization
+  :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
+  :@save_image [--as=file] (save current layout, that can be used at a next invocation
+                            with --load-file=file.i, to restore it,
+                            default filename: $SYSDATADIR/images/currentbufname.i)
   :q[!] [--global]       quit (if force[!], do not check for modified buffers),
                               (if --global exit from all running editor instances)
 
@@ -737,12 +740,8 @@ Search:
   :`man     manpage   (display man page on the scratch buffer)
   :`stat    file      (display file status information)
   :`battery           (display battery status to the message line) (only for Linux)
-  :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
   :@info [--buf,--win,--ed] (with no arguments defaults to --buf) (this prints
                       details to the scratch buffer of the corresponded arguments)
-  :@save_image [--as=file] (save current layout, that can be used at a next invocation
-                            with --load-file=file.i, to restore it,
-                            default filename: $SYSDATADIR/profiles/currentbufname.i)
 
   The `man command requires the man utility, which simply means probably also an
   implementation of a roff system. The col utility is not required, as we filter

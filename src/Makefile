@@ -249,8 +249,6 @@ HAS_CURL := 0
 HAS_JSON := 0
 HAS_EXPR := 0
 
-WORD_LEXICON_FILE :=
-
 ifneq ($(HAS_JSON), 0)
   HAS_USER_EXTENSIONS = 1
 endif
@@ -283,10 +281,6 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
   ifneq ($(HAS_EXPR), 0)
     APPFLAGS += -DHAS_EXPR
     FLAGS += -lm
-  endif
-
-  ifdef WORD_LEXICON_FILE
-    APPFLAGS += -DWORD_LEXICON_FILE='"$(WORD_LEXICON_FILE)"'
   endif
 
   ifneq ($(HAS_TCC), 0)

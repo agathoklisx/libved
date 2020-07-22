@@ -112,6 +112,7 @@ enum {
   VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE,
   VED_COM_SUBSTITUTE_ALIAS,
   VED_COM_TEST_KEY,
+  VED_COM_SAVE_IMG,
   VED_COM_VALIDATE_UTF8,
   VED_COM_WIN_CHANGE_NEXT,
   VED_COM_WIN_CHANGE_NEXT_ALIAS,
@@ -723,6 +724,7 @@ NewType (hist,
     int  num_items
 
 #define MY_CLASSES(__me__)          \
+  Class (E) *__E__;                 \
   Class (__me__) *Me;               \
   Class (i) *__I__;                 \
   Class (re) *__Re__;               \
@@ -1503,6 +1505,7 @@ do {                                                                \
   node;                                                             \
 })
 
+#define Root  My(__E__)
 #define Ed My(__Ed__)
 #define Win My(__Win__)
 #define Buf My(__Buf__)

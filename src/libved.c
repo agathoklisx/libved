@@ -6707,6 +6707,131 @@ private int buf_com_backupfile (buf_t *this) {
       this->num_items - 1, FORCE, VERBOSE_OFF);
 }
 
+private int buf_com_save_image (buf_t *this, rline_t *rl) {
+  int retval = NOTOK;
+  int cbidx = $my(parent)->cur_idx;
+
+  char *fn = NULL;
+  string_t *fn_arg = Rline.get.anytype_arg (rl, "as");
+  ifnot (NULL is fn_arg) {
+    fn = fn_arg->bytes;
+  } else
+    fn = Path.basename (self(get.basename));
+
+  string_t *img = String.new_with (fn);
+  char *extname = Path.extname (img->bytes);
+
+  size_t exlen = bytelen (extname);
+  if (exlen) {
+    if (exlen isnot img->num_bytes) {
+      char *p = img->bytes + img->num_bytes - 1;
+      while (*p isnot '.') {
+        p--;
+        String.clear_at (img, img->num_bytes - 1);
+      }
+    } else  // .file
+      String.append_byte (img, '.');
+  } else
+    String.append_byte (img, '.');
+
+  ifnot (Path.is_absolute (img->bytes)) {
+    String.prepend (img, "/images/");
+    String.prepend (img, Root.get.env ($my(__E__), "data_dir")->bytes);
+  }
+
+  String.append (img, "i");
+
+  FILE *fp = fopen (img->bytes, "w");
+  if (NULL is fp) goto theend;
+
+  String.clear (img);
+
+  String.append (img,
+     "var flags = 0\n"
+     "var frame_zero = 0\n"
+     "var draw = 1\n"
+     "var donot_draw = 0\n");
+
+  int g_num_buf = 0;
+  int g_num_win = 0;
+  int g_num_ed = 0;
+
+  ed_t *ed = Root.get.head ($my(__E__));
+
+  while (ed isnot NULL) {
+    ifnot (g_num_ed) {
+      String.append (img, "var ");
+    }
+
+    g_num_ed++;
+
+    int num_win = Ed.get.num_win (ed, NO_COUNT_SPECIAL);
+    String.append_fmt (img, "ed = ed_new (%d)\n", num_win);
+
+    ifnot (g_num_win) {
+      String.append (img, "var ");
+      g_num_win++;
+    }
+
+    String.append (img, "cwin = ed_get_current_win (ed)\n");
+
+    int l_num_win = 0;
+    win_t *cwin = Ed.get.win_head (ed);
+
+    while (cwin) {
+      if (Win.isit.special_type (cwin)) goto next_win;
+
+      if (l_num_win)
+        String.append (img, "cwin = ed_get_win_next (ed, cwin)\n\n");
+
+      l_num_win++;
+
+      buf_t *buf = Win.get.buf_head (cwin);
+      while (buf) {
+        if (($from(buf, flags) & BUF_IS_SPECIAL)) goto next_buf;
+        char *bufname = $from(buf, fname);
+
+        ifnot (g_num_buf) {
+          String.append (img, "var ");
+          g_num_buf++;
+         }
+
+         String.append (img, "buf = win_buf_init (cwin, frame_zero, flags)\n");
+         String.append_fmt (img, "buf_init_fname (buf, \"%s\")\n", bufname);
+         char *ftype_name = $from(buf, ftype)->name;
+         String.append_fmt (img, "buf_set_ftype (buf, \"%s\")\n", ftype_name);
+         int cur_row_idx = buf->cur_idx;
+         String.append_fmt (img, "buf_set_row_idx (buf, %d)\n", cur_row_idx);
+         String.append (img, "win_append_buf (cwin, buf)\n");
+
+next_buf:
+        buf = Win.get.buf_next (cwin, buf);
+      }
+
+next_win:
+      cwin = Ed.get.win_next (ed, cwin);
+    }
+
+    ed = Root.get.next ($my(__E__), ed);
+    ifnot (NULL is ed)
+      String.append (img, "ed = e_set_ed_next ()\n");
+  }
+
+  int idx = Root.get.current_idx ($my(__E__));
+  String.append_fmt (img, "ed = e_set_ed_by_idx (%d)\n", idx);
+  String.append (img, "cwin = ed_get_current_win (ed)\n");
+  String.append_fmt (img, "win_set_current_buf (cwin, %d, donot_draw)\n", cbidx);
+  String.append (img, "win_draw (cwin)\n");
+
+  fprintf (fp, "%s\n", img->bytes);
+  fclose (fp);
+  retval = OK;
+
+theend:
+  String.free (img);
+  return retval;
+}
+
 private ssize_t buf_read_fname (buf_t *this) {
   if ($my(fname) is NULL or cstring_eq ($my(fname), UNAMED)) return NOTOK;
 
@@ -7057,6 +7182,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(__Ed__)      = $myparents(__Ed__);
   $my(__Win__)     = $myparents(Me);
   $my(__I__)       = $myparents(__I__);
+  $my(__E__)       = $myparents(__E__);
   $my(__Re__)      = $myparents(__Re__);
   $my(__Msg__)     = $myparents(__Msg__);
   $my(__Dir__)     = $myparents(__Dir__);
@@ -7374,6 +7500,7 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   $my(__Ed__)      = $myparents(Me);
   $my(__Buf__)     = &$myparents(Me)->__Buf__;
   $my(__I__)       = $myparents(__I__);
+  $my(__E__)       = $myparents(__E__);
   $my(__Re__)      = $myparents(__Re__);
   $my(__Msg__)     = $myparents(__Msg__);
   $my(__Dir__)     = $myparents(__Dir__);
@@ -13342,6 +13469,7 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
     [VED_COM_TEST_KEY] = "testkey",
+    [VED_COM_SAVE_IMG] = "@save_image",
     [VED_COM_VALIDATE_UTF8] = "@validate_utf8",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
@@ -13368,6 +13496,7 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_READ ... VED_COM_READ_ALIAS] = 1,
     [VED_COM_SPLIT] = 1,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] = 5,
+    [VED_COM_SAVE_IMG] = 1,
     [VED_COM_VALIDATE_UTF8] = 1,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] = 4,
     [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = 1
@@ -13428,6 +13557,7 @@ private void ed_init_commands (ed_t *this) {
   ed_append_command_arg (this, "s%",         "--remove-tabs", 13);
   ed_append_command_arg (this, "substitute", "--shiftwidth=", 13);
   ed_append_command_arg (this, "s%",         "--shiftwidth=", 13);
+  ed_append_command_arg (this, "@save_image", "--as=", 5);
 }
 
 private void rline_write_and_break (rline_t *rl){
@@ -14744,6 +14874,10 @@ exec:
        buf_test_key (this);
        retval = DONE;
        goto theend;
+
+      case VED_COM_SAVE_IMG:
+        retval = buf_com_save_image (this, rl);
+        goto theend;
 
       case VED_COM_VALIDATE_UTF8:
         retval = buf_com_validate_utf8 (thisp, rl);
@@ -16640,6 +16774,7 @@ private ed_t *ed_init (E_T *E) {
   $my(__Win__)     = &E->__Ed__->__Win__;
   $my(__Buf__)     = &E->__Ed__->__Buf__;
   $my(__I__)       = &E->__Ed__->__I__;
+  $my(__E__)       = E;
   $my(__Re__)      = &E->__Ed__->__Re__;
   $my(__Msg__)     = &E->__Ed__->__Msg__;
   $my(__Dir__)     = &E->__Ed__->__Dir__;
@@ -17033,6 +17168,7 @@ private ed_T *ed_init_prop (ed_T *this) {
   $my(__Win__)     = &this->__Win__;
   $my(__Buf__)     = &this->__Buf__;
   $my(__I__)       = &this->__I__;
+  $my(__E__)       = $my(__E__);
   $my(__Re__)      = &this->__Re__;
   $my(__Msg__)     = &this->__Msg__;
   $my(__Dir__)     = &this->__Dir__;
@@ -18641,9 +18777,10 @@ private int i_load_file (Class (i) *__i__, char *fn) {
     string_t *ddir = E_venv_get (this->__E__, "data_dir");
     size_t len = ddir->num_bytes + bytelen (fname) + 2 + 8;
     char tmp[len + 1];
-    cstring_cp_fmt (tmp, len + 1, "%s/profiles/%s", ddir->bytes, fname);
+    cstring_cp_fmt (tmp, len + 1, "%s/images/%s", ddir->bytes, fname);
     ifnot (file_exists (tmp))
       return NOTOK;
+
     return i_eval_file (this, tmp);
   } else
     return i_eval_file (this, fn);
@@ -18685,10 +18822,10 @@ private Class (i) *__init_i__ (Class (E) *e) {
 
   string_t *ddir = E_venv_get (e, "data_dir");
   size_t len = ddir->num_bytes + 1 + 8;
-  char profiles[len + 1];
-  cstring_cp_fmt (profiles, len + 1, "%s/profiles", ddir->bytes);
-  ifnot (file_exists (profiles))
-    mkdir (profiles, S_IRWXU);
+  char images[len + 1];
+  cstring_cp_fmt (images, len + 1, "%s/images", ddir->bytes);
+  ifnot (file_exists (images))
+    mkdir (images, S_IRWXU);
 
   return this;
 }

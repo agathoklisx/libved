@@ -61,6 +61,3 @@ make                                                \
     BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
     BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
     veda-shared
-
-#   WORD_LEXICON_FILE="/path/to/some/dict.txt"      \
-#   VED_APPLICATION_FLAGS=-lutil                    \
