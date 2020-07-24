@@ -189,16 +189,12 @@ SYSAPPSHARED := $(SYSBINDIR)/$(APPSHARED)
 SYSAPPSTATIC := $(SYSBINDIR)/$(APPSTATIC)
 
 #----------------------------------------------------------#
-REQOBJS   =   $(LIBVED_SRCDIR)/libved+.c
+REQOBJS   =   $(LIBVED_SRCDIR)/libved+.c $(LIBVED_SRCDIR)/lib/tinyexpr/tinyexpr.c
 
 APPFLAGS :=
 
 HAS_TCC  := 0
 HAS_CURL := 0
-
-ifneq ($(HAS_TCC), 0)
-  REQOBJS += $(LIBVED_SRCDIR)/lib/Ccompilers/tcc/tcc.c
-endif
 
 PROGRAMMING_LANGUAGE_SHARED_FLAGS =
 PROGRAMMING_LANGUAGE_STATIC_FLAGS += "ENABLE_HTTP=0"
@@ -223,7 +219,7 @@ ifneq ($(HAS_JSON), 0)
 endif
 
 APPFLAGS  +=   $(REQOBJS)
-APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved
+APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
 
 # This is to set specific order, needed by the linker in the static target
 # as it has to be after the required objects but before -lm (if present)
@@ -269,7 +265,6 @@ APPFLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
 APPFLAGS += -DHAS_MOONPHASE
 APPFLAGS += -DSYS_NAME='"$(SYSKERNEL)"'
 APPFLAGS += -DHAS_JSON
-APPFLAGS += -DHAS_EXPR
 APPFLAGS += -DHAS_USER_EXTENSIONS
 APPFLAGS += -DVED_DIR='"$(SYSDIR)"'
 APPFLAGS += -DVED_DATADIR='"$(SYSDATADIR)"'

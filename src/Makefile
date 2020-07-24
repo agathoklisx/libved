@@ -181,17 +181,13 @@ APPFLAGS  :=
 
 HAS_PROGRAMMING_LANGUAGE := 0
 
-REQOBJS    =  libved+.c
+REQOBJS    =  libved+.c lib/tinyexpr/tinyexpr.c
 
 ifneq ($(HAS_JSON), 0)
   REQOBJS += lib/json/json.c
 endif
 
 HAS_TCC := 0
-
-ifneq ($(HAS_TCC), 0)
-  REQOBJS += lib/Ccompilers/tcc/tcc.c
-endif
 
 PROGRAMMING_LANGUAGE_SHARED_FLAGS :=
 PROGRAMMING_LANGUAGE_STATIC_FLAGS := "ENABLE_HTTP=0"
@@ -220,6 +216,8 @@ ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
   APPFLAGS += -l$(PROGRAMMING_LANGUAGE_NAME)
 endif
 
+APPFLAGS += -lm
+
 ifeq (-$(SYSKERNEL), -Linux)
   APPFLAGS += -DSYS_IS_LINUX
 endif
@@ -247,13 +245,8 @@ USER_EXTENSIONS_FLAGS :=
 
 HAS_CURL := 0
 HAS_JSON := 0
-HAS_EXPR := 0
 
 ifneq ($(HAS_JSON), 0)
-  HAS_USER_EXTENSIONS = 1
-endif
-
-ifneq ($(HAS_EXPR), 0)
   HAS_USER_EXTENSIONS = 1
 endif
 
@@ -276,11 +269,6 @@ ifneq ($(HAS_USER_EXTENSIONS), 0)
 
   ifneq ($(HAS_JSON), 0)
     APPFLAGS += -DHAS_JSON
-  endif
-
-  ifneq ($(HAS_EXPR), 0)
-    APPFLAGS += -DHAS_EXPR
-    FLAGS += -lm
   endif
 
   ifneq ($(HAS_TCC), 0)

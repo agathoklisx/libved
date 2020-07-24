@@ -299,7 +299,6 @@
   The following options extend the application and any of them enables the
   HAS_USER_EXTENSIONS option.
 
-  HAS_EXPR=1|0     (en|dis)able math expression support (default 0)
   HAS_TCC=1|0      (en|dis)able tcc compiler (default 0) (note: requires libtcc)
   HAS_PROGRAMMING_LANGUAGE=1|0 (en|dis)able programming language (default 0)
   HAS_CURL=1|0     (en|dis)able libcurl, used by the PL above (default 0)
@@ -342,8 +341,8 @@
       errors, the application segfaults, because of the call to stat(). This was
       reported upstream.)
 
-     (note 2: since the introduction of tinyexpr and if HAS_EXPR=1, tcc can not
-      compile the source of tinyexpr)
+     (note 2: since the introduction of tinyexpr, tcc can not compile the source
+      of tinyexpr)
 
   But see at the very last section of this document (ERRORS - WARNINGS - BUGS),
   for issues/details.

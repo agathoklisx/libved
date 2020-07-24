@@ -455,6 +455,203 @@ private string_t *this_parse_command (Class (this) *this, char *bytes) {
   return com;
 }
 
+#if HAS_TCC
+private void __tcc_free (tcc_t **thisp) {
+  if (NULL is thisp) return;
+
+  tcc_t *this = *thisp;
+  ifnot (NULL is this->handler) {
+    tcc_delete (this->handler);
+    this->handler = NULL;
+  }
+
+  free (this);
+  thisp = NULL;
+}
+
+private tcc_t *__tcc_new (void) {
+  tcc_t *this = AllocType (tcc);
+  this->handler = tcc_new ();
+  return this;
+}
+
+private int tcc_set_path (tcc_t *this, char *path, int type) {
+  switch (type) {
+    case TCC_CONFIG_TCC_DIR:
+      tcc_set_lib_path (this->handler, path);
+      return 0;
+
+    case TCC_ADD_INC_PATH:
+      return tcc_add_include_path (this->handler, path);
+
+    case TCC_ADD_SYS_INC_PATH:
+      return tcc_add_sysinclude_path (this->handler, path);
+
+    case TCC_ADD_LPATH:
+      return tcc_add_library_path (this->handler, path);
+
+    case TCC_ADD_LIB:
+      return tcc_add_library (this->handler, path);
+
+    case TCC_SET_OUTPUT_PATH:
+      return tcc_output_file (this->handler, path);
+
+    default:
+      return NOTOK;
+    }
+
+  return NOTOK;
+}
+
+private void __tcc_set_options (tcc_t *this, char *opt) {
+  tcc_set_options (this->handler, opt);
+}
+
+private int __tcc_set_output_type (tcc_t *this, int type) {
+  return (this->retval = tcc_set_output_type (this->handler, type));
+}
+
+private void tcc_set_error_handler (tcc_t *this, void *obj, TCCErrorFunc cb) {
+  tcc_set_error_func (this->handler, obj, cb);
+}
+
+private int __tcc_compile_string (tcc_t *this, char *src) {
+  return (this->retval = tcc_compile_string (this->handler, src));
+}
+
+private int tcc_compile_file (tcc_t *this, char *file) {
+  return (this->retval = tcc_add_file (this->handler, file));
+}
+
+private int __tcc_run (tcc_t *this, int argc, char **argv) {
+  return (this->retval = tcc_run (this->handler, argc, argv));
+}
+
+private int __tcc_relocate (tcc_t *this, void *mem) {
+  return (this->retval = tcc_relocate (this->handler, mem));
+}
+
+private tcc_T __init_tcc__ (void) {
+  return ClassInit (tcc,
+    .self = SelfInit (tcc,
+      .free = __tcc_free,
+      .new = __tcc_new,
+      .compile_string = __tcc_compile_string,
+      .compile_file = tcc_compile_file,
+      .run = __tcc_run,
+      .relocate = __tcc_relocate,
+      .set = SubSelfInit (tcc, set,
+        .path = tcc_set_path,
+        .output_type = __tcc_set_output_type,
+        .options = __tcc_set_options,
+        .error_handler = tcc_set_error_handler
+      )
+    )
+  );
+}
+#endif /* HAS_TCC */
+
+/* Math Expr */
+#define MATH_OK            OK
+#define MATH_NOTOK         NOTOK
+#define MATH_BASE_ERROR    2000
+#define MATH_COMPILE_NOREF (MATH_BASE_ERROR + 1)
+#define MATH_EVAL_NOREF    (MATH_BASE_ERROR + 2)
+#define MATH_INTERP_NOREF  (MATH_BASE_ERROR + 3)
+#define MATH_COMPILE_ERROR (MATH_BASE_ERROR + 4)
+#define MATH_LAST_ERROR    MATH_COMPILE_ERROR
+#define MATH_OUT_OF_BOUNDS_ERROR MATH_LAST_ERROR + 1
+
+private void math_free (math_t **thisp) {
+  String.free ((*thisp)->data);
+  String.free ((*thisp)->lang);
+  String.free ((*thisp)->error_string);
+
+  ifnot (NULL is (*thisp)->free)
+    (*thisp)->free ((*thisp));
+
+  free (*thisp);
+  thisp = NULL;
+}
+
+private math_t *math_new (char *lang, MathCompile_cb compile,
+    MathEval_cb eval, MathInterp_cb interp, MathFree_cb free_ref) {
+  math_t *this = AllocType (math);
+  this->retval = this->error = MATH_OK;
+  this->lang = String.new_with (lang);
+  this->error_string = String.new (8);
+  this->compile = compile;
+  this->eval = eval;
+  this->interp = interp;
+  this->free = free_ref;
+  return this;
+}
+
+private char *math_strerror (math_t *this, int error) {
+  if (error > MATH_LAST_ERROR)
+    this->error = MATH_OUT_OF_BOUNDS_ERROR;
+  else
+    this->error = error;
+
+  char *math_errors[] = {
+    "NULL Function Reference (compile)",
+    "NULL Function Reference (eval)",
+    "NULL Function Reference (interp)",
+    "Compilation ERROR",
+    "Evaluation ERROR",
+    "Interpretation ERROR",
+    "INTERNAL ERROR, NO SUCH_ERROR, ERROR IS OUT OF BOUNDS"};
+
+  String.append (this->error_string, math_errors[this->error - MATH_BASE_ERROR - 1]);
+
+  ifnot (NULL is this->strerror) return this->strerror (this, error);
+
+  return this->error_string->bytes;
+}
+
+private int math_compile (math_t *this) {
+  if (NULL is this->compile) {
+    this->retval = MATH_NOTOK;
+    math_strerror (this, MATH_COMPILE_NOREF);
+    return MATH_NOTOK;
+  }
+
+  return this->compile (this);
+}
+
+private int math_eval (math_t *this) {
+  if (NULL is this->eval) {
+    this->retval = MATH_NOTOK;
+    math_strerror (this, MATH_EVAL_NOREF);
+    return MATH_NOTOK;
+  }
+
+  return this->eval (this);
+}
+
+private int math_interp (math_t *this) {
+  if (NULL is this->interp) {
+    this->retval = MATH_NOTOK;
+    math_strerror (this, MATH_INTERP_NOREF);
+    return MATH_NOTOK;
+  }
+
+  return this->interp (this);
+}
+
+public math_T __init_math__ (void) {
+  return ClassInit (math,
+    .self = SelfInit (math,
+      .new = math_new,
+      .free = math_free,
+      .compile = math_compile,
+      .interp = math_interp,
+      .eval = math_eval,
+      .strerror = math_strerror
+    )
+  );
+}
+
 /* proc */
 
 #define PIPE_READ_END  0
@@ -1293,6 +1490,45 @@ theend:
   return retval;
 }
 
+/* Math Expr */
+
+private int __ex_math_expr_interp__ (math_t *expr) {
+  int err = 0;
+
+  ed_t *ed = E.get.current (THIS_E);
+  expr->ff_obj = (te_expr *) te_compile (expr->data->bytes, 0, 0, &err);
+
+  ifnot (expr->ff_obj) {
+    buf_t **thisp = (buf_t **) expr->i_obj;
+    Math.strerror (expr, MATH_COMPILE_ERROR);
+    String.append_fmt (expr->error_string, "\n%s\n%*s^\nError near here",
+        expr->data->bytes, err-1, "");
+    Ed.append.message_fmt (ed, expr->error_string->bytes);
+    Ed.messages (ed, thisp, NOT_AT_EOF);
+    expr->retval = MATH_NOTOK;
+    return NOTOK;
+  }
+
+  expr->val.double_v = te_eval (expr->ff_obj);
+  Ed.append.message_fmt (ed, "Result:\n%f\n", expr->val.double_v);
+  char buf[256]; buf[0] = '\0';
+  snprintf (buf, 256, "%f", expr->val.double_v);
+  Ed.reg.set (ed, 'M', CHARWISE, buf, NORMAL_ORDER);
+  Msg.send_fmt (ed, COLOR_NORMAL, "Result =  %f (stored to 'M' register)", expr->val.double_v);
+  te_free (expr->ff_obj);
+
+  return OK;
+}
+
+private int __ex_math_expr_evaluate__ (buf_t **thisp, char *bytes) {
+  math_t *expr = Math.new ("Math", NULL_REF, NULL_REF, __ex_math_expr_interp__, NULL_REF);
+  expr->i_obj = thisp;
+  expr->data = String.new_with (bytes);
+  int retval = Math.interp (expr);
+  Math.free (&expr);
+  return retval;
+}
+
 /* callbacks */
 
 private int __ex_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
@@ -1337,7 +1573,14 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
       else
         Rline.free (rl);
     }
-    break;
+      break;
+
+    case 'm': {
+      string_t *expression = Vstring.join (vstr, "\n");
+      retval = __ex_math_expr_evaluate__ (thisp, expression->bytes);
+      String.free (expression);
+    }
+      break;
 
     default:
       retval = NO_CALLBACK_FUNCTION;
@@ -1347,11 +1590,14 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
 }
 
 private void __ex_add_lw_mode_actions__ (ed_t *this) {
-  int num_actions = 1;
+  int num_actions = 2;
 
-  utf8 chars[] = {'S'};
+  utf8 chars[] = {'S', 'm'};
 
-  char actions[] = "Spell line[s]";
+  char actions[] =
+     "Spell line[s]\n"
+     "math expression";
+
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __ex_lw_mode_cb__);
 }
 
@@ -1365,18 +1611,25 @@ private int __ex_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str,
       }
       break;
 
+    case 'm':
+      debug_append ("stt |%s|\n",                str->bytes);
+      retval = __ex_math_expr_evaluate__ (thisp, str->bytes);
+      debug_append ("ret %d\n", retval);
+      break;
+
     default:
-      retval = NO_CALLBACK_FUNCTION;
+      break;
   }
+
   return retval;
 }
 
 private void __ex_add_cw_mode_actions__ (ed_t *this) {
-  int num_actions = 1;
-
-  utf8 chars[] = {'S'};
-
- char actions[] = "Spell selected";
+  int num_actions = 2;
+  utf8 chars[] = {'S', 'm'};
+  char actions[] =
+    "Spell selected\n"
+    "math expression";
 
   Ed.set.cw_mode_actions (this, chars, num_actions, actions, __ex_cw_mode_cb__);
 }
@@ -1646,6 +1899,7 @@ private void __init_self__ (Class (this) *this) {
   ((Self (this) *) this->self)->parse_command = this_parse_command;
   ((Self (this) *) this->self)->argparse = __init_argparse__ ().self;
   ((Self (this) *) this->self)->proc = __init_proc__ ().self;
+  ((Self (this) *) this->self)->math = __init_math__().self;
 }
 
 /* Surely not perfect handler. Never have the chance to test since
@@ -1723,6 +1977,11 @@ public Class (this) *__init_this__ (void) {
 
   ((Prop (this) *) this->prop)->spell =  __init_spell__ ();
   ((Self (this) *) this->self)->spell = ((Prop (this) *) __This__->prop)->spell.self;
+
+#if HAS_TCC
+  ((Prop (this) *) this->prop)->tcc =  __init_tcc__ ();
+  ((Self (this) *) this->self)->tcc = ((Prop (this) *) __This__->prop)->tcc.self;
+#endif
 
 #if HAS_PROGRAMMING_LANGUAGE
   __init_l__ (1);

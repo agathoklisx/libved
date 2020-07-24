@@ -49,7 +49,6 @@ make                                                \
     HAS_PROGRAMMING_LANGUAGE=1                      \
     HAS_USER_EXTENSIONS=1                           \
     HAS_JSON=1                                      \
-    HAS_EXPR=1                                      \
     HAS_TCC=0                                       \
     HAS_LOCAL_EXTENSIONS=0                          \
     CLEAR_BLANKLINES=1                              \

@@ -13,21 +13,6 @@
 #include <pwd.h>
 #include <grp.h>
 
-#if HAS_EXPR
-#include "../lib/tinyexpr/tinyexpr.c"
-#include "../ext/if_has_expr.c"
-
-static expr_T ExprClass;
-#define  Expr ExprClass.self
-#endif
-
-#if HAS_TCC
-
-static tcc_T TccClass;
-#define Tcc TccClass.self
-
-#endif
-
 NewType (uenv,
   string_t *man_exec;
   string_t *elinks_exec;
@@ -67,45 +52,6 @@ private void __u_add_word_actions__ (ed_t *this) {
   utf8 chr[] = {'m'};
   Ed.set.word_actions (this, chr, 1, "man page", __u_word_actions_cb__);
 }
-
-#if HAS_EXPR
-private int __u_math_expr_interp__ (expr_t *expr) {
-  int err = 0;
-
-  ed_t *ed = E.get.current (THIS_E);
-  expr->ff_obj = (te_expr *) te_compile (expr->data->bytes, 0, 0, &err);
-
-  ifnot (expr->ff_obj) {
-    buf_t **thisp = (buf_t **) expr->i_obj;
-    Expr.strerror (expr, EXPR_COMPILE_ERROR);
-    String.append_fmt (expr->error_string, "\n%s\n%*s^\nError near here",
-        expr->data->bytes, err-1, "");
-    Ed.append.message_fmt (ed, expr->error_string->bytes);
-    Ed.messages (ed, thisp, NOT_AT_EOF);
-    expr->retval = EXPR_NOTOK;
-    return NOTOK;
-  }
-
-  expr->val.double_v = te_eval (expr->ff_obj);
-  Ed.append.message_fmt (ed, "Result:\n%f\n", expr->val.double_v);
-  char buf[256]; buf[0] = '\0';
-  snprintf (buf, 256, "%f", expr->val.double_v);
-  Ed.reg.set (ed, 'M', CHARWISE, buf, NORMAL_ORDER);
-  Msg.send_fmt (ed, COLOR_NORMAL, "Result =  %f (stored to 'M' register)", expr->val.double_v);
-  te_free (expr->ff_obj);
-
-  return OK;
-}
-
-private int __math_expr_evaluate__ (buf_t **thisp, char *bytes) {
-  expr_t *expr = Expr.new ("Math", NULL_REF, NULL_REF, __u_math_expr_interp__, NULL_REF);
-  expr->i_obj = thisp;
-  expr->data = String.new_with (bytes);
-  int retval = Expr.interp (expr);
-  Expr.free (&expr);
-  return retval;
-}
-#endif /* HAS_EXPR */
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
 private int __interpret__ (buf_t **thisp, char *bytes) {
@@ -303,15 +249,6 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr
       break;
 #endif
 
-#ifdef HAS_EXPR
-    case 'm': {
-      string_t *expression = Vstring.join (vstr, "\n");
-      retval = __math_expr_evaluate__ (thisp, expression->bytes);
-      String.free (expression);
-    }
-      break;
-#endif
-
 #ifdef HAS_PROGRAMMING_LANGUAGE
     case 'I': {
       string_t *expression = Vstring.join (vstr, "\n");
@@ -335,10 +272,6 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   num_actions++;
 #endif
 
-#if HAS_EXPR
-  num_actions++;
-#endif
-
 #if HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
@@ -352,9 +285,6 @@ ifnot (num_actions) return;
 #if HAS_PROGRAMMING_LANGUAGE
   'I',
 #endif
-#if HAS_EXPR
-  'm'
-#endif
   };
 
   char actions[] =
@@ -364,66 +294,10 @@ ifnot (num_actions) return;
 #if HAS_PROGRAMMING_LANGUAGE
      "Interpret line[s] with Dictu\n"
 #endif
-#if HAS_EXPR
-     "math expression\n"
-#endif
     ;
+
   actions[bytelen (actions) - 1] = '\0';
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
-}
-
-private int __u_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str, utf8 c, char *action) {
-  (void) fidx; (void) lidx; (void) action;
-  int retval = NO_CALLBACK_FUNCTION;
-  switch (c) {
-#if HAS_EXPR
-    case 'm': {
-      retval = __math_expr_evaluate__ (thisp, str->bytes);
-      break;
-    }
-#endif
-    default:
-      retval = NO_CALLBACK_FUNCTION;
-  }
-  return retval;
-}
-
-private void __u_add_cw_mode_actions__ (ed_t *this) {
-  int num_actions = 0;
-
-#if HAS_EXPR
-  num_actions++;
-#endif
-
-  utf8 chars[] = {
-#if HAS_EXPR
-  'm'
-#endif
-  };
-
- char actions[] = ""
-#if HAS_EXPR
-  "math expression"
-#endif
-   ;
-
-  Ed.set.cw_mode_actions (this, chars, num_actions, actions, __u_cw_mode_cb__);
-}
-
-          /* user defined commands and|or actions */
-private void __u_add_rline_user_commands__ (ed_t *this) {
-  Ed.append.rline_command (this, "`battery", 0, 0);
-}
-
-private void __u_add_rline_sys_commands__ (ed_t *this) {
- /* sys defined commands can begin with '`': associated with shell syntax */
-  int num_commands = 3;
-  char *commands[] = {"`mkdir", "`man", "`stat", NULL};
-  int num_args[] = {3, 0, 1, 0};
-  int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, RL_ARG_FILENAME, 0};
-  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
-  Ed.append.command_arg (this, "`man", "--section=", 10);
-  Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
 }
 
 /* this is the callback function that is called on the extended commands */
@@ -475,8 +349,15 @@ theend:
 }
 
 private void __u_add_rline_commands__ (ed_t *this) {
-  __u_add_rline_sys_commands__ (this);
-  __u_add_rline_user_commands__ (this);
+ /* sys defined commands can begin with '`': associated with shell syntax */
+  int num_commands = 4;
+  char *commands[] = {"`mkdir", "`man", "`stat", "`battery", NULL};
+  int num_args[] = {3, 0, 1, 0, 0};
+  int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, RL_ARG_FILENAME, 0, 0};
+  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
+  Ed.append.command_arg (this, "`man", "--section=", 10);
+  Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
+
   Ed.set.rline_cb (this, __u_rline_cb__);
 }
 
@@ -773,7 +654,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
     return NOTOK;
 
   ObjString *var = L.newString (L_CUR_STATE, "__val__", 7);
-  Table *table = L.table.get.module(L_CUR_STATE, "main", 4);
+  Table *table = L.table.get.module (L_CUR_STATE, "main", 4);
 
   if (NULL is table) return NOTOK;
 
@@ -814,7 +695,6 @@ private void __init_usr__ (ed_t *this) {
   __u_add_rline_commands__ (this);
   /* extend visual [lc]wise mode */
   __u_add_lw_mode_actions__ (this);
-  __u_add_cw_mode_actions__ (this);
 
   __u_add_file_mode_actions__ (this);
 
@@ -826,14 +706,6 @@ private void __init_usr__ (ed_t *this) {
 
 #if HAS_JSON
   JsonClass = __init_json__ ();
-#endif
-
-#if HAS_EXPR
-  ExprClass = __init_expr__ ();
-#endif
-
-#if HAS_TCC
-  TccClass = __init_tcc__ ();
 #endif
 
   for (size_t i = 0; i < ARRLEN(u_syn); i++)
@@ -850,9 +722,4 @@ private void __deinit_usr__ (void) {
 #if HAS_JSON
   __deinit_json__ (&JsonClass);
 #endif
-
-#if HAS_EXPR
-  __deinit_expr__ (&ExprClass);
-#endif
-
 }

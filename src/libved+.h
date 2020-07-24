@@ -32,9 +32,14 @@ extern Class (this) *__This__;
 #define Ustring __This__->__E__->__Ed__->__Ustring__.self
 #define Vstring __This__->__E__->__Ed__->__Vstring__.self
 
-#define Argparse ((Self (this) *) __This__->self)->argparse
-#define Spell    ((Self (this) *) __This__->self)->spell
+#define Math     ((Self (this) *) __This__->self)->math
 #define Proc     ((Self (this) *) __This__->self)->proc
+#define Spell    ((Self (this) *) __This__->self)->spell
+#define Argparse ((Self (this) *) __This__->self)->argparse
+
+#if HAS_TCC
+#define Tcc      ((Self (this) *) __This__->self)->tcc
+#endif
 
 #if HAS_PROGRAMMING_LANGUAGE
 #define __L__ ((Prop (this) *) __This__->prop)->__L
@@ -215,15 +220,90 @@ NewClass (proc,
   Self (proc) self;
 );
 
-#if HAS_USER_EXTENSIONS
-  private void __init_usr__ (ed_t *);
-  private void __deinit_usr__ (void);
-#endif
+/* Math Expr */
 
-#if HAS_LOCAL_EXTENSIONS
-  private void __init_local__ (ed_t *);
-  private void __deinit_local__ (void);
-#endif
+typedef struct te_expr {
+    int type;
+    union {double value; const double *bound; const void *function;};
+    void *parameters[1];
+} te_expr;
+
+enum {
+    TE_VARIABLE = 0,
+
+    TE_FUNCTION0 = 8, TE_FUNCTION1, TE_FUNCTION2, TE_FUNCTION3,
+    TE_FUNCTION4, TE_FUNCTION5, TE_FUNCTION6, TE_FUNCTION7,
+
+    TE_CLOSURE0 = 16, TE_CLOSURE1, TE_CLOSURE2, TE_CLOSURE3,
+    TE_CLOSURE4, TE_CLOSURE5, TE_CLOSURE6, TE_CLOSURE7,
+
+    TE_FLAG_PURE = 32
+};
+
+typedef struct te_variable {
+    const char *name;
+    const void *address;
+    int type;
+    void *context;
+} te_variable;
+
+double te_interp(const char *expression, int *error);
+te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error);
+double te_eval(const te_expr *n);
+void te_print(const te_expr *n);
+void te_free(te_expr *n);
+
+DeclareType (math);
+DeclareSelf (math);
+
+typedef void (*MathFree_cb) (math_t *);
+typedef int  (*MathEval_cb) (math_t *);
+typedef int  (*MathInterp_cb) (math_t *);
+typedef int  (*MathCompile_cb) (math_t *);
+typedef char *(*MathStrError_cb) (math_t *, int);
+
+NewType (math,
+  int retval;
+  int error;
+
+  string_t
+    *lang,
+    *data,
+    *error_string;
+
+  union {
+    double double_v;
+       int int_v;
+  } val;
+
+  void *i_obj;
+  void *ff_obj;
+
+  MathEval_cb eval;
+  MathInterp_cb interp;
+  MathCompile_cb compile;
+  MathFree_cb free;
+  MathStrError_cb strerror;
+);
+
+NewSelf (math,
+  math_t
+    *(*new) (char *, MathCompile_cb, MathEval_cb, MathInterp_cb, MathFree_cb);
+  void
+    (*free) (math_t **);
+
+  char
+    *(*strerror) (math_t *, int);
+
+  int
+    (*interp) (math_t *),
+    (*eval) (math_t *),
+    (*compile) (math_t *);
+);
+
+NewClass (math,
+  Self (math) self;
+);
 
 #if HAS_TCC
 #include <libtcc.h>
@@ -275,10 +355,6 @@ NewSelf (tcc,
 NewClass (tcc,
   Self (tcc) self;
 );
-
-public tcc_T __init_tcc__ (void);
-public void __deinit_tcc__ (tcc_T **this);
-
 #endif /* HAS_TCC */
 
 private void __init_ext__ (ed_t *);
@@ -300,6 +376,11 @@ NewSelf (this,
   Self (argparse) argparse;
   Self (spell) spell;
   Self (proc) proc;
+  Self (math) math;
+
+#if HAS_TCC
+  Self (tcc) tcc;
+#endif
 
   string_t *(*parse_command) (Class (this) *, char *);
 );
@@ -309,10 +390,24 @@ NewProp (this,
 
   Class (spell) spell;
 
+#if HAS_TCC
+  Class (tcc) tcc;
+#endif
+
 #if HAS_PROGRAMMING_LANGUAGE
   Class (l) *__L;
 #endif
 );
+
+#if HAS_USER_EXTENSIONS
+  private void __init_usr__ (ed_t *);
+  private void __deinit_usr__ (void);
+#endif
+
+#if HAS_LOCAL_EXTENSIONS
+  private void __init_local__ (ed_t *);
+  private void __deinit_local__ (void);
+#endif
 
 public Class (this) *__init_this__ (void);
 public void __deinit_this__ (Class (this) **);
