@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <locale.h>
 #include <errno.h>
 
@@ -453,6 +454,59 @@ private string_t *this_parse_command (Class (this) *this, char *bytes) {
   }
 
   return com;
+}
+
+private string_t *sys_get_env (Class (sys) *this, char *name) {
+  if (Cstring.eq (name, "sysname"))
+    String.replace_with_len ($my(shared_str), $my(env)->sysname->bytes,
+      $my(env)->sysname->num_bytes);
+  else if (Cstring.eq (name, "battery_dir"))
+    String.replace_with_len ($my(shared_str), $my(env)->battery_dir->bytes,
+      $my(env)->battery_dir->num_bytes);
+  else
+    String.clear ($my(shared_str));
+
+  return $my(shared_str);
+}
+
+private Class (sys) *__init_sys__ (void) {
+  Class (sys) *this = AllocClass (sys);
+  $my(env) = AllocType (sysenv);
+
+  struct utsname u;
+  if (-1 is uname (&u))
+    $my(env)->sysname = String.new_with ("unknown");
+  else
+    $my(env)->sysname = String.new_with (u.sysname);
+
+  if (Cstring.eq_n ($my(env)->sysname->bytes, "Linux", 5))
+    $my(env)->battery_dir = String.new_with ("/sys/class/power_supply");
+  else
+    $my(env)->battery_dir = String.new (0);
+
+  $my(shared_str) = String.new (8);
+
+  this->self = SelfInit (sys,
+    .get = SubSelfInit (sys, get,
+      .env = sys_get_env
+     )
+   );
+
+   return this;
+}
+
+private void __deinit_sys__ (Class (sys) **thisp) {
+  if (*thisp is NULL) return;
+
+  Class (sys) *this = *thisp;
+  String.free ($my(env)->sysname);
+  String.free ($my(env)->battery_dir);
+  free ($my(env));
+
+  String.free ($my(shared_str));
+  free (this->prop);
+  free (this);
+  *thisp = NULL;
 }
 
 #if HAS_TCC
@@ -2089,6 +2143,9 @@ public Class (this) *__init_this__ (void) {
   ((Prop (this) *) this->prop)->spell =  __init_spell__ ();
   ((Self (this) *) this->self)->spell = ((Prop (this) *) __This__->prop)->spell.self;
 
+  ((Prop (this) *) this->prop)->sys =  __init_sys__ ();
+  ((Self (this) *) this->self)->sys = ((Prop (this) *) __This__->prop)->sys->self;
+
 #if HAS_TCC
   ((Prop (this) *) this->prop)->tcc =  __init_tcc__ ();
   ((Self (this) *) this->self)->tcc = ((Prop (this) *) __This__->prop)->tcc.self;
@@ -2105,6 +2162,8 @@ public void __deinit_this__ (Class (this) **thisp) {
   if (*thisp is NULL) return;
 
   Class (this) *this = *thisp;
+
+  __deinit_sys__ (&((Prop (this) *) this->prop)->sys);
 
   __deinit_ed__ (&this->__E__);
 

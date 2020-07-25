@@ -36,6 +36,9 @@ extern Class (this) *__This__;
 #define Proc     ((Self (this) *) __This__->self)->proc
 #define Spell    ((Self (this) *) __This__->self)->spell
 #define Argparse ((Self (this) *) __This__->self)->argparse
+#define Sys      ((Self (this) *) __This__->self)->sys
+
+#define __SYS__  ((Prop (this) *) __This__->prop)->sys
 
 #if HAS_TCC
 #define Tcc      ((Self (this) *) __This__->self)->tcc
@@ -357,9 +360,6 @@ NewClass (tcc,
 );
 #endif /* HAS_TCC */
 
-private void __init_ext__ (ed_t *);
-private void __deinit_ext__ (void);
-
 /* ************************************************ */
 
 NewSelf (argparse,
@@ -372,11 +372,38 @@ NewClass (argparse,
   Self (argparse) self;
 );
 
+DeclareClass (sys);
+
+NewType (sysenv,
+  string_t
+    *sysname,
+    *battery_dir;
+);
+
+NewProp (sys,
+  string_t *shared_str;
+  sysenv_t *env;
+);
+
+NewSubSelf (sys, get,
+  string_t *(*env) (Class (sys) *, char *);
+);
+
+NewSelf (sys,
+  SubSelf (sys, get) get;
+);
+
+NewClass (sys,
+  Prop (sys) *prop;
+  Self (sys)  self;
+);
+
 NewSelf (this,
   Self (argparse) argparse;
   Self (spell) spell;
   Self (proc) proc;
   Self (math) math;
+  Self (sys) sys;
 
 #if HAS_TCC
   Self (tcc) tcc;
@@ -389,6 +416,7 @@ NewProp (this,
   char *name;
 
   Class (spell) spell;
+  Class (sys) *sys;
 
 #if HAS_TCC
   Class (tcc) tcc;
@@ -409,6 +437,11 @@ NewProp (this,
   private void __deinit_local__ (void);
 #endif
 
+private void __init_ext__ (ed_t *);
+private void __deinit_ext__ (void);
+
 public Class (this) *__init_this__ (void);
 public void __deinit_this__ (Class (this) **);
 #endif
+
+

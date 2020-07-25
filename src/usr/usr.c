@@ -1,12 +1,3 @@
-#ifndef SYS_NAME
-#error "SYS_NAME is not defined"
-#else
-#if defined(SYS_IS_LINUX)
-#define SYS_BATTERY_DIR "/sys/class/power_supply"
-#else
-#define SYS_BATTERY_DIR
-#endif /* SYS_IS_LINUX */
-#endif /* SYS_NAME */
 
 #include <sys/stat.h> /* for mkdir() */
 #include <time.h>

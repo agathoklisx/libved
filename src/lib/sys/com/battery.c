@@ -6,13 +6,18 @@ private int sys_battery_info (char *buf, int should_print) {
 
   int retval = NOTOK;
 
-  /* use the SYS_NAME defined in the Makefile and avoid uname() for now */
-  ifnot (Cstring.eq ("Linux", SYS_NAME)) {
+  ifnot (Cstring.eq_n ("Linux", Sys.get.env (__SYS__, "sysname")->bytes, 5)) {
     Msg.error (ed, "battery function implemented for Linux");
     return NOTOK;
   }
 
-  dirlist_t *dlist = Dir.list (SYS_BATTERY_DIR, 0);
+  string_t *battery_dir = Sys.get.env (__SYS__, "battery_dir");
+  ifnot (battery_dir->num_bytes) {
+    Msg.error (ed, "battery directory hasn't been defined");
+    return NOTOK;
+  }
+
+  dirlist_t *dlist = Dir.list (battery_dir->bytes, 0);
   char *cap = NULL;
   char *status = NULL;
 
@@ -30,7 +35,7 @@ private int sys_battery_info (char *buf, int should_print) {
 foundbat:;
   /* some maybe needless verbosity */
   char dir[64];
-  snprintf (dir, 64, "%s/%s/", SYS_BATTERY_DIR, it->data->bytes);
+  snprintf (dir, 64, "%s/%s/", battery_dir->bytes, it->data->bytes);
   size_t len = bytelen (dir);
   Cstring.cp (dir + len, 64 - len, "capacity", 8);
   FILE *fp = fopen (dir, "r");
