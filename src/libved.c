@@ -3305,9 +3305,10 @@ private int path_is_absolute (char *path) {
   return IS_DIR_ABS (path);
 }
 
-/* adapt realpath() from OpenBSD to this environment
- * while the algorithm is from the above implementation,
- * we use our functions to do the actual work */
+/* Adapt realpath() from OpenBSD to this environment.
+ *
+ * While the algorithm is from the above implementation, we use our functions to do
+ * the string processing work. */
 
 /* $OpenBSD: realpath.c,v 1.13 2005/08/08 08:05:37 espie Exp $
  * Copyright (c) 2003 Constantin S. Svintsoff <kostik@iclub.nsu.ru>
@@ -11879,7 +11880,10 @@ private char *buf_get_current_dir (buf_t *this, int new_allocation) {
 
 private int buf_open_fname_under_cursor (buf_t **thisp, int frame, int force_open, int reopen) {
   buf_t *this = *thisp;
-  char fname[PATH_MAX]; int fidx, lidx;
+
+  char fname[PATH_MAX];
+  int fidx, lidx;
+
   if (NULL is buf_get_current_word (this, fname, Notfname, Notfname_len, &fidx, &lidx))
     return NOTHING_TODO;
 
@@ -11908,25 +11912,32 @@ private int buf_open_fname_under_cursor (buf_t **thisp, int frame, int force_ope
         int len = bytelen (cwd) + bytelen (fname) + 1;
         char nfn[len + 1];
         snprintf (nfn, len + 1, "%s%c%s", cwd, DIR_SEP, fname);
-        bn = Win.get.buf_by_name ($my(parent), nfn,  &idx);
+        char tmp[PATH_MAX + 1];
+        Path.real (nfn, tmp);
+        bn = Win.get.buf_by_name ($my(parent), tmp,  &idx);
       } else
         bn = Win.get.buf_by_name ($my(parent), fname, &idx);
 
       if (NULL is bn) break;
+
       *thisp = Win.set.current_buf ($my(parent), idx, DONOT_DRAW);
       this = *thisp;
-      if (NOTHING_TODO is buf_normal_goto_linenr (*thisp, lnr, DRAW))
+
+      if (NOTHING_TODO is self(normal.goto_linenr, lnr, DRAW))
         self(draw);
+
       return DONE;
     } while (0);
 
   if (frame is AT_CURRENT_FRAME) frame = $myparents(cur_frame);
-  if (NOTHING_TODO is win_edit_fname ($my(parent), thisp, fname, frame, 0,
+
+  if (NOTHING_TODO is Win.edit_fname ($my(parent), thisp, fname, frame, 0,
   	DONOT_DRAW, 1))
     return NOTHING_TODO;
 
   this = *thisp;
-  if (NOTHING_TODO is buf_normal_goto_linenr (*thisp, lnr, DRAW))
+
+  if (NOTHING_TODO is self(normal.goto_linenr, lnr, DRAW))
     self(draw);
 
   return DONE;
@@ -12475,9 +12486,9 @@ private int buf_delete (buf_t **thisp, int idx, int force) {
     }
   } else should_draw = 1;
 
- if (0 is found or should_draw) Win.draw (parent);
+  if (0 is found or should_draw) Win.draw (parent);
 
- return DONE;
+  return DONE;
 }
 
 private int ed_complete_digraph_callback (menu_t *menu) {
@@ -12833,6 +12844,7 @@ private void rline_clear (rline_t *rl) {
 
   if (rl->prompt_row is $from(rl->ed, prompt_row))
     video_set_row_with (rl->cur_video, rl->prompt_row - 1, " ");
+
   video_draw_at (rl->cur_video, rl->prompt_row);
 
   if (rl->state & RL_CLEAR_FREE_LINE) {
@@ -14539,9 +14551,10 @@ private void ed_free_expr_register_cbs (ed_t *this) {
 }
 
 private int buf_rline (buf_t **thisp, rline_t *rl) {
+  buf_t *this = *thisp;
+
   int retval = NOTHING_TODO;
 
-  buf_t *this = *thisp;
   int is_special_win = $myparents(type) is VED_WIN_SPECIAL_TYPE;
 
   if (rl->state & RL_EXEC) goto exec;
@@ -14765,8 +14778,8 @@ exec:
         arg_t *fname = Rline.get.arg (rl, RL_ARG_FILENAME);
         if (NULL is fname) goto theend;
         retval = buf_read_from_file (this, fname->argval->bytes);
-        goto theend;
       }
+      goto theend;
 
     case VED_COM_SHELL:
     case VED_COM_READ_SHELL:
@@ -14781,8 +14794,8 @@ exec:
         }
 
         string_free (com);
-        goto theend;
       }
+      goto theend;
 
     case VED_COM_SUBSTITUTE:
     case VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE:
@@ -14867,8 +14880,8 @@ exec:
             idx = $my(parent)->cur_idx;
 
         retval = buf_delete (thisp, idx, rl->com is VED_COM_BUF_DELETE_FORCE);
-        goto theend;
       }
+      goto theend;
 
      case VED_COM_TEST_KEY:
        buf_test_key (this);
@@ -14892,7 +14905,10 @@ exec:
   }
 
 theend:
+  this = *thisp; // as thisp can be modified, "this" might end up as NULL reference
+
   Rline.clear (rl);
+
   ifnot (DONE is retval)
     Rline.free (rl);
   else {
@@ -17048,7 +17064,7 @@ private ed_t *E_next_editor (E_T *this, buf_t **thisp) {
   ed_t *ed = E_set_next (this);
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
-  win_draw (w);
+  win_set_current_buf (w, w->cur_idx, DRAW);
   return ed;
 }
 
@@ -17057,7 +17073,7 @@ private ed_t *E_prev_editor (E_T *this, buf_t **thisp) {
   ed_t *ed = E_set_prev (this);
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
-  win_draw (w);
+  win_set_current_buf (w, w->cur_idx, DRAW);
   return ed;
 }
 
@@ -17066,7 +17082,7 @@ private ed_t *E_prev_focused_editor (E_T *this, buf_t **thisp) {
   ed_t *ed = E_set_current (this, $my(prev_idx));
   win_t * w = ed_get_current_win (ed);
   *thisp = win_get_current_buf (w);
-  win_draw (w);
+  win_set_current_buf (w, w->cur_idx, DRAW);
   return ed;
 }
 
