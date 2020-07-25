@@ -549,6 +549,71 @@ private tcc_T __init_tcc__ (void) {
     )
   );
 }
+
+private void c_tcc_error_cb (void *obj, const char *msg) {
+  (void) obj;
+  ed_t *ed = E.get.current (THIS_E);
+  Msg.write (ed, "====- Tcc Error Message -====\n");
+  Msg.write (ed, (char *) msg);
+}
+
+private int c_tcc_string_add_lnums_cb (Vstring_t *str, char *tok, void *obj) {
+  (void) str;
+  ed_t *ed = E.get.current (THIS_E);
+  int *lnr = (int *) obj;
+  Ed.append.message_fmt (ed, "%d|%s", ++(*lnr), tok);
+  return OK;
+}
+
+private void c_tcc_string_add_lnums (char *src) {
+  Vstring_t unused;
+  int lnr = 0;
+  Cstring.chop (src, '\n', &unused, c_tcc_string_add_lnums_cb, &lnr);
+}
+
+private int c_tcc_string (buf_t **thisp, char *src) {
+  (void) thisp;
+  ed_t *ed = E.get.current (THIS_E);
+  tcc_t *this = Tcc.new ();
+
+  Tcc.set.error_handler (this, NULL, c_tcc_error_cb);
+  Tcc.set.output_type (this, TCC_OUTPUT_MEMORY);
+
+  int retval = NOTOK;
+  if (NOTOK is (retval = Tcc.compile_string (this, src))) {
+failed:
+    Ed.append.message (ed, "Failed to compile string\n");
+    c_tcc_string_add_lnums (src);
+    goto theend;
+  }
+
+  char *argv[] = {"libved_module"};
+  if (NOTOK is (retval = Tcc.run (this, 1, argv)))
+    goto failed;
+
+theend:
+  Tcc.free (&this);
+  Ed.append.message_fmt (ed, "exitstatus: %d\n", retval);
+  return retval;
+}
+
+private int __tcc_compile__ (buf_t **thisp, string_t *src) {
+  ed_t *ed = E.get.current (THIS_E);
+  term_t *term = Ed.get.term (ed);
+  Term.reset (term);
+  int exit_code = c_tcc_string (thisp, src->bytes);
+  String.free (src);
+  Term.set_mode (term, 'r');
+  Input.get (term);
+  Term.set (term);
+  Ed.draw.current_win (ed);
+
+  if (NOTOK is exit_code)
+    Ed.messages (ed, thisp, NOT_AT_EOF);
+
+  return exit_code;
+}
+
 #endif /* HAS_TCC */
 
 /* Math Expr */
@@ -1582,6 +1647,13 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
     }
       break;
 
+#ifdef HAS_TCC
+    case 'C': {
+      return __tcc_compile__ (thisp, Vstring.join (vstr, "\n"));
+      }
+      break;
+#endif
+
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -1591,10 +1663,20 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
 
 private void __ex_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 2;
+#if HAS_TCC
+  num_actions++;
+#endif
 
-  utf8 chars[] = {'S', 'm'};
+  utf8 chars[] = {
+#if HAS_TCC
+  'C',
+#endif
+  'S', 'm'};
 
   char actions[] =
+#if HAS_TCC
+    "Compile lines with tcc\n"
+#endif
      "Spell line[s]\n"
      "math expression";
 
@@ -1657,6 +1739,22 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     }
       break;
 
+#if HAS_TCC
+    case 'C': {
+      int flags = Buf.get.flags (*thisp);
+      if (0 is (flags & BUF_IS_SPECIAL) and
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+        Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
+        ifnot (NULL is lines) {
+          retval = __tcc_compile__ (thisp, Vstring.join (lines, "\n"));
+          Vstring.free (lines);
+        } else
+          retval = NOTOK;
+      }
+    }
+    break;
+#endif
+
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -1666,9 +1764,22 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 
 private void __ex_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
+#if HAS_TCC
+  num_actions++;
+#endif
 
-  utf8 chars[] = {'S'};
-  char actions[] = "Spell check this file";
+  utf8 chars[] = {
+#if HAS_TCC
+  'C',
+#endif
+  'S'};
+
+  char actions[] =
+#if HAS_TCC
+ "Compile file with tcc compiler\n"
+#endif
+ "Spell check this file";
+
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __ex_file_mode_cb__);
 }
 

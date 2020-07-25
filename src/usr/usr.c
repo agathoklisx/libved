@@ -72,73 +72,6 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
 }
 #endif /* HAS_PROGRAMMING_LANGUAGE */
 
-#ifdef HAS_TCC
-private void c_tcc_error_cb (void *obj, const char *msg) {
-  (void) obj;
-  ed_t *ed = E.get.current (THIS_E);
-  Msg.write (ed, "====- Tcc Error Message -====\n");
-  Msg.write (ed, (char *) msg);
-}
-
-private int c_tcc_string_add_lnums_cb (Vstring_t *str, char *tok, void *obj) {
-  (void) str;
-  ed_t *ed = E.get.current (THIS_E);
-  int *lnr = (int *) obj;
-  Ed.append.message_fmt (ed, "%d|%s", ++(*lnr), tok);
-  return OK;
-}
-
-private void c_tcc_string_add_lnums (char *src) {
-  Vstring_t unused;
-  int lnr = 0;
-  Cstring.chop (src, '\n', &unused, c_tcc_string_add_lnums_cb, &lnr);
-}
-
-private int c_tcc_string (buf_t **thisp, char *src) {
-  (void) thisp;
-  ed_t *ed = E.get.current (THIS_E);
-  tcc_t *this = Tcc.new ();
-
-  Tcc.set.error_handler (this, NULL, c_tcc_error_cb);
-  Tcc.set.output_type (this, TCC_OUTPUT_MEMORY);
-
-  int retval = NOTOK;
-  if (NOTOK is (retval = Tcc.compile_string (this, src))) {
-failed:
-    Ed.append.message (ed, "Failed to compile string\n");
-    c_tcc_string_add_lnums (src);
-    goto theend;
-  }
-
-  char *argv[] = {"libved_module"};
-  if (NOTOK is (retval = Tcc.run (this, 1, argv)))
-    goto failed;
-
-theend:
-  Tcc.free (&this);
-  Ed.append.message_fmt (ed, "exitstatus: %d\n", retval);
-  return retval;
-}
-
-private int __tcc_compile__ (buf_t **thisp, string_t *src) {
-  ed_t *ed = E.get.current (THIS_E);
-  term_t *term = Ed.get.term (ed);
-  Term.reset (term);
-  int exit_code = c_tcc_string (thisp, src->bytes);
-  String.free (src);
-  Term.set_mode (term, 'r');
-  Input.get (term);
-  Term.set (term);
-  Ed.draw.current_win (ed);
-
-  if (NOTOK is exit_code)
-    Ed.messages (ed, thisp, NOT_AT_EOF);
-
-  return exit_code;
-}
-
-#endif /* HAS_TCC */
-
 private int __u_proc_popen_open_link_cb (buf_t *this, FILE *stream, fp_t *fp) {
   (void) this; (void) fp; (void) stream;
   return 0;
@@ -184,22 +117,6 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     break;
 #endif
 
-#if HAS_TCC
-    case 'C': {
-      int flags = Buf.get.flags (*thisp);
-      if (0 is (flags & BUF_IS_SPECIAL) and
-          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
-        Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
-        ifnot (NULL is lines) {
-          retval = __tcc_compile__ (thisp, Vstring.join (lines, "\n"));
-          Vstring.free (lines);
-        } else
-          retval = NOTOK;
-      }
-    }
-    break;
-#endif
-
     default:
       retval = NO_CALLBACK_FUNCTION;
   }
@@ -211,24 +128,15 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 #if HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
-#if HAS_TCC
-  num_actions++;
-#endif
 
   utf8 chars[] = {
 #if HAS_PROGRAMMING_LANGUAGE
   'I',
 #endif
-#if HAS_TCC
-  'C',
-#endif
  'B'};
   char actions[] =
 #if HAS_PROGRAMMING_LANGUAGE
  "Interpret file with Dictu\n"
-#endif
-#if HAS_TCC
- "Compile file with tcc compiler\n"
 #endif
  "Browser: Open file in the text browser (elinks)";
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
@@ -241,13 +149,6 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr
   if (Cstring.eq_n (action, "Math", 4)) c = 'm';
 
   switch (c) {
-
-#ifdef HAS_TCC
-    case 'C': {
-      return __tcc_compile__ (thisp, Vstring.join (vstr, "\n"));
-      }
-      break;
-#endif
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
     case 'I': {
@@ -268,35 +169,16 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr
 private void __u_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 0;
 
-#if HAS_TCC
-  num_actions++;
-#endif
-
 #if HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
 
 ifnot (num_actions) return;
 
-  utf8 chars[] = {
-#if HAS_TCC
-  'C',
-#endif
-#if HAS_PROGRAMMING_LANGUAGE
-  'I',
-#endif
-  };
-
-  char actions[] =
-#if HAS_TCC
-  "Compile lines with tcc\n"
-#endif
-#if HAS_PROGRAMMING_LANGUAGE
-     "Interpret line[s] with Dictu\n"
-#endif
-    ;
-
+  utf8 chars[] = {'I'};
+  char actions[] = "Interpret line[s] with Dictu\n";
   actions[bytelen (actions) - 1] = '\0';
+
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __u_lw_mode_cb__);
 }
 
