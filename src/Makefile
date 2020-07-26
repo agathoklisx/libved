@@ -218,6 +218,10 @@ endif
 
 APPFLAGS += -lm
 
+ifeq ($(SYSKERNEL), "Darwin")
+  APPFLAGS += -lutil
+endif
+
 HAS_LOCAL_EXTENSIONS := 0
 LOCAL_EXTENSIONS_FLAGS :=
 

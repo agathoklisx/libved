@@ -4,7 +4,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
+#ifndef __APPLE__
 #include <pty.h>
+#else
+#include <util.h>
+#endif
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
