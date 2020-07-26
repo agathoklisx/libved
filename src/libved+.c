@@ -1748,9 +1748,7 @@ private int __ex_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str,
       break;
 
     case 'm':
-      debug_append ("stt |%s|\n",                str->bytes);
       retval = __ex_math_expr_evaluate__ (thisp, str->bytes);
-      debug_append ("ret %d\n", retval);
       break;
 
     default:
