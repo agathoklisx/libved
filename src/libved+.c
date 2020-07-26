@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -14,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <locale.h>
+#include <time.h>
 #include <errno.h>
 
 #include "libved.h"
