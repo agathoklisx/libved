@@ -12192,7 +12192,11 @@ private int buf_write (buf_t *this, int force) {
           "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
       switch (c) {case 'n': case 'N': return NOTHING_TODO;};
     } else {
+#if defined(__APPLE__)
+      if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec) {
+#else
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec) {
+#endif
         utf8 chars[] = {'y', 'Y', 'n', 'N'};
         utf8 c = buf_quest (this, STR_FMT (
             "[Warning]%s: has been modified since last operation\n"
