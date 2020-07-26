@@ -1818,21 +1818,22 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 
 private void __ex_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
+
 #if HAS_TCC
   num_actions++;
 #endif
 
   utf8 chars[] = {
 #if HAS_TCC
-  'C',
+    'C',
 #endif
-  'S'};
+    'S'};
 
   char actions[] =
 #if HAS_TCC
- "Compile file with tcc compiler\n"
+    "Compile file with tcc compiler\n"
 #endif
- "Spell check this file";
+    "Spell check this file";
 
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __ex_file_mode_cb__);
 }

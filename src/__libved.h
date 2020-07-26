@@ -734,6 +734,7 @@ NewType (hist,
   Class (term) *__Term__;           \
   Class (file) *__File__;           \
   Class (path) *__Path__;           \
+  Class (smap) *__Smap__;           \
   Class (imap) *__Imap__;           \
   Class (input) *__Input__;         \
   Class (video) *__Video__;         \
@@ -1518,6 +1519,7 @@ do {                                                                \
 #define Term My(__Term__)
 #define Path My(__Path__)
 #define Vsys My(__Vsys__)
+#define Smap My(__Smap__)
 #define Imap My(__Imap__)
 #define Input My(__Input__)
 #define Error My(__Error__)

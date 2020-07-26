@@ -2089,41 +2089,73 @@ tokenize:;
   hs % __map__->num_slots;                          \
 })
 
+#define MAP_FREE_SLOT(_it, _tp, _fun) \
+({                                    \
+  while (_it) {                       \
+    _tp *_tmp = _it->next;            \
+    free (_it->key);                  \
+    _fun (_it->val);                  \
+    free (_it);                       \
+    _it = _tmp;                       \
+  }                                   \
+})
+
 private void imap_free_slot (imap_t *item) {
-  while (item) {
-    imap_t *tmp = item->next;
-    free (item->key);
-    free (item);
-    item = tmp;
-  }
+  MAP_FREE_SLOT(item, imap_t, (void));
 }
+
+private void smap_free_slot (smap_t *item) {
+  MAP_FREE_SLOT(item, smap_t, string_free);
+}
+
+#define MAP_CLEAR(_map, _fun)                 \
+({                                            \
+  for (size_t i = 0; i < map->num_slots; i++) \
+    _fun (map->slots[i]);                     \
+  map->num_keys = 0;                          \
+})
 
 private void imap_clear (Imap_t *map) {
-  for (size_t i = 0; i < map->num_slots; i++)
-    imap_free_slot (map->slots[i]);
-
-  map->num_keys = 0;
+  MAP_CLEAR(map, imap_free_slot);
 }
+
+private void smap_clear (Smap_t *map) {
+  MAP_CLEAR(map, smap_free_slot);
+}
+
+#define MAP_FREE(_map, _fun) \
+do {                         \
+  if (_map is NULL) return;  \
+  _fun (_map);               \
+  free (_map->slots);        \
+  free (_map);               \
+} while (0)
 
 private void imap_free (Imap_t *map) {
-  if (map is NULL) return;
-  for (size_t i = 0; i < map->num_slots; i++)
-    imap_free_slot (map->slots[i]);
-
-  free (map->slots);
-  free (map);
+  MAP_FREE(map, imap_clear);
 }
 
+private void smap_free (Smap_t *map) {
+  MAP_FREE(map, smap_clear);
+}
+
+#define MAP_NEW(_TP, _tp, _num)                            \
+({                                                         \
+  _TP *_map = Alloc (sizeof (_TP));                        \
+  int _num_slots = (_num < 1 ? MAP_DEFAULT_LENGTH : _num); \
+  _map->slots = Alloc (sizeof (_tp *) * num_slots);        \
+  _map->num_slots = _num_slots;                            \
+  _map->num_keys = 0;                                      \
+  for (;--_num_slots >= 0;) _map->slots[_num_slots] = 0;   \
+  _map;                                                    \
+})
+
 private Imap_t *imap_new (int num_slots) {
-  Imap_t *imap = Alloc (sizeof (Imap_t));
+  return MAP_NEW(Imap_t, imap_t, num_slots);
+}
 
-  if (1 > num_slots) num_slots = MAP_DEFAULT_LENGTH;
-
-  imap->slots = Alloc (sizeof (imap_t *) * num_slots);
-  imap->num_slots = num_slots;
-  imap->num_keys = 0;
-  for (;--num_slots >= 0;) imap->slots[num_slots] = 0;
-  return imap;
+private Smap_t *smap_new (int num_slots) {
+  return MAP_NEW(Smap_t, smap_t, num_slots);
 }
 
 private imap_t *__imap_get__ (Imap_t *imap, char *key, uint idx) {
@@ -2135,52 +2167,69 @@ private imap_t *__imap_get__ (Imap_t *imap, char *key, uint idx) {
   return NULL;
 }
 
+#define MAP_GET(_tp, _map, _key, _idx)        \
+({                                            \
+  _idx = MAP_HASH_KEY (_map, _key);           \
+  _tp *_slot = _map->slots[_idx];             \
+  while (_slot) {                             \
+    if (cstring_eq (_slot->key, _key)) break; \
+    _slot = _slot->next;                      \
+  }                                           \
+  _slot;                                      \
+})
+
 private int imap_get (Imap_t *imap, char *key) {
-  uint idx = MAP_HASH_KEY (imap, key);
-  imap_t *im = __imap_get__ (imap, key, idx);
-  ifnot (NULL is im) return im->val;
+  uint idx = 0;
+  imap_t *item = MAP_GET(imap_t, imap, key, idx);
+  ifnot (NULL is item) return item->val;
   return 0;
 }
 
-private uint imap_set (Imap_t *imap, char *key, int val) {
-  uint idx = MAP_HASH_KEY (imap, key);
-  imap_t *item = __imap_get__ (imap, key, idx);
-  ifnot (NULL is item) {
-    item->val = val;
-    return idx;
-  } else {
-    item = AllocType (imap);
-    item->key = cstring_dup (key, bytelen (key));
-    item->val = val;
-    item->next = imap->slots[idx];
+private string_t *smap_get (Smap_t *smap, char *key) {
+  uint idx = 0;
+  smap_t *item = MAP_GET(smap_t, smap, key, idx);
+  ifnot (NULL is item) return item->val;
+  return NULL;
+}
 
-    imap->slots[idx] = item;
-    imap->num_keys++;
-  }
-  return idx;
+#define MAP_SET(_tp_, _map_, _key_, _val)             \
+({                                                    \
+  uint _idx_ = 0;                                     \
+  _tp_ *_it_ = MAP_GET(_tp_, _map_, _key_, _idx_);    \
+  ifnot (NULL is _it_) {                              \
+    _it_->val = _val;                                 \
+  } else {                                            \
+    _it_ = Alloc (sizeof (_tp_));                     \
+    _it_->key = cstring_dup (_key_, bytelen (_key_)); \
+    _it_->val = _val;                                 \
+    _it_->next = _map_->slots[_idx_];                 \
+    _map_->slots[_idx_] = _it_;                       \
+    _map_->num_keys++;                                \
+  }                                                   \
+  _idx_;                                              \
+})
+
+private uint imap_set (Imap_t *imap, char *key, int val) {
+  return MAP_SET(imap_t, imap, key, val);
+}
+
+private uint smap_set (Smap_t *smap, char *key, string_t *val) {
+  return MAP_SET(smap_t, smap, key, val);
 }
 
 private uint imap_set_with_keylen (Imap_t *imap, char *key) {
-  uint idx = MAP_HASH_KEY (imap, key);
-  imap_t *item = __imap_get__ (imap, key, idx);
-  if (NULL is item) {
-    item = AllocType (imap);
-    size_t len = bytelen (key);
-    item->key = cstring_dup (key, len);
-    item->val = len;
-    item->next = imap->slots[idx];
-
-    imap->slots[idx] = item;
-    imap->num_keys++;
-  } else
-    item->val = bytelen (key);
-
-  return idx;
+  return MAP_SET(imap_t, imap, key, bytelen (key));
 }
 
 private int imap_key_exists (Imap_t *imap, char *key) {
-  uint idx = MAP_HASH_KEY (imap, key);
-  imap_t *item = __imap_get__ (imap, key, idx);
+  uint idx = 0;
+  imap_t *item = MAP_GET(imap_t, imap, key, idx);
+  return (NULL isnot item);
+}
+
+private int smap_key_exists (Smap_t *smap, char *key) {
+  uint idx = 0;
+  smap_t *item = MAP_GET(smap_t, smap, key, idx);
   return (NULL isnot item);
 }
 
@@ -2194,6 +2243,19 @@ private Class (imap) __init_imap__ (void) {
       .set = imap_set,
       .set_with_keylen = imap_set_with_keylen,
       .key_exists = imap_key_exists
+    )
+  );
+}
+
+private Class (smap) __init_smap__ (void) {
+  return ClassInit (smap,
+    .self = SelfInit (smap,
+      .new = smap_new,
+      .free = smap_free,
+      .clear = smap_clear,
+      .get = smap_get,
+      .set = smap_set,
+      .key_exists = smap_key_exists
     )
   );
 }
@@ -7191,6 +7253,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(__Term__)    = $myparents(__Term__);
   $my(__Path__)    = $myparents(__Path__);
   $my(__Vsys__)    = $myparents(__Vsys__);
+  $my(__Smap__)    = $myparents(__Smap__);
   $my(__Imap__)    = $myparents(__Imap__);
   $my(__Input__)   = $myparents(__Input__);
   $my(__Error__)   = $myparents(__Error__);
@@ -7509,6 +7572,7 @@ private win_t *ed_win_init (ed_t *ed, char *name, WinDimCalc_cb dim_calc_cb) {
   $my(__Term__)    = $myparents(__Term__);
   $my(__Path__)    = $myparents(__Path__);
   $my(__Vsys__)    = $myparents(__Vsys__);
+  $my(__Smap__)    = $myparents(__Smap__);
   $my(__Imap__)    = $myparents(__Imap__);
   $my(__Input__)   = $myparents(__Input__);
   $my(__Error__)   = $myparents(__Error__);
@@ -10180,7 +10244,7 @@ private int buf_normal_handle_F (buf_t **thisp) {
 
   int retval = NOTHING_TODO;
 
-  for (int i = 0; i < $myroots(file_mode_chars_len); i++) {
+  for (int i = 0; i < $myroots(num_file_mode_cbs); i++) {
     if (NULL is $myroots(file_mode_cbs)[i]) continue;
     retval = $myroots(file_mode_cbs)[i] (thisp, c, action);
     if (retval isnot NO_CALLBACK_FUNCTION) break;
@@ -15710,9 +15774,9 @@ private void ed_set_file_mode_actions (ed_t *this, utf8 *chars, int len,
 
   $my(num_file_mode_cbs)++;
   ifnot ($my(num_file_mode_cbs) - 1)
-    $my(file_mode_cbs) = Alloc (sizeof (VisualLwMode_cb));
+    $my(file_mode_cbs) = Alloc (sizeof (FileActions_cb));
   else
-    $my(file_mode_cbs) = Realloc ($my(file_mode_cbs), sizeof (VisualLwMode_cb) * $my(num_file_mode_cbs));
+    $my(file_mode_cbs) = Realloc ($my(file_mode_cbs), sizeof (FileActions_cb) * $my(num_file_mode_cbs));
 
   $my(file_mode_cbs)[$my(num_file_mode_cbs) -1] = cb;
 }
@@ -15751,7 +15815,8 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
 private void ed_set_file_mode_actions_default (ed_t *this) {
   utf8 chars[] = {'w', 'v', '@'};
   char actions[] =
-     "write buffer\nvalidate file for invalid utf8 sequences\n"
+     "write buffer\n"
+     "validate file for invalid utf8 sequences\n"
      "@evaluate buffer";
   self(set.file_mode_actions, chars, ARRLEN(chars), actions, buf_file_mode_actions_cb);
 
@@ -16718,6 +16783,7 @@ private Class (ed) *editor_new (void) {
     .__File__ = __init_file__ (),
     .__Path__ = __init_path__ (),
     .__Vsys__ = __init_vsys__ (),
+    .__Smap__ = __init_smap__ (),
     .__Imap__ = __init_imap__ (),
     .__Term__ = __init_term__ (),
     .__Video__ = __init_video__ (),
@@ -16798,6 +16864,7 @@ private ed_t *ed_init (E_T *E) {
   $my(__File__)    = &E->__Ed__->__File__;
   $my(__Path__)    = &E->__Ed__->__Path__;
   $my(__Vsys__)    = &E->__Ed__->__Vsys__;
+  $my(__Smap__)    = &E->__Ed__->__Smap__;
   $my(__Imap__)    = &E->__Ed__->__Imap__;
   $my(__Input__)   = &E->__Ed__->__Input__;
   $my(__Video__)   = &E->__Ed__->__Video__;
@@ -16856,7 +16923,7 @@ private ed_t *ed_init (E_T *E) {
 
   $my(num_rline_cbs) = $my(num_on_normal_g_cbs) =
   $my(num_lw_mode_cbs) = $my(num_cw_mode_cbs) =
-  $my(num_at_exit_cbs) = 0;
+  $my(num_at_exit_cbs) = $my(num_file_mode_cbs) = 0;
 
   ed_set_cw_mode_actions_default (this);
   ed_set_lw_mode_actions_default (this);
@@ -17192,6 +17259,7 @@ private ed_T *ed_init_prop (ed_T *this) {
   $my(__File__)    = &this->__File__;
   $my(__Term__)    = &this->__Term__;
   $my(__Vsys__)    = &this->__Vsys__;
+  $my(__Smap__)    = &this->__Smap__;
   $my(__Imap__)    = &this->__Imap__;
   $my(__Input__)   = &this->__Input__;
   $my(__Error__)   = &this->__Error__;

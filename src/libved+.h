@@ -20,6 +20,7 @@ extern Class (this) *__This__;
 #define Path    __This__->__E__->__Ed__->__Path__.self
 #define Vsys    __This__->__E__->__Ed__->__Vsys__.self
 #define Term    __This__->__E__->__Ed__->__Term__.self
+#define Smap    __This__->__E__->__Ed__->__Smap__.self
 #define Imap    __This__->__E__->__Ed__->__Imap__.self
 #define Input   __This__->__E__->__Ed__->__Input__.self
 #define Error   __This__->__E__->__Ed__->__Error__.self

@@ -122,14 +122,14 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 
   utf8 chars[] = {
 #if HAS_PROGRAMMING_LANGUAGE
-  'I',
+    'I',
 #endif
- 'B'};
+    'B'};
   char actions[] =
 #if HAS_PROGRAMMING_LANGUAGE
- "Interpret file with Dictu\n"
+    "Interpret file with Dictu\n"
 #endif
- "Browser: Open file in the text browser (elinks)";
+    "Browser: Open file in the text browser (elinks)";
   Ed.set.file_mode_actions (this, chars, num_actions, actions, __u_file_mode_cb__);
 }
 

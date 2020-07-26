@@ -728,6 +728,19 @@ NewType (Imap,
     num_keys;
 );
 
+NewType (smap,
+  char *key;
+  string_t *val;
+  smap_t *next;
+);
+
+NewType (Smap,
+  smap_t **slots;
+  size_t
+    num_slots,
+    num_keys;
+);
+
 /* do not change order */
 NewType (syn,
   char
@@ -1265,6 +1278,27 @@ NewSelf (imap,
 
 NewClass (imap,
   Self (imap) self;
+);
+
+NewSelf (smap,
+  void
+    (*free) (Smap_t *),
+    (*clear) (Smap_t *);
+
+  Smap_t *(*new) (int);
+
+  int
+    (*key_exists) (Smap_t *, char *);
+
+  string_t
+    *(*get) (Smap_t *, char *);
+
+  uint
+    (*set) (Smap_t *, char *, string_t *);
+);
+
+NewClass (smap,
+  Self (smap) self;
 );
 
 NewSubSelf (rline, set,
@@ -1941,6 +1975,7 @@ NewClass (ed,
   Class (dir) __Dir__;
   Class (vsys) __Vsys__;
   Class (term) __Term__;
+  Class (smap) __Smap__;
   Class (imap) __Imap__;
   Class (path) __Path__;
   Class (file) __File__;
