@@ -5,6 +5,11 @@
 #define _DEFAULT_SOURCE
 #endif
 
+#if defined(__MACH__) && !defined(CLOCK_REALTIME)
+#include <sys/time.h>
+#define CLOCK_REALTIME 0
+#endif
+
 #if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
 #define _DARWIN_C_SOURCE
 #endif
@@ -6137,6 +6142,20 @@ private char *vsys_stat_mode_to_string (char *mode_string, mode_t mode) {
   mode_string[10] = '\0';
   return mode_string;
 }
+/*
+https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
+*/
+
+#if defined(__MACH__)
+int clock_gettime (int clock_id, struct timespec* t) {
+  struct timeval now;
+  int rv = gettimeofday (&now, NULL);
+  if (rv) return rv;
+  t->tv_sec  = now.tv_sec;
+  t->tv_nsec = now.tv_usec * 1000;
+  return 0;
+}
+#endif
 
 private long vsys_get_clock_sec (clockid_t clock_id) {
   struct timespec cspec;
