@@ -1,6 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+
+#ifndef __APPLE__
 #define _DEFAULT_SOURCE
+#endif
 
 #if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
 #define _DARWIN_C_SOURCE
@@ -3747,7 +3750,7 @@ private int term_sane_mode (term_t *this) {
   mode.c_iflag &= ~(IGNBRK|INLCR|IGNCR|IXOFF);
   mode.c_oflag |= (OPOST|ONLCR);
   mode.c_lflag |= (ECHO|ECHOE|ECHOK|ECHOCTL|ISIG|ICANON|IEXTEN);
-  mode.c_lflag &= ~(ECHONL|NOFLSH|XCASE|TOSTOP|ECHOPRT);
+  mode.c_lflag &= ~(ECHONL|NOFLSH|TOSTOP|ECHOPRT);
   mode.c_cc[VEOF] = 'D'^64; // splitvt
   mode.c_cc[VMIN] = 1;   /* 0 */
   mode.c_cc[VTIME] = 0;  /* 1 */
@@ -7383,7 +7386,11 @@ change:
     if (-1 is stat ($my(fname), &st)) {
       VED_MSG_ERROR(MSG_FILE_REMOVED_FROM_FILESYSTEM, $my(fname));
     } else {
+#if defined(__APPLE__)
+      if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec)
+#else
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec)
+#endif
         VED_MSG_ERROR(MSG_FILE_HAS_BEEN_MODIFIED, $my(fname));
     }
   }
