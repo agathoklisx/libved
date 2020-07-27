@@ -1041,8 +1041,12 @@ NewProp (ed,
 );
 
 NewProp (E,
-  char name[MAXLEN_ED_NAME];
+  char
+    name[MAXLEN_ED_NAME],
+    *image_name;
+
   int
+    save_image,
     state,
     error_state,
     name_gen;

@@ -1428,6 +1428,7 @@ NewSelf (path,
   char
     *(*real) (const char *, char *),
     *(*basename) (char *),
+    *(*basename_sans_extname) (char *),
     *(*extname) (char *),
     *(*dirname) (char *);
 
@@ -1993,6 +1994,8 @@ NewClass (ed,
 
 NewSubSelf (E, set,
   void
+    (*save_image) (E_T *, int),
+    (*image_name) (E_T *, char *),
     (*state) (E_T *, int),
     (*at_init_cb) (E_T *, EdAtInit_cb),
     (*at_exit_cb) (E_T *, EAtExit_cb);
@@ -2030,6 +2033,7 @@ NewSelf (E,
     *(*new) (E_T *, ED_INIT_OPTS);
 
   int
+    (*save_image) (E_T *, char *),
     (*main) (E_T *, buf_t *),
     (*exit_all) (E_T *),
     (*delete) (E_T *, int, int);

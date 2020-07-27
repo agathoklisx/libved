@@ -6,6 +6,9 @@
 #endif
 
 #if defined(__MACH__) && !defined(CLOCK_REALTIME)
+/*
+https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
+*/
 #include <sys/time.h>
 #define CLOCK_REALTIME 0
 #endif
@@ -3319,6 +3322,21 @@ private char *path_basename (char *name) {
   return p;
 }
 
+/* ala SLang */
+private char *path_basename_sans_extname (char *name) {
+  char *bsnm = path_basename (name);
+  ifnot (bsnm) return name;
+
+  char *sp = bsnm;
+
+  while (*(sp + 1) and *(sp + 1) isnot '.') sp++;
+
+  size_t len = sp - bsnm + 1;
+  char *buf = Alloc (len + 1);
+  cstring_cp (buf, len + 1, bsnm, len);
+  return buf;
+}
+
 private char *path_extname (char *name) {
   ifnot (name) return name;
   char *p = nullbyte_in_str (name);
@@ -3566,6 +3584,7 @@ private path_T __init_path__ (void) {
     .self = SelfInit (path,
       .real = path_real,
       .basename = path_basename,
+      .basename_sans_extname = path_basename_sans_extname,
       .extname = path_extname,
       .dirname = path_dirname,
       .is_absolute = path_is_absolute
@@ -5790,6 +5809,13 @@ private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
     return OK;
   }
 
+  arg = rline_get_anytype_arg (rl, "save-image");
+  ifnot (NULL is arg) {
+    int save = atoi (arg->bytes);
+    Root.set.save_image ($my(__E__), save);
+    return OK;
+  }
+
   if (rline_arg_exists (rl, "backupfile")) {
     arg = rline_get_anytype_arg (rl, "backup-suffix");
     self(set.backup, 1, (NULL is arg ? BACKUP_SUFFIX : arg->bytes));
@@ -6142,20 +6168,6 @@ private char *vsys_stat_mode_to_string (char *mode_string, mode_t mode) {
   mode_string[10] = '\0';
   return mode_string;
 }
-/*
-https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
-*/
-
-#if defined(__MACH__)
-int clock_gettime (int clock_id, struct timespec* t) {
-  struct timeval now;
-  int rv = gettimeofday (&now, NULL);
-  if (rv) return rv;
-  t->tv_sec  = now.tv_sec;
-  t->tv_nsec = now.tv_usec * 1000;
-  return 0;
-}
-#endif
 
 private long vsys_get_clock_sec (clockid_t clock_id) {
   struct timespec cspec;
@@ -6793,128 +6805,15 @@ private int buf_com_backupfile (buf_t *this) {
 }
 
 private int buf_com_save_image (buf_t *this, rline_t *rl) {
-  int retval = NOTOK;
-  int cbidx = $my(parent)->cur_idx;
-
   char *fn = NULL;
   string_t *fn_arg = Rline.get.anytype_arg (rl, "as");
-  ifnot (NULL is fn_arg) {
+
+  ifnot (NULL is fn_arg)
     fn = fn_arg->bytes;
-  } else
+  else
     fn = Path.basename (self(get.basename));
 
-  string_t *img = String.new_with (fn);
-  char *extname = Path.extname (img->bytes);
-
-  size_t exlen = bytelen (extname);
-  if (exlen) {
-    if (exlen isnot img->num_bytes) {
-      char *p = img->bytes + img->num_bytes - 1;
-      while (*p isnot '.') {
-        p--;
-        String.clear_at (img, img->num_bytes - 1);
-      }
-    } else  // .file
-      String.append_byte (img, '.');
-  } else
-    String.append_byte (img, '.');
-
-  ifnot (Path.is_absolute (img->bytes)) {
-    String.prepend (img, "/images/");
-    String.prepend (img, Root.get.env ($my(__E__), "data_dir")->bytes);
-  }
-
-  String.append (img, "i");
-
-  FILE *fp = fopen (img->bytes, "w");
-  if (NULL is fp) goto theend;
-
-  String.clear (img);
-
-  String.append (img,
-     "var flags = 0\n"
-     "var frame_zero = 0\n"
-     "var draw = 1\n"
-     "var donot_draw = 0\n");
-
-  int g_num_buf = 0;
-  int g_num_win = 0;
-  int g_num_ed = 0;
-
-  ed_t *ed = Root.get.head ($my(__E__));
-
-  while (ed isnot NULL) {
-    ifnot (g_num_ed) {
-      String.append (img, "var ");
-    }
-
-    g_num_ed++;
-
-    int num_win = Ed.get.num_win (ed, NO_COUNT_SPECIAL);
-    String.append_fmt (img, "ed = ed_new (%d)\n", num_win);
-
-    ifnot (g_num_win) {
-      String.append (img, "var ");
-      g_num_win++;
-    }
-
-    String.append (img, "cwin = ed_get_current_win (ed)\n");
-
-    int l_num_win = 0;
-    win_t *cwin = Ed.get.win_head (ed);
-
-    while (cwin) {
-      if (Win.isit.special_type (cwin)) goto next_win;
-
-      if (l_num_win)
-        String.append (img, "cwin = ed_get_win_next (ed, cwin)\n\n");
-
-      l_num_win++;
-
-      buf_t *buf = Win.get.buf_head (cwin);
-      while (buf) {
-        if (($from(buf, flags) & BUF_IS_SPECIAL)) goto next_buf;
-        char *bufname = $from(buf, fname);
-
-        ifnot (g_num_buf) {
-          String.append (img, "var ");
-          g_num_buf++;
-         }
-
-         String.append (img, "buf = win_buf_init (cwin, frame_zero, flags)\n");
-         String.append_fmt (img, "buf_init_fname (buf, \"%s\")\n", bufname);
-         char *ftype_name = $from(buf, ftype)->name;
-         String.append_fmt (img, "buf_set_ftype (buf, \"%s\")\n", ftype_name);
-         int cur_row_idx = buf->cur_idx;
-         String.append_fmt (img, "buf_set_row_idx (buf, %d)\n", cur_row_idx);
-         String.append (img, "win_append_buf (cwin, buf)\n");
-
-next_buf:
-        buf = Win.get.buf_next (cwin, buf);
-      }
-
-next_win:
-      cwin = Ed.get.win_next (ed, cwin);
-    }
-
-    ed = Root.get.next ($my(__E__), ed);
-    ifnot (NULL is ed)
-      String.append (img, "ed = e_set_ed_next ()\n");
-  }
-
-  int idx = Root.get.current_idx ($my(__E__));
-  String.append_fmt (img, "ed = e_set_ed_by_idx (%d)\n", idx);
-  String.append (img, "cwin = ed_get_current_win (ed)\n");
-  String.append_fmt (img, "win_set_current_buf (cwin, %d, donot_draw)\n", cbidx);
-  String.append (img, "win_draw (cwin)\n");
-
-  fprintf (fp, "%s\n", img->bytes);
-  fclose (fp);
-  retval = OK;
-
-theend:
-  String.free (img);
-  return retval;
+  return Root.save_image ($my(__E__), fn);
 }
 
 private ssize_t buf_read_fname (buf_t *this) {
@@ -13654,6 +13553,7 @@ private void ed_init_commands (ed_t *this) {
   ed_append_command_arg (this, "set", "--backup-suffix=", 16);
   ed_append_command_arg (this, "set", "--no-backupfile", 15);
   ed_append_command_arg (this, "set", "--shiftwidth=", 13);
+  ed_append_command_arg (this, "set", "--save-image=", 13);
   ed_append_command_arg (this, "set", "--backupfile", 12);
   ed_append_command_arg (this, "set", "--tabwidth=", 11);
   ed_append_command_arg (this, "set", "--autosave=", 11);
@@ -14001,7 +13901,8 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
 
       it = it->next;
       if (it is NULL) {
-        MSG_ERRNO (RL_ARGUMENT_MISSING_ERROR);
+        if (this)
+          MSG_ERRNO (RL_ARGUMENT_MISSING_ERROR);
         rl->com = RL_ARGUMENT_MISSING_ERROR;
         goto theerror;
       }
@@ -14013,7 +13914,8 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
 
         if (it->data->bytes[0] is '=') {
           if (it->next is NULL) {
-            MSG_ERRNO (RL_ARG_AWAITING_STRING_OPTION_ERROR);
+            if (this)
+              MSG_ERRNO (RL_ARG_AWAITING_STRING_OPTION_ERROR);
             rl->com = RL_ARG_AWAITING_STRING_OPTION_ERROR;
             goto theerror;
           }
@@ -14052,7 +13954,8 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
           }
 
           if (is_quoted){
-            MSG_ERRNO (RL_UNTERMINATED_QUOTED_STRING_ERROR);
+            if (this)
+              MSG_ERRNO (RL_UNTERMINATED_QUOTED_STRING_ERROR);
             rl->com = RL_UNTERMINATED_QUOTED_STRING_ERROR;
             goto theerror;
           }
@@ -14098,7 +14001,8 @@ arg_type:
           }
 
           ifnot (found_arg) {
-            MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
+            if (this)
+              MSG_ERRNO (RL_UNRECOGNIZED_OPTION);
             rl->com = RL_UNRECOGNIZED_OPTION;
           }
         }
@@ -16865,7 +16769,7 @@ private int ed_main (ed_t *this, buf_t *buf) {
 
 /*
   Msg.send (this, COLOR_CYAN,
-      "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνοιότητα");
+      "Υγειά σου Κόσμε και καλό ταξίδι στο ραντεβού με την αιωνιότητα");
  */
 
   return ed_loop (this, buf);
@@ -17100,6 +17004,170 @@ private ed_t *E_set_prev (E_T *this) {
   return E_set_current (this, idx);
 }
 
+private int E_save_image (Class (E) *this, char *name) {
+  ifnot ($my(num_items)) return NOTOK;
+
+  if (NULL is name)
+    if ($my(current) isnot NULL)
+      if ($my(current)->current isnot NULL)
+        if ($my(current)->current->current isnot NULL)
+          name = $from ($my(current)->current->current, fname);
+
+  if (NULL is name) return NOTOK;
+
+  int retval = NOTOK;
+
+  string_t *img = string_new_with (name);
+
+  char *extname = path_extname (img->bytes);
+
+  size_t exlen = bytelen (extname);
+  if (exlen) {
+    if (exlen isnot img->num_bytes) {
+      char *p = img->bytes + img->num_bytes - 1;
+      while (*p isnot '.') {
+        p--;
+        string_clear_at (img, img->num_bytes - 1);
+      }
+    } else  // .file
+      string_append_byte (img, '.');
+  } else
+    string_append_byte (img, '.');
+
+  ifnot (path_is_absolute (img->bytes)) {
+    string_prepend (img, "/images/");
+    string_prepend (img, self(get.env, "data_dir")->bytes);
+  }
+
+  string_append (img, "i");
+
+  char *iname = path_basename_sans_extname (img->bytes);
+  self(set.image_name, iname);
+  free (iname);
+
+  FILE *fp = fopen (img->bytes, "w");
+  if (NULL is fp) goto theend;
+
+  string_clear (img);
+
+  string_append_fmt (img,
+       "var ed_instances = %d\n"
+       "var flags = 0\n"
+       "var frame_zero = 0\n"
+       "var draw = 1\n"
+       "var donot_draw = 0\n"
+       "var save_image = %d\n"
+       "var ed_cur_idx = %d\n"
+       "var win_cur_idx = %d\n"
+       "var buf_cur_idx = %d\n",
+    $my(num_items),
+    $my(save_image),
+    $my(cur_idx),
+    $my(current)->cur_idx,
+    $my(current)->current->cur_idx);
+
+  int g_num_buf = 0;
+  int g_num_win = 0;
+  int g_num_ed = 0;
+
+  ed_t *ed = self(get.head);
+
+  while (ed isnot NULL) {
+    int num_win = ed_get_num_win (ed, NO_COUNT_SPECIAL);
+
+    ifnot (g_num_ed) {
+      string_append (img, "var ");
+      g_num_ed++;
+    }
+
+    string_append_fmt (img,
+       "ed = ed_new (%d)\n", num_win);
+
+    ifnot (g_num_win) {
+      string_append (img, "var ");
+      g_num_win++;
+    }
+
+    string_append (img, "cwin = ed_get_current_win (ed)\n");
+
+    int l_num_win = 0;
+    win_t *cwin = ed_get_win_head (ed);
+
+    while (cwin) {
+      if (win_isit_special_type (cwin)) goto next_win;
+
+      if (l_num_win++)
+        string_append (img, "cwin = ed_get_win_next (ed, cwin)\n\n");
+
+      buf_t *buf = win_get_buf_head (cwin);
+      while (buf) {
+        if (($from(buf, flags) & BUF_IS_SPECIAL)) goto next_buf;
+        char *bufname = $from(buf, fname);
+        char *ftype_name = $from(buf, ftype)->name;
+        int cur_row_idx = buf->cur_idx;
+
+        string_append (img, "\n");
+
+        ifnot (g_num_buf) {
+          string_append (img, "var ");
+          g_num_buf++;
+        }
+
+        string_append_fmt (img,
+              "buf = win_buf_init (cwin, frame_zero, flags)\n"
+              "buf_init_fname (buf, \"%s\")\n"
+              "buf_set_ftype (buf, \"%s\")\n"
+              "buf_set_row_idx (buf, %d)\n"
+              "win_append_buf (cwin, buf)\n",
+            bufname,
+            ftype_name,
+            cur_row_idx);
+
+next_buf:
+        buf = win_get_buf_next (cwin, buf);
+      }
+
+next_win:
+      cwin = ed_get_win_next (ed, cwin);
+    }
+
+    ed = ed->next;
+    ifnot (NULL is ed)
+      string_append (img,
+         "ed = e_set_ed_next ()\n");
+  }
+
+  string_append (img, "\n");
+
+  string_append (img,
+        "e_set_save_image (save_image)\n\n"
+        "ed = e_set_ed_by_idx (ed_cur_idx)\n"
+        "cwin = ed_get_current_win (ed)\n"
+        "win_set_current_buf (cwin, buf_cur_idx, donot_draw)\n\n"
+        "win_draw (cwin)\n");
+
+  fprintf (fp, "%s\n", img->bytes);
+  fclose (fp);
+  retval = OK;
+
+theend:
+  string_free (img);
+  return retval;
+}
+
+private void E_set_image_name (E_T *this, char *name) {
+  if (NULL is name) return;
+
+  ifnot (NULL is $my(image_name))
+    free ($my(image_name));
+
+  $my(image_name) = cstring_dup (name, bytelen (name));
+}
+
+private void E_set_save_image (E_T *this, int val) {
+  $my(save_image) = val;
+}
+
 private void E_set_state (E_T *this, int state) {
   $my(state) = state;
 }
@@ -17228,7 +17296,7 @@ main:
   $my(state) = ed_get_state (ed);
 
   if ($my(state) & ED_SUSPENDED) {
-    ed_set_state (ed, 0);
+    ed_set_state (ed, UNSET);
     ed_suspend (ed);
     return retval;
   }
@@ -17254,6 +17322,9 @@ main:
   }
 
   if (($my(state) & ED_EXIT_ALL) or ($my(state) & ED_EXIT_ALL_FORCE)) {
+    if ($my(save_image))
+      self(save_image, $my(image_name));
+
     if (NOTOK is self(exit_all)) {
       ed = self(get.current);
       buf = win_get_current_buf (ed_get_current_win (ed));
@@ -17265,6 +17336,9 @@ main:
   }
 
   if (($my(state) & ED_EXIT)) {
+    if ($my(save_image))
+      self(save_image, $my(image_name));
+
     self(delete, $my(cur_idx), FORCE);
 
     if ($my(num_items)) {
@@ -17329,11 +17403,12 @@ public Class (E) *__init_ed__ (char *name) {
 
   *this = ClassInit (E,
     .self = SelfInit (E,
-      .init = E_init,
       .new = E_new,
+      .init = E_init,
+      .main = E_main,
       .delete = E_delete,
       .exit_all = E_exit_all,
-      .main = E_main,
+      .save_image = E_save_image,
       .get = SubSelfInit (E, get,
         .current = E_get_current,
         .head = E_get_head,
@@ -17348,6 +17423,8 @@ public Class (E) *__init_ed__ (char *name) {
       ),
       .set = SubSelfInit (E, set,
         .state = E_set_state,
+        .image_name = E_set_image_name,
+        .save_image = E_set_save_image,
         .at_exit_cb = E_set_at_exit_cb,
         .at_init_cb = E_set_at_init_cb,
         .next = E_set_next,
@@ -17375,6 +17452,8 @@ public Class (E) *__init_ed__ (char *name) {
   $my(cur_idx) = $my(prev_idx) = -1;
   $my(state) = 0;
   $my(shared_reg)[0] = (Reg_t) {.reg = REG_SHARED_CHR};
+  $my(image_name) = NULL;
+  $my(save_image) = 0;
 
   return this;
 }
@@ -17403,6 +17482,9 @@ public void __deinit_ed__ (Class (E) **thisp) {
     $my(at_exit_cbs)[i] ();
 
   register_free (&$my(shared_reg)[0]);
+
+  if ($my(image_name) isnot NULL)
+    free ($my(image_name));
 
   deinit_ed (this->__Ed__);
 
@@ -18665,6 +18747,12 @@ ival_t i_e_set_ed_by_idx (ival_t i, int idx) {
   return (ival_t) E_set_current (this->__E__, idx);
 }
 
+ival_t i_e_set_save_image (ival_t i, int val) {
+  i_t *this = (i_t *) i;
+  E_set_save_image (this->__E__, val);
+  return I_OK;
+}
+
 ival_t i_e_get_ed_current_idx (ival_t i) {
   i_t *this = (i_t *) i;
   return E_get_current_idx (this->__E__);
@@ -18780,30 +18868,31 @@ struct ifun_t {
   ival_t val;
   int nargs;
 } ifuns[] = {
-  //{ "init_this",           (ival_t) i_init_this, 0},
+ // { "init_this",           (ival_t) i_init_this, 0},
  // { "deinit_this",         (ival_t) i_deinit_this, 0},
-  { "e_get_ed_num",        (ival_t) i_e_get_ed_num, 0},
-  { "e_set_ed_next",       (ival_t) i_e_set_ed_next, 0},
-  { "e_set_ed_by_idx",     (ival_t) i_e_set_ed_by_idx, 1},
-  { "e_get_ed_current_idx",(ival_t) i_e_get_ed_current_idx, 0},
-  { "e_get_ed_current",    (ival_t) i_e_get_ed_current, 0},
-  { "ed_new",              (ival_t) i_ed_new, 1},
-  { "ed_get_num_win",      (ival_t) i_ed_get_num_win, 1},
-  { "ed_get_current_win",  (ival_t) i_ed_get_current_win, 1},
-  { "ed_get_win_next",     (ival_t) i_ed_get_win_next, 2},
-  { "buf_init_fname",      (ival_t) i_buf_init_fname, 2},
-  { "buf_set_ftype",       (ival_t) i_buf_set_ftype, 2},
-  { "buf_set_row_idx",     (ival_t) i_buf_set_row_idx, 2},
-  { "buf_draw",            (ival_t) i_buf_draw, 1},
-  { "buf_normal_page_down",(ival_t) i_buf_normal_page_down, 2},
-  { "buf_normal_page_up",  (ival_t) i_buf_normal_page_up, 2},
+  { "e_set_ed_next",         (ival_t) i_e_set_ed_next, 0},
+  { "e_set_ed_by_idx",       (ival_t) i_e_set_ed_by_idx, 1},
+  { "e_set_save_image",      (ival_t) i_e_set_save_image, 1},
+  { "e_get_ed_num",          (ival_t) i_e_get_ed_num, 0},
+  { "e_get_ed_current",      (ival_t) i_e_get_ed_current, 0},
+  { "e_get_ed_current_idx",  (ival_t) i_e_get_ed_current_idx, 0},
+  { "ed_new",                (ival_t) i_ed_new, 1},
+  { "ed_get_num_win",        (ival_t) i_ed_get_num_win, 1},
+  { "ed_get_current_win",    (ival_t) i_ed_get_current_win, 1},
+  { "ed_get_win_next",       (ival_t) i_ed_get_win_next, 2},
+  { "buf_set_ftype",         (ival_t) i_buf_set_ftype, 2},
+  { "buf_set_row_idx",       (ival_t) i_buf_set_row_idx, 2},
+  { "buf_normal_page_up",    (ival_t) i_buf_normal_page_up, 2},
+  { "buf_normal_page_down",  (ival_t) i_buf_normal_page_down, 2},
   { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
-  { "buf_substitute",      (ival_t) i_buf_substitute, 7},
-  { "win_buf_init",        (ival_t) i_win_buf_init, 3},
-  { "win_draw",            (ival_t) i_win_draw, 1},
-  { "win_append_buf",      (ival_t) i_win_append_buf, 2},
-  { "win_set_current_buf", (ival_t) i_win_set_current_buf, 3},
-  { "win_get_current_buf", (ival_t) i_win_get_current_buf, 1},
+  { "buf_draw",              (ival_t) i_buf_draw, 1},
+  { "buf_init_fname",        (ival_t) i_buf_init_fname, 2},
+  { "buf_substitute",        (ival_t) i_buf_substitute, 7},
+  { "win_buf_init",          (ival_t) i_win_buf_init, 3},
+  { "win_draw",              (ival_t) i_win_draw, 1},
+  { "win_append_buf",        (ival_t) i_win_append_buf, 2},
+  { "win_set_current_buf",   (ival_t) i_win_set_current_buf, 3},
+  { "win_get_current_buf",   (ival_t) i_win_get_current_buf, 1},
   { NULL, 0, 0}
 };
 
