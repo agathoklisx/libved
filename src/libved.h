@@ -159,6 +159,9 @@
 #define DONOT_CLEAR  0
 #define CLEAR        1
 
+#define DONOR_REOPEN 0
+#define REOPEN       1
+
 #define X_PRIMARY     0
 #define X_CLIPBOARD   1
 
@@ -1996,6 +1999,7 @@ NewSubSelf (E, set,
   void
     (*save_image) (E_T *, int),
     (*image_name) (E_T *, char *),
+    (*image_file) (E_T *, char *),
     (*state) (E_T *, int),
     (*at_init_cb) (E_T *, EdAtInit_cb),
     (*at_exit_cb) (E_T *, EAtExit_cb);

@@ -5203,10 +5203,10 @@ char *c_keywords[] = {
     "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
     "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
-    "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V", "public I",
-    "mutable I", "loop I", "forever I", "static I", "enum T", "bool T","long T",
-    "double T", "float T", "unsigned T", "extern I", "signed T", "volatile T",
-    "register T", "union T", "const T", "auto T",
+    "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V",
+    "$OurRoot V", "$OurRoots V", "public I", "mutable I", "loop I", "forever I",
+    "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
+    "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
     NULL
 };
 
@@ -5812,7 +5812,7 @@ private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
   arg = rline_get_anytype_arg (rl, "save-image");
   ifnot (NULL is arg) {
     int save = atoi (arg->bytes);
-    Root.set.save_image ($my(__E__), save);
+    Root.set.save_image ($OurRoot, save);
     return OK;
   }
 
@@ -6804,16 +6804,28 @@ private int buf_com_backupfile (buf_t *this) {
       this->num_items - 1, FORCE, VERBOSE_OFF);
 }
 
+private int buf_com_edit_image (buf_t **thisp, rline_t *rl) {
+  (void) rl;
+  buf_t *this = *thisp;
+  if (NULL is $OurRoots(image_file))
+    return NOTHING_TODO;
+
+  return Win.edit_fname ($my(parent), thisp, $OurRoots(image_file),
+     $myparents(cur_frame), NO_FORCE, DRAW, REOPEN);
+}
+
 private int buf_com_save_image (buf_t *this, rline_t *rl) {
   char *fn = NULL;
   string_t *fn_arg = Rline.get.anytype_arg (rl, "as");
 
   ifnot (NULL is fn_arg)
     fn = fn_arg->bytes;
+  else ifnot (NULL is $OurRoots(image_name))
+    fn = $OurRoots(image_name);
   else
     fn = Path.basename (self(get.basename));
 
-  return Root.save_image ($my(__E__), fn);
+  return Root.save_image ($OurRoot, fn);
 }
 
 private ssize_t buf_read_fname (buf_t *this) {
@@ -13450,6 +13462,7 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_EDIT_FORCE_ALIAS] = "e!",
     [VED_COM_EDIT] = "edit",
     [VED_COM_EDIT_ALIAS] = "e",
+    [VED_COM_EDIT_IMAGE] = "@edit_image",
     [VED_COM_EDNEW] = "ednew",
     [VED_COM_ENEW] = "enew",
     [VED_COM_EDNEXT] = "ednext",
@@ -13473,8 +13486,8 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_SUBSTITUTE] = "substitute",
     [VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE] = "s%",
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
+    [VED_COM_SAVE_IMAGE] = "@save_image",
     [VED_COM_TEST_KEY] = "testkey",
-    [VED_COM_SAVE_IMG] = "@save_image",
     [VED_COM_VALIDATE_UTF8] = "@validate_utf8",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
@@ -13501,7 +13514,7 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_READ ... VED_COM_READ_ALIAS] = 1,
     [VED_COM_SPLIT] = 1,
     [VED_COM_SUBSTITUTE ... VED_COM_SUBSTITUTE_ALIAS] = 5,
-    [VED_COM_SAVE_IMG] = 1,
+    [VED_COM_SAVE_IMAGE] = 1,
     [VED_COM_VALIDATE_UTF8] = 1,
     [VED_COM_WRITE_FORCE ... VED_COM_WRITE_ALIAS] = 4,
     [VED_COM_WRITE_QUIT_FORCE ... VED_COM_WRITE_QUIT] = 1
@@ -14886,8 +14899,12 @@ exec:
        retval = DONE;
        goto theend;
 
-      case VED_COM_SAVE_IMG:
+      case VED_COM_SAVE_IMAGE:
         retval = buf_com_save_image (this, rl);
+        goto theend;
+
+      case VED_COM_EDIT_IMAGE:
+        retval = buf_com_edit_image (thisp, rl);
         goto theend;
 
       case VED_COM_VALIDATE_UTF8:
@@ -17041,6 +17058,7 @@ private int E_save_image (Class (E) *this, char *name) {
 
   string_append (img, "i");
 
+  self(set.image_file, img->bytes);
   char *iname = path_basename_sans_extname (img->bytes);
   self(set.image_name, iname);
   free (iname);
@@ -17153,6 +17171,15 @@ next_win:
 theend:
   string_free (img);
   return retval;
+}
+
+private void E_set_image_file (E_T *this, char *name) {
+  if (NULL is name) return;
+
+  ifnot (NULL is $my(image_file))
+    free ($my(image_file));
+
+  $my(image_file) = cstring_dup (name, bytelen (name));
 }
 
 private void E_set_image_name (E_T *this, char *name) {
@@ -17424,6 +17451,7 @@ public Class (E) *__init_ed__ (char *name) {
       .set = SubSelfInit (E, set,
         .state = E_set_state,
         .image_name = E_set_image_name,
+        .image_file = E_set_image_file,
         .save_image = E_set_save_image,
         .at_exit_cb = E_set_at_exit_cb,
         .at_init_cb = E_set_at_init_cb,
@@ -17485,6 +17513,9 @@ public void __deinit_ed__ (Class (E) **thisp) {
 
   if ($my(image_name) isnot NULL)
     free ($my(image_name));
+
+  if ($my(image_file) isnot NULL)
+    free ($my(image_file));
 
   deinit_ed (this->__Ed__);
 
@@ -18964,31 +18995,40 @@ private int i_load_file (Class (i) *__i__, char *fn) {
   i_t *this = i_init_instance (__i__);
 
   ifnot (path_is_absolute (fn)) {
+    if (file_exists (fn))
+      return i_eval_file (this, fn);
+
     size_t fnlen = bytelen (fn);
     char fname[fnlen+3];
     cstring_cp (fname, fnlen + 1, fn, fnlen);
+
     char *extname = path_extname (fname);
-    ifnot (extname[0]) {
-      fname[fnlen] = '.';
-      fname[fnlen+1] = 'i';
-      fname[fnlen+2] = '\0';
+    size_t extlen = bytelen (extname);
+
+    if (0 is extlen or 0 is cstring_eq (".i", extname)) {
+      fname[fnlen] = '.'; fname[fnlen+1] = 'i'; fname[fnlen+2] = '\0';
+      if (file_exists (fname))
+        return i_eval_file (this, fname);
+      fname[fnlen] = '\0';
     }
 
-    if (file_exists (fname))
-      return i_eval_file (this, fname);
-
     string_t *ddir = E_venv_get (this->__E__, "data_dir");
-    size_t len = ddir->num_bytes + bytelen (fname) + 2 + 8;
-    char tmp[len + 1];
+    size_t len = ddir->num_bytes + bytelen (fname) + 2 + 6;
+    char tmp[len + 3];
     cstring_cp_fmt (tmp, len + 1, "%s/images/%s", ddir->bytes, fname);
-    ifnot (file_exists (tmp))
-      return NOTOK;
+    ifnot (file_exists (tmp)) {
+      tmp[len] = '.'; tmp[len+1] = 'i'; tmp[len+2] = '\0';
+    }
+
+    ifnot (file_exists (tmp)) return NOTOK;
+
+    E_set_image_file (this->__E__, tmp);
 
     return i_eval_file (this, tmp);
-  } else
-    return i_eval_file (this, fn);
+  }
 
-  return OK;
+  return i_eval_file (this, fn);
+
 }
 
 private Class (i) *__init_i__ (Class (E) *e) {

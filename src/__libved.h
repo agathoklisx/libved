@@ -88,6 +88,7 @@ enum {
   VED_COM_EDIT_FORCE_ALIAS,
   VED_COM_EDIT,
   VED_COM_EDIT_ALIAS,
+  VED_COM_EDIT_IMAGE,
   VED_COM_EDNEW,
   VED_COM_ENEW,
   VED_COM_EDNEXT,
@@ -111,8 +112,8 @@ enum {
   VED_COM_SUBSTITUTE,
   VED_COM_SUBSTITUTE_WHOLE_FILE_AS_RANGE,
   VED_COM_SUBSTITUTE_ALIAS,
+  VED_COM_SAVE_IMAGE,
   VED_COM_TEST_KEY,
-  VED_COM_SAVE_IMG,
   VED_COM_VALIDATE_UTF8,
   VED_COM_WIN_CHANGE_NEXT,
   VED_COM_WIN_CHANGE_NEXT_ALIAS,
@@ -1043,7 +1044,8 @@ NewProp (ed,
 NewProp (E,
   char
     name[MAXLEN_ED_NAME],
-    *image_name;
+    *image_name,
+    *image_file;
 
   int
     save_image,
@@ -1535,3 +1537,6 @@ do {                                                                \
 #define Cstring My(__Cstring__)
 #define Vstring My(__Vstring__)
 #define Ustring My(__Ustring__)
+
+#define $OurRoot  $my(__E__)
+#define $OurRoots(__p__) $my(__E__)->prop->__p__

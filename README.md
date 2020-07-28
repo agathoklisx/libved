@@ -727,6 +727,7 @@ Search:
   :@save_image [--as=file] (save current layout, that can be used at a next invocation
                             with --load-file=file.i, to restore it,
                             default filename: $SYSDATADIR/images/currentbufname.i)
+  :@edit_image           edit the current process image script (if exists)
   :q[!] [--global]       quit (if force[!], do not check for modified buffers),
                               (if --global exit from all running editor instances)
 
