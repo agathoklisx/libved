@@ -454,11 +454,6 @@ typedef size_t uidx_t;
 typedef ptrdiff_t idx_t;
 typedef ptrdiff_t msize_t;
 
-/* interpeter */
-typedef intptr_t ival_t;
-typedef ival_t (*Cfunc) (ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t);
-typedef ival_t (*Opfunc) (ival_t, ival_t);
-
 #define public __attribute__((visibility ("default")))
 #define private __attribute__((visibility ("hidden")))
 #define mutable __attribute__((__weak__))
@@ -695,6 +690,10 @@ typedef void (*IPrintByte_cb) (FILE *, int);
 typedef void (*IPrintBytes_cb) (FILE *, const char *);
 typedef void (*IPrintFmtBytes_cb) (FILE *, const char *, ...);
 typedef int  (*ISyntaxError_cb) (i_t *, const char *);
+
+typedef intptr_t ival_t;
+typedef ival_t (*Cfunc) (i_t *, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t);
+typedef ival_t (*Opfunc) (ival_t, ival_t);
 
 #define NULL_REF NULL
 

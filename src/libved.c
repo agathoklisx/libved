@@ -17902,7 +17902,16 @@ private int i_do_next_token (i_t *this, int israw) {
     } else {
       this->state &= ~(FUNC_CALL_BUILTIN);
       size_t len = 0;
-      while ('"' isnot i_peek_char (this, len)) len++;
+      int pc = 0;
+      int cc = 0;
+      //while ('"' isnot i_peek_char (this, len)) len++;
+      while (pc = cc, (cc = i_peek_char (this, len)) isnot -1) {
+        if ('"' is cc and pc isnot '\\') break;
+        len++;
+      }
+
+      if (cc is -1) return I_TOK_SYNTAX_ERR;
+
       char *ibuf = Alloc (len + 1);
       for (size_t i = 0; i < len; i++) {
         c = i_get_char (this);
@@ -18147,9 +18156,9 @@ private int i_parse_func_call (i_t *this, Cfunc op, ival_t *vp, UserFunc *uf) {
     this->state &= ~(FUNC_CALL_USRFUNC);
     return err;
   } else {
-    *vp = op ((ival_t) this, this->fArgs[0], this->fArgs[1], this->fArgs[2],
-                             this->fArgs[3], this->fArgs[4], this->fArgs[5],
-                             this->fArgs[6], this->fArgs[7]);
+    *vp = op (this, this->fArgs[0], this->fArgs[1], this->fArgs[2],
+                    this->fArgs[3], this->fArgs[4], this->fArgs[5],
+                    this->fArgs[6], this->fArgs[7], this->fArgs[8]);
 
     this->state &= ~(FUNC_CALL_BUILTIN);
   }
@@ -18771,86 +18780,71 @@ private void i_print_byte (FILE *fp, int c) {
   i_print_fmt_bytes (fp, "%c", c);
 }
 
-ival_t i_e_get_ed_num (ival_t i) {
-  i_t *this = (i_t *) i;
+ival_t i_e_get_ed_num (i_t *this) {
   return Root.get.num ($OurRoot);
 }
 
-ival_t i_e_set_ed_next (ival_t i) {
-  i_t *this = (i_t *) i;
+ival_t i_e_set_ed_next (i_t *this) {
   return (ival_t) Root.set.next ($OurRoot);
 }
 
-ival_t i_e_set_ed_by_idx (ival_t i, int idx) {
-  i_t *this = (i_t *) i;
+ival_t i_e_set_ed_by_idx (i_t *this, int idx) {
   return (ival_t) Root.set.current ($OurRoot, idx);
 }
 
-ival_t i_e_set_save_image (ival_t i, int val) {
-  i_t *this = (i_t *) i;
+ival_t i_e_set_save_image (i_t *this, int val) {
   Root.set.save_image ($OurRoot, val);
   return I_OK;
 }
 
-ival_t i_e_get_ed_current_idx (ival_t i) {
-  i_t *this = (i_t *) i;
+ival_t i_e_get_ed_current_idx (i_t *this) {
   return Root.get.current_idx ($OurRoot);
 }
 
-ival_t i_e_get_ed_current (ival_t i) {
-  i_t *this = (i_t *) i;
+ival_t i_e_get_ed_current (i_t *this) {
   return (ival_t) Root.get.current ($OurRoot);
 }
 
-ival_t i_ed_new (ival_t i, int num_win) {
-  i_t *this = (i_t *) i;
+ival_t i_ed_new (i_t *this, int num_win) {
   return (ival_t) Root.new ($OurRoot, QUAL(ED_INIT, .num_win = num_win));
 }
 
-ival_t i_ed_get_num_win (ival_t i, ed_t *ed) {
-  i_t *this = (i_t *) i;
+ival_t i_ed_get_num_win (i_t *this, ed_t *ed) {
   return Ed.get.num_win (ed, 0);
 }
 
-ival_t i_ed_get_current_win (ival_t i, ed_t *ed) {
-  i_t *this = (i_t *) i;
+ival_t i_ed_get_current_win (i_t *this, ed_t *ed) {
   return (ival_t) Ed.get.current_win (ed);
 }
 
-ival_t i_ed_get_win_next (ival_t i, ed_t *ed, win_t *win) {
-  i_t *this = (i_t *) i;
+ival_t i_ed_get_win_next (i_t *this, ed_t *ed, win_t *win) {
   return (ival_t) Ed.get.win_next (ed, win);
 }
 
-ival_t i_buf_init_fname (ival_t i, buf_t *buf, char *fn) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_init_fname (i_t *this, buf_t *buf, char *fn) {
   Buf.init_fname (buf, fn);
   free (fn);
   return OK;
 }
 
-ival_t i_buf_set_ftype (ival_t i, buf_t *buf, char *ftype) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_set_ftype (i_t *this, buf_t *buf, char *ftype) {
   Buf.set.ftype (buf, Ed.syn.get_ftype_idx ($OurRoots(current), ftype));
   free (ftype);
   return OK;
 }
 
-ival_t i_buf_set_row_idx (ival_t i, buf_t *buf, int row) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_set_row_idx (i_t *this, buf_t *buf, int row) {
   Buf.set.row.idx (buf, row, NO_OFFSET, 1);
   return OK;
 }
 
-ival_t i_buf_draw (ival_t i, buf_t *buf) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_draw (i_t *this, buf_t *buf) {
   Buf.draw (buf);
   return OK;
 }
 
-ival_t i_buf_substitute (ival_t i, buf_t *buf, char *pat, char *sub, int global,
+ival_t i_buf_substitute (i_t *this, buf_t *buf, char *pat, char *sub, int global,
                                             int interactive, int fidx, int lidx) {
-  i_t *this = (i_t *) i;
   if (fidx is lidx) fidx = lidx = buf->cur_idx;
 
   ival_t val = Buf.substitute (buf, pat, sub, global, interactive, fidx, lidx);
@@ -18859,46 +18853,37 @@ ival_t i_buf_substitute (ival_t i, buf_t *buf, char *pat, char *sub, int global,
   return val;
 }
 
-ival_t i_win_buf_init (ival_t i, win_t *win, int frame, int flags) {
-  i_t *this = (i_t *) i;
+ival_t i_win_buf_init (i_t *this, win_t *win, int frame, int flags) {
   return (ival_t) Win.buf.init (win, frame, flags);
 }
 
-ival_t i_win_set_current_buf (ival_t i, win_t *win, int idx, int draw) {
-  i_t *this = (i_t *) i;
-  buf_t *buf = Win.set.current_buf (win, idx, draw);
-  return (ival_t) buf;
+ival_t i_win_set_current_buf (i_t *this, win_t *win, int idx, int draw) {
+  return (ival_t) Win.set.current_buf (win, idx, draw);
 }
 
-ival_t i_win_get_current_buf (ival_t i, win_t *win) {
-  i_t *this = (i_t *) i;
+ival_t i_win_get_current_buf (i_t *this, win_t *win) {
   return (ival_t) Win.get.current_buf (win);
 }
 
-ival_t i_win_draw (ival_t i, win_t *win) {
-  i_t *this = (i_t *) i;
+ival_t i_win_draw (i_t *this, win_t *win) {
   Win.draw (win);
   return OK;
 }
 
-ival_t i_win_append_buf (ival_t i, win_t *win, buf_t *buf) {
-  i_t *this = (i_t *) i;
+ival_t i_win_append_buf (i_t *this, win_t *win, buf_t *buf) {
   Win.append_buf (win, buf);
   return OK;
 }
 
-ival_t i_buf_normal_page_down (ival_t i, buf_t *buf, int count) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_normal_page_down (i_t *this, buf_t *buf, int count) {
   return Buf.normal.page_down (buf, count);
 }
 
-ival_t i_buf_normal_page_up (ival_t i, buf_t *buf, int count) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_normal_page_up (i_t *this, buf_t *buf, int count) {
   return Buf.normal.page_up (buf, count);
 }
 
-ival_t i_buf_normal_goto_linenr (ival_t i, buf_t *buf, int linenum, int draw) {
-  i_t *this = (i_t *) i;
+ival_t i_buf_normal_goto_linenr (i_t *this, buf_t *buf, int linenum, int draw) {
   return Buf.normal.goto_linenr (buf, linenum, draw);
 }
 
