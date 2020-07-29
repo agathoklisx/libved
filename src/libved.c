@@ -17693,10 +17693,12 @@ private int i_syntax_error (i_t *this, const char *msg) {
   return i_err_ptr (this, I_ERR_SYNTAX);
 }
 
-private int i_syntax_error_to_ed (i_t *i, const char *msg) {
-  ed_t *this = $from(i->__E__, current);
-  const char *ptr = (const char *) i_StringGetPtr (i->parseptr);
-  Msg.write_fmt (this, "\nSYNTAX ERROR: %s\nbefore:\n%s\n", msg, ptr);
+private int i_syntax_error_to_ed (i_t *this, const char *msg) {
+  if (NULL is $OurRoots(current))
+    return i_syntax_error (this, msg);
+
+  const char *ptr = (const char *) i_StringGetPtr (this->parseptr);
+  Msg.write_fmt ($OurRoots(current), "\nSYNTAX ERROR: %s\nbefore:\n%s\n", msg, ptr);
   return I_ERR_SYNTAX;
 }
 
@@ -18621,7 +18623,7 @@ private int i_eval_file (i_t *this, const char *filename) {
   FILE *fp = fopen (filename, "r");
   if (NULL is fp) {
     this->print_fmt_bytes (this->err_fp, "%s\n",
-        ed_error_string ($from(this->__E__, current), errno));
+        ed_error_string ($OurRoots(current), errno));
     return NOTOK;
   }
 
@@ -18771,133 +18773,133 @@ private void i_print_byte (FILE *fp, int c) {
 
 ival_t i_e_get_ed_num (ival_t i) {
   i_t *this = (i_t *) i;
-  return E_get_num (this->__E__);
+  return Root.get.num ($OurRoot);
 }
 
 ival_t i_e_set_ed_next (ival_t i) {
   i_t *this = (i_t *) i;
-  return (ival_t) E_set_next (this->__E__);
+  return (ival_t) Root.set.next ($OurRoot);
 }
 
 ival_t i_e_set_ed_by_idx (ival_t i, int idx) {
   i_t *this = (i_t *) i;
-  return (ival_t) E_set_current (this->__E__, idx);
+  return (ival_t) Root.set.current ($OurRoot, idx);
 }
 
 ival_t i_e_set_save_image (ival_t i, int val) {
   i_t *this = (i_t *) i;
-  E_set_save_image (this->__E__, val);
+  Root.set.save_image ($OurRoot, val);
   return I_OK;
 }
 
 ival_t i_e_get_ed_current_idx (ival_t i) {
   i_t *this = (i_t *) i;
-  return E_get_current_idx (this->__E__);
+  return Root.get.current_idx ($OurRoot);
 }
 
 ival_t i_e_get_ed_current (ival_t i) {
   i_t *this = (i_t *) i;
-  return (ival_t) E_get_current (this->__E__);
+  return (ival_t) Root.get.current ($OurRoot);
 }
 
 ival_t i_ed_new (ival_t i, int num_win) {
   i_t *this = (i_t *) i;
-  return (ival_t) E_new (this->__E__, QUAL(ED_INIT, .num_win = num_win));
+  return (ival_t) Root.new ($OurRoot, QUAL(ED_INIT, .num_win = num_win));
 }
 
 ival_t i_ed_get_num_win (ival_t i, ed_t *ed) {
-  (void) i;
-  return ed_get_num_win (ed, 0);
+  i_t *this = (i_t *) i;
+  return Ed.get.num_win (ed, 0);
 }
 
 ival_t i_ed_get_current_win (ival_t i, ed_t *ed) {
-  (void) i;
-  return (ival_t) ed_get_current_win (ed);
+  i_t *this = (i_t *) i;
+  return (ival_t) Ed.get.current_win (ed);
 }
 
 ival_t i_ed_get_win_next (ival_t i, ed_t *ed, win_t *win) {
-  (void) i;
-  return (ival_t) ed_get_win_next (ed, win);
+  i_t *this = (i_t *) i;
+  return (ival_t) Ed.get.win_next (ed, win);
 }
 
-ival_t i_buf_init_fname (ival_t i, buf_t *this, char *fn) {
-  (void) i;
-  buf_init_fname (this, fn);
+ival_t i_buf_init_fname (ival_t i, buf_t *buf, char *fn) {
+  i_t *this = (i_t *) i;
+  Buf.init_fname (buf, fn);
   free (fn);
   return OK;
 }
 
 ival_t i_buf_set_ftype (ival_t i, buf_t *buf, char *ftype) {
   i_t *this = (i_t *) i;
-  buf_set_ftype (buf, ed_syn_get_ftype_idx ($from(this->__E__, current), ftype));
+  Buf.set.ftype (buf, Ed.syn.get_ftype_idx ($OurRoots(current), ftype));
   free (ftype);
   return OK;
 }
 
-ival_t i_buf_set_row_idx (ival_t i, buf_t *this, int row) {
-  (void) i;
-  buf_set_row_idx (this, row, NO_OFFSET, 1);
+ival_t i_buf_set_row_idx (ival_t i, buf_t *buf, int row) {
+  i_t *this = (i_t *) i;
+  Buf.set.row.idx (buf, row, NO_OFFSET, 1);
   return OK;
 }
 
-ival_t i_buf_draw (ival_t i, buf_t *this) {
-  (void) i;
-  buf_draw (this);
+ival_t i_buf_draw (ival_t i, buf_t *buf) {
+  i_t *this = (i_t *) i;
+  Buf.draw (buf);
   return OK;
 }
 
-ival_t i_buf_substitute (ival_t i, buf_t *this, char *pat, char *sub, int global,
+ival_t i_buf_substitute (ival_t i, buf_t *buf, char *pat, char *sub, int global,
                                             int interactive, int fidx, int lidx) {
-  (void) i;
-  if (fidx is lidx) fidx = lidx = this->cur_idx;
+  i_t *this = (i_t *) i;
+  if (fidx is lidx) fidx = lidx = buf->cur_idx;
 
-  ival_t val = buf_substitute (this, pat, sub, global, interactive, fidx, lidx);
+  ival_t val = Buf.substitute (buf, pat, sub, global, interactive, fidx, lidx);
   free (sub);
   free (pat);
   return val;
 }
 
-ival_t i_win_buf_init (ival_t i, win_t *this, int frame, int flags) {
-  (void) i;
-  return (ival_t) win_buf_init (this, frame, flags);
+ival_t i_win_buf_init (ival_t i, win_t *win, int frame, int flags) {
+  i_t *this = (i_t *) i;
+  return (ival_t) Win.buf.init (win, frame, flags);
 }
 
-ival_t i_win_set_current_buf (ival_t i, win_t *this, int idx, int draw) {
-  (void) i;
-  buf_t *buf = win_set_current_buf (this, idx, draw);
+ival_t i_win_set_current_buf (ival_t i, win_t *win, int idx, int draw) {
+  i_t *this = (i_t *) i;
+  buf_t *buf = Win.set.current_buf (win, idx, draw);
   return (ival_t) buf;
 }
 
-ival_t i_win_get_current_buf (ival_t i, win_t *this) {
-  (void) i;
-  return (ival_t) win_get_current_buf (this);
+ival_t i_win_get_current_buf (ival_t i, win_t *win) {
+  i_t *this = (i_t *) i;
+  return (ival_t) Win.get.current_buf (win);
 }
 
-ival_t i_buf_normal_page_down (ival_t i, buf_t *this, int count) {
-  (void) i;
-  return buf_normal_page_down (this, count);
-}
-
-ival_t i_buf_normal_page_up (ival_t i, buf_t *this, int count) {
-  (void) i;
-  return buf_normal_page_up (this, count);
-}
-
-ival_t i_buf_normal_goto_linenr (ival_t i, buf_t *this, int linenum, int draw) {
-  (void) i;
-  return buf_normal_goto_linenr (this, linenum, draw);
-}
-
-ival_t i_win_draw (ival_t i, win_t *this) {
-  (void) i;
-  win_draw (this);
+ival_t i_win_draw (ival_t i, win_t *win) {
+  i_t *this = (i_t *) i;
+  Win.draw (win);
   return OK;
 }
 
-ival_t i_win_append_buf (ival_t i, win_t *this, buf_t *buf) {
-  (void) i;
-  win_append_buf (this, buf);
+ival_t i_win_append_buf (ival_t i, win_t *win, buf_t *buf) {
+  i_t *this = (i_t *) i;
+  Win.append_buf (win, buf);
   return OK;
+}
+
+ival_t i_buf_normal_page_down (ival_t i, buf_t *buf, int count) {
+  i_t *this = (i_t *) i;
+  return Buf.normal.page_down (buf, count);
+}
+
+ival_t i_buf_normal_page_up (ival_t i, buf_t *buf, int count) {
+  i_t *this = (i_t *) i;
+  return Buf.normal.page_up (buf, count);
+}
+
+ival_t i_buf_normal_goto_linenr (ival_t i, buf_t *buf, int linenum, int draw) {
+  i_t *this = (i_t *) i;
+  return Buf.normal.goto_linenr (buf, linenum, draw);
 }
 
 struct ifun_t {
@@ -18982,6 +18984,7 @@ private int i_init (Class (i) *interp, i_t *this, I_INIT opts) {
 
 private i_t *i_init_instance (Class (i) *__i__) {
   i_t *this = i_new ();
+  this->prop = __i__->prop;
 
   FILE *err_fp = stderr;
 
@@ -19018,7 +19021,7 @@ private int i_load_file (Class (i) *__i__, char *fn) {
       fname[fnlen] = '\0';
     }
 
-    string_t *ddir = E_venv_get (this->__E__, "i_dir");
+    string_t *ddir = E_venv_get ($OurRoot, "i_dir");
     size_t len = ddir->num_bytes + bytelen (fname) + 2 + 7;
     char tmp[len + 3];
     cstring_cp_fmt (tmp, len + 1, "%s/scripts/%s", ddir->bytes, fname);
@@ -19028,13 +19031,12 @@ private int i_load_file (Class (i) *__i__, char *fn) {
 
     ifnot (file_exists (tmp)) return NOTOK;
 
-    E_set_image_file (this->__E__, tmp);
+    E_set_image_file ($OurRoot, tmp);
 
     return i_eval_file (this, tmp);
   }
 
   return i_eval_file (this, fn);
-
 }
 
 private Class (i) *__init_i__ (Class (E) *e) {
@@ -19067,7 +19069,32 @@ private Class (i) *__init_i__ (Class (E) *e) {
   $my(head) = NULL;
   $my(num_instances) = 0;
   $my(current_idx) = -1;
-  $my(__E__) = e;
+
+  $my(Me)          =  this;
+  $OurRoot         =  e;
+  $my(__Ed__)      =  e->__Ed__;
+  $my(__Win__)     = &e->__Ed__->__Win__;
+  $my(__Buf__)     = &e->__Ed__->__Buf__;
+  $my(__Re__)      = &e->__Ed__->__Re__;
+  $my(__Msg__)     = &e->__Ed__->__Msg__;
+  $my(__Dir__)     = &e->__Ed__->__Dir__;
+  $my(__Term__)    = &e->__Ed__->__Term__;
+  $my(__File__)    = &e->__Ed__->__File__;
+  $my(__Path__)    = &e->__Ed__->__Path__;
+  $my(__Vsys__)    = &e->__Ed__->__Vsys__;
+  $my(__Smap__)    = &e->__Ed__->__Smap__;
+  $my(__Imap__)    = &e->__Ed__->__Imap__;
+  $my(__Input__)   = &e->__Ed__->__Input__;
+  $my(__Video__)   = &e->__Ed__->__Video__;
+  $my(__Rline__)   = &e->__Ed__->__Rline__;
+  $my(__Error__)   = &e->__Ed__->__Error__;
+  $my(__Screen__)  = &e->__Ed__->__Screen__;
+  $my(__Cursor__)  = &e->__Ed__->__Cursor__;
+  $my(__String__)  = &e->__Ed__->__String__;
+  $my(__Cstring__) = &e->__Ed__->__Cstring__;
+  $my(__Vstring__) = &e->__Ed__->__Vstring__;
+  $my(__Ustring__) = &e->__Ed__->__Ustring__;
+
 
   return this;
 }

@@ -257,6 +257,35 @@ enum {
 #define MSG_ERROR(fmt, ...) \
   Msg.error ($my(root), fmt, ##__VA_ARGS__)
 
+#define MY_PROPERTIES            \
+  dim_t *dim;                    \
+  video_t *video;                \
+    int  num_items
+
+#define MY_CLASSES(__me__)          \
+  Class (E) *__E__;                 \
+  Class (__me__) *Me;               \
+  Class (re) *__Re__;               \
+  Class (msg) *__Msg__;             \
+  Class (dir) *__Dir__;             \
+  Class (vsys) *__Vsys__;           \
+  Class (term) *__Term__;           \
+  Class (file) *__File__;           \
+  Class (path) *__Path__;           \
+  Class (smap) *__Smap__;           \
+  Class (imap) *__Imap__;           \
+  Class (input) *__Input__;         \
+  Class (video) *__Video__;         \
+  Class (error) *__Error__;         \
+  Class (rline) *__Rline__;         \
+  Class (screen) *__Screen__;       \
+  Class (cursor) *__Cursor__;       \
+  Class (string) *__String__;       \
+  Class (cstring) *__Cstring__;     \
+  Class (vstring) *__Vstring__;     \
+  Class (ustring) *__Ustring__;
+
+
 /* slre */
 
 #define MAX_BRANCHES 100
@@ -384,7 +413,12 @@ typedef struct ufunc {
 } UserFunc;
 
 NewProp (i,
-  Class (E) *__E__;
+  MY_CLASSES (i);
+
+  Class (buf) *__Buf__;
+  Class (ed)  *__Ed__;
+  Class (win) *__Win__;
+
   int name_gen;
   Type (i) *head;
   int num_instances;
@@ -393,6 +427,9 @@ NewProp (i,
 
 NewType (i,
   char name[32];
+
+  Prop (i) *prop;
+
   size_t
     mem_size,
     max_script_size;
@@ -719,35 +756,6 @@ NewType (hist,
   h_rline_t  *rline;
 );
 
-#define MY_PROPERTIES            \
-  dim_t *dim;                    \
-  video_t *video;                \
-    int  num_items
-
-#define MY_CLASSES(__me__)          \
-  Class (E) *__E__;                 \
-  Class (__me__) *Me;               \
-  Class (i) *__I__;                 \
-  Class (re) *__Re__;               \
-  Class (msg) *__Msg__;             \
-  Class (dir) *__Dir__;             \
-  Class (vsys) *__Vsys__;           \
-  Class (term) *__Term__;           \
-  Class (file) *__File__;           \
-  Class (path) *__Path__;           \
-  Class (smap) *__Smap__;           \
-  Class (imap) *__Imap__;           \
-  Class (input) *__Input__;         \
-  Class (video) *__Video__;         \
-  Class (error) *__Error__;         \
-  Class (rline) *__Rline__;         \
-  Class (screen) *__Screen__;       \
-  Class (cursor) *__Cursor__;       \
-  Class (string) *__String__;       \
-  Class (cstring) *__Cstring__;     \
-  Class (vstring) *__Vstring__;     \
-  Class (ustring) *__Ustring__;
-
 NewType (dim,
   int
     first_row,
@@ -822,8 +830,9 @@ NewProp (buf,
   MY_PROPERTIES;
   MY_CLASSES (buf);
 
-  ed_T  *__Ed__;
-  win_T *__Win__;
+  Class (ed)  *__Ed__;
+  Class (win) *__Win__;
+  Class (i)   *__I__;
 
   ed_t  *root;
   win_t *parent;
@@ -898,8 +907,10 @@ NewProp (win,
 
   MY_PROPERTIES;
   MY_CLASSES (win);
-  buf_T *__Buf__;
-  ed_T  *__Ed__;
+
+  Class (buf) *__Buf__;
+  Class (ed)  *__Ed__;
+  Class (i)   *__I__;
 
   int
     has_promptline,
@@ -947,8 +958,10 @@ NewProp (ed,
 
   MY_PROPERTIES;
   MY_CLASSES (ed);
-  buf_T *__Buf__;
-  win_T *__Win__;
+
+  Class (buf) *__Buf__;
+  Class (win) *__Win__;
+  Class (i)   *__I__;
 
   venv_t *env;
 
