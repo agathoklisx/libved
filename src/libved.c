@@ -6324,6 +6324,10 @@ private venv_t *venv_new (void) {
 #endif
   __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
 
+  env->i_dir = string_new_with_fmt ("%s/i", env->data_dir->bytes);
+  __env_check_directory__ (env->i_dir->bytes, "integrated interpreter directory", 1, 1, 0);
+  __env_check_directory__ (STR_FMT("%s/scripts", env->i_dir->bytes), "integrated interpreter scripts directory", 1, 1, 0);
+
   char *path = getenv ("PATH");
   env->path = (path is NULL) ? NULL : string_new_with (path);
 
@@ -6338,17 +6342,18 @@ private venv_t *venv_new (void) {
 private void venv_free (venv_t **env) {
   if (NULL is env) return;
 
-  string_free ((*env)->user_name);
   string_free ((*env)->group_name);
-  string_free ((*env)->my_dir);
+  string_free ((*env)->user_name);
+  string_free ((*env)->term_name);
   string_free ((*env)->home_dir);
+  string_free ((*env)->env_str);
+  string_free ((*env)->path);
+  string_free ((*env)->i_dir);
+  string_free ((*env)->my_dir);
   string_free ((*env)->tmp_dir);
   string_free ((*env)->data_dir);
   string_free ((*env)->diff_exec);
   string_free ((*env)->xclip_exec);
-  string_free ((*env)->path);
-  string_free ((*env)->term_name);
-  string_free ((*env)->env_str);
 
   free (*env); *env = NULL;
 }
@@ -16981,6 +16986,7 @@ private string_t *E_venv_get (Class (E) *__e__, char *name) {
   if (cstring_eq (name, "term_name")) return __venv_get__ (this, $my(env)->term_name);
   if (cstring_eq (name, "home_dir")) return __venv_get__ (this, $my(env)->home_dir);
   if (cstring_eq (name, "path")) return __venv_get__ (this, $my(env)->path);
+  if (cstring_eq (name, "i_dir")) return __venv_get__(this, $my(env)->i_dir);
   if (cstring_eq (name, "my_dir")) return __venv_get__ (this,  $my(env)->my_dir);
   if (cstring_eq (name, "tmp_dir")) return __venv_get__ (this, $my(env)->tmp_dir);
   if (cstring_eq (name, "data_dir")) return __venv_get__ (this, $my(env)->data_dir);
@@ -17052,8 +17058,8 @@ private int E_save_image (Class (E) *this, char *name) {
     string_append_byte (img, '.');
 
   ifnot (path_is_absolute (img->bytes)) {
-    string_prepend (img, "/images/");
-    string_prepend (img, self(get.env, "data_dir")->bytes);
+    string_prepend (img, "/scripts/");
+    string_prepend (img, self(get.env, "i_dir")->bytes);
   }
 
   string_append (img, "i");
@@ -19012,10 +19018,10 @@ private int i_load_file (Class (i) *__i__, char *fn) {
       fname[fnlen] = '\0';
     }
 
-    string_t *ddir = E_venv_get (this->__E__, "data_dir");
-    size_t len = ddir->num_bytes + bytelen (fname) + 2 + 6;
+    string_t *ddir = E_venv_get (this->__E__, "i_dir");
+    size_t len = ddir->num_bytes + bytelen (fname) + 2 + 7;
     char tmp[len + 3];
-    cstring_cp_fmt (tmp, len + 1, "%s/images/%s", ddir->bytes, fname);
+    cstring_cp_fmt (tmp, len + 1, "%s/scripts/%s", ddir->bytes, fname);
     ifnot (file_exists (tmp)) {
       tmp[len] = '.'; tmp[len+1] = 'i'; tmp[len+2] = '\0';
     }
@@ -19062,13 +19068,6 @@ private Class (i) *__init_i__ (Class (E) *e) {
   $my(num_instances) = 0;
   $my(current_idx) = -1;
   $my(__E__) = e;
-
-  string_t *ddir = E_venv_get (e, "data_dir");
-  size_t len = ddir->num_bytes + 1 + 8;
-  char images[len + 1];
-  cstring_cp_fmt (images, len + 1, "%s/images", ddir->bytes);
-  ifnot (file_exists (images))
-    mkdir (images, S_IRWXU);
 
   return this;
 }

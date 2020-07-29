@@ -933,7 +933,8 @@ NewType (venv,
     *xclip_exec,
     *path,
     *display,
-    *env_str;
+    *env_str,
+    *i_dir;
 );
 
 NewProp (ed,
