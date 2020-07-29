@@ -1773,7 +1773,7 @@ private Vstring_t *vstring_new (void) {
   return Alloc (sizeof (Vstring_t));
 }
 
-private size_t vstring_len (Vstring_t *this) {
+private size_t vstring_get_size (Vstring_t *this) {
   size_t len = 0;
   vstring_t *it = this->head;
 
@@ -1785,8 +1785,10 @@ private size_t vstring_len (Vstring_t *this) {
   return len;
 }
 
-private char *Vstring_to_cstring (Vstring_t *this, int addnl) {
-  size_t len = vstring_len (this) + (addnl ? this->num_items : 0);
+private char *vstring_to_cstring (Vstring_t *this, int addnl) {
+  size_t len = vstring_get_size (this) + (addnl ? this->num_items : 0);
+  ifnot (len) return NULL;
+
   char *buf = Alloc (len + 1);
 
   vstring_t *it = this->head;
@@ -2009,7 +2011,10 @@ private vstring_T __init_vstring__ (void) {
         .sort_and_uniq = vstring_add_sort_and_uniq
       ),
       .to = SubSelfInit (vstring, to,
-        .cstring = Vstring_to_cstring
+        .cstring = vstring_to_cstring
+      ),
+      .get = SubSelfInit (vstring, get,
+        .size = vstring_get_size
       )
     )
   );
@@ -5190,6 +5195,7 @@ private void buf_action_push (buf_t *this, Action_t *action) {
 private char *buf_syn_parser (buf_t *, char *, int, int, row_t *);
 private ftype_t *buf_syn_init (buf_t *);
 private ftype_t *buf_syn_init_c (buf_t *);
+private ftype_t *buf_syn_init_i (buf_t *);
 
 char *default_extensions[] = {".txt", NULL};
 
@@ -5216,6 +5222,17 @@ char c_multiline_comment_end[] = "*/";
 char c_multiline_comment_continuation[] = " * ";
 char c_operators[] = "+:?-%*^><=|&~.()[]{}!";
 char c_balanced_pairs[] = "[](){}";
+
+char *i_extensions[] = {".i", NULL};
+char *i_shebangs[] = {"#!/bin/env i", NULL};
+char i_operators[] = "+:-*^><=|&~.()[]{}/";
+char *i_keywords[] = {
+  "while I", "if I", "var V", "ifnot I", "else I", "return I", "func I", "is I",
+  "isnot I", "print F", "println F", "true V", "false V", "OK V", "NOTOK V", NULL
+};
+
+char i_singleline_comment[] = "//";
+
 char *NULL_ARRAY[] = {NULL};
 
 syn_t HL_DB[] = {
@@ -5233,6 +5250,11 @@ syn_t HL_DB[] = {
     c_multiline_comment_continuation,
     HL_STRINGS, HL_NUMBERS,
     buf_syn_parser, buf_syn_init_c, 0, 0, NULL, NULL, c_balanced_pairs,
+  },
+  {
+    "i", NULL_ARRAY, i_extensions, i_shebangs, i_keywords, i_operators,
+    i_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    buf_syn_parser, buf_syn_init_i, 0, 0, NULL, NULL, c_balanced_pairs
   }
 };
 
@@ -5860,14 +5882,24 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
 }
 
 private ftype_t *buf_syn_init_c (buf_t *this) {
-  int idx = ed_syn_get_ftype_idx ($my(root), "c");
-  return buf_ftype_set (this, idx, QUAL(FTYPE,
+  int idx = Ed.syn.get_ftype_idx ($my(root), "c");
+  return self(ftype.set, idx, QUAL(FTYPE,
     .autoindent = buf_autoindent_c,
     .shiftwidth = C_DEFAULT_SHIFTWIDTH,
     .tab_indents = C_TAB_ON_INSERT_MODE_INDENTS,
     .on_open_fname_under_cursor = ftype_on_open_fname_under_cursor_c,
     .balanced = buf_balanced_obj
     ));
+}
+
+private ftype_t *buf_syn_init_i (buf_t *this) {
+  int idx = Ed.syn.get_ftype_idx ($my(root), "i");
+  return self(ftype.set, idx, QUAL(FTYPE,
+    .autoindent = buf_autoindent_c,
+    .tabwidth = 2,
+    .tab_indents = 1,
+    .balanced = buf_balanced_obj
+  ));
 }
 
 private ftype_t *buf_syn_init (buf_t *this) {
@@ -6511,6 +6543,26 @@ private row_t *buf_current_pop_next (buf_t *this) {
   }
 
   return row;
+}
+
+private char *buf_get_contents (buf_t *this, int addnl) {
+  size_t len = self(get.size) - (addnl ? 0 : this->num_items);
+  char *buf = Alloc (len + 1);
+
+  row_t *it = this->head;
+  size_t offset = 0;
+
+  while (it) {
+    byte_cp (buf + offset, it->data->bytes, it->data->num_bytes);
+    offset += it->data->num_bytes;
+    if (addnl)
+      buf[offset++] = '\n';
+    it = it->next;
+  }
+
+  buf[len] = '\0';
+
+  return buf;
 }
 
 private win_t *buf_get_parent (buf_t *this) {
@@ -15756,9 +15808,21 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
       if (0 is (($my(flags) & BUF_IS_SPECIAL)) and
           0 is Cstring.eq ($my(basename), UNAMED)) {
         Vstring_t *lines = File.readlines ($my(fname), NULL, NULL, NULL);
-        retval = buf_interpret (thisp, Vstring.to.cstring (lines, ADD_NL));
+        char *buf = Vstring.to.cstring (lines, ADD_NL);
+        if (NULL is buf)
+          buf = self(get.contents, ADD_NL);
+
+        retval = buf_interpret (thisp, buf);
         Vstring.free (lines);
+        break;
       }
+
+      if (Cstring.eq ($my(basename), UNAMED) or
+          Cstring.eq ($my(basename), VED_SCRATCH_BUF)) {
+        char *buf = self(get.contents, ADD_NL);
+        retval = buf_interpret (thisp, buf);
+      }
+
       break;
 
     default:
@@ -15832,8 +15896,8 @@ private void ed_syn_append (ed_t *this, syn_t syn) {
 }
 
 private void ed_init_syntaxes (ed_t *this) {
-  ed_syn_append (this, HL_DB[0]);
-  ed_syn_append (this, HL_DB[1]);
+  for (size_t i = 0; i < ARRLEN(HL_DB); i++)
+    self(syn.append, HL_DB[i]);
 }
 
 private void ed_free (ed_t *this) {
@@ -16621,6 +16685,7 @@ private Class (ed) *editor_new (void) {
           .flags = buf_get_flags,
           .num_lines = buf_get_num_lines,
           .size = buf_get_size,
+          .contents = buf_get_contents,
           .current_word = buf_get_current_word,
           .current_row_idx = buf_get_current_row_idx,
           .current_col_idx = buf_get_current_col_idx,
@@ -17599,7 +17664,7 @@ static inline const char *i_StringGetPtr (Istring_t s) { return (const char *)(i
 static inline void i_StringSetLen (Istring_t *s, unsigned len) { s->len_ = len; }
 static inline void i_StringSetPtr (Istring_t *s, const char *ptr) { s->ptr_ = ptr; }
 
-private int i_stringeq (Istring_t ai, Istring_t bi) {
+private int i_StringEq (Istring_t ai, Istring_t bi) {
   const char *a, *b;
   size_t i, len;
 
@@ -17783,7 +17848,7 @@ private Sym * i_lookup_sym (i_t *this, Istring_t name) {
 
   while ((ival_t) s > (ival_t) this->arena) {
     --s;
-    if (i_stringeq (s->name, name))
+    if (i_StringEq (s->name, name))
       return s;
   }
 
@@ -17813,7 +17878,7 @@ private int i_do_next_token (i_t *this, int israw) {
     c = i_get_char (this);
   }
 
-  if (c is '#') {
+  if ((c is '/' and i_peek_char (this, 0) is  '/') or c is '#') {
     do
       c = i_get_char (this);
     while (c >= 0 and c isnot '\n');
@@ -17904,7 +17969,7 @@ private int i_do_next_token (i_t *this, int israw) {
       size_t len = 0;
       int pc = 0;
       int cc = 0;
-      //while ('"' isnot i_peek_char (this, len)) len++;
+
       while (pc = cc, (cc = i_peek_char (this, len)) isnot -1) {
         if ('"' is cc and pc isnot '\\') break;
         len++;

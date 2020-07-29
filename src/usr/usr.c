@@ -249,15 +249,6 @@ char *sh_keywords[] = {
   "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
   "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
 char sh_singleline_comment[] = "#";
-char *i_extensions[] = {".i", NULL};
-char *i_shebangs[] = {"#!/bin/env i", NULL};
-char i_operators[] = "+:-*^><=|&~.()[]{}/";
-char *i_keywords[] = {
-  "while I", "if I", "var V", "ifnot I", "else I", "return I", "func I", "is I",
-  "isnot I", "print F", "println F", "true V", "false V", "OK V", "NOTOK V", NULL
-};
-
-char i_singleline_comment[] = "#";
 
 char *zig_extensions[] = {".zig", NULL};
 char zig_operators[] = "+:-*^><=|&~.()[]{}/";
@@ -398,12 +389,6 @@ private ftype_t *__u_zig_syn_init (buf_t *this) {
   return ft;
 }
 
-private ftype_t *__u_i_syn_init (buf_t *this) {
-  ftype_t *ft = Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "i"),
-    QUAL(FTYPE, .autoindent = __u_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
-  return ft;
-}
-
 /* really minimal and incomplete support */
 syn_t u_syn[] = {
   {
@@ -419,11 +404,6 @@ syn_t u_syn[] = {
     sh_singleline_comment, NULL, NULL, NULL,
     HL_STRINGS, HL_NUMBERS,
     __u_syn_parser, __u_sh_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs,
-  },
-  {
-    "i", __u_NULL_ARRAY, i_extensions, i_shebangs, i_keywords, i_operators,
-    i_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
-    __u_syn_parser, __u_i_syn_init, 0, 0, NULL, NULL, __u_balanced_pairs
   },
   {
     "zig", __u_NULL_ARRAY, zig_extensions, __u_NULL_ARRAY, zig_keywords, zig_operators,

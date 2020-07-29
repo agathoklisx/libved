@@ -868,8 +868,6 @@ NewProp (buf,
     saved_sec,
     autosave;
 
-  size_t num_bytes;
-
   string_t
     *cur_insert,
     *last_insert,

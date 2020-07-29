@@ -1229,6 +1229,10 @@ NewSubSelf (vstring, current,
     (*append_with_len) (Vstring_t *, char *, size_t);
 );
 
+NewSubSelf (vstring, get,
+  size_t (*size) (Vstring_t *);
+);
+
 NewSubSelf (vstring, add,
   Vstring_t *(*sort_and_uniq) (Vstring_t *, char *bytes);
 );
@@ -1241,6 +1245,7 @@ NewSelf (vstring,
   SubSelf (vstring, current) current;
   SubSelf (vstring, add) add;
   SubSelf (vstring, to) to;
+  SubSelf (vstring, get) get;
 
   Vstring_t *(*new) (void);
   void
@@ -1511,11 +1516,12 @@ NewSubSelf (buf, get,
   SubSelf (bufget, info) info;
 
   char
-     *(*basename) (buf_t *),
-     *(*fname) (buf_t *),
-     *(*ftype_name) (buf_t *),
-     *(*info_string) (buf_t *),
-     *(*current_word) (buf_t *, char *, char *, int, int *, int *);
+    *(*contents) (buf_t *, int),
+    *(*basename) (buf_t *),
+    *(*fname) (buf_t *),
+    *(*ftype_name) (buf_t *),
+    *(*info_string) (buf_t *),
+    *(*current_word) (buf_t *, char *, char *, int, int *, int *);
 
   size_t
     (*size) (buf_t *),
