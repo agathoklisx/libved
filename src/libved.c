@@ -3,19 +3,20 @@
 
 #ifndef __APPLE__
 #define _DEFAULT_SOURCE
-#endif
 
-#if defined(__MACH__) && !defined(CLOCK_REALTIME)
-/*
-https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
-*/
+#else
+#define _DARWIN_C_SOURCE
+
+typedef int clockid_t;
+
+// https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
 #include <sys/time.h>
+
+#ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0
 #endif
 
-#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
-#define _DARWIN_C_SOURCE
-#endif
+#endif /* __APPLE__ */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -1995,6 +1996,7 @@ private vstring_T __init_vstring__ (void) {
       .free = vstring_free,
       .clear = vstring_clear,
       .new = vstring_new,
+      .dup = vstring_dup,
       .join = vstring_join,
       .append = vstring_append,
       .append_with = vstring_append_with,
@@ -4091,7 +4093,7 @@ private void video_render_set_from_to (video_t *this, int frow, int lrow) {
   string_append (this->render, TERM_CURSOR_SHOW);
 }
 
-private void video_draw_at (video_t *this, int at) {
+private void video_draw_row_at (video_t *this, int at) {
   int idx = at - 1;
 
   if (current_list_set(this, idx) is INDEX_ERROR) return;
@@ -4149,7 +4151,7 @@ private void video_row_hl_at (video_t *this, int idx, int color,
 
 private void video_resume_painted_rows (video_t *this) {
   int row = 0, i = 0;
-  while (0 isnot (row = this->rows[i++])) video_draw_at (this, row);
+  while (0 isnot (row = this->rows[i++])) video_draw_row_at (this, row);
   this->rows[0] = 0;
 }
 
@@ -4263,9 +4265,11 @@ private video_T __init_video__ (void) {
       .free = video_free,
       .flush = video_flush,
       .new =  video_new,
-      .set_with = video_set_row_with,
-      .Draw = SubSelfInit (video, draw,
-        .row_at = video_draw_at,
+      .set = SubSelfInit (video, set,
+        .row_with = video_set_row_with
+      ),
+      .draw = SubSelfInit (video, draw,
+        .row_at = video_draw_row_at,
         .all = video_draw_all
       )
     )
@@ -4318,11 +4322,12 @@ private menu_t *menu_new (ed_t *this, int first_row, int last_row, int first_col
 }
 
 private void menu_clear (menu_t *menu) {
+  buf_t *this = menu->this;
   if (menu->header->num_bytes)
-    video_draw_at (menu->cur_video, menu->first_row - 1);
+    Video.draw.row_at (menu->cur_video, menu->first_row - 1);
 
   for (int i = 0;i < menu->num_rows; i++)
-    video_draw_at (menu->cur_video, menu->first_row + i);
+    Video.draw.row_at (menu->cur_video, menu->first_row + i);
 }
 
 private int rline_menu_at_beg (rline_t **rl) {
@@ -7000,8 +7005,7 @@ private void win_set_video_dividers (win_t *this) {
 
   line[len+1] = '\0';
    for (int i = 0; i < $my(num_frames) - 1; i++) {
-     Video.set_with ($my(video), $my(frames_dim)[i]->last_row,
-       line);
+     Video.set.row_with ($my(video), $my(frames_dim)[i]->last_row, line);
   }
 }
 
@@ -7463,6 +7467,8 @@ private int win_pop_current_buf (win_t *this) {
 }
 
 private void win_draw (win_t *w) {
+  buf_t *this = w->head;
+
   char line[$from(w, dim->num_cols) + 1];
   for (int i = 0; i < $from(w, dim->num_cols); i++) line[i] = ' ';
   line[$from(w, dim->num_cols)] = '\0';
@@ -7470,10 +7476,9 @@ private void win_draw (win_t *w) {
 //  if (w->num_items is 0) return;
 
   for (int i = $from(w, dim->first_row) - 1; i < $from(w, dim->last_row); i++) {
-    $from(w, __Video__->self).set_with ($from(w, video), i, line);
+    Video.set.row_with ($from(w, video), i, line);
   }
 
-  buf_t *this = w->head;
   Win.set.video_dividers ($my(parent));
 
   while (this) {
@@ -7487,7 +7492,7 @@ private void win_draw (win_t *w) {
   }
 
   this = w->head;
-  Video.Draw.all ($my(video));
+  Video.draw.all ($my(video));
 }
 
 private void ed_draw_current_win (ed_t *this) {
@@ -7638,8 +7643,8 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
   $my(video)->row_pos = $from(this->current, cur_video_row);
   $my(video)->col_pos = $from(this->current, cur_video_col);
   if (this is $my(parent)->current) {
-    Video.set_with ($my(video), $myparents(prompt_row), " ");
-    Video.set_with ($my(video), $myparents(msg_row), " ");
+    Video.set.row_with ($my(video), $myparents(prompt_row), " ");
+    Video.set.row_with ($my(video), $myparents(msg_row), " ");
     self(draw);
   }
 }
@@ -7648,8 +7653,8 @@ private void ed_check_msg_status (ed_t *this) {
   if ($my(msg_send) is 1)
     $my(msg_send)++;
   else if (2 is $my(msg_send)) {
-    Video.set_with ($my(video), $my(msg_row) - 1, " ");
-    Video.Draw.row_at ($my(video), $my(msg_row));
+    Video.set.row_with ($my(video), $my(msg_row) - 1, " ");
+    Video.draw.row_at ($my(video), $my(msg_row));
     $my(msg_send) = 0;
   }
 }
@@ -7898,11 +7903,11 @@ private void ed_msg_set (ed_t *this, int color, int msg_flags, char *msg,
     String.append($my(msgline), TERM_COLOR_RESET);
   }
 
-  Video.set_with ($my(video), $my(msg_row) - 1, $my(msgline)->bytes);
+  Video.set.row_with ($my(video), $my(msg_row) - 1, $my(msgline)->bytes);
 
   int draw = (msg_flags & MSG_SET_DRAW);
   if (draw)
-    Video.Draw.row_at ($my(video), $my(msg_row));
+    Video.draw.row_at ($my(video), $my(msg_row));
 
   $my(msg_send) = 1;
 }
@@ -7980,19 +7985,19 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
 
   String.append_fmt ($myroots(topline), "%s%s", tmnow, TERM_COLOR_RESET);
   String.prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT, COLOR_TOPLINE);
-  Video.set_with ($my(video), 0, $myroots(topline)->bytes);
+  Video.set.row_with ($my(video), 0, $myroots(topline)->bytes);
 }
 
 private void buf_set_draw_topline (buf_t *this) {
   Ed.set.topline ($my(root), this);
-  Video.Draw.row_at ($my(video), 1);
+  Video.draw.row_at ($my(video), 1);
 }
 
 private void buf_set_statusline (buf_t *this) {
   if ($my(dim->num_rows) is 1 or (
       $my(show_statusline) is 0 and 0 is IS_MODE (INSERT_MODE))) {
     String.replace_with ($my(statusline), " ");
-    Video.set_with ($my(video), $my(statusline_row) - 1, $my(statusline)->bytes);
+    Video.set.row_with ($my(video), $my(statusline_row) - 1, $my(statusline)->bytes);
     return;
   }
 
@@ -8009,12 +8014,12 @@ private void buf_set_statusline (buf_t *this) {
 
   String.clear_at ($my(statusline), $my(dim)->num_cols + TERM_SET_COLOR_FMT_LEN);
   String.append_fmt ($my(statusline), "%s", TERM_COLOR_RESET);
-  Video.set_with ($my(video), $my(statusline_row) - 1, $my(statusline)->bytes);
+  Video.set.row_with ($my(video), $my(statusline_row) - 1, $my(statusline)->bytes);
 }
 
 private void buf_set_draw_statusline (buf_t *this) {
   buf_set_statusline (this);
-  Video.Draw.row_at ($my(video), $my(statusline_row));
+  Video.draw.row_at ($my(video), $my(statusline_row));
 }
 
 private string_t *get_current_number (buf_t *this, int *fidx) {
@@ -8539,7 +8544,13 @@ private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
 
   row_t *it = this->head;
   int idx = 0;
-  while (idx < fidx) {idx++; it = it->next;}
+  while (idx < fidx) {
+    idx++;
+    if (NULL is it->next) break;
+    it = it->next;
+  }
+
+  if (lidx >= this->num_items) lidx = this->num_items - 1;
 
   while (idx++ <= lidx) {
     int bidx = 0;
@@ -8952,8 +8963,8 @@ private char *buf_parse_line (buf_t *this, row_t *row, char *line, int idx) {
 private void buf_draw_current_row (buf_t *this) {
   char line[MAXLEN_LINE];
   buf_parse_line (this, this->current, line, this->cur_idx);
-  Video.set_with ($my(video), $my(video)->row_pos - 1, line);
-  Video.Draw.row_at ($my(video), $my(video)->row_pos);
+  Video.set.row_with ($my(video), $my(video)->row_pos - 1, line);
+  Video.draw.row_at ($my(video), $my(video)->row_pos);
   buf_set_draw_statusline (this);
   Cursor.set_pos ($my(term_ptr), $my(video)->row_pos, $my(video)->col_pos);
 }
@@ -8967,12 +8978,12 @@ private void buf_to_video (buf_t *this) {
   for (i = $my(dim)->first_row - 1; i < $my(statusline_row) - 1; i++) {
     if (row is NULL) break;
     buf_parse_line (this, row, line, idx++);
-    Video.set_with ($my(video), i, line);
+    Video.set.row_with ($my(video), i, line);
     row = row->next;
   }
 
   while (i < $my(statusline_row) - 1)
-    Video.set_with ($my(video), i++, $my(ftype)->on_emptyline->bytes);
+    Video.set.row_with ($my(video), i++, $my(ftype)->on_emptyline->bytes);
 
   buf_set_statusline (this);
 }
@@ -9308,8 +9319,7 @@ private int buf_normal_bol (buf_t *this) {
   return DONE;
 }
 
-private int buf_normal_end_word (buf_t **thisp, int count, int run_insert_mode, int draw) {
-  buf_t *this = *thisp;
+private int buf_normal_end_word (buf_t *this, int count, int run_insert_mode, int draw) {
   ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
   int cur_idx = $mycur(cur_col_idx);
@@ -9987,7 +9997,8 @@ private int buf_complete_word (buf_t **thisp) {
     vundo_push (this, action);
     String.delete_numbytes_at ($mycur(data), orig_patlen, $my(shared_int));
     String.insert_at ($mycur(data), word, $my(shared_int));
-    buf_normal_end_word (thisp, 1, 0, DONOT_DRAW);
+    buf_normal_end_word (this, 1, 0, DONOT_DRAW);
+    this = *thisp;
     buf_normal_right (this, 1, DONOT_DRAW);
     $my(flags) |= BUF_IS_MODIFIED;
     self(draw_current_row);
@@ -12617,9 +12628,9 @@ private int ed_complete_arg (menu_t *menu) {
   } else
     menu_free_list (menu);
 
-  Vstring_t *args = vstring_new ();
+  Vstring_t *args = Vstring.new ();
 
-  int patisopt = (menu->patlen ? cstring_eq (menu->pat, "--bufname=") : 0);
+  int patisopt = (menu->patlen ? Cstring.eq (menu->pat, "--bufname=") : 0);
 
   if ((com >= VED_COM_BUF_DELETE_FORCE and com <= VED_COM_BUF_CHANGE_ALIAS) or
        patisopt) {
@@ -12627,16 +12638,16 @@ private int ed_complete_arg (menu_t *menu) {
 
     buf_t *it = $my(parent)->head;
     while (it) {
-      ifnot (cstring_eq (cur_fname, $from(it, fname))) {
+      ifnot (Cstring.eq (cur_fname, $from(it, fname))) {
         if ((0 is menu->patlen or 1 is patisopt) or
-             cstring_eq_n ($from(it, fname), menu->pat, menu->patlen)) {
+             Cstring.eq_n ($from(it, fname), menu->pat, menu->patlen)) {
           ifnot (patisopt) {
             size_t len = bytelen ($from(it, fname)) + 10 + 2;
             char bufn[len + 1];
             snprintf (bufn, len + 1, "--bufname=\"%s\"", $from(it, fname));
-            vstring_add_sort_and_uniq (args, bufn);
+            Vstring.add.sort_and_uniq (args, bufn);
           } else
-            vstring_add_sort_and_uniq (args, $from(it, fname));
+            Vstring.add.sort_and_uniq (args, $from(it, fname));
         }
       }
       it = it->next;
@@ -12649,13 +12660,13 @@ private int ed_complete_arg (menu_t *menu) {
 
   ifnot (menu->patlen) {
     while ($myroots(commands)[com]->args[i])
-      vstring_add_sort_and_uniq (args, $myroots(commands)[com]->args[i++]);
+      Vstring.add.sort_and_uniq (args, $myroots(commands)[com]->args[i++]);
   } else {
     while ($myroots(commands)[com]->args[i]) {
-      if (cstring_eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
+      if (Cstring.eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
         if (NULL is strstr (line, $myroots(commands)[com]->args[i]) or
-        	cstring_eq ($myroots(commands)[com]->args[i], "--fname="))
-          vstring_add_sort_and_uniq (args, $myroots(commands)[com]->args[i]);
+        	Cstring.eq ($myroots(commands)[com]->args[i], "--fname="))
+          Vstring.add.sort_and_uniq (args, $myroots(commands)[com]->args[i]);
       i++;
     }
   }
@@ -12663,7 +12674,7 @@ private int ed_complete_arg (menu_t *menu) {
 check_list:
   ifnot (args->num_items) {
     menu->state |= MENU_QUIT;
-    vstring_free (args);
+    Vstring.free (args);
     return NOTHING_TODO;
   }
 
@@ -12682,23 +12693,23 @@ private int ed_complete_command (menu_t *menu) {
   } else
     menu_free_list (menu);
 
-  Vstring_t *coms = vstring_new ();
+  Vstring_t *coms = Vstring.new ();
   int i = 0;
 
   ifnot (menu->patlen) {
     while ($myroots(commands)[i])
-      vstring_add_sort_and_uniq (coms, $myroots(commands)[i++]->com);
+      Vstring.add.sort_and_uniq (coms, $myroots(commands)[i++]->com);
   } else {
     while ($myroots(commands)[i]) {
-      ifnot (strncmp ($myroots(commands)[i]->com, menu->pat, menu->patlen))
-        vstring_add_sort_and_uniq (coms, $myroots(commands)[i]->com);
+      ifnot (Cstring.cmp_n ($myroots(commands)[i]->com, menu->pat, menu->patlen))
+        Vstring.add.sort_and_uniq (coms, $myroots(commands)[i]->com);
       i++;
     }
   }
 
   ifnot (coms->num_items) {
     menu->state |= MENU_QUIT;
-    vstring_free (coms);
+    Vstring.free (coms);
     return NOTHING_TODO;
   }
 
@@ -12729,7 +12740,7 @@ private int ed_complete_filename (menu_t *menu) {
 
   if (NULL is sp) {
     char *cwd = Dir.current ();
-    cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+    Cstring.cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     end = NULL;
     goto getlist;
@@ -12743,14 +12754,14 @@ private int ed_complete_filename (menu_t *menu) {
       if (*end is DIR_SEP) { if (*(end + 1)) end++; else end = NULL; }
     }
 
-    cstring_cp (dir, PATH_MAX, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
+    Cstring.cp (dir, PATH_MAX, $myroots(env)->home_dir->bytes, $myroots(env)->home_dir->num_bytes);
 
     joinpath = 1;
     goto getlist;
   }
 
-  if (is_directory (menu->pat) and bytelen (path_basename (menu->pat)) > 1) {
-    cstring_cp (dir, PATH_MAX, menu->pat, menu->patlen);
+  if (Dir.is_directory (menu->pat) and bytelen (Path.basename (menu->pat)) > 1) {
+    Cstring.cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -12763,7 +12774,7 @@ private int ed_complete_filename (menu_t *menu) {
       end = NULL;
     } else {
       char *cwd = Dir.current ();
-      cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+      Cstring.cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
       free (cwd);
       end = sp;
     }
@@ -12772,7 +12783,7 @@ private int ed_complete_filename (menu_t *menu) {
   }
 
   if (*sp is DIR_SEP) {
-    cstring_cp (dir, PATH_MAX, menu->pat, menu->patlen);
+    Cstring.cp (dir, PATH_MAX, menu->pat, menu->patlen);
     end = NULL;
     joinpath = 1;
     goto getlist;
@@ -12782,7 +12793,7 @@ private int ed_complete_filename (menu_t *menu) {
   if (sp is menu->pat) {
     end = sp;
     char *cwd = Dir.current ();
-    cstring_cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
+    Cstring.cp (dir, PATH_MAX, cwd, PATH_MAX - 1);
     free (cwd);
     goto getlist;
   }
@@ -12796,22 +12807,22 @@ private int ed_complete_filename (menu_t *menu) {
 
 getlist:;
   int endlen = (NULL is end) ? 0 : bytelen (end);
-  dirlist_t *dlist = dir_list (dir, 0);
+  dirlist_t *dlist = Dir.list (dir, 0);
 
   if (NULL is dlist) {
     menu->state |= MENU_QUIT;
     return NOTHING_TODO;
   }
 
-  Vstring_t *vs = vstring_new ();
+  Vstring_t *vs = Vstring.new ();
   vstring_t *it = dlist->list->head;
 
   $my(shared_int) = joinpath;
   String.replace_with ($my(shared_str), dir);
 
   while (it) {
-    if (end is NULL or (cstring_eq_n (it->data->bytes, end, endlen))) {
-      vstring_add_sort_and_uniq (vs, it->data->bytes);
+    if (end is NULL or (Cstring.eq_n (it->data->bytes, end, endlen))) {
+      Vstring.add.sort_and_uniq (vs, it->data->bytes);
     }
 
     it = it->next;
@@ -12821,7 +12832,7 @@ getlist:;
 
   menu->list = vs;
   menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
-  string_replace_with (menu->header, menu->pat);
+  String.replace_with (menu->header, menu->pat);
 
   return DONE;
 
@@ -12839,7 +12850,7 @@ finalize:
   } else
     String.replace_with ($my(shared_str), menu->pat);
 
-  if (is_directory ($my(shared_str)->bytes))
+  if (Dir.is_directory ($my(shared_str)->bytes))
     menu->state |= MENU_REDO;
   else
     menu->state |= MENU_DONE;
@@ -12855,7 +12866,7 @@ private int buf_insert_complete_filename (buf_t **thisp) {
   char word[WORD_LEN]; word[0] = '\0';
   if (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]) and (
       $mycur(data)->num_bytes > 1 and 0 is IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx) - 1])))
-    buf_normal_left (this, 1, DRAW);
+    self(normal.left, 1, DRAW);
 
   self(get.current_word, word, Notfname, Notfname_len, &fidx, &lidx);
   size_t len = bytelen (word);
@@ -12873,7 +12884,7 @@ redo:;
     if (NULL is item) { retval = NOTHING_TODO; goto theend; }
 
     menu->patlen = bytelen (item);
-    cstring_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
+    Cstring.cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
     menu->state |= MENU_FINALIZE;
 
     ed_complete_filename (menu);
@@ -12881,7 +12892,7 @@ redo:;
     if (menu->state & MENU_DONE) break;
 
     len = $my(shared_str)->num_bytes;
-    cstring_cp (word, WORD_LEN, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
+    Cstring.cp (word, WORD_LEN, $my(shared_str)->bytes, $my(shared_str)->num_bytes);
     menu_free (menu);
     goto redo;
   }
@@ -12890,7 +12901,7 @@ redo:;
       $my(shared_str)->bytes);
 
   $my(flags) |= BUF_IS_MODIFIED;
-  buf_normal_end_word (thisp, 1, 0, DONOT_DRAW);
+  self(normal.end_word, 1, 0, DONOT_DRAW);
   self(draw_current_row);
 
 theend:
@@ -12899,23 +12910,24 @@ theend:
 }
 
 private void rline_clear (rline_t *rl) {
+  ed_t *this = rl->ed;
   rl->state &= ~RL_CLEAR;
   int row = rl->first_row;
   while (row < rl->prompt_row)
-    video_draw_at (rl->cur_video, row++);
+    Video.draw.row_at (rl->cur_video, row++);
 
   if (rl->prompt_row is $from(rl->ed, prompt_row))
-    video_set_row_with (rl->cur_video, rl->prompt_row - 1, " ");
+    Video.set.row_with (rl->cur_video, rl->prompt_row - 1, " ");
 
-  video_draw_at (rl->cur_video, rl->prompt_row);
+  Video.draw.row_at (rl->cur_video, rl->prompt_row);
 
   if (rl->state & RL_CLEAR_FREE_LINE) {
-    vstring_free (rl->line);
+    Vstring.free (rl->line);
     rl->num_items = 0;
     rl->cur_idx = 0;
-    rl->line = vstring_new ();
+    rl->line = Vstring.new ();
     vstring_t *vstr = AllocType (vstring);
-    vstr->data = string_new_with_len (" ", 1);
+    vstr->data = String.new_with_len (" ", 1);
     current_list_append (rl->line, vstr);
   }
 
@@ -12991,15 +13003,15 @@ private rline_t *rline_complete_last_arg (rline_t *rl) {
 
 loop_again:
   if (lrl->line isnot NULL)
-    vstring_free (lrl->line);
+    Vstring.free (lrl->line);
 
-  lrl->line = vstring_dup (rl->line);
+  lrl->line = Vstring.dup (rl->line);
   BYTES_TO_RLINE (lrl, $my(rl_last_component)->current->data->bytes,
                  (int) $my(rl_last_component)->current->data->num_bytes);
-  rline_write_and_break (lrl);
+  Rline.write_and_break (lrl);
 
 get_char:;
-  utf8 c = rline_edit (lrl)->c;
+  utf8 c = Rline.edit (lrl)->c;
   switch (c) {
     case ESCAPE_KEY:
       goto theend;
@@ -13017,13 +13029,13 @@ get_char:;
   }
 
 thesuccess:
-  vstring_free (rl->line);
-  rl->line = vstring_dup (lrl->line);
+  Vstring.free (rl->line);
+  rl->line = Vstring.dup (lrl->line);
 
 theend:
-  rline_clear (lrl);
+  Rline.clear (lrl);
   rline_release (lrl);
-  video_draw_at (rl->cur_video, rl->first_row); // is minus one
+  Video.draw.row_at (rl->cur_video, rl->first_row); // is minus one
   return rl;
 }
 
@@ -13124,13 +13136,13 @@ theinput:
 
 thesuccess:
   rline_free_members (rl);
-  rl->line = vstring_dup (it->data->line);
+  rl->line = Vstring.dup (it->data->line);
   rl->first_row = it->data->first_row;
   rl->row_pos = it->data->row_pos;
 
 theend:
-  rline_clear (lrl);
-  video_draw_at (rl->cur_video, rl->first_row); // is minus one
+  Rline.clear (lrl);
+  Video.draw.row_at (rl->cur_video, rl->first_row); // is minus one
   rline_release (lrl);
   rl->at_beg = at_beg;
   rl->at_end = at_end;
@@ -13728,6 +13740,7 @@ set_pos:
 }
 
 private void rline_write (rline_t *rl) {
+  ed_t *this = rl->ed;
   int orig_first_row = rl->first_row;
 
   if (rl->line->num_items + 1 <= rl->num_cols) {
@@ -13741,7 +13754,7 @@ private void rline_write (rline_t *rl) {
   }
 
   while (rl->first_row > orig_first_row)
-    video_draw_at (rl->cur_video, orig_first_row++);
+    Video.draw.row_at (rl->cur_video, orig_first_row++);
 
   rline_render (rl);
   fd_write (rl->fd, rl->render->bytes, rl->render->num_bytes);
@@ -16263,8 +16276,9 @@ handle_com:
 
     case 'E':
     case 'e':
-      retval = buf_normal_end_word (thisp, count,
+      retval = buf_normal_end_word (this, count,
         ($my(ftype)->small_e_on_normal_goes_insert_mode is 1 and 'e' is com), DRAW);
+      this = *thisp;
       break;
 
     case ARROW_RIGHT_KEY:
@@ -16760,11 +16774,14 @@ private Class (ed) *editor_new (void) {
           .push = buf_action_push
         ),
         .normal = SubSelfInit (buf, normal,
+          .up = buf_normal_up,
           .bof = buf_normal_bof,
           .eof = buf_normal_eof,
           .down = buf_normal_down,
-          .up = buf_normal_up,
+          .left = buf_normal_left,
+          .right = buf_normal_right,
           .page_up = buf_normal_page_up,
+          .end_word = buf_normal_end_word,
           .page_down = buf_normal_page_down,
           .goto_linenr = buf_normal_goto_linenr
         ),

@@ -1028,25 +1028,29 @@ NewType (i_options,
   .max_script_size = 1 << 16,            \
   __VA_ARGS__}
 
+NewSubSelf (video, set,
+  void (*row_with) (video_t *, int, char *);
+);
 
 NewSubSelf (video, draw,
   void
-     (*row_at) (video_t *, int),
-     (*all) (video_t *);
+    (*row_at) (video_t *, int),
+    (*all) (video_t *);
 
   int
     (*bytes) (video_t *, char *, size_t);
 );
 
 NewSelf (video,
-  SubSelf (video, draw) Draw;
+  SubSelf (video, set) set;
+  SubSelf (video, draw) draw;
+
   video_t
     *(*new) (int, int, int, int, int);
 
   void
-     (*free) (video_t *),
-     (*flush) (video_t *, string_t *),
-     (*set_with) (video_t *, int, char *);
+    (*free) (video_t *),
+    (*flush) (video_t *, string_t *);
 );
 
 NewClass (video,
@@ -1247,7 +1251,10 @@ NewSelf (vstring,
   SubSelf (vstring, to) to;
   SubSelf (vstring, get) get;
 
-  Vstring_t *(*new) (void);
+  Vstring_t
+    *(*new) (void),
+    *(*dup) (Vstring_t *);
+
   void
     (*free) (Vstring_t *),
     (*clear) (Vstring_t *),
@@ -1639,10 +1646,13 @@ NewSubSelf (buf, action,
 NewSubSelf (buf, normal,
   int
     (*up) (buf_t *, int, int, int),
-    (*down) (buf_t *, int, int, int),
     (*bof) (buf_t *, int),
     (*eof) (buf_t *, int),
+    (*down) (buf_t *, int, int, int),
+    (*left) (buf_t *, int, int),
+    (*right) (buf_t *, int, int),
     (*page_up) (buf_t *, int),
+    (*end_word) (buf_t *, int, int, int),
     (*page_down) (buf_t *, int),
     (*goto_linenr) (buf_t *, int, int);
 );
