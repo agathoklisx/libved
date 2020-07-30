@@ -8,12 +8,9 @@
 #define _POSIX_C_SOURCE 200809L
 
 #ifdef __APPLE__
-
 #ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE
 #endif
-
-typedef int clockid_t;
 #endif
 
 #include <stdint.h>
