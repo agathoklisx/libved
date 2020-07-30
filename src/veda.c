@@ -7,6 +7,18 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
+
+#if defined(__MACH__) && !defined(CLOCK_REALTIME)
+/*
+https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
+*/
+#include <sys/time.h>
+#define CLOCK_REALTIME 0
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

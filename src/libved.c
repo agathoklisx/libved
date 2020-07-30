@@ -12036,7 +12036,7 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
   int cidx = idx;
 
   ifnot (NULL is name) {
-    if (cstring_eq ($from($from((*bufp), parent), name), name))
+    if (Cstring.eq ($from($from((*bufp), parent), name), name))
       return NOTHING_TODO;
     win_t *w = self(get.win_by_name, name, &idx);
     if (NULL is w) return NOTHING_TODO;
@@ -15364,7 +15364,7 @@ private win_t *ed_get_win_by_name (ed_t *this, char *name, int *idx) {
   win_t *it = this->head;
   *idx = 0;
   while (it) {
-    if (cstring_eq ($from(it, name), name)) return it;
+    if (Cstring.eq ($from(it, name), name)) return it;
     (*idx)++;
     it = it->next;
   }
@@ -17044,7 +17044,7 @@ private string_t *__venv_get__ (Class (ed) *this, string_t *v) {
   return $my(env)->env_str;
 }
 
-private string_t *E_venv_get (Class (E) *__e__, char *name) {
+private string_t *E_get_env (Class (E) *__e__, char *name) {
   Class (ed) *this = __e__->__Ed__;
   if (cstring_eq (name, "group_name"))  return __venv_get__ (this, $my(env)->group_name);
   if (cstring_eq (name, "user_name"))  return __venv_get__ (this, $my(env)->user_name);
@@ -17099,7 +17099,7 @@ private int E_save_image (Class (E) *this, char *name) {
     if ($my(current) isnot NULL)
       if ($my(current)->current isnot NULL)
         if ($my(current)->current->current isnot NULL)
-          name = $from ($my(current)->current->current, fname);
+          name = path_basename ($from ($my(current)->current->current, fname));
 
   if (NULL is name) return NOTOK;
 
@@ -17130,6 +17130,7 @@ private int E_save_image (Class (E) *this, char *name) {
   string_append (img, "i");
 
   self(set.image_file, img->bytes);
+
   char *iname = path_basename_sans_extname (img->bytes);
   self(set.image_name, iname);
   free (iname);
@@ -17226,14 +17227,16 @@ next_win:
          "ed = e_set_ed_next ()\n");
   }
 
-  string_append (img, "\n");
-
-  string_append (img,
+  string_append_fmt (img, "\n"
+        "e_set_image_file (\"%s\")\n"
+        "e_set_image_name (\"%s\")\n"
         "e_set_save_image (save_image)\n\n"
         "ed = e_set_ed_by_idx (ed_cur_idx)\n"
-        "cwin = ed_get_current_win (ed)\n"
+        "cwin = ed_set_current_win (ed, win_cur_idx)\n"
         "win_set_current_buf (cwin, buf_cur_idx, donot_draw)\n\n"
-        "win_draw (cwin)\n");
+        "win_draw (cwin)\n",
+     $my(image_file),
+     $my(image_name));
 
   fprintf (fp, "%s\n", img->bytes);
   fclose (fp);
@@ -17516,7 +17519,7 @@ public Class (E) *__init_ed__ (char *name) {
         .num = E_get_num,
         .error_state = E_get_error_state,
         .state = E_get_state,
-        .env = E_venv_get,
+        .env = E_get_env,
         .iclass = E_get_i_class
       ),
       .set = SubSelfInit (E, set,
@@ -18862,6 +18865,18 @@ ival_t i_e_set_save_image (i_t *this, int val) {
   return I_OK;
 }
 
+ival_t i_e_set_image_name (i_t *this, char *name) {
+  Root.set.image_name ($OurRoot, name);
+  free (name);
+  return I_OK;
+}
+
+ival_t i_e_set_image_file (i_t *this, char *file) {
+  Root.set.image_file ($OurRoot, file);
+  free (file);
+  return I_OK;
+}
+
 ival_t i_e_get_ed_current_idx (i_t *this) {
   return Root.get.current_idx ($OurRoot);
 }
@@ -18878,12 +18893,16 @@ ival_t i_ed_get_num_win (i_t *this, ed_t *ed) {
   return Ed.get.num_win (ed, 0);
 }
 
+ival_t i_ed_get_win_next (i_t *this, ed_t *ed, win_t *win) {
+  return (ival_t) Ed.get.win_next (ed, win);
+}
+
 ival_t i_ed_get_current_win (i_t *this, ed_t *ed) {
   return (ival_t) Ed.get.current_win (ed);
 }
 
-ival_t i_ed_get_win_next (i_t *this, ed_t *ed, win_t *win) {
-  return (ival_t) Ed.get.win_next (ed, win);
+ival_t i_ed_set_current_win (i_t *this, ed_t *ed, int idx) {
+  return (ival_t) Ed.set.current_win (ed, idx);
 }
 
 ival_t i_buf_init_fname (i_t *this, buf_t *buf, char *fn) {
@@ -18962,13 +18981,16 @@ struct ifun_t {
   { "e_set_ed_next",         (ival_t) i_e_set_ed_next, 0},
   { "e_set_ed_by_idx",       (ival_t) i_e_set_ed_by_idx, 1},
   { "e_set_save_image",      (ival_t) i_e_set_save_image, 1},
+  { "e_set_image_name",      (ival_t) i_e_set_image_name, 1},
+  { "e_set_image_file",      (ival_t) i_e_set_image_file, 1},
   { "e_get_ed_num",          (ival_t) i_e_get_ed_num, 0},
   { "e_get_ed_current",      (ival_t) i_e_get_ed_current, 0},
   { "e_get_ed_current_idx",  (ival_t) i_e_get_ed_current_idx, 0},
   { "ed_new",                (ival_t) i_ed_new, 1},
   { "ed_get_num_win",        (ival_t) i_ed_get_num_win, 1},
-  { "ed_get_current_win",    (ival_t) i_ed_get_current_win, 1},
   { "ed_get_win_next",       (ival_t) i_ed_get_win_next, 2},
+  { "ed_get_current_win",    (ival_t) i_ed_get_current_win, 1},
+  { "ed_set_current_win",    (ival_t) i_ed_set_current_win, 2},
   { "buf_set_ftype",         (ival_t) i_buf_set_ftype, 2},
   { "buf_set_row_idx",       (ival_t) i_buf_set_row_idx, 2},
   { "buf_normal_page_up",    (ival_t) i_buf_normal_page_up, 2},
@@ -19053,40 +19075,40 @@ private i_t *i_init_instance (Class (i) *__i__) {
 private int i_load_file (Class (i) *__i__, char *fn) {
   i_t *this = i_init_instance (__i__);
 
-  ifnot (path_is_absolute (fn)) {
-    if (file_exists (fn))
-      return i_eval_file (this, fn);
+  ifnot (Path.is_absolute (fn)) {
+    if (File.exists (fn))
+      return self(eval_file, fn);
 
     size_t fnlen = bytelen (fn);
     char fname[fnlen+3];
-    cstring_cp (fname, fnlen + 1, fn, fnlen);
+    Cstring.cp (fname, fnlen + 1, fn, fnlen);
 
-    char *extname = path_extname (fname);
+    char *extname = Path.extname (fname);
     size_t extlen = bytelen (extname);
 
-    if (0 is extlen or 0 is cstring_eq (".i", extname)) {
+    if (0 is extlen or 0 is Cstring.eq (".i", extname)) {
       fname[fnlen] = '.'; fname[fnlen+1] = 'i'; fname[fnlen+2] = '\0';
-      if (file_exists (fname))
-        return i_eval_file (this, fname);
+      if (File.exists (fname))
+        return self(eval_file, fname);
       fname[fnlen] = '\0';
     }
 
-    string_t *ddir = E_venv_get ($OurRoot, "i_dir");
+    string_t *ddir = Root.get.env ($OurRoot, "i_dir");
     size_t len = ddir->num_bytes + bytelen (fname) + 2 + 7;
     char tmp[len + 3];
-    cstring_cp_fmt (tmp, len + 1, "%s/scripts/%s", ddir->bytes, fname);
-    ifnot (file_exists (tmp)) {
+    Cstring.cp_fmt (tmp, len + 1, "%s/scripts/%s", ddir->bytes, fname);
+    ifnot (File.exists (tmp)) {
       tmp[len] = '.'; tmp[len+1] = 'i'; tmp[len+2] = '\0';
     }
 
-    ifnot (file_exists (tmp)) return NOTOK;
+    ifnot (File.exists (tmp)) return NOTOK;
 
-    E_set_image_file ($OurRoot, tmp);
-
-    return i_eval_file (this, tmp);
+    return self(eval_file, tmp);
   }
 
-  return i_eval_file (this, fn);
+  ifnot (File.exists (fn)) return NOTOK;
+
+  return self(eval_file, fn);
 }
 
 private Class (i) *__init_i__ (Class (E) *e) {
