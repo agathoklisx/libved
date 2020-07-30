@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 
-#ifndef __APPLE__
+#ifndef __MACH__
 #define _DEFAULT_SOURCE
 
 #else
@@ -14,7 +14,7 @@
 #define CLOCK_REALTIME 0
 #endif
 
-#endif /* __APPLE__ */
+#endif /* __MACH__ */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -7375,7 +7375,7 @@ change:
     if (-1 is stat ($my(fname), &st)) {
       VED_MSG_ERROR(MSG_FILE_REMOVED_FROM_FILESYSTEM, $my(fname));
     } else {
-#if defined(__APPLE__)
+#if defined(__MACH__)
       if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec)
 #else
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec)
@@ -12188,7 +12188,7 @@ private int buf_write (buf_t *this, int force) {
           "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
       switch (c) {case 'n': case 'N': return NOTHING_TODO;};
     } else {
-#if defined(__APPLE__)
+#if defined(__MACH__)
       if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec) {
 #else
       if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec) {
