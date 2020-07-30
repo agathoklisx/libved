@@ -7,8 +7,6 @@
 #else
 #define _DARWIN_C_SOURCE
 
-typedef int clockid_t;
-
 // https://stackoverflow.com/questions/5167269/clock-gettime-alternative-in-mac-os-x
 #include <sys/time.h>
 
