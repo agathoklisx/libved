@@ -9,6 +9,7 @@
 
 #ifdef __MACH__
 #define _DARWIN_C_SOURCE
+#include <sys/time.h>
 #include <mach/clock.h>
 #include <mach/mach.h>
 #endif
