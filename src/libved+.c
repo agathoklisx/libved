@@ -25,11 +25,11 @@
 
 public Class (this) *__This__ = NULL;
 
-#if HAS_USER_EXTENSIONS
+#ifdef HAS_USER_EXTENSIONS
   #include "usr/usr.c"
 #endif
 
-#if HAS_LOCAL_EXTENSIONS
+#ifdef HAS_LOCAL_EXTENSIONS
   #include "local/local.c"
 #endif
 
@@ -516,7 +516,7 @@ private void __deinit_sys__ (Class (sys) **thisp) {
   *thisp = NULL;
 }
 
-#if HAS_TCC
+#ifdef HAS_TCC
 private void __tcc_free (tcc_t **thisp) {
   if (NULL is thisp) return;
 
@@ -1724,18 +1724,18 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
 
 private void __ex_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 2;
-#if HAS_TCC
+#ifdef HAS_TCC
   num_actions++;
 #endif
 
   utf8 chars[] = {
-#if HAS_TCC
+#ifdef HAS_TCC
   'C',
 #endif
   'S', 'm'};
 
   char actions[] =
-#if HAS_TCC
+#ifdef HAS_TCC
     "Compile lines with tcc\n"
 #endif
      "Spell line[s]\n"
@@ -1798,7 +1798,7 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     }
       break;
 
-#if HAS_TCC
+#ifdef HAS_TCC
     case 'C': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
@@ -1824,18 +1824,18 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 private void __ex_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
 
-#if HAS_TCC
+#ifdef HAS_TCC
   num_actions++;
 #endif
 
   utf8 chars[] = {
-#if HAS_TCC
+#ifdef HAS_TCC
     'C',
 #endif
     'S'};
 
   char actions[] =
-#if HAS_TCC
+#ifdef HAS_TCC
     "Compile file with tcc compiler\n"
 #endif
     "Spell check this file";
@@ -1981,11 +1981,11 @@ private void __init_ext__ (Type (ed) *this) {
 
   Ed.sh.popen = ex_ed_sh_popen;
 
-#if HAS_USER_EXTENSIONS
+#ifdef HAS_USER_EXTENSIONS
   __init_usr__ (this);
 #endif
 
-#if HAS_LOCAL_EXTENSIONS
+#ifdef HAS_LOCAL_EXTENSIONS
   __init_local__ (this);
 #endif
 
@@ -1994,18 +1994,18 @@ private void __init_ext__ (Type (ed) *this) {
 }
 
 private void __deinit_ext__ (void) {
-#if HAS_USER_EXTENSIONS
+#ifdef HAS_USER_EXTENSIONS
   __deinit_usr__ ();
 #endif
 
-#if HAS_LOCAL_EXTENSIONS
+#ifdef HAS_LOCAL_EXTENSIONS
   __deinit_local__ ();
 #endif
 
   __deinit_spell__ ( &(((Prop (this) *) __This__->prop))->spell);
 }
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
 
 private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
   Lstate *this = initVM (0, src, argc, argv);
@@ -2152,12 +2152,12 @@ public Class (this) *__init_this__ (void) {
   ((Prop (this) *) this->prop)->sys =  __init_sys__ ();
   ((Self (this) *) this->self)->sys = ((Prop (this) *) __This__->prop)->sys->self;
 
-#if HAS_TCC
+#ifdef HAS_TCC
   ((Prop (this) *) this->prop)->tcc =  __init_tcc__ ();
   ((Self (this) *) this->self)->tcc = ((Prop (this) *) __This__->prop)->tcc.self;
 #endif
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   __init_l__ (1);
 #endif
 
@@ -2173,7 +2173,7 @@ public void __deinit_this__ (Class (this) **thisp) {
 
   __deinit_ed__ (&this->__E__);
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   __deinit_l__ (&__L__);
 #endif
 

@@ -1,7 +1,7 @@
 NAME    := lai
 VERSION := 0.1
+SYSDIR  :=
 
-SYSDIR  := $(shell realpath ../../sys)
 BINDIR   = $(SYSDIR)/bin
 INCDIR   = $(SYSDIR)/include
 LIBDIR   = $(SYSDIR)/lib
@@ -38,6 +38,8 @@ ifneq ($(ENABLE_HTTP), 0)
 else
   SHARED_FLAGS =-DDISABLE_HTTP
 endif
+
+INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
 
 shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
 

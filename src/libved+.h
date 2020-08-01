@@ -41,11 +41,11 @@ extern Class (this) *__This__;
 
 #define __SYS__  ((Prop (this) *) __This__->prop)->sys
 
-#if HAS_TCC
+#ifdef HAS_TCC
 #define Tcc      ((Self (this) *) __This__->self)->tcc
 #endif
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
 #define __L__ ((Prop (this) *) __This__->prop)->__L
 #define L (*__L__).self
 #define L_CUR_STATE __L__->states[__L__->cur_state]
@@ -309,7 +309,7 @@ NewClass (math,
   Self (math) self;
 );
 
-#if HAS_TCC
+#ifdef HAS_TCC
 #include <libtcc.h>
 
 #define TCC_CONFIG_TCC_DIR    1
@@ -406,7 +406,7 @@ NewSelf (this,
   Self (math) math;
   Self (sys) sys;
 
-#if HAS_TCC
+#ifdef HAS_TCC
   Self (tcc) tcc;
 #endif
 
@@ -419,21 +419,21 @@ NewProp (this,
   Class (spell) spell;
   Class (sys) *sys;
 
-#if HAS_TCC
+#ifdef HAS_TCC
   Class (tcc) tcc;
 #endif
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   Class (l) *__L;
 #endif
 );
 
-#if HAS_USER_EXTENSIONS
+#ifdef HAS_USER_EXTENSIONS
   private void __init_usr__ (ed_t *);
   private void __deinit_usr__ (void);
 #endif
 
-#if HAS_LOCAL_EXTENSIONS
+#ifdef HAS_LOCAL_EXTENSIONS
   private void __init_local__ (ed_t *);
   private void __deinit_local__ (void);
 #endif
@@ -444,5 +444,3 @@ private void __deinit_ext__ (void);
 public Class (this) *__init_this__ (void);
 public void __deinit_this__ (Class (this) **);
 #endif
-
-

@@ -1,4 +1,3 @@
-
 #define _XOPEN_SOURCE 700
 
 #include <stdint.h>
@@ -15,12 +14,9 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <curl/curl.h>
 #include <errno.h>
 #include <assert.h>
-
-#ifndef DISABLE_HTTP
-#include <curl/curl.h>
-#endif
 
 #include "__lai.h"
 
@@ -815,27 +811,15 @@ ObjBoundMethod *newBoundMethod(VM *vm, Value receiver, ObjClosure *method) {
     return bound;
 }
 
-ObjClass *newClass(VM *vm, ObjString *name, ObjClass *superclass) {
+ObjClass *newClass(VM *vm, ObjString *name, ObjClass *superclass, ClassType type) {
     ObjClass *klass = ALLOCATE_OBJ(vm, ObjClass, OBJ_CLASS);
     klass->name = name;
     klass->superclass = superclass;
-    initTable(&klass->methods);
-    return klass;
-}
-
-ObjClassNative *newClassNative(VM *vm, ObjString *name) {
-    ObjClassNative *klass = ALLOCATE_OBJ(vm, ObjClassNative, OBJ_NATIVE_CLASS);
-    klass->name = name;
+    klass->type = type;
+    initTable(&klass->abstractMethods);
     initTable(&klass->methods);
     initTable(&klass->properties);
     return klass;
-}
-
-ObjTrait *newTrait(VM *vm, ObjString *name) {
-    ObjTrait *trait = ALLOCATE_OBJ(vm, ObjTrait, OBJ_TRAIT);
-    trait->name = name;
-    initTable(&trait->methods);
-    return trait;
 }
 
 ObjClosure *newClosure(VM *vm, ObjFunction *function) {
@@ -851,13 +835,13 @@ ObjClosure *newClosure(VM *vm, ObjFunction *function) {
     return closure;
 }
 
-ObjFunction *newFunction(VM *vm, ObjModule *module, bool isStatic) {
+ObjFunction *newFunction(VM *vm, ObjModule *module, FunctionType type) {
     ObjFunction *function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
     function->arity = 0;
     function->arityOptional = 0;
     function->upvalueCount = 0;
     function->name = NULL;
-    function->staticMethod = isStatic;
+    function->type = type;
     function->module = module;
     initChunk(vm, &function->chunk);
     return function;
@@ -1051,9 +1035,9 @@ char *dictToString(Value value) {
 
        if (keySize > (size - dictStringLength - 1)) {
            if (keySize > size * 2) {
-               size += keySize * 2;
+               size += keySize * 2 + 4;
            } else {
-               size *= 2;
+               size *= 2 + 4;
            }
 
            char *newB = realloc(dictString, sizeof(char) * size);
@@ -1227,16 +1211,15 @@ char *objectToString(Value value) {
             return moduleString;
         }
 
-        case OBJ_NATIVE_CLASS:
         case OBJ_CLASS: {
-            return classToString(value);
-        }
+            if (IS_TRAIT(value)) {
+                ObjClass *trait = AS_CLASS(value);
+                char *traitString = malloc(sizeof(char) * (trait->name->length + 10));
+                snprintf(traitString, trait->name->length + 9, "<trait %s>", trait->name->chars);
+                return traitString;
+            }
 
-        case OBJ_TRAIT: {
-            ObjTrait *trait = AS_TRAIT(value);
-            char *traitString = malloc(sizeof(char) * (trait->name->length + 10));
-            snprintf(traitString, trait->name->length + 9, "<trait %s>", trait->name->chars);
-            return traitString;
+            return classToString(value);
         }
 
         case OBJ_BOUND_METHOD: {
@@ -1245,12 +1228,34 @@ char *objectToString(Value value) {
 
             if (method->method->function->name != NULL) {
                 methodString = malloc(sizeof(char) * (method->method->function->name->length + 17));
-                char *methodType = method->method->function->staticMethod ? "<static method %s>" : "<bound method %s>";
-                snprintf(methodString, method->method->function->name->length + 17, methodType, method->method->function->name->chars);
+
+                switch (method->method->function->type) {
+                    case TYPE_STATIC: {
+                        snprintf(methodString, method->method->function->name->length + 17, "<bound method %s>", method->method->function->name->chars);
+                        break;
+                    }
+
+                    default: {
+                        snprintf(methodString, method->method->function->name->length + 17, "<static method %s>", method->method->function->name->chars);
+                        break;
+                    }
+                }
             } else {
                 methodString = malloc(sizeof(char) * 16);
-                char *methodType = method->method->function->staticMethod ? "<static method>" : "<bound method>";
-                snprintf(methodString, 16, "%s", methodType);
+
+                switch (method->method->function->type) {
+                    case TYPE_STATIC: {
+                        memcpy(methodString, "<static method>", 15);
+                        methodString[15] = '\0';
+                        break;
+                    }
+
+                    default: {
+                        memcpy(methodString, "<bound method>", 15);
+                        methodString[15] = '\0';
+                        break;
+                    }
+                }
             }
 
             return methodString;
@@ -1475,6 +1480,10 @@ static TokenType identifierType() {
         case 'a':
             if (scanner.current - scanner.start > 1) {
                 switch (scanner.start[1]) {
+                    case 'b': {
+                        return checkKeyword(2, 6, "stract", TOKEN_ABSTRACT);
+                    }
+
                     case 'n': {
                         return checkKeyword(2, 1, "d", TOKEN_AND);
                     }
@@ -1965,12 +1974,13 @@ static void initCompiler(Parser *parser, Compiler *compiler, Compiler *parent, F
 
     parser->vm->compiler = compiler;
 
-    compiler->function = newFunction(parser->vm, parser->module, type == TYPE_STATIC);
+    compiler->function = newFunction(parser->vm, parser->module, type);
 
     switch (type) {
         case TYPE_INITIALIZER:
         case TYPE_METHOD:
         case TYPE_STATIC:
+        case TYPE_ABSTRACT:
         case TYPE_FUNCTION:
         case TYPE_ARROW_FUNCTION: {
             compiler->function->name = copyString(
@@ -2213,7 +2223,7 @@ static void defineVariable(Compiler *compiler, uint8_t global, bool constant) {
             tableDelete(compiler->parser->vm, &compiler->parser->vm->constants, AS_STRING(currentChunk(compiler)->constants.values[global]));
         }
 
-        emitBytes(compiler, OP_DEFINE_GLOBAL, global);
+        emitBytes(compiler, OP_DEFINE_MODULE, global);
     } else {
         // Mark the local as defined now.
         compiler->locals[compiler->localCount - 1].depth = compiler->scopeDepth;
@@ -2434,6 +2444,7 @@ static void beginFunction(Compiler *compiler, Compiler *fnCompiler, FunctionType
 
         if (fnCompiler->function->arityOptional > 0) {
             emitByte(fnCompiler, OP_DEFINE_OPTIONAL);
+            emitBytes(fnCompiler, fnCompiler->function->arity, fnCompiler->function->arityOptional);
         }
     }
 
@@ -2674,7 +2685,7 @@ static void checkConst(Compiler *compiler, uint8_t setOp, int arg) {
         if (compiler->locals[arg].constant) {
             error(compiler->parser, "Cannot assign to a constant.");
         }
-    } else if (setOp == OP_SET_GLOBAL) {
+    } else if (setOp == OP_SET_MODULE) {
         Value _;
         if (tableGet(&compiler->parser->vm->constants, AS_STRING(currentChunk(compiler)->constants.values[arg]), &_)) {
             error(compiler->parser, "Cannot assign to a constant.");
@@ -2693,8 +2704,15 @@ static void namedVariable(Compiler *compiler, Token name, bool canAssign) {
         setOp = OP_SET_UPVALUE;
     } else {
         arg = identifierConstant(compiler, &name);
-        getOp = OP_GET_GLOBAL;
-        setOp = OP_SET_GLOBAL;
+        ObjString *string = copyString(compiler->parser->vm, name.start, name.length);
+        Value value;
+        if (tableGet(&compiler->parser->vm->globals, string, &value)) {
+            getOp = OP_GET_GLOBAL;
+            canAssign = false;
+        } else {
+            getOp = OP_GET_MODULE;
+            setOp = OP_SET_MODULE;
+        }
     }
 
     if (canAssign && match(compiler, TOKEN_EQUAL)) {
@@ -2886,7 +2904,7 @@ static void prefix(Compiler *compiler, bool canAssign) {
             setOp = OP_SET_UPVALUE;
         } else {
             arg = identifierConstant(compiler, &cur);
-            setOp = OP_SET_GLOBAL;
+            setOp = OP_SET_MODULE;
         }
 
         checkConst(compiler, setOp, arg);
@@ -2936,6 +2954,7 @@ ParseRule rules[] = {
         {variable, NULL,      PREC_NONE},               // TOKEN_IDENTIFIER
         {comp_string,   NULL,      PREC_NONE},               // TOKEN_STRING
         {comp_number,   NULL,      PREC_NONE},               // TOKEN_NUMBER
+        {NULL,     NULL,      PREC_NONE},               // TOKEN_ABSTRACT
         {NULL,     NULL,      PREC_NONE},               // TOKEN_CLASS
         {NULL,     NULL,      PREC_NONE},               // TOKEN_TRAIT
         {NULL,     NULL,      PREC_NONE},               // TOKEN_USE
@@ -3013,16 +3032,22 @@ static void comp_function(Compiler *compiler, FunctionType type) {
     endCompiler(&fnCompiler);
 }
 
-static void method(Compiler *compiler, bool trait) {
+static void method(Compiler *compiler) {
     FunctionType type;
 
-    if (check(compiler, TOKEN_STATIC)) {
+    compiler->class->staticMethod = false;
+    type = TYPE_METHOD;
+
+    if (match(compiler, TOKEN_STATIC)) {
         type = TYPE_STATIC;
-        consume(compiler, TOKEN_STATIC, "Expect static.");
         compiler->class->staticMethod = true;
-    } else {
-        type = TYPE_METHOD;
-        compiler->class->staticMethod = false;
+    } else if (match(compiler, TOKEN_ABSTRACT)) {
+        if (!compiler->class->abstractClass) {
+            error(compiler->parser, "Abstract methods can only appear within abstract classes.");
+            return;
+        }
+
+        type = TYPE_ABSTRACT;
     }
 
     consume(compiler, TOKEN_IDENTIFIER, "Expect method name.");
@@ -3034,12 +3059,44 @@ static void method(Compiler *compiler, bool trait) {
         type = TYPE_INITIALIZER;
     }
 
-    comp_function(compiler, type);
-
-    if (trait) {
-        emitBytes(compiler, OP_TRAIT_METHOD, constant);
+    if (type != TYPE_ABSTRACT) {
+        comp_function(compiler, type);
     } else {
-        emitBytes(compiler, OP_METHOD, constant);
+        Compiler fnCompiler;
+
+        // Setup function and parse parameters
+        beginFunction(compiler, &fnCompiler, TYPE_ABSTRACT);
+        endCompiler(&fnCompiler);
+    }
+
+    emitBytes(compiler, OP_METHOD, constant);
+}
+
+static void setupClassCompiler(Compiler *compiler, ClassCompiler *classCompiler, bool abstract) {
+    classCompiler->name = compiler->parser->previous;
+    classCompiler->hasSuperclass = false;
+    classCompiler->enclosing = compiler->class;
+    classCompiler->staticMethod = false;
+    classCompiler->abstractClass = abstract;
+    compiler->class = classCompiler;
+}
+
+static void parseClassBody(Compiler *compiler) {
+    while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
+        if (match(compiler, TOKEN_USE)) {
+            useStatement(compiler);
+        } else if (match(compiler, TOKEN_VAR)) {
+            consume(compiler, TOKEN_IDENTIFIER, "Expect class variable name.");
+            uint8_t name = identifierConstant(compiler, &compiler->parser->previous);
+
+            consume(compiler, TOKEN_EQUAL, "Expect '=' after expression.");
+            expression(compiler);
+            emitBytes(compiler, OP_SET_PROPERTY, name);
+
+            consume(compiler, TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+        } else {
+            method(compiler);
+        }
     }
 }
 
@@ -3049,11 +3106,7 @@ static void classDeclaration(Compiler *compiler) {
     declareVariable(compiler);
 
     ClassCompiler classCompiler;
-    classCompiler.name = compiler->parser->previous;
-    classCompiler.hasSuperclass = false;
-    classCompiler.enclosing = compiler->class;
-    classCompiler.staticMethod = false;
-    compiler->class = &classCompiler;
+    setupClassCompiler(compiler, &classCompiler, false);
 
     if (match(compiler, TOKEN_LESS)) {
         consume(compiler, TOKEN_IDENTIFIER, "Expect superclass name.");
@@ -3065,20 +3118,59 @@ static void classDeclaration(Compiler *compiler) {
         variable(compiler, false);
         addLocal(compiler, syntheticToken("super"));
 
-        emitBytes(compiler, OP_SUBCLASS, nameConstant);
+        emitBytes(compiler, OP_SUBCLASS, CLASS_DEFAULT);
     } else {
-        emitBytes(compiler, OP_CLASS, nameConstant);
+        emitBytes(compiler, OP_CLASS, CLASS_DEFAULT);
     }
+    emitByte(compiler, nameConstant);
 
     consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
 
-    while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
-        if (match(compiler, TOKEN_USE)) {
-            useStatement(compiler);
-        } else {
-            method(compiler, false);
-        }
+    parseClassBody(compiler);
+
+    consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+
+    if (classCompiler.hasSuperclass) {
+        endScope(compiler);
+
+        // If there's a super class, check abstract methods have been defined
+        emitByte(compiler, OP_END_CLASS);
     }
+
+    defineVariable(compiler, nameConstant, false);
+    compiler->class = compiler->class->enclosing;
+}
+
+static void abstractClassDeclaration(Compiler *compiler) {
+    consume(compiler, TOKEN_CLASS, "Expect class keyword.");
+
+    consume(compiler, TOKEN_IDENTIFIER, "Expect class name.");
+    uint8_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
+    declareVariable(compiler);
+
+    ClassCompiler classCompiler;
+    setupClassCompiler(compiler, &classCompiler, true);
+
+    if (match(compiler, TOKEN_LESS)) {
+        consume(compiler, TOKEN_IDENTIFIER, "Expect superclass name.");
+        classCompiler.hasSuperclass = true;
+
+        beginScope(compiler);
+
+        // Store the superclass in a local variable named "super".
+        variable(compiler, false);
+        addLocal(compiler, syntheticToken("super"));
+
+        emitBytes(compiler, OP_SUBCLASS, CLASS_ABSTRACT);
+    } else {
+        emitBytes(compiler, OP_CLASS, CLASS_ABSTRACT);
+    }
+    emitByte(compiler, nameConstant);
+
+    consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+
+    parseClassBody(compiler);
+
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
 
     if (classCompiler.hasSuperclass) {
@@ -3086,7 +3178,6 @@ static void classDeclaration(Compiler *compiler) {
     }
 
     defineVariable(compiler, nameConstant, false);
-
     compiler->class = compiler->class->enclosing;
 }
 
@@ -3096,22 +3187,18 @@ static void traitDeclaration(Compiler *compiler) {
     declareVariable(compiler);
 
     ClassCompiler classCompiler;
-    classCompiler.name = compiler->parser->previous;
-    classCompiler.hasSuperclass = false;
-    classCompiler.enclosing = compiler->class;
-    classCompiler.staticMethod = false;
-    compiler->class = &classCompiler;
+    setupClassCompiler(compiler, &classCompiler, false);
 
-    emitBytes(compiler, OP_TRAIT, nameConstant);
+    emitBytes(compiler, OP_CLASS, CLASS_TRAIT);
+    emitByte(compiler, nameConstant);
 
     consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' before trait body.");
-    while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
-        method(compiler, true);
-    }
+
+    parseClassBody(compiler);
+
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after trait body.");
 
     defineVariable(compiler, nameConstant, false);
-
     compiler->class = compiler->class->enclosing;
 }
 
@@ -3343,18 +3430,34 @@ static void returnStatement(Compiler *compiler) {
 }
 
 static void importStatement(Compiler *compiler) {
-    consume(compiler, TOKEN_STRING, "Expect string after import.");
+    if (match(compiler, TOKEN_STRING)) {
+        int importConstant = makeConstant(compiler, OBJ_VAL(copyString(
+                compiler->parser->vm,
+                compiler->parser->previous.start + 1,
+                compiler->parser->previous.length - 2)));
 
-    int importConstant = makeConstant(compiler, OBJ_VAL(copyString(
-            compiler->parser->vm,
-            compiler->parser->previous.start + 1,
-            compiler->parser->previous.length - 2)));
+        emitBytes(compiler, OP_IMPORT, importConstant);
 
-    emitBytes(compiler, OP_IMPORT, importConstant);
+        if (match(compiler, TOKEN_AS)) {
+            uint8_t importName = parseVariable(compiler, "Expect import alias.", false);
+            emitByte(compiler, OP_IMPORT_VARIABLE);
+            defineVariable(compiler, importName, false);
+        }
+    } else {
+        uint8_t importName = parseVariable(compiler, "Expect import identifier.", false);
 
-    if (match(compiler, TOKEN_AS)) {
-        uint8_t importName = parseVariable(compiler, "Expect import alias.", false);
-        emitByte(compiler, OP_IMPORT_VARIABLE);
+        int index = findBuiltinModule(
+            (char *)compiler->parser->previous.start,
+            compiler->parser->previous.length - compiler->parser->current.length
+        );
+
+        if (index == -1) {
+            error(compiler->parser, "Unknown module");
+        }
+
+        emitBytes(compiler, OP_IMPORT_BUILTIN, index);
+        emitByte(compiler, importName);
+
         defineVariable(compiler, importName, false);
     }
 
@@ -3426,6 +3529,8 @@ static void declaration(Compiler *compiler) {
         classDeclaration(compiler);
     } else if (match(compiler, TOKEN_TRAIT)) {
         traitDeclaration(compiler);
+    } else if (match(compiler, TOKEN_ABSTRACT)) {
+        abstractClassDeclaration(compiler);
     } else if (match(compiler, TOKEN_DEF)) {
         funDeclaration(compiler);
     } else if (match(compiler, TOKEN_VAR)) {
@@ -3659,17 +3764,13 @@ VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]) {
     // Native functions
     defineAllNatives(vm);
 
-    // Native classes
-    createMathsClass(vm);
-    createEnvClass(vm);
+    /**
+     * Native classes which are not required to be
+     * imported. For imported natives see optionals.c
+     */
     createSystemClass(vm, argc, argv);
-    createJSONClass(vm);
-    createPathClass(vm);
     createCClass(vm);
-    createDatetimeClass(vm);
-#ifndef DISABLE_HTTP
-    createHTTPClass(vm);
-#endif
+
     return vm;
 }
 
@@ -3755,6 +3856,11 @@ static bool callValue(VM *vm, Value callee, int argCount) {
             }
 
             case OBJ_CLASS: {
+                // If it's not a default class, e.g a trait, it is not callable
+                if (!(IS_DEFAULT_CLASS(callee))) {
+                    break;
+                }
+
                 ObjClass *klass = AS_CLASS(callee);
 
                 // Create the instance.
@@ -3772,8 +3878,10 @@ static bool callValue(VM *vm, Value callee, int argCount) {
                 return true;
             }
 
-            case OBJ_CLOSURE:
+            case OBJ_CLOSURE: {
+                vm->stackTop[-argCount - 1] = callee;
                 return call(vm, AS_CLOSURE(callee), argCount);
+            }
 
             case OBJ_NATIVE: {
                 NativeFn native = AS_NATIVE(callee);
@@ -3857,28 +3965,18 @@ static bool invoke(VM *vm, ObjString *name, int argCount) {
                 ObjModule *module = AS_MODULE(receiver);
 
                 Value value;
-                if (tableGet(&module->values, name, &value)) {
-                    vm->stackTop[-argCount - 1] = value;
-                    return callValue(vm, value, argCount);
-                }
-                break;
-            }
-            case OBJ_NATIVE_CLASS: {
-                ObjClassNative *instance = AS_CLASS_NATIVE(receiver);
-                Value function;
-                if (!tableGet(&instance->methods, name, &function)) {
+                if (!tableGet(&module->values, name, &value)) {
                     runtimeError(vm, "Undefined property '%s'.", name->chars);
                     return false;
                 }
-
-                return callValue(vm, function, argCount);
+                return callValue(vm, value, argCount);
             }
 
             case OBJ_CLASS: {
                 ObjClass *instance = AS_CLASS(receiver);
                 Value method;
                 if (tableGet(&instance->methods, name, &method)) {
-                    if (!AS_CLOSURE(method)->function->staticMethod) {
+                    if (AS_CLOSURE(method)->function->type != TYPE_STATIC) {
                         if (tableGet(&vm->classMethods, name, &method)) {
                             return callNativeMethod(vm, method, argCount);
                         }
@@ -3985,7 +4083,6 @@ static bool invoke(VM *vm, ObjString *name, int argCount) {
 static bool bindMethod(VM *vm, ObjClass *klass, ObjString *name) {
     Value method;
     if (!tableGet(&klass->methods, name, &method)) {
-        runtimeError(vm, "Undefined property '%s'.", name->chars);
         return false;
     }
 
@@ -4054,24 +4151,23 @@ static void closeUpvalues(VM *vm, Value *last) {
 static void defineMethod(VM *vm, ObjString *name) {
     Value method = peek(vm, 0);
     ObjClass *klass = AS_CLASS(peek(vm, 1));
-    tableSet(vm, &klass->methods, name, method);
+
+    if (AS_CLOSURE(method)->function->type == TYPE_ABSTRACT) {
+        tableSet(vm, &klass->abstractMethods, name, method);
+    } else {
+        tableSet(vm, &klass->methods, name, method);
+    }
     pop(vm);
 }
 
-static void defineTraitMethod(VM *vm, ObjString *name) {
-    Value method = peek(vm, 0);
-    ObjTrait *trait = AS_TRAIT(peek(vm, 1));
-    tableSet(vm, &trait->methods, name, method);
-    pop(vm);
-}
-
-static void createClass(VM *vm, ObjString *name, ObjClass *superclass) {
-    ObjClass *klass = newClass(vm, name, superclass);
+static void createClass(VM *vm, ObjString *name, ObjClass *superclass, ClassType type) {
+    ObjClass *klass = newClass(vm, name, superclass, type);
     push(vm, OBJ_VAL(klass));
 
     // Inherit methods.
     if (superclass != NULL) {
         tableAddAll(vm, &superclass->methods, &klass->methods);
+        tableAddAll(vm, &superclass->abstractMethods, &klass->abstractMethods);
     }
 }
 
@@ -4157,7 +4253,7 @@ static InterpretResult run(VM *vm) {
                 }                                                                                 \
                 printf("\n");                                                                     \
                 disassembleInstruction(&frame->closure->function->chunk,                          \
-                        (int) (frame->ip - frame->closure->function->chunk.code));                \
+                        (int) (ip - frame->closure->function->chunk.code));                \
                 goto *dispatchTable[instruction = READ_BYTE()];                                   \
             }                                                                                     \
             while (false)
@@ -4237,64 +4333,68 @@ static InterpretResult run(VM *vm) {
         CASE_CODE(GET_GLOBAL): {
             ObjString *name = READ_STRING();
             Value value;
-            if (!tableGet(&frame->closure->function->module->values, name, &value)) {
-                if (!tableGet(&vm->globals, name, &value)) {
-                    frame->ip = ip;
-                    runtimeError(vm, "Undefined variable '%s'.", name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
-                }
+            if (!tableGet(&vm->globals, name, &value)) {
+                frame->ip = ip;
+                runtimeError(vm, "Undefined variable '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
             }
             push(vm, value);
             DISPATCH();
         }
 
-        CASE_CODE(DEFINE_GLOBAL): {
+        CASE_CODE(GET_MODULE): {
+            ObjString *name = READ_STRING();
+            Value value;
+            if (!tableGet(&frame->closure->function->module->values, name, &value)) {
+                frame->ip = ip;
+                runtimeError(vm, "Undefined variable '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            push(vm, value);
+            DISPATCH();
+        }
+
+        CASE_CODE(DEFINE_MODULE): {
             ObjString *name = READ_STRING();
             tableSet(vm, &frame->closure->function->module->values, name, peek(vm, 0));
             pop(vm);
             DISPATCH();
         }
 
-        CASE_CODE(SET_GLOBAL): {
-        ObjString *name = READ_STRING();
-        if (tableSet(vm, &frame->closure->function->module->values, name, peek(vm, 0))) {
-            tableDelete(vm, &frame->closure->function->module->values, name);
-            frame->ip = ip;
-            runtimeError(vm, "Undefined variable '%s'.", name->chars);
-            return INTERPRET_RUNTIME_ERROR;
+        CASE_CODE(SET_MODULE): {
+            ObjString *name = READ_STRING();
+            if (tableSet(vm, &frame->closure->function->module->values, name, peek(vm, 0))) {
+                tableDelete(vm, &frame->closure->function->module->values, name);
+                frame->ip = ip;
+                runtimeError(vm, "Undefined variable '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            DISPATCH();
         }
-        DISPATCH();
-    }
 
         CASE_CODE(DEFINE_OPTIONAL): {
+            int arity = READ_BYTE();
+            int arityOptional = READ_BYTE();
+            int argCount = vm->stackTop - frame->slots - arityOptional - 1;
+
             // Temp array while we shuffle the stack.
             // Can not have more than 255 args to a function, so
             // we can define this with a constant limit
             Value values[255];
-            int index = 0;
+            int index;
 
-            values[index] = pop(vm);
-
-            // Pop all args and default values a function has
-            while (!IS_CLOSURE(values[index])) {
-                values[++index] = pop(vm);
+            for (index = 0; index < arityOptional + argCount; index++) {
+                values[index] = pop(vm);
             }
 
-            ObjClosure *closure = AS_CLOSURE(values[index--]);
-            ObjFunction *function = closure->function;
+            --index;
 
-            int argCount = index - function->arityOptional + 1;
-
-            // Push the function back onto the stack
-            push(vm, OBJ_VAL(closure));
-
-            // Push all user given options
             for (int i = 0; i < argCount; i++) {
                 push(vm, values[index - i]);
             }
 
             // Calculate how many "default" values are required
-            int remaining = function->arity + function->arityOptional - argCount;
+            int remaining = arity + arityOptional - argCount;
 
             // Push any "default" values back onto the stack
             for (int i = remaining; i > 0; i--) {
@@ -4327,20 +4427,26 @@ static InterpretResult run(VM *vm) {
                     DISPATCH();
                 }
 
-                if (!bindMethod(vm, instance->klass, name)) {
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-
-                DISPATCH();
-            } else if (IS_NATIVE_CLASS(peek(vm, 0))) {
-                ObjClassNative *klass = AS_CLASS_NATIVE(peek(vm, 0));
-                ObjString *name = READ_STRING();
-                Value value;
-                if (tableGet(&klass->properties, name, &value)) {
-                    pop(vm); // Class.
-                    push(vm, value);
+                if (bindMethod(vm, instance->klass, name)) {
                     DISPATCH();
                 }
+
+                // Check class for properties
+                ObjClass *klass = instance->klass;
+
+                while (klass != NULL) {
+                    if (tableGet(&klass->properties, name, &value)) {
+                        pop(vm); // Instance.
+                        push(vm, value);
+                        DISPATCH();
+                    }
+
+                    klass = klass->superclass;
+                }
+
+                frame->ip = ip;
+                runtimeError(vm, "Undefined property '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
             } else if (IS_MODULE(peek(vm, 0))) {
                 ObjModule *module = AS_MODULE(peek(vm, 0));
                 ObjString *name = READ_STRING();
@@ -4349,6 +4455,20 @@ static InterpretResult run(VM *vm) {
                     pop(vm); // Module.
                     push(vm, value);
                     DISPATCH();
+                }
+            } else if (IS_CLASS(peek(vm, 0))) {
+                ObjClass *klass = AS_CLASS(peek(vm, 0));
+                ObjString *name = READ_STRING();
+
+                Value value;
+                while (klass != NULL) {
+                    if (tableGet(&klass->properties, name, &value)) {
+                        pop(vm); // Class.
+                        push(vm, value);
+                        DISPATCH();
+                    }
+
+                    klass = klass->superclass;
                 }
             }
 
@@ -4372,32 +4492,54 @@ static InterpretResult run(VM *vm) {
                 DISPATCH();
             }
 
-            if (!bindMethod(vm, instance->klass, name)) {
-                return INTERPRET_RUNTIME_ERROR;
+            if (bindMethod(vm, instance->klass, name)) {
+                DISPATCH();
             }
 
-            DISPATCH();
+            // Check class for properties
+            ObjClass *klass = instance->klass;
+
+            while (klass != NULL) {
+                if (tableGet(&klass->properties, name, &value)) {
+                    push(vm, value);
+                    DISPATCH();
+                }
+
+                klass = klass->superclass;
+            }
+
+            frame->ip = ip;
+            runtimeError(vm, "Undefined property '%s'.", name->chars);
+            return INTERPRET_RUNTIME_ERROR;
         }
 
         CASE_CODE(SET_PROPERTY): {
-            if (!IS_INSTANCE(peek(vm, 1))) {
-                frame->ip = ip;
-                runtimeError(vm, "Only instances have fields.");
-                return INTERPRET_RUNTIME_ERROR;
+            if (IS_INSTANCE(peek(vm, 1))) {
+                ObjInstance *instance = AS_INSTANCE(peek(vm, 1));
+                tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
+                pop(vm);
+                pop(vm);
+                push(vm, NIL_VAL);
+                DISPATCH();
+            } else if (IS_CLASS(peek(vm, 1))) {
+                ObjClass *klass = AS_CLASS(peek(vm, 1));
+                tableSet(vm, &klass->properties, READ_STRING(), peek(vm, 0));
+                pop(vm);
+                DISPATCH();
             }
 
-            ObjInstance *instance = AS_INSTANCE(peek(vm, 1));
-            tableSet(vm, &instance->fields, READ_STRING(), peek(vm, 0));
-            pop(vm);
-            pop(vm);
-            push(vm, NIL_VAL);
-            DISPATCH();
+            frame->ip = ip;
+            runtimeError(vm, "Only instances have fields.");
+            return INTERPRET_RUNTIME_ERROR;
         }
 
         CASE_CODE(GET_SUPER): {
             ObjString *name = READ_STRING();
             ObjClass *superclass = AS_CLASS(pop(vm));
+
             if (!bindMethod(vm, superclass, name)) {
+                frame->ip = ip;
+                runtimeError(vm, "Undefined property '%s'.", name->chars);
                 return INTERPRET_RUNTIME_ERROR;
             }
             DISPATCH();
@@ -4604,8 +4746,27 @@ static InterpretResult run(VM *vm) {
             DISPATCH();
         }
 
+        CASE_CODE(IMPORT_BUILTIN): {
+            int index = READ_BYTE();
+            ObjString *fileName = READ_STRING();
+            Value moduleVal;
+
+            // If we have imported this module already, skip.
+            if (tableGet(&vm->modules, fileName, &moduleVal)) {
+                ++vm->scriptNameCount;
+                push(vm, moduleVal);
+                DISPATCH();
+            }
+
+            ObjModule *module = importBuiltinModule(vm, index);
+
+            ++vm->scriptNameCount;
+            push(vm, OBJ_VAL(module));
+            DISPATCH();
+        }
+
         CASE_CODE(IMPORT_VARIABLE): {
-            push(vm, OBJ_VAL( vm->lastModule));
+            push(vm, OBJ_VAL(vm->lastModule));
             DISPATCH();
         }
 
@@ -5056,11 +5217,16 @@ static InterpretResult run(VM *vm) {
             DISPATCH();
         }
 
-        CASE_CODE(CLASS):
-            createClass(vm, READ_STRING(), NULL);
+        CASE_CODE(CLASS): {
+            ClassType type = READ_BYTE();
+
+            createClass(vm, READ_STRING(), NULL, type);
             DISPATCH();
+        }
 
         CASE_CODE(SUBCLASS): {
+            ClassType type = READ_BYTE();
+
             Value superclass = peek(vm, 0);
             if (!IS_CLASS(superclass)) {
                 frame->ip = ip;
@@ -5068,25 +5234,38 @@ static InterpretResult run(VM *vm) {
                 return INTERPRET_RUNTIME_ERROR;
             }
 
-            createClass(vm, READ_STRING(), AS_CLASS(superclass));
+            if (IS_TRAIT(superclass)) {
+                frame->ip = ip;
+                runtimeError(vm, "Superclass can not be a trait.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            createClass(vm, READ_STRING(), AS_CLASS(superclass), type);
             DISPATCH();
         }
 
-        CASE_CODE(TRAIT): {
-            ObjString *name = READ_STRING();
-            ObjTrait *trait = newTrait(vm, name);
-            push(vm, OBJ_VAL(trait));
+        CASE_CODE(END_CLASS): {
+            ObjClass *klass = AS_CLASS(peek(vm, 0));
+
+            // If super class is abstract, ensure we have defined all abstract methods
+            for (int i = 0; i < klass->abstractMethods.capacityMask + 1; i++) {
+                if (klass->abstractMethods.entries[i].key == NULL) {
+                    continue;
+                }
+
+                Value _;
+                if (!tableGet(&klass->methods, klass->abstractMethods.entries[i].key, &_)) {
+                    frame->ip = ip;
+                    runtimeError(vm, "Class %s does not implement abstract method %s", klass->name->chars, klass->abstractMethods.entries[i].key->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            }
             DISPATCH();
         }
 
         CASE_CODE(METHOD):
             defineMethod(vm, READ_STRING());
             DISPATCH();
-
-        CASE_CODE(TRAIT_METHOD): {
-            defineTraitMethod(vm, READ_STRING());
-            DISPATCH();
-        }
 
         CASE_CODE(USE): {
             Value trait = peek(vm, 0);
@@ -5098,7 +5277,7 @@ static InterpretResult run(VM *vm) {
 
             ObjClass *klass = AS_CLASS(peek(vm, 1));
 
-            tableAddAll(vm, &AS_TRAIT(trait)->methods, &klass->methods);
+            tableAddAll(vm, &AS_CLASS(trait)->methods, &klass->methods);
             pop(vm); // pop the trait
 
             DISPATCH();
@@ -5227,11 +5406,22 @@ static Value typeNative(VM *vm, int argCount, Value *args) {
         return OBJ_VAL(copyString(vm, "number", 6));
     } else if (IS_OBJ(args[0])) {
         switch (OBJ_TYPE(args[0])) {
-            case OBJ_NATIVE_CLASS:
-            case OBJ_CLASS:
-                return OBJ_VAL(copyString(vm, "class", 5));
-            case OBJ_TRAIT:
-                return OBJ_VAL(copyString(vm, "trait", 5));
+            case OBJ_CLASS: {
+                switch (AS_CLASS(args[0])->type) {
+                    case CLASS_DEFAULT:
+                    case CLASS_ABSTRACT: {
+                        return OBJ_VAL(copyString(vm, "class", 5));
+                    }
+                    case CLASS_TRAIT: {
+                        return OBJ_VAL(copyString(vm, "trait", 5));
+                    }
+                }
+
+                break;
+            }
+            case OBJ_MODULE: {
+                return OBJ_VAL(copyString(vm, "module", 6));
+            }
             case OBJ_INSTANCE: {
                 ObjString *className = AS_INSTANCE(args[0])->klass->name;
                 return OBJ_VAL(copyString(vm, className->chars, className->length));
@@ -5494,21 +5684,8 @@ static void blackenObject(VM *vm, Obj *object) {
             grayObject(vm, (Obj *) klass->name);
             grayObject(vm, (Obj *) klass->superclass);
             grayTable(vm, &klass->methods);
-            break;
-        }
-
-        case OBJ_NATIVE_CLASS: {
-            ObjClassNative *klass = (ObjClassNative *) object;
-            grayObject(vm, (Obj *) klass->name);
-            grayTable(vm, &klass->methods);
+            grayTable(vm, &klass->abstractMethods);
             grayTable(vm, &klass->properties);
-            break;
-        }
-
-        case OBJ_TRAIT: {
-            ObjTrait *trait = (ObjTrait *) object;
-            grayObject(vm, (Obj *) trait->name);
-            grayTable(vm, &trait->methods);
             break;
         }
 
@@ -5586,22 +5763,9 @@ void freeObject(VM *vm, Obj *object) {
         case OBJ_CLASS: {
             ObjClass *klass = (ObjClass *) object;
             freeTable(vm, &klass->methods);
-            FREE(vm, ObjClass, object);
-            break;
-        }
-
-        case OBJ_NATIVE_CLASS: {
-            ObjClassNative *klass = (ObjClassNative *) object;
-            freeTable(vm, &klass->methods);
+            freeTable(vm, &klass->abstractMethods);
             freeTable(vm, &klass->properties);
-            FREE(vm, ObjClassNative, object);
-            break;
-        }
-
-        case OBJ_TRAIT: {
-            ObjTrait *trait = (ObjTrait *) object;
-            freeTable(vm, &trait->methods);
-            FREE(vm, ObjTrait, object);
+            FREE(vm, ObjClass, object);
             break;
         }
 
@@ -5989,6 +6153,29 @@ static Value lenDict(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(dict->count);
 }
 
+static Value keysDict(VM *vm, int argCount, Value *args) {
+    if (argCount != 0) {
+        runtimeError(vm, "keys() takes no arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    ObjDict *dict = AS_DICT(args[0]);
+
+    ObjList *list = initList(vm);
+    push(vm, OBJ_VAL(list));
+
+    for (int i = 0; i < dict->capacityMask + 1; ++i) {
+        if (IS_EMPTY(dict->entries[i].key)) {
+            continue;
+        }
+
+        writeValueArray(vm, &list->values, dict->entries[i].key);
+    }
+
+    pop(vm);
+    return OBJ_VAL(list);
+}
+
 static Value getDictItem(VM *vm, int argCount, Value *args) {
     if (argCount != 1 && argCount != 2) {
         runtimeError(vm, "get() takes 1 or 2 arguments (%d given)", argCount);
@@ -6091,6 +6278,7 @@ static Value copyDictDeep(VM *vm, int argCount, Value *args) {
 void declareDictMethods(VM *vm) {
     defineNative(vm, &vm->dictMethods, "toString", toStringDict);
     defineNative(vm, &vm->dictMethods, "len", lenDict);
+    defineNative(vm, &vm->dictMethods, "keys", keysDict);
     defineNative(vm, &vm->dictMethods, "get", getDictItem);
     defineNative(vm, &vm->dictMethods, "remove", removeDictItem);
     defineNative(vm, &vm->dictMethods, "exists", dictItemExists);
@@ -6526,6 +6714,52 @@ static Value popListItem(VM *vm, int argCount, Value *args) {
     return element;
 }
 
+static Value removeListItem(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "remove() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    ObjList *list = AS_LIST(args[0]);
+    Value remove = args[1];
+    bool found = false;
+
+    if (list->values.count == 0) {
+        runtimeError(vm, "Value passed to remove() does not exist within an empty list");
+        return EMPTY_VAL;
+    }
+
+    if (list->values.count > 1) {
+        for (int i = 0; i < list->values.count - 1; i++) {
+            if (!found && valuesEqual(remove, list->values.values[i])) {
+                found = true;
+            }
+
+            // If we have found the value, shuffle the array
+            if (found) {
+                list->values.values[i] = list->values.values[i + 1];
+            }
+        }
+
+        // Check if it's the last element
+        if (!found && valuesEqual(remove, list->values.values[list->values.count - 1])) {
+            found = true;
+        }
+    } else {
+        if (valuesEqual(remove, list->values.values[0])) {
+            found = true;
+        }
+    }
+
+    if (found) {
+        list->values.count--;
+        return NIL_VAL;
+    }
+
+    runtimeError(vm, "Value passed to remove() does not exist within the list");
+    return EMPTY_VAL;
+}
+
 static Value containsListItem(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
         runtimeError(vm, "contains() takes 1 argument (%d given)", argCount);
@@ -6638,6 +6872,7 @@ void declareListMethods(VM *vm) {
     defineNative(vm, &vm->listMethods, "push", pushListItem);
     defineNative(vm, &vm->listMethods, "insert", insertListItem);
     defineNative(vm, &vm->listMethods, "pop", popListItem);
+    defineNative(vm, &vm->listMethods, "remove", removeListItem);
     defineNative(vm, &vm->listMethods, "contains", containsListItem);
     defineNative(vm, &vm->listMethods, "join", joinListItem);
     defineNative(vm, &vm->listMethods, "copy", copyListShallow);
@@ -7228,7 +7463,35 @@ void declareStringMethods(VM *vm) {
     defineNative(vm, &vm->stringMethods, "toBool", boolNative); // Defined in util
 }
 
-    /* 22: c.c */
+    /* 22: optionals.c */
+
+BuiltinModules modules[] = {
+        {"Math", &createMathsClass},
+        {"Env", &createEnvClass},
+        {"JSON", &createJSONClass},
+        {"Path", &createPathClass},
+        {"Datetime", &createDatetimeClass},
+#ifndef DISABLE_HTTP
+        {"HTTP", &createHTTPClass},
+#endif
+        {NULL, NULL}
+};
+
+ObjModule *importBuiltinModule(VM *vm, int index) {
+    return modules[index].module(vm);
+}
+
+int findBuiltinModule(char *name, int length) {
+    for (int i = 0; modules[i].module != NULL; ++i) {
+        if (strncmp(modules[i].name, name, length) == 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+    /* 23: c.c */
 
 Value strerrorGeneric(VM *vm, int error) {
     if (error <= 0) {
@@ -7278,262 +7541,262 @@ Value strerrorNative(VM *vm, int argCount, Value *args) {
 void createCClass(VM *vm) {
     ObjString *name = copyString(vm, "C", 1);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define C methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "strerror", strerrorNative);
 
     /**
      * Define C properties
      */
-    defineNativeProperty(vm, &klass->properties, "EPERM",  NUMBER_VAL(EPERM));
-    defineNativeProperty(vm, &klass->properties, "ENOENT", NUMBER_VAL(ENOENT));
-    defineNativeProperty(vm, &klass->properties, "ESRCH",  NUMBER_VAL(ESRCH));
-    defineNativeProperty(vm, &klass->properties, "EINTR",  NUMBER_VAL(EINTR));
-    defineNativeProperty(vm, &klass->properties, "EIO",    NUMBER_VAL(EIO));
-    defineNativeProperty(vm, &klass->properties, "ENXIO",  NUMBER_VAL(ENXIO));
-    defineNativeProperty(vm, &klass->properties, "E2BIG",  NUMBER_VAL(E2BIG));
-    defineNativeProperty(vm, &klass->properties, "ENOEXEC",NUMBER_VAL(ENOEXEC));
-    defineNativeProperty(vm, &klass->properties, "EAGAIN", NUMBER_VAL(EAGAIN));
-    defineNativeProperty(vm, &klass->properties, "ENOMEM", NUMBER_VAL(ENOMEM));
-    defineNativeProperty(vm, &klass->properties, "EACCES", NUMBER_VAL(EACCES));
-    defineNativeProperty(vm, &klass->properties, "EFAULT", NUMBER_VAL(EFAULT));
+    defineNativeProperty(vm, &module->values, "EPERM",  NUMBER_VAL(EPERM));
+    defineNativeProperty(vm, &module->values, "ENOENT", NUMBER_VAL(ENOENT));
+    defineNativeProperty(vm, &module->values, "ESRCH",  NUMBER_VAL(ESRCH));
+    defineNativeProperty(vm, &module->values, "EINTR",  NUMBER_VAL(EINTR));
+    defineNativeProperty(vm, &module->values, "EIO",    NUMBER_VAL(EIO));
+    defineNativeProperty(vm, &module->values, "ENXIO",  NUMBER_VAL(ENXIO));
+    defineNativeProperty(vm, &module->values, "E2BIG",  NUMBER_VAL(E2BIG));
+    defineNativeProperty(vm, &module->values, "ENOEXEC",NUMBER_VAL(ENOEXEC));
+    defineNativeProperty(vm, &module->values, "EAGAIN", NUMBER_VAL(EAGAIN));
+    defineNativeProperty(vm, &module->values, "ENOMEM", NUMBER_VAL(ENOMEM));
+    defineNativeProperty(vm, &module->values, "EACCES", NUMBER_VAL(EACCES));
+    defineNativeProperty(vm, &module->values, "EFAULT", NUMBER_VAL(EFAULT));
 #ifdef ENOTBLK
-    defineNativeProperty(vm, &klass->properties, "ENOTBLK", NUMBER_VAL(ENOTBLK));
+    defineNativeProperty(vm, &module->values, "ENOTBLK", NUMBER_VAL(ENOTBLK));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EBUSY",  NUMBER_VAL(EBUSY));
-    defineNativeProperty(vm, &klass->properties, "EEXIST", NUMBER_VAL(EEXIST));
-    defineNativeProperty(vm, &klass->properties, "EXDEV",  NUMBER_VAL(EXDEV));
-    defineNativeProperty(vm, &klass->properties, "ENODEV", NUMBER_VAL(ENODEV));
-    defineNativeProperty(vm, &klass->properties, "ENOTDIR",NUMBER_VAL(ENOTDIR));
-    defineNativeProperty(vm, &klass->properties, "EISDIR", NUMBER_VAL(EISDIR));
-    defineNativeProperty(vm, &klass->properties, "EINVAL", NUMBER_VAL(EINVAL));
-    defineNativeProperty(vm, &klass->properties, "ENFILE", NUMBER_VAL(ENFILE));
-    defineNativeProperty(vm, &klass->properties, "EMFILE", NUMBER_VAL(EMFILE));
-    defineNativeProperty(vm, &klass->properties, "ENOTTY", NUMBER_VAL(ENOTTY));
-    defineNativeProperty(vm, &klass->properties, "ETXTBSY",NUMBER_VAL(ETXTBSY));
-    defineNativeProperty(vm, &klass->properties, "EFBIG",  NUMBER_VAL(EFBIG));
-    defineNativeProperty(vm, &klass->properties, "ENOSPC", NUMBER_VAL(ENOSPC));
-    defineNativeProperty(vm, &klass->properties, "ESPIPE", NUMBER_VAL(ESPIPE));
-    defineNativeProperty(vm, &klass->properties, "EROFS",  NUMBER_VAL(EROFS));
-    defineNativeProperty(vm, &klass->properties, "EMLINK", NUMBER_VAL(EMLINK));
-    defineNativeProperty(vm, &klass->properties, "EPIPE",  NUMBER_VAL(EPIPE));
-    defineNativeProperty(vm, &klass->properties, "EDOM",   NUMBER_VAL(EDOM));
-    defineNativeProperty(vm, &klass->properties, "ERANGE", NUMBER_VAL(ERANGE));
-    defineNativeProperty(vm, &klass->properties, "EDEADLK",NUMBER_VAL(EDEADLK));
-    defineNativeProperty(vm, &klass->properties, "ENAMETOOLONG", NUMBER_VAL(ENAMETOOLONG));
-    defineNativeProperty(vm, &klass->properties, "ENOLCK", NUMBER_VAL(ENOLCK));
-    defineNativeProperty(vm, &klass->properties, "ENOSYS", NUMBER_VAL(ENOSYS));
-    defineNativeProperty(vm, &klass->properties, "ENOTEMPTY", NUMBER_VAL(ENOTEMPTY));
-    defineNativeProperty(vm, &klass->properties, "ELOOP",  NUMBER_VAL(ELOOP));
-    defineNativeProperty(vm, &klass->properties, "EWOULDBLOCK", NUMBER_VAL(EWOULDBLOCK));
-    defineNativeProperty(vm, &klass->properties, "ENOMSG", NUMBER_VAL(ENOMSG));
-    defineNativeProperty(vm, &klass->properties, "EIDRM", NUMBER_VAL(EIDRM));
+    defineNativeProperty(vm, &module->values, "EBUSY",  NUMBER_VAL(EBUSY));
+    defineNativeProperty(vm, &module->values, "EEXIST", NUMBER_VAL(EEXIST));
+    defineNativeProperty(vm, &module->values, "EXDEV",  NUMBER_VAL(EXDEV));
+    defineNativeProperty(vm, &module->values, "ENODEV", NUMBER_VAL(ENODEV));
+    defineNativeProperty(vm, &module->values, "ENOTDIR",NUMBER_VAL(ENOTDIR));
+    defineNativeProperty(vm, &module->values, "EISDIR", NUMBER_VAL(EISDIR));
+    defineNativeProperty(vm, &module->values, "EINVAL", NUMBER_VAL(EINVAL));
+    defineNativeProperty(vm, &module->values, "ENFILE", NUMBER_VAL(ENFILE));
+    defineNativeProperty(vm, &module->values, "EMFILE", NUMBER_VAL(EMFILE));
+    defineNativeProperty(vm, &module->values, "ENOTTY", NUMBER_VAL(ENOTTY));
+    defineNativeProperty(vm, &module->values, "ETXTBSY",NUMBER_VAL(ETXTBSY));
+    defineNativeProperty(vm, &module->values, "EFBIG",  NUMBER_VAL(EFBIG));
+    defineNativeProperty(vm, &module->values, "ENOSPC", NUMBER_VAL(ENOSPC));
+    defineNativeProperty(vm, &module->values, "ESPIPE", NUMBER_VAL(ESPIPE));
+    defineNativeProperty(vm, &module->values, "EROFS",  NUMBER_VAL(EROFS));
+    defineNativeProperty(vm, &module->values, "EMLINK", NUMBER_VAL(EMLINK));
+    defineNativeProperty(vm, &module->values, "EPIPE",  NUMBER_VAL(EPIPE));
+    defineNativeProperty(vm, &module->values, "EDOM",   NUMBER_VAL(EDOM));
+    defineNativeProperty(vm, &module->values, "ERANGE", NUMBER_VAL(ERANGE));
+    defineNativeProperty(vm, &module->values, "EDEADLK",NUMBER_VAL(EDEADLK));
+    defineNativeProperty(vm, &module->values, "ENAMETOOLONG", NUMBER_VAL(ENAMETOOLONG));
+    defineNativeProperty(vm, &module->values, "ENOLCK", NUMBER_VAL(ENOLCK));
+    defineNativeProperty(vm, &module->values, "ENOSYS", NUMBER_VAL(ENOSYS));
+    defineNativeProperty(vm, &module->values, "ENOTEMPTY", NUMBER_VAL(ENOTEMPTY));
+    defineNativeProperty(vm, &module->values, "ELOOP",  NUMBER_VAL(ELOOP));
+    defineNativeProperty(vm, &module->values, "EWOULDBLOCK", NUMBER_VAL(EWOULDBLOCK));
+    defineNativeProperty(vm, &module->values, "ENOMSG", NUMBER_VAL(ENOMSG));
+    defineNativeProperty(vm, &module->values, "EIDRM", NUMBER_VAL(EIDRM));
 #ifdef ECHRNG
-    defineNativeProperty(vm, &klass->properties, "ECHRNG", NUMBER_VAL(ECHRNG));
+    defineNativeProperty(vm, &module->values, "ECHRNG", NUMBER_VAL(ECHRNG));
 #endif
 #ifdef EL2NSYNC
-    defineNativeProperty(vm, &klass->properties, "EL2NSYNC", NUMBER_VAL(EL2NSYNC));
+    defineNativeProperty(vm, &module->values, "EL2NSYNC", NUMBER_VAL(EL2NSYNC));
 #endif
 #ifdef EL3HLT
-    defineNativeProperty(vm, &klass->properties, "EL3HLT", NUMBER_VAL(EL3HLT));
+    defineNativeProperty(vm, &module->values, "EL3HLT", NUMBER_VAL(EL3HLT));
 #endif
 #ifdef EL3RST
-    defineNativeProperty(vm, &klass->properties, "EL3RST", NUMBER_VAL(EL3RST));
+    defineNativeProperty(vm, &module->values, "EL3RST", NUMBER_VAL(EL3RST));
 #endif
 #ifdef ELNRNG
-    defineNativeProperty(vm, &klass->properties, "ELNRNG", NUMBER_VAL(ELNRNG));
+    defineNativeProperty(vm, &module->values, "ELNRNG", NUMBER_VAL(ELNRNG));
 #endif
 #ifdef EUNATCH
-    defineNativeProperty(vm, &klass->properties, "EUNATCH", NUMBER_VAL(EUNATCH));
+    defineNativeProperty(vm, &module->values, "EUNATCH", NUMBER_VAL(EUNATCH));
 #endif
 #ifdef ENOCSI
-    defineNativeProperty(vm, &klass->properties, "ENOCSI", NUMBER_VAL(ENOCSI));
+    defineNativeProperty(vm, &module->values, "ENOCSI", NUMBER_VAL(ENOCSI));
 #endif
 #ifdef EL2HLT
-    defineNativeProperty(vm, &klass->properties, "EL2HLT", NUMBER_VAL(EL2HLT));
+    defineNativeProperty(vm, &module->values, "EL2HLT", NUMBER_VAL(EL2HLT));
 #endif
 #ifdef EBADE
-    defineNativeProperty(vm, &klass->properties, "EBADE", NUMBER_VAL(EBADE));
+    defineNativeProperty(vm, &module->values, "EBADE", NUMBER_VAL(EBADE));
 #endif
 #ifdef EBADR
-    defineNativeProperty(vm, &klass->properties, "EBADR", NUMBER_VAL(EBADR));
+    defineNativeProperty(vm, &module->values, "EBADR", NUMBER_VAL(EBADR));
 #endif
 #ifdef EXFULL
-    defineNativeProperty(vm, &klass->properties, "EXFULL", NUMBER_VAL(EXFULL));
+    defineNativeProperty(vm, &module->values, "EXFULL", NUMBER_VAL(EXFULL));
 #endif
 #ifdef ENOANO
-    defineNativeProperty(vm, &klass->properties, "ENOANO", NUMBER_VAL(ENOANO));
+    defineNativeProperty(vm, &module->values, "ENOANO", NUMBER_VAL(ENOANO));
 #endif
 #ifdef EBADRQC
-    defineNativeProperty(vm, &klass->properties, "EBADRQC", NUMBER_VAL(EBADRQC));
+    defineNativeProperty(vm, &module->values, "EBADRQC", NUMBER_VAL(EBADRQC));
 #endif
 #ifdef EBADSLT
-    defineNativeProperty(vm, &klass->properties, "EBADSLT", NUMBER_VAL(EBADSLT));
+    defineNativeProperty(vm, &module->values, "EBADSLT", NUMBER_VAL(EBADSLT));
 #endif
 #ifdef EDEADLOCK
-    defineNativeProperty(vm, &klass->properties, "EDEADLOCK", NUMBER_VAL(EDEADLOCK));
+    defineNativeProperty(vm, &module->values, "EDEADLOCK", NUMBER_VAL(EDEADLOCK));
 #endif
 #ifdef EBFONT
-    defineNativeProperty(vm, &klass->properties, "EBFONT", NUMBER_VAL(EBFONT));
+    defineNativeProperty(vm, &module->values, "EBFONT", NUMBER_VAL(EBFONT));
 #endif
-    defineNativeProperty(vm, &klass->properties, "ENOSTR", NUMBER_VAL(ENOSTR));
-    defineNativeProperty(vm, &klass->properties, "ENODATA", NUMBER_VAL(ENODATA));
-    defineNativeProperty(vm, &klass->properties, "ETIME", NUMBER_VAL(ETIME));
-    defineNativeProperty(vm, &klass->properties, "ENOSR", NUMBER_VAL(ENOSR));
+    defineNativeProperty(vm, &module->values, "ENOSTR", NUMBER_VAL(ENOSTR));
+    defineNativeProperty(vm, &module->values, "ENODATA", NUMBER_VAL(ENODATA));
+    defineNativeProperty(vm, &module->values, "ETIME", NUMBER_VAL(ETIME));
+    defineNativeProperty(vm, &module->values, "ENOSR", NUMBER_VAL(ENOSR));
 #ifdef ENONET
-    defineNativeProperty(vm, &klass->properties, "ENONET", NUMBER_VAL(ENONET));
+    defineNativeProperty(vm, &module->values, "ENONET", NUMBER_VAL(ENONET));
 #endif
 #ifdef ENOPKG
-    defineNativeProperty(vm, &klass->properties, "ENOPKG", NUMBER_VAL(ENOPKG));
+    defineNativeProperty(vm, &module->values, "ENOPKG", NUMBER_VAL(ENOPKG));
 #endif
 #ifdef EREMOTE
-    defineNativeProperty(vm, &klass->properties, "EREMOTE", NUMBER_VAL(EREMOTE));
+    defineNativeProperty(vm, &module->values, "EREMOTE", NUMBER_VAL(EREMOTE));
 #endif
-    defineNativeProperty(vm, &klass->properties, "ENOLINK", NUMBER_VAL(ENOLINK));
+    defineNativeProperty(vm, &module->values, "ENOLINK", NUMBER_VAL(ENOLINK));
 #ifdef EADV
-    defineNativeProperty(vm, &klass->properties, "EADV", NUMBER_VAL(EADV));
+    defineNativeProperty(vm, &module->values, "EADV", NUMBER_VAL(EADV));
 #endif
 #ifdef ESRMNT
-    defineNativeProperty(vm, &klass->properties, "ESRMNT", NUMBER_VAL(ESRMNT));
+    defineNativeProperty(vm, &module->values, "ESRMNT", NUMBER_VAL(ESRMNT));
 #endif
 #ifdef ECOMM
-    defineNativeProperty(vm, &klass->properties, "ECOMM", NUMBER_VAL(ECOMM));
+    defineNativeProperty(vm, &module->values, "ECOMM", NUMBER_VAL(ECOMM));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EPROTO", NUMBER_VAL(EPROTO));
-    defineNativeProperty(vm, &klass->properties, "EMULTIHOP", NUMBER_VAL(EMULTIHOP));
+    defineNativeProperty(vm, &module->values, "EPROTO", NUMBER_VAL(EPROTO));
+    defineNativeProperty(vm, &module->values, "EMULTIHOP", NUMBER_VAL(EMULTIHOP));
 #ifdef EDOTDOT
-    defineNativeProperty(vm, &klass->properties, "EDOTDOT", NUMBER_VAL(EDOTDOT));
+    defineNativeProperty(vm, &module->values, "EDOTDOT", NUMBER_VAL(EDOTDOT));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EBADMSG", NUMBER_VAL(EBADMSG));
-    defineNativeProperty(vm, &klass->properties, "EOVERFLOW", NUMBER_VAL(EOVERFLOW));
+    defineNativeProperty(vm, &module->values, "EBADMSG", NUMBER_VAL(EBADMSG));
+    defineNativeProperty(vm, &module->values, "EOVERFLOW", NUMBER_VAL(EOVERFLOW));
 #ifdef ENOTUNIQ
-    defineNativeProperty(vm, &klass->properties, "ENOTUNIQ", NUMBER_VAL(ENOTUNIQ));
+    defineNativeProperty(vm, &module->values, "ENOTUNIQ", NUMBER_VAL(ENOTUNIQ));
 #endif
 #ifdef EBADFD
-    defineNativeProperty(vm, &klass->properties, "EBADFD", NUMBER_VAL(EBADFD));
+    defineNativeProperty(vm, &module->values, "EBADFD", NUMBER_VAL(EBADFD));
 #endif
 #ifdef EREMCHG
-    defineNativeProperty(vm, &klass->properties, "EREMCHG", NUMBER_VAL(EREMCHG));
+    defineNativeProperty(vm, &module->values, "EREMCHG", NUMBER_VAL(EREMCHG));
 #endif
 #ifdef ELIBACC
-    defineNativeProperty(vm, &klass->properties, "ELIBACC", NUMBER_VAL(ELIBACC));
+    defineNativeProperty(vm, &module->values, "ELIBACC", NUMBER_VAL(ELIBACC));
 #endif
 #ifdef ELIBBAD
-    defineNativeProperty(vm, &klass->properties, "ELIBBAD", NUMBER_VAL(ELIBBAD));
+    defineNativeProperty(vm, &module->values, "ELIBBAD", NUMBER_VAL(ELIBBAD));
 #endif
 #ifdef ELIBSCN
-    defineNativeProperty(vm, &klass->properties, "ELIBSCN", NUMBER_VAL(ELIBSCN));
+    defineNativeProperty(vm, &module->values, "ELIBSCN", NUMBER_VAL(ELIBSCN));
 #endif
 #ifdef ELIBMAX
-    defineNativeProperty(vm, &klass->properties, "ELIBMAX", NUMBER_VAL(ELIBMAX));
+    defineNativeProperty(vm, &module->values, "ELIBMAX", NUMBER_VAL(ELIBMAX));
 #endif
 #ifdef ELIBEXEC
-    defineNativeProperty(vm, &klass->properties, "ELIBEXEC", NUMBER_VAL(ELIBEXEC));
+    defineNativeProperty(vm, &module->values, "ELIBEXEC", NUMBER_VAL(ELIBEXEC));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EILSEQ", NUMBER_VAL(EILSEQ));
+    defineNativeProperty(vm, &module->values, "EILSEQ", NUMBER_VAL(EILSEQ));
 #ifdef ERESTART
-    defineNativeProperty(vm, &klass->properties, "ERESTART", NUMBER_VAL(ERESTART));
+    defineNativeProperty(vm, &module->values, "ERESTART", NUMBER_VAL(ERESTART));
 #endif
 #ifdef ESTRPIPE
-    defineNativeProperty(vm, &klass->properties, "ESTRPIPE", NUMBER_VAL(ESTRPIPE));
+    defineNativeProperty(vm, &module->values, "ESTRPIPE", NUMBER_VAL(ESTRPIPE));
 #endif
 #ifdef EUSERS
-    defineNativeProperty(vm, &klass->properties, "EUSERS", NUMBER_VAL(EUSERS));
+    defineNativeProperty(vm, &module->values, "EUSERS", NUMBER_VAL(EUSERS));
 #endif
-    defineNativeProperty(vm, &klass->properties, "ENOTSOCK", NUMBER_VAL(ENOTSOCK));
-    defineNativeProperty(vm, &klass->properties, "EDESTADDRREQ", NUMBER_VAL(EDESTADDRREQ));
-    defineNativeProperty(vm, &klass->properties, "EMSGSIZE", NUMBER_VAL(EMSGSIZE));
-    defineNativeProperty(vm, &klass->properties, "EPROTOTYPE", NUMBER_VAL(EPROTOTYPE));
-    defineNativeProperty(vm, &klass->properties, "ENOPROTOOPT", NUMBER_VAL(ENOPROTOOPT));
-    defineNativeProperty(vm, &klass->properties, "EPROTONOSUPPORT", NUMBER_VAL(EPROTONOSUPPORT));
+    defineNativeProperty(vm, &module->values, "ENOTSOCK", NUMBER_VAL(ENOTSOCK));
+    defineNativeProperty(vm, &module->values, "EDESTADDRREQ", NUMBER_VAL(EDESTADDRREQ));
+    defineNativeProperty(vm, &module->values, "EMSGSIZE", NUMBER_VAL(EMSGSIZE));
+    defineNativeProperty(vm, &module->values, "EPROTOTYPE", NUMBER_VAL(EPROTOTYPE));
+    defineNativeProperty(vm, &module->values, "ENOPROTOOPT", NUMBER_VAL(ENOPROTOOPT));
+    defineNativeProperty(vm, &module->values, "EPROTONOSUPPORT", NUMBER_VAL(EPROTONOSUPPORT));
 #ifdef ESOCKTNOSUPPORT
-    defineNativeProperty(vm, &klass->properties, "ESOCKTNOSUPPORT", NUMBER_VAL(ESOCKTNOSUPPORT));
+    defineNativeProperty(vm, &module->values, "ESOCKTNOSUPPORT", NUMBER_VAL(ESOCKTNOSUPPORT));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EOPNOTSUPP", NUMBER_VAL(EOPNOTSUPP));
+    defineNativeProperty(vm, &module->values, "EOPNOTSUPP", NUMBER_VAL(EOPNOTSUPP));
 #ifdef EPFNOSUPPORT
-    defineNativeProperty(vm, &klass->properties, "EPFNOSUPPORT", NUMBER_VAL(EPFNOSUPPORT));
+    defineNativeProperty(vm, &module->values, "EPFNOSUPPORT", NUMBER_VAL(EPFNOSUPPORT));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EAFNOSUPPORT", NUMBER_VAL(EAFNOSUPPORT));
-    defineNativeProperty(vm, &klass->properties, "EADDRINUSE", NUMBER_VAL(EADDRINUSE));
-    defineNativeProperty(vm, &klass->properties, "EADDRNOTAVAIL", NUMBER_VAL(EADDRNOTAVAIL));
-    defineNativeProperty(vm, &klass->properties, "ENETDOWN", NUMBER_VAL(ENETDOWN));
-    defineNativeProperty(vm, &klass->properties, "ENETUNREACH", NUMBER_VAL(ENETUNREACH));
-    defineNativeProperty(vm, &klass->properties, "ENETRESET", NUMBER_VAL(ENETRESET));
-    defineNativeProperty(vm, &klass->properties, "ECONNABORTED", NUMBER_VAL(ECONNABORTED));
-    defineNativeProperty(vm, &klass->properties, "ECONNRESET", NUMBER_VAL(ECONNRESET));
-    defineNativeProperty(vm, &klass->properties, "ENOBUFS", NUMBER_VAL(ENOBUFS));
-    defineNativeProperty(vm, &klass->properties, "EISCONN", NUMBER_VAL(EISCONN));
-    defineNativeProperty(vm, &klass->properties, "ENOTCONN", NUMBER_VAL(ENOTCONN));
+    defineNativeProperty(vm, &module->values, "EAFNOSUPPORT", NUMBER_VAL(EAFNOSUPPORT));
+    defineNativeProperty(vm, &module->values, "EADDRINUSE", NUMBER_VAL(EADDRINUSE));
+    defineNativeProperty(vm, &module->values, "EADDRNOTAVAIL", NUMBER_VAL(EADDRNOTAVAIL));
+    defineNativeProperty(vm, &module->values, "ENETDOWN", NUMBER_VAL(ENETDOWN));
+    defineNativeProperty(vm, &module->values, "ENETUNREACH", NUMBER_VAL(ENETUNREACH));
+    defineNativeProperty(vm, &module->values, "ENETRESET", NUMBER_VAL(ENETRESET));
+    defineNativeProperty(vm, &module->values, "ECONNABORTED", NUMBER_VAL(ECONNABORTED));
+    defineNativeProperty(vm, &module->values, "ECONNRESET", NUMBER_VAL(ECONNRESET));
+    defineNativeProperty(vm, &module->values, "ENOBUFS", NUMBER_VAL(ENOBUFS));
+    defineNativeProperty(vm, &module->values, "EISCONN", NUMBER_VAL(EISCONN));
+    defineNativeProperty(vm, &module->values, "ENOTCONN", NUMBER_VAL(ENOTCONN));
 #ifdef ESHUTDOWN
-    defineNativeProperty(vm, &klass->properties, "ESHUTDOWN", NUMBER_VAL(ESHUTDOWN));
+    defineNativeProperty(vm, &module->values, "ESHUTDOWN", NUMBER_VAL(ESHUTDOWN));
 #endif
 #ifdef ETOOMANYREFS
-    defineNativeProperty(vm, &klass->properties, "ETOOMANYREFS", NUMBER_VAL(ETOOMANYREFS));
+    defineNativeProperty(vm, &module->values, "ETOOMANYREFS", NUMBER_VAL(ETOOMANYREFS));
 #endif
-    defineNativeProperty(vm, &klass->properties, "ETIMEDOUT", NUMBER_VAL(ETIMEDOUT));
-    defineNativeProperty(vm, &klass->properties, "ECONNREFUSED", NUMBER_VAL(ECONNREFUSED));
+    defineNativeProperty(vm, &module->values, "ETIMEDOUT", NUMBER_VAL(ETIMEDOUT));
+    defineNativeProperty(vm, &module->values, "ECONNREFUSED", NUMBER_VAL(ECONNREFUSED));
 #ifdef EHOSTDOWN
-    defineNativeProperty(vm, &klass->properties, "EHOSTDOWN", NUMBER_VAL(EHOSTDOWN));
+    defineNativeProperty(vm, &module->values, "EHOSTDOWN", NUMBER_VAL(EHOSTDOWN));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EHOSTUNREACH", NUMBER_VAL(EHOSTUNREACH));
-    defineNativeProperty(vm, &klass->properties, "EALREADY", NUMBER_VAL(EALREADY));
-    defineNativeProperty(vm, &klass->properties, "EINPROGRESS", NUMBER_VAL(EINPROGRESS));
-    defineNativeProperty(vm, &klass->properties, "ESTALE", NUMBER_VAL(ESTALE));
+    defineNativeProperty(vm, &module->values, "EHOSTUNREACH", NUMBER_VAL(EHOSTUNREACH));
+    defineNativeProperty(vm, &module->values, "EALREADY", NUMBER_VAL(EALREADY));
+    defineNativeProperty(vm, &module->values, "EINPROGRESS", NUMBER_VAL(EINPROGRESS));
+    defineNativeProperty(vm, &module->values, "ESTALE", NUMBER_VAL(ESTALE));
 #ifdef EUCLEAN
-    defineNativeProperty(vm, &klass->properties, "EUCLEAN", NUMBER_VAL(EUCLEAN));
+    defineNativeProperty(vm, &module->values, "EUCLEAN", NUMBER_VAL(EUCLEAN));
 #endif
 #ifdef ENOTNAM
-    defineNativeProperty(vm, &klass->properties, "ENOTNAM", NUMBER_VAL(ENOTNAM));
+    defineNativeProperty(vm, &module->values, "ENOTNAM", NUMBER_VAL(ENOTNAM));
 #endif
 #ifdef ENAVAIL
-    defineNativeProperty(vm, &klass->properties, "ENAVAIL", NUMBER_VAL(ENAVAIL));
+    defineNativeProperty(vm, &module->values, "ENAVAIL", NUMBER_VAL(ENAVAIL));
 #endif
 #ifdef EISNAM
-    defineNativeProperty(vm, &klass->properties, "EISNAM", NUMBER_VAL(EISNAM));
+    defineNativeProperty(vm, &module->values, "EISNAM", NUMBER_VAL(EISNAM));
 #endif
 #ifdef EREMOTEIO
-    defineNativeProperty(vm, &klass->properties, "EREMOTEIO", NUMBER_VAL(EREMOTEIO));
+    defineNativeProperty(vm, &module->values, "EREMOTEIO", NUMBER_VAL(EREMOTEIO));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EDQUOT", NUMBER_VAL(EDQUOT));
+    defineNativeProperty(vm, &module->values, "EDQUOT", NUMBER_VAL(EDQUOT));
 #ifdef ENOMEDIUM
-    defineNativeProperty(vm, &klass->properties, "ENOMEDIUM", NUMBER_VAL(ENOMEDIUM));
+    defineNativeProperty(vm, &module->values, "ENOMEDIUM", NUMBER_VAL(ENOMEDIUM));
 #endif
 #ifdef EMEDIUMTYPE
-    defineNativeProperty(vm, &klass->properties, "EMEDIUMTYPE", NUMBER_VAL(EMEDIUMTYPE));
+    defineNativeProperty(vm, &module->values, "EMEDIUMTYPE", NUMBER_VAL(EMEDIUMTYPE));
 #endif
-    defineNativeProperty(vm, &klass->properties, "ECANCELED", NUMBER_VAL(ECANCELED));
+    defineNativeProperty(vm, &module->values, "ECANCELED", NUMBER_VAL(ECANCELED));
 #ifdef ENOKEY
-    defineNativeProperty(vm, &klass->properties, "ENOKEY", NUMBER_VAL(ENOKEY));
+    defineNativeProperty(vm, &module->values, "ENOKEY", NUMBER_VAL(ENOKEY));
 #endif
 #ifdef EKEYEXPIRED
-    defineNativeProperty(vm, &klass->properties, "EKEYEXPIRED", NUMBER_VAL(EKEYEXPIRED));
+    defineNativeProperty(vm, &module->values, "EKEYEXPIRED", NUMBER_VAL(EKEYEXPIRED));
 #endif
 #ifdef EKEYREVOKED
-    defineNativeProperty(vm, &klass->properties, "EKEYREVOKED", NUMBER_VAL(EKEYREVOKED));
+    defineNativeProperty(vm, &module->values, "EKEYREVOKED", NUMBER_VAL(EKEYREVOKED));
 #endif
 #ifdef EKEYREJECTED
-    defineNativeProperty(vm, &klass->properties, "EKEYREJECTED", NUMBER_VAL(EKEYREJECTED));
+    defineNativeProperty(vm, &module->values, "EKEYREJECTED", NUMBER_VAL(EKEYREJECTED));
 #endif
-    defineNativeProperty(vm, &klass->properties, "EOWNERDEAD", NUMBER_VAL(EOWNERDEAD));
-    defineNativeProperty(vm, &klass->properties, "ENOTRECOVERABLE", NUMBER_VAL(ENOTRECOVERABLE));
+    defineNativeProperty(vm, &module->values, "EOWNERDEAD", NUMBER_VAL(EOWNERDEAD));
+    defineNativeProperty(vm, &module->values, "ENOTRECOVERABLE", NUMBER_VAL(ENOTRECOVERABLE));
 #ifdef ERFKILL
-    defineNativeProperty(vm, &klass->properties, "ERFKILL", NUMBER_VAL(ERFKILL));
+    defineNativeProperty(vm, &module->values, "ERFKILL", NUMBER_VAL(ERFKILL));
 #endif
 #ifdef EHWPOISON
-    defineNativeProperty(vm, &klass->properties, "EHWPOISON", NUMBER_VAL(EHWPOISON));
+    defineNativeProperty(vm, &module->values, "EHWPOISON", NUMBER_VAL(EHWPOISON));
 #endif
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
+    tableSet(vm, &vm->globals, name, OBJ_VAL(module));
     pop(vm);
     pop(vm);
 }
 
 
-    /* 23: env.c */
+    /* 24: env.c */
 
 static Value env_get(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
@@ -7588,27 +7851,27 @@ static Value set(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(retval == 0 ? OK : NOTOK);
 }
 
-void createEnvClass(VM *vm) {
+ObjModule *createEnvClass(VM *vm) {
     ObjString *name = copyString(vm, "Env", 3);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Env methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorNative);
-    defineNative(vm, &klass->methods, "get", env_get);
-    defineNative(vm, &klass->methods, "set", set);
+    defineNative(vm, &module->values, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "get", env_get);
+    defineNative(vm, &module->values, "set", set);
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }
 #ifndef DISABLE_HTTP
 
 
-    /* 24: http.c */
+    /* 25: http.c */
 
 static Value strerrorHttpNative(VM *vm, int argCount, Value *args) {
     if (argCount > 1) {
@@ -7905,32 +8168,32 @@ static Value post(VM *vm, int argCount, Value *args) {
     return NIL_VAL;
 }
 
-void createHTTPClass(VM *vm) {
+ObjModule *createHTTPClass(VM *vm) {
     ObjString *name = copyString(vm, "HTTP", 4);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Http methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorHttpNative);
-    defineNative(vm, &klass->methods, "get", get);
-    defineNative(vm, &klass->methods, "post", post);
+    defineNative(vm, &module->values, "strerror", strerrorHttpNative);
+    defineNative(vm, &module->values, "get", get);
+    defineNative(vm, &module->values, "post", post);
 
     /**
      * Define Http properties
      */
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }
 
 #endif /* DISABLE_HTTP */
 
-    /* 25: jsonParseLib.c */
+    /* 26: jsonParseLib.c */
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
  * Copyright (C) 2012, 2013, 2014 James McLaughlin et al.  All rights reserved.
@@ -8962,7 +9225,7 @@ void json_value_free (json_value * value)
     json_value_free_ex (&settings, value);
 }
 
-    /* 26: jsonBuilderLib.c */
+    /* 27: jsonBuilderLib.c */
 
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
@@ -9948,7 +10211,7 @@ void json_builder_free (json_value * value)
         free (cur_value);
     }
 }
-    /* 27: json.c */
+    /* 28: json.c */
 
 struct json_error_table_t {
   int error;
@@ -10213,34 +10476,34 @@ static Value stringify(VM *vm, int argCount, Value *args) {
     return OBJ_VAL(string);
 }
 
-void createJSONClass(VM *vm) {
+ObjModule *createJSONClass(VM *vm) {
     ObjString *name = copyString(vm, "JSON", 4);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Json methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorJsonNative);
-    defineNative(vm, &klass->methods, "parse", parse);
-    defineNative(vm, &klass->methods, "stringify", stringify);
+    defineNative(vm, &module->values, "strerror", strerrorJsonNative);
+    defineNative(vm, &module->values, "parse", parse);
+    defineNative(vm, &module->values, "stringify", stringify);
 
     /**
      * Define Json properties
      */
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
-    defineNativeProperty(vm, &klass->properties, "ENULL", NUMBER_VAL(JSON_ENULL));
-    defineNativeProperty(vm, &klass->properties, "ENOTYPE", NUMBER_VAL(JSON_ENOTYPE));
-    defineNativeProperty(vm, &klass->properties, "EINVAL", NUMBER_VAL(JSON_EINVAL));
-    defineNativeProperty(vm, &klass->properties, "ENOSERIAL", NUMBER_VAL(JSON_ENOSERIAL));
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "ENULL", NUMBER_VAL(JSON_ENULL));
+    defineNativeProperty(vm, &module->values, "ENOTYPE", NUMBER_VAL(JSON_ENOTYPE));
+    defineNativeProperty(vm, &module->values, "EINVAL", NUMBER_VAL(JSON_EINVAL));
+    defineNativeProperty(vm, &module->values, "ENOSERIAL", NUMBER_VAL(JSON_ENOSERIAL));
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }
 
-    /* 28: math.c */
+    /* 29: math.c */
 
 static Value averageNative(VM *vm, int argCount, Value *args) {
     double average = 0;
@@ -10326,9 +10589,7 @@ static Value absNative(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(absValue);
 }
 
-static Value sumNative(VM *vm, int argCount, Value *args) {
-    double sum = 0;
-
+static Value maxNative(VM *vm, int argCount, Value *args) {
     if (argCount == 0) {
         return NUMBER_VAL(0);
     } else if (argCount == 1 && IS_LIST(args[0])) {
@@ -10337,16 +10598,23 @@ static Value sumNative(VM *vm, int argCount, Value *args) {
         args = list->values.values;
     }
 
-    for (int i = 0; i < argCount; ++i) {
+    double maximum = AS_NUMBER(args[0]);
+
+    for (int i = 1; i < argCount; ++i) {
         Value value = args[i];
         if (!IS_NUMBER(value)) {
-            runtimeError(vm, "A non-number value passed to sum()");
+            runtimeError(vm, "A non-number value passed to max()");
             return EMPTY_VAL;
         }
-        sum = sum + AS_NUMBER(value);
+
+        double current = AS_NUMBER(value);
+
+        if (maximum < current) {
+            maximum = current;
+        }
     }
 
-    return NUMBER_VAL(sum);
+    return NUMBER_VAL(maximum);
 }
 
 static Value minNative(VM *vm, int argCount, Value *args) {
@@ -10377,7 +10645,9 @@ static Value minNative(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(minimum);
 }
 
-static Value maxNative(VM *vm, int argCount, Value *args) {
+static Value sumNative(VM *vm, int argCount, Value *args) {
+    double sum = 0;
+
     if (argCount == 0) {
         return NUMBER_VAL(0);
     } else if (argCount == 1 && IS_LIST(args[0])) {
@@ -10386,55 +10656,63 @@ static Value maxNative(VM *vm, int argCount, Value *args) {
         args = list->values.values;
     }
 
-    double maximum = AS_NUMBER(args[0]);
-
-    for (int i = 1; i < argCount; ++i) {
+    for (int i = 0; i < argCount; ++i) {
         Value value = args[i];
         if (!IS_NUMBER(value)) {
-            runtimeError(vm, "A non-number value passed to max()");
+            runtimeError(vm, "A non-number value passed to sum()");
             return EMPTY_VAL;
         }
-
-        double current = AS_NUMBER(value);
-
-        if (maximum < current) {
-            maximum = current;
-        }
+        sum = sum + AS_NUMBER(value);
     }
 
-    return NUMBER_VAL(maximum);
+    return NUMBER_VAL(sum);
 }
 
-void createMathsClass(VM *vm) {
+static Value sqrtNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "sqrt() takes 1 argument (%d given).", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0])) {
+        runtimeError(vm, "A non-number value passed to sqrt()");
+        return EMPTY_VAL;
+    }
+
+    return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
+}
+
+ObjModule *createMathsClass(VM *vm) {
     ObjString *name = copyString(vm, "Math", 4);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
-     * Define Math methods
+     * Define Math values
      */
-    defineNative(vm, &klass->methods, "average", averageNative);
-    defineNative(vm, &klass->methods, "floor", floorNative);
-    defineNative(vm, &klass->methods, "round", roundNative);
-    defineNative(vm, &klass->methods, "ceil", ceilNative);
-    defineNative(vm, &klass->methods, "abs", absNative);
-    defineNative(vm, &klass->methods, "max", maxNative);
-    defineNative(vm, &klass->methods, "min", minNative);
-    defineNative(vm, &klass->methods, "sum", sumNative);
+    defineNative(vm, &module->values, "average", averageNative);
+    defineNative(vm, &module->values, "floor", floorNative);
+    defineNative(vm, &module->values, "round", roundNative);
+    defineNative(vm, &module->values, "ceil", ceilNative);
+    defineNative(vm, &module->values, "abs", absNative);
+    defineNative(vm, &module->values, "max", maxNative);
+    defineNative(vm, &module->values, "min", minNative);
+    defineNative(vm, &module->values, "sum", sumNative);
+    defineNative(vm, &module->values, "sqrt", sqrtNative);
 
     /**
      * Define Math properties
      */
-    defineNativeProperty(vm, &klass->properties, "PI", NUMBER_VAL(3.14159265358979));
-    defineNativeProperty(vm, &klass->properties, "e", NUMBER_VAL(2.71828182845905));
+    defineNativeProperty(vm, &module->values, "PI", NUMBER_VAL(3.14159265358979));
+    defineNativeProperty(vm, &module->values, "e", NUMBER_VAL(2.71828182845905));
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }
 
-    /* 29: path.c */
+    /* 30: path.c */
 
 #ifdef HAS_REALPATH
 static Value realpathNative(VM *vm, int argCount, Value *args) {
@@ -10586,36 +10864,36 @@ static Value dirnameNative(VM *vm, int argCount, Value *args) {
     return OBJ_VAL(copyString(vm, path, len));
 }
 
-void createPathClass(VM *vm) {
+ObjModule *createPathClass(VM *vm) {
     ObjString *name = copyString(vm, "Path", 4);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Path methods
      */
 #ifdef HAS_REALPATH
-    defineNative(vm, &klass->methods, "realpath", realpathNative);
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
-    defineNative(vm, &klass->methods, "strerror", strerrorNative); // only realpath uset errno
+    defineNative(vm, &module->values, "realpath", realpathNative);
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
+    defineNative(vm, &module->values, "strerror", strerrorNative); // only realpath uset errno
 #endif
-    defineNative(vm, &klass->methods, "isAbsolute", isAbsoluteNative);
-    defineNative(vm, &klass->methods, "basename", basenameNative);
-    defineNative(vm, &klass->methods, "extname", extnameNative);
-    defineNative(vm, &klass->methods, "dirname", dirnameNative);
+    defineNative(vm, &module->values, "isAbsolute", isAbsoluteNative);
+    defineNative(vm, &module->values, "basename", basenameNative);
+    defineNative(vm, &module->values, "extname", extnameNative);
+    defineNative(vm, &module->values, "dirname", dirnameNative);
 
-    defineNativeProperty(vm, &klass->properties, "delimiter", OBJ_VAL(
+    defineNativeProperty(vm, &module->values, "delimiter", OBJ_VAL(
         copyString(vm, PATH_DELIMITER_AS_STRING, PATH_DELIMITER_STRLEN)));
-    defineNativeProperty(vm, &klass->properties, "dirSeparator", OBJ_VAL(
+    defineNativeProperty(vm, &module->values, "dirSeparator", OBJ_VAL(
         copyString(vm, DIR_SEPARATOR_AS_STRING, DIR_SEPARATOR_STRLEN)));
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }
 
-    /* 30: system.c */
+    /* 31: system.c */
 
 static Value getgidNative(VM *vm, int argCount, Value *args) {
     UNUSED(args);
@@ -10887,65 +11165,63 @@ void initPlatform(VM *vm, Table *table) {
 void createSystemClass(VM *vm, int argc, const char *argv[]) {
     ObjString *name = copyString(vm, "System", 6);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define System methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorNative);
-    defineNative(vm, &klass->methods, "getgid", getgidNative);
-    defineNative(vm, &klass->methods, "getegid", getegidNative);
-    defineNative(vm, &klass->methods, "getuid", getuidNative);
-    defineNative(vm, &klass->methods, "geteuid", geteuidNative);
-    defineNative(vm, &klass->methods, "getppid", getppidNative);
-    defineNative(vm, &klass->methods, "getpid", getpidNative);
-    defineNative(vm, &klass->methods, "rmdir", rmdirNative);
-    defineNative(vm, &klass->methods, "mkdir", mkdirNative);
-    defineNative(vm, &klass->methods, "remove", removeNative);
-    defineNative(vm, &klass->methods, "setCWD", setCWDNative);
-    defineNative(vm, &klass->methods, "getCWD", getCWDNative);
-    defineNative(vm, &klass->methods, "time", timeNative);
-    defineNative(vm, &klass->methods, "clock", clockNative);
-    defineNative(vm, &klass->methods, "collect", collectNative);
-    defineNative(vm, &klass->methods, "sleep", sleepNative);
-    /*** DISABLED ***/
-    (void) exitNative;
-    // defineNative(vm, &klass->methods, "exit", exitNative);
+    defineNative(vm, &module->values, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "getgid", getgidNative);
+    defineNative(vm, &module->values, "getegid", getegidNative);
+    defineNative(vm, &module->values, "getuid", getuidNative);
+    defineNative(vm, &module->values, "geteuid", geteuidNative);
+    defineNative(vm, &module->values, "getppid", getppidNative);
+    defineNative(vm, &module->values, "getpid", getpidNative);
+    defineNative(vm, &module->values, "rmdir", rmdirNative);
+    defineNative(vm, &module->values, "mkdir", mkdirNative);
+    defineNative(vm, &module->values, "remove", removeNative);
+    defineNative(vm, &module->values, "setCWD", setCWDNative);
+    defineNative(vm, &module->values, "getCWD", getCWDNative);
+    defineNative(vm, &module->values, "time", timeNative);
+    defineNative(vm, &module->values, "clock", clockNative);
+    defineNative(vm, &module->values, "collect", collectNative);
+    defineNative(vm, &module->values, "sleep", sleepNative);
+    defineNative(vm, &module->values, "exit", exitNative);
 
     /**
      * Define System properties
      */
     if (!vm->repl) {
         // Set argv variable
-        initArgv(vm, &klass->properties, argc, argv);
+        initArgv(vm, &module->values, argc, argv);
     }
 
-    initPlatform(vm, &klass->properties);
+    initPlatform(vm, &module->values);
 
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
 
-    defineNativeProperty(vm, &klass->properties, "S_IRWXU", NUMBER_VAL(448));
-    defineNativeProperty(vm, &klass->properties, "S_IRUSR", NUMBER_VAL(256));
-    defineNativeProperty(vm, &klass->properties, "S_IWUSR", NUMBER_VAL(128));
-    defineNativeProperty(vm, &klass->properties, "S_IXUSR", NUMBER_VAL(64));
-    defineNativeProperty(vm, &klass->properties, "S_IRWXG", NUMBER_VAL(56));
-    defineNativeProperty(vm, &klass->properties, "S_IRGRP", NUMBER_VAL(32));
-    defineNativeProperty(vm, &klass->properties, "S_IWGRP", NUMBER_VAL(16));
-    defineNativeProperty(vm, &klass->properties, "S_IXGRP", NUMBER_VAL(8));
-    defineNativeProperty(vm, &klass->properties, "S_IRWXO", NUMBER_VAL(7));
-    defineNativeProperty(vm, &klass->properties, "S_IROTH", NUMBER_VAL(4));
-    defineNativeProperty(vm, &klass->properties, "S_IWOTH", NUMBER_VAL(2));
-    defineNativeProperty(vm, &klass->properties, "S_IXOTH", NUMBER_VAL(1));
-    defineNativeProperty(vm, &klass->properties, "S_ISUID", NUMBER_VAL(2048));
-    defineNativeProperty(vm, &klass->properties, "S_ISGID", NUMBER_VAL(1024));
+    defineNativeProperty(vm, &module->values, "S_IRWXU", NUMBER_VAL(448));
+    defineNativeProperty(vm, &module->values, "S_IRUSR", NUMBER_VAL(256));
+    defineNativeProperty(vm, &module->values, "S_IWUSR", NUMBER_VAL(128));
+    defineNativeProperty(vm, &module->values, "S_IXUSR", NUMBER_VAL(64));
+    defineNativeProperty(vm, &module->values, "S_IRWXG", NUMBER_VAL(56));
+    defineNativeProperty(vm, &module->values, "S_IRGRP", NUMBER_VAL(32));
+    defineNativeProperty(vm, &module->values, "S_IWGRP", NUMBER_VAL(16));
+    defineNativeProperty(vm, &module->values, "S_IXGRP", NUMBER_VAL(8));
+    defineNativeProperty(vm, &module->values, "S_IRWXO", NUMBER_VAL(7));
+    defineNativeProperty(vm, &module->values, "S_IROTH", NUMBER_VAL(4));
+    defineNativeProperty(vm, &module->values, "S_IWOTH", NUMBER_VAL(2));
+    defineNativeProperty(vm, &module->values, "S_IXOTH", NUMBER_VAL(1));
+    defineNativeProperty(vm, &module->values, "S_ISUID", NUMBER_VAL(2048));
+    defineNativeProperty(vm, &module->values, "S_ISGID", NUMBER_VAL(1024));
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
+    tableSet(vm, &vm->globals, name, OBJ_VAL(module));
     pop(vm);
     pop(vm);
 }
 
-    /* 31: datetime.c */
+    /* 32: datetime.c */
 
 static Value nowNative(VM *vm, int argCount, Value *args) {
     UNUSED(args);
@@ -11086,21 +11362,21 @@ static Value strptimeNative(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL((double) mktime(&tictoc));
 }
 
-void createDatetimeClass(VM *vm) {
+ObjModule *createDatetimeClass(VM *vm) {
     ObjString *name = copyString(vm, "Datetime", 8);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Datetime methods
      */
-    defineNative(vm, &klass->methods, "now", nowNative);
-    defineNative(vm, &klass->methods, "nowUTC", nowUTCNative);
-    defineNative(vm, &klass->methods, "strftime", strftimeNative);
-    defineNative(vm, &klass->methods, "strptime", strptimeNative);
+    defineNative(vm, &module->values, "now", nowNative);
+    defineNative(vm, &module->values, "nowUTC", nowUTCNative);
+    defineNative(vm, &module->values, "strftime", strftimeNative);
+    defineNative(vm, &module->values, "strptime", strptimeNative);
+    pop(vm);
+    pop(vm);
 
-    tableSet(vm, &vm->globals, name, OBJ_VAL(klass));
-    pop(vm);
-    pop(vm);
+    return module;
 }

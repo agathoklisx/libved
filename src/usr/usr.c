@@ -92,7 +92,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
       }
       break;
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
     case 'I': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
@@ -116,17 +116,17 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 
 private void __u_add_file_mode_actions__ (ed_t *this) {
   int num_actions = 1;
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
 
   utf8 chars[] = {
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
     'I',
 #endif
     'B'};
   char actions[] =
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
     "Interpret file with Dictu\n"
 #endif
     "Browser: Open file in the text browser (elinks)";
@@ -144,6 +144,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr
 #ifdef HAS_PROGRAMMING_LANGUAGE
     case 'I': {
       string_t *expression = Vstring.join (vstr, "\n");
+      String.prepend (expression, "import Datetime;\n");
       retval = __interpret__ (thisp, expression->bytes);
       String.free (expression);
     }
@@ -160,7 +161,7 @@ private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr
 private void __u_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 0;
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   num_actions++;
 #endif
 
@@ -477,7 +478,7 @@ private int __u_on_normal_g (buf_t **thisp, utf8 c) {
   return NO_CALLBACK_FUNCTION;
 }
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
 
 private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
   (void) this; (void) buf; (void) regidx;
@@ -496,7 +497,9 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
 
   String.prepend (line, "var __val__ = ");
   String.trim_end (line, '\n');
+  String.prepend (line, "import Datetime;\n");
   String.trim_end (line, ' ');
+
   ifnot (line->bytes[line->num_bytes - 1] is ';')
     String.append_byte (line, ';');
 
@@ -515,7 +518,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
   if (NULL is L.table.get.value (L_CUR_STATE, table, var, &value))
     return NOTOK;
 
-  if (IS_STRING (value)) {
+  if (IS_STRING(value) or IS_INSTANCE(value)) {
     char *cstr = AS_CSTRING(value);
     Ed.reg.setidx (this, regidx, CHARWISE, cstr, NORMAL_ORDER);
   } else if (IS_NUMBER (value)) {
@@ -551,13 +554,13 @@ private void __init_usr__ (ed_t *this) {
 
   __u_add_file_mode_actions__ (this);
 
-#if HAS_PROGRAMMING_LANGUAGE
+#ifdef HAS_PROGRAMMING_LANGUAGE
   __u_add_expr_register_cb__ (this);
 #endif
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
 
-#if HAS_JSON
+#ifdef HAS_JSON
   JsonClass = __init_json__ ();
 #endif
 
@@ -572,7 +575,7 @@ private void __deinit_usr__ (void) {
   String.free (Uenv->elinks_exec);
   free (Uenv);
 
-#if HAS_JSON
+#ifdef HAS_JSON
   __deinit_json__ (&JsonClass);
 #endif
 }

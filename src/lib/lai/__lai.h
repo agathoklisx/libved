@@ -1,4 +1,5 @@
-    /* 32: common.h */
+
+    /* 33: common.h */
 #ifndef dictu_common_h
 #define dictu_common_h
 
@@ -25,7 +26,7 @@ typedef struct _vm VM;
 
 #endif
 
-    /* 33: value.h */
+    /* 34: value.h */
 #ifndef dictu_value_h
 #define dictu_value_h
 
@@ -167,7 +168,7 @@ void printValue(Value value);
 
 #endif
 
-    /* 34: chunk.h */
+    /* 35: chunk.h */
 #ifndef dictu_chunk_h
 #define dictu_chunk_h
 
@@ -196,7 +197,7 @@ int addConstant(VM *vm, Chunk *chunk, Value value);
 
 #endif
 
-    /* 35: table.h */
+    /* 36: table.h */
 #ifndef dictu_table_h
 #define dictu_table_h
 
@@ -235,7 +236,7 @@ void grayTable(VM *vm, Table *table);
 
 #endif
 
-    /* 36: object.h */
+    /* 37: object.h */
 #ifndef dictu_object_h
 #define dictu_object_h
 
@@ -243,26 +244,9 @@ void grayTable(VM *vm, Table *table);
 
 #define OBJ_TYPE(value)         (AS_OBJ(value)->type)
 
-#define IS_MODULE(value)        isObjType(value, OBJ_MODULE)
-#define IS_BOUND_METHOD(value)  isObjType(value, OBJ_BOUND_METHOD)
-#define IS_CLASS(value)         isObjType(value, OBJ_CLASS)
-#define IS_NATIVE_CLASS(value)  isObjType(value, OBJ_NATIVE_CLASS)
-#define IS_TRAIT(value)         isObjType(value, OBJ_TRAIT)
-#define IS_CLOSURE(value)       isObjType(value, OBJ_CLOSURE)
-#define IS_FUNCTION(value)      isObjType(value, OBJ_FUNCTION)
-#define IS_INSTANCE(value)      isObjType(value, OBJ_INSTANCE)
-#define IS_NATIVE(value)        isObjType(value, OBJ_NATIVE)
-#define IS_STRING(value)        isObjType(value, OBJ_STRING)
-#define IS_LIST(value)          isObjType(value, OBJ_LIST)
-#define IS_DICT(value)          isObjType(value, OBJ_DICT)
-#define IS_SET(value)           isObjType(value, OBJ_SET)
-#define IS_FILE(value)          isObjType(value, OBJ_FILE)
-
 #define AS_MODULE(value)        ((ObjModule*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
-#define AS_CLASS_NATIVE(value)  ((ObjClassNative*)AS_OBJ(value))
-#define AS_TRAIT(value)         ((ObjTrait*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
@@ -274,12 +258,25 @@ void grayTable(VM *vm, Table *table);
 #define AS_SET(value)           ((ObjSet*)AS_OBJ(value))
 #define AS_FILE(value)          ((ObjFile*)AS_OBJ(value))
 
+#define IS_MODULE(value)          isObjType(value, OBJ_MODULE)
+#define IS_BOUND_METHOD(value)    isObjType(value, OBJ_BOUND_METHOD)
+#define IS_CLASS(value)           isObjType(value, OBJ_CLASS)
+#define IS_DEFAULT_CLASS(value)   isObjType(value, OBJ_CLASS) && AS_CLASS(value)->type == CLASS_DEFAULT
+#define IS_TRAIT(value)           isObjType(value, OBJ_CLASS) && AS_CLASS(value)->type == CLASS_TRAIT
+#define IS_CLOSURE(value)         isObjType(value, OBJ_CLOSURE)
+#define IS_FUNCTION(value)        isObjType(value, OBJ_FUNCTION)
+#define IS_INSTANCE(value)        isObjType(value, OBJ_INSTANCE)
+#define IS_NATIVE(value)          isObjType(value, OBJ_NATIVE)
+#define IS_STRING(value)          isObjType(value, OBJ_STRING)
+#define IS_LIST(value)            isObjType(value, OBJ_LIST)
+#define IS_DICT(value)            isObjType(value, OBJ_DICT)
+#define IS_SET(value)             isObjType(value, OBJ_SET)
+#define IS_FILE(value)            isObjType(value, OBJ_FILE)
+
 typedef enum {
     OBJ_MODULE,
     OBJ_BOUND_METHOD,
     OBJ_CLASS,
-    OBJ_NATIVE_CLASS,
-    OBJ_TRAIT,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
     OBJ_INSTANCE,
@@ -291,6 +288,22 @@ typedef enum {
     OBJ_FILE,
     OBJ_UPVALUE
 } ObjType;
+
+typedef enum {
+    CLASS_DEFAULT,
+    CLASS_ABSTRACT,
+    CLASS_TRAIT
+} ClassType;
+
+typedef enum {
+    TYPE_FUNCTION,
+    TYPE_ARROW_FUNCTION,
+    TYPE_INITIALIZER,
+    TYPE_METHOD,
+    TYPE_STATIC,
+    TYPE_ABSTRACT,
+    TYPE_TOP_LEVEL
+} FunctionType;
 
 struct sObj {
     ObjType type;
@@ -311,7 +324,7 @@ typedef struct {
     int upvalueCount;
     Chunk chunk;
     ObjString *name;
-    bool staticMethod;
+    FunctionType type;
     ObjModule* module;
 } ObjFunction;
 
@@ -395,20 +408,10 @@ typedef struct sObjClass {
     ObjString *name;
     struct sObjClass *superclass;
     Table methods;
-} ObjClass;
-
-typedef struct sObjClassNative {
-    Obj obj;
-    ObjString *name;
-    Table methods;
+    Table abstractMethods;
     Table properties;
-} ObjClassNative;
-
-typedef struct sObjTrait {
-    Obj obj;
-    ObjString *name;
-    Table methods;
-} ObjTrait;
+    ClassType type;
+} ObjClass;
 
 typedef struct {
     Obj obj;
@@ -426,15 +429,11 @@ ObjModule *newModule(VM *vm, ObjString *name);
 
 ObjBoundMethod *newBoundMethod(VM *vm, Value receiver, ObjClosure *method);
 
-ObjClass *newClass(VM *vm, ObjString *name, ObjClass *superclass);
-
-ObjClassNative *newClassNative(VM *vm, ObjString *name);
-
-ObjTrait *newTrait(VM *vm, ObjString *name);
+ObjClass *newClass(VM *vm, ObjString *name, ObjClass *superclass, ClassType type);
 
 ObjClosure *newClosure(VM *vm, ObjFunction *function);
 
-ObjFunction *newFunction(VM *vm, ObjModule *module, bool isStatic);
+ObjFunction *newFunction(VM *vm, ObjModule *module, FunctionType type);
 
 ObjInstance *newInstance(VM *vm, ObjClass *klass);
 
@@ -471,7 +470,7 @@ static inline ObjType getObjType(Value value) {
 
 #endif
 
-    /* 37: scanner.h */
+    /* 38: scanner.h */
 #ifndef dictu_scanner_h
 #define dictu_scanner_h
 
@@ -505,7 +504,7 @@ typedef enum {
     TOKEN_IDENTIFIER, TOKEN_STRING, TOKEN_NUMBER,
 
     // Keywords.
-    TOKEN_CLASS, TOKEN_TRAIT, TOKEN_USE, TOKEN_STATIC,
+    TOKEN_CLASS, TOKEN_ABSTRACT, TOKEN_TRAIT, TOKEN_USE, TOKEN_STATIC,
     TOKEN_THIS, TOKEN_SUPER, TOKEN_DEF, TOKEN_AS,
     TOKEN_IF, TOKEN_AND, TOKEN_ELSE, TOKEN_OR,
     TOKEN_VAR, TOKEN_CONST, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL,
@@ -531,7 +530,7 @@ Token scanToken();
 
 #endif
 
-    /* 38: compiler.h */
+    /* 39: compiler.h */
 #ifndef dictu_compiler_h
 #define dictu_compiler_h
 
@@ -582,20 +581,12 @@ typedef struct {
     bool isLocal;
 } Upvalue;
 
-typedef enum {
-    TYPE_FUNCTION,
-    TYPE_ARROW_FUNCTION,
-    TYPE_INITIALIZER,
-    TYPE_METHOD,
-    TYPE_STATIC,
-    TYPE_TOP_LEVEL
-} FunctionType;
-
 typedef struct ClassCompiler {
     struct ClassCompiler *enclosing;
     Token name;
     bool hasSuperclass;
     bool staticMethod;
+    bool abstractClass;
 } ClassCompiler;
 
 typedef struct Loop {
@@ -648,7 +639,7 @@ void grayCompilerRoots(VM *vm);
 
 #endif
 
-    /* 39: vm.h */
+    /* 40: vm.h */
 #ifndef dictu_vm_h
 #define dictu_vm_h
 
@@ -731,7 +722,7 @@ bool isFalsey(Value value);
 
 #endif
 
-    /* 40: natives.h */
+    /* 41: natives.h */
 #ifndef dictu_natives_h
 #define dictu_natives_h
 
@@ -740,7 +731,7 @@ void defineAllNatives(VM *vm);
 
 #endif //dictu_natives_h
 
-    /* 41: memory.h */
+    /* 42: memory.h */
 #ifndef dictu_memory_h
 #define dictu_memory_h
 
@@ -778,7 +769,7 @@ void freeObject(VM *vm, Obj *object);
 
 #endif
 
-    /* 42: util.h */
+    /* 43: util.h */
 #ifndef dictu_util_h
 #define dictu_util_h
 
@@ -795,7 +786,7 @@ Value boolNative(VM *vm, int argCount, Value *args);
 
 #endif //dictu_util_h
 
-    /* 43: bool.h */
+    /* 44: bool.h */
 #ifndef dictu_bool_h
 #define dictu_bool_h
 
@@ -804,7 +795,7 @@ void declareBoolMethods(VM *vm);
 
 #endif //dictu_bool_h
 
-    /* 44: class.h */
+    /* 45: class.h */
 #ifndef dictu_class_h
 #define dictu_class_h
 
@@ -814,7 +805,7 @@ void declareClassMethods(VM *vm);
 
 #endif //dictu_class_h
 
-    /* 45: copy.h */
+    /* 46: copy.h */
 #ifndef dictu_copy_h
 #define dictu_copy_h
 
@@ -828,7 +819,7 @@ ObjInstance *copyInstance(VM *vm, ObjInstance *oldInstance, bool shallow);
 
 #endif //dictu_copy_h
 
-    /* 46: dicts.h */
+    /* 47: dicts.h */
 #ifndef dictu_dicts_h
 #define dictu_dicts_h
 
@@ -838,7 +829,7 @@ void declareDictMethods(VM *vm);
 
 #endif //dictu_dicts_h
 
-    /* 47: files.h */
+    /* 48: files.h */
 #ifndef dictu_files_h
 #define dictu_files_h
 
@@ -848,7 +839,7 @@ void declareFileMethods(VM *vm);
 
 #endif //dictu_files_h
 
-    /* 48: instance.h */
+    /* 49: instance.h */
 #ifndef dictu_instance_h
 #define dictu_instance_h
 
@@ -858,7 +849,7 @@ void declareInstanceMethods(VM *vm);
 
 #endif //dictu_instance_h
 
-    /* 49: lists.h */
+    /* 50: lists.h */
 #ifndef dictu_lists_h
 #define dictu_lists_h
 
@@ -868,7 +859,7 @@ void declareListMethods(VM *vm);
 
 #endif //dictu_lists_h
 
-    /* 50: nil.h */
+    /* 51: nil.h */
 #ifndef dictu_nil_h
 #define dictu_nil_h
 
@@ -877,7 +868,7 @@ void declareNilMethods(VM *vm);
 
 #endif //dictu_nil_h
 
-    /* 51: number.h */
+    /* 52: number.h */
 #ifndef dictu_number_h
 #define dictu_number_h
 
@@ -886,7 +877,7 @@ void declareNumberMethods(VM *vm);
 
 #endif //dictu_number_h
 
-    /* 52: sets.h */
+    /* 53: sets.h */
 #ifndef dictu_sets_h
 #define dictu_sets_h
 
@@ -896,7 +887,7 @@ void declareSetMethods(VM *vm);
 
 #endif //dictu_sets_h
 
-    /* 53: strings.h */
+    /* 54: strings.h */
 #ifndef dictu_strings_h
 #define dictu_strings_h
 
@@ -906,27 +897,38 @@ void declareStringMethods(VM *vm);
 
 #endif //dictu_strings_h
 
-    /* 54: optionals.h */
+    /* 55: optionals.h */
 #ifndef dictu_optionals_h
 #define dictu_optionals_h
 
 
 #define GET_SELF_CLASS \
-  AS_CLASS_NATIVE(args[-1])
+  AS_MODULE(args[-1])
 
-#define SET_ERRNO(klass_)                                              \
-  defineNativeProperty(vm, &klass_->properties, "errno", NUMBER_VAL(errno))
+#define SET_ERRNO(module_)                                              \
+  defineNativeProperty(vm, &module_->values, "errno", NUMBER_VAL(errno))
 
-#define GET_ERRNO(klass_)({                          \
+#define GET_ERRNO(module_)({                         \
   Value errno_value = 0;                             \
   ObjString *name = copyString(vm, "errno", 5);      \
-  tableGet(&klass_->properties, name, &errno_value); \
+  tableGet(&module_->values, name, &errno_value);    \
   errno_value;                                       \
 })
 
+typedef ObjModule *(*BuiltinModule)(VM *vm);
+
+typedef struct {
+    char *name;
+    BuiltinModule module;
+} BuiltinModules;
+
+ObjModule *importBuiltinModule(VM *vm, int index);
+
+int findBuiltinModule(char *name, int length);
+
 #endif //dictu_optionals_h
 
-    /* 55: c.h */
+    /* 56: c.h */
 #ifndef dictu_c_h
 #define dictu_c_h
 
@@ -955,19 +957,19 @@ Value strerrorNative(VM *, int, Value *);
 
 #endif //dictu_c_h
 
-    /* 56: env.h */
+    /* 57: env.h */
 #ifndef dictu_env_h
 #define dictu_env_h
 
 
 
-void createEnvClass(VM *vm);
+ObjModule *createEnvClass(VM *vm);
 
 #endif //dictu_env_h
 #ifndef DISABLE_HTTP
 
 
-    /* 57: http.h */
+    /* 58: http.h */
 #ifndef dictu_http_h
 #define dictu_http_h
 
@@ -984,12 +986,12 @@ typedef struct response {
     long statusCode;
 } Response;
 
-void createHTTPClass(VM *vm);
+ObjModule *createHTTPClass(VM *vm);
 
 #endif //dictu_http_h
 #endif /* DISABLE_HTTP */
 
-    /* 58: jsonParseLib.h */
+    /* 59: jsonParseLib.h */
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
  * Copyright (C) 2012, 2013, 2014 James McLaughlin et al.  All rights reserved.
@@ -1269,7 +1271,7 @@ void json_value_free_ex (json_settings * settings,
 #endif
 
 
-    /* 59: jsonBuilderLib.h */
+    /* 60: jsonBuilderLib.h */
 
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
@@ -1425,26 +1427,26 @@ void json_builder_free (json_value *);
 #endif
 
 #endif
-    /* 60: json.h */
+    /* 61: json.h */
 #ifndef dictu_json_h
 #define dictu_json_h
 
 
-void createJSONClass(VM *vm);
+ObjModule *createJSONClass(VM *vm);
 
 #endif //dictu_json_h
 
-    /* 61: math.h */
+    /* 62: math.h */
 #ifndef dictu_math_h
 #define dictu_math_h
 
 
 
-void createMathsClass(VM *vm);
+ObjModule *createMathsClass(VM *vm);
 
 #endif //dictu_math_h
 
-    /* 62: path.h */
+    /* 63: path.h */
 #ifndef dictu_path_h
 #define dictu_path_h
 
@@ -1473,11 +1475,11 @@ void createMathsClass(VM *vm);
 #define IS_DIR_SEPARATOR(c) (c == DIR_SEPARATOR)
 
 
-void createPathClass();
+ObjModule *createPathClass(VM *vm);
 
 #endif //dictu_path_h
 
-    /* 63: system.h */
+    /* 64: system.h */
 #ifndef dictu_system_h
 #define dictu_system_h
 
@@ -1495,13 +1497,13 @@ void createSystemClass(VM *vm, int argc, const char *argv[]);
 
 #endif //dictu_system_h
 
-    /* 64: datetime.h */
+    /* 65: datetime.h */
 #ifndef dictu_datetime_h
 #define dictu_datetime_h
 
 
 
 
-void createDatetimeClass(VM *vm);
+ObjModule *createDatetimeClass(VM *vm);
 
 #endif //dictu_datetime_h

@@ -10,14 +10,11 @@ typedef struct sObjList ObjList;
 typedef struct sObjDict ObjDict;
 typedef struct sObjSet  ObjSet;
 typedef struct sObjFile ObjFile;
-typedef struct ObjModule ObjModule;
 
 typedef enum {
     OBJ_MODULE,
     OBJ_BOUND_METHOD,
     OBJ_CLASS,
-    OBJ_NATIVE_CLASS,
-    OBJ_TRAIT,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
     OBJ_INSTANCE,
@@ -62,6 +59,34 @@ typedef struct sObjClassNative {
     Table properties;
 } ObjClassNative;
 
+typedef struct {
+    Obj obj;
+    ObjString* name;
+    Table values;
+} ObjModule;
+
+typedef ObjModule *(*BuiltinModule)(VM *vm);
+typedef struct {
+    char *name;
+    BuiltinModule module;
+} BuiltinModules;
+
+
+#define SIGN_BIT ((uint64_t)1 << 63)
+#define QNAN ((uint64_t)0x7ffc000000000000)
+
+#define TAG_NIL    1
+#define TAG_FALSE  2
+#define TAG_TRUE   3
+#define TAG_EMPTY  4
+
+#define BOOL_VAL(boolean)   ((boolean) ? TRUE_VAL : FALSE_VAL)
+#define FALSE_VAL           ((Value)(uint64_t)(QNAN | TAG_FALSE))
+#define TRUE_VAL            ((Value)(uint64_t)(QNAN | TAG_TRUE))
+#define NIL_VAL             ((Value)(uint64_t)(QNAN | TAG_NIL))
+#define EMPTY_VAL           ((Value)(uint64_t)(QNAN | TAG_EMPTY))
+#define NUMBER_VAL(num)     numToValue(num)
+
 #define OBJ_TYPE(value)         (AS_OBJ(value)->type)
 
 #define IS_MODULE(value)        isObjType(value, OBJ_MODULE)
@@ -78,6 +103,11 @@ typedef struct sObjClassNative {
 #define IS_DICT(value)          isObjType(value, OBJ_DICT)
 #define IS_SET(value)           isObjType(value, OBJ_SET)
 #define IS_FILE(value)          isObjType(value, OBJ_FILE)
+#define IS_BOOL(v)              (((v) & FALSE_VAL) == FALSE_VAL)
+#define IS_NIL(v)               ((v) == NIL_VAL)
+#define IS_EMPTY(v)             ((v) == EMPTY_VAL)
+#define IS_NUMBER(v)            (((v) & QNAN) != QNAN)
+#define IS_OBJ(v)               (((v) & (QNAN | SIGN_BIT)) == (QNAN | SIGN_BIT))
 
 #define AS_MODULE(value)        ((ObjModule*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
@@ -94,31 +124,9 @@ typedef struct sObjClassNative {
 #define AS_DICT(value)          ((ObjDict*)AS_OBJ(value))
 #define AS_SET(value)           ((ObjSet*)AS_OBJ(value))
 #define AS_FILE(value)          ((ObjFile*)AS_OBJ(value))
-
-#define SIGN_BIT ((uint64_t)1 << 63)
-#define QNAN ((uint64_t)0x7ffc000000000000)
-
-#define TAG_NIL    1
-#define TAG_FALSE  2
-#define TAG_TRUE   3
-#define TAG_EMPTY  4
-
-#define IS_BOOL(v)    (((v) & FALSE_VAL) == FALSE_VAL)
-#define IS_NIL(v)     ((v) == NIL_VAL)
-#define IS_EMPTY(v)   ((v) == EMPTY_VAL)
-#define IS_NUMBER(v)  (((v) & QNAN) != QNAN)
-#define IS_OBJ(v)     (((v) & (QNAN | SIGN_BIT)) == (QNAN | SIGN_BIT))
-
-#define AS_BOOL(v)    ((v) == TRUE_VAL)
-#define AS_NUMBER(v)  valueToNum(v)
-#define AS_OBJ(v)     ((Obj*)(uintptr_t)((v) & ~(SIGN_BIT | QNAN)))
-
-#define BOOL_VAL(boolean)   ((boolean) ? TRUE_VAL : FALSE_VAL)
-#define FALSE_VAL           ((Value)(uint64_t)(QNAN | TAG_FALSE))
-#define TRUE_VAL            ((Value)(uint64_t)(QNAN | TAG_TRUE))
-#define NIL_VAL             ((Value)(uint64_t)(QNAN | TAG_NIL))
-#define EMPTY_VAL           ((Value)(uint64_t)(QNAN | TAG_EMPTY))
-#define NUMBER_VAL(num)     numToValue(num)
+#define AS_BOOL(v)              ((v) == TRUE_VAL)
+#define AS_NUMBER(v)            valueToNum(v)
+#define AS_OBJ(v)               ((Obj*)(uintptr_t)((v) & ~(SIGN_BIT | QNAN)))
 
 #define OBJ_VAL(obj) \
     (Value)(SIGN_BIT | QNAN | (uint64_t)(uintptr_t)(obj))
@@ -160,6 +168,19 @@ typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
 #define OK     0
 #define NOTOK -1
 #define UNUSED(__x__) (void) __x__
+
+#define GET_SELF_CLASS \
+  AS_MODULE(args[-1])
+
+#define SET_ERRNO(klass_)                                              \
+  defineNativeProperty(vm, &module_->values, "errno", NUMBER_VAL(errno))
+
+#define GET_ERRNO(klass_)({                          \
+  Value errno_value = 0;                             \
+  ObjString *name = copyString(vm, "errno", 5);      \
+  tableGet(&module_->values, name, &errno_value);    \
+  errno_value;                                       \
+})
 
 VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]);
 
@@ -221,19 +242,6 @@ typedef struct lang_t {
   int cur_state;
 } lang_t;
 
-#define GET_SELF_CLASS \
-  AS_CLASS_NATIVE(args[-1])
-
-#define SET_ERRNO(klass_)                                              \
-  defineNativeProperty(vm, &klass_->properties, "errno", NUMBER_VAL(errno))
-
-#define GET_ERRNO(klass_)({                          \
-  Value errno_value = 0;                             \
-  ObjString *name = copyString(vm, "errno", 5);      \
-  tableGet(&klass_->properties, name, &errno_value); \
-  errno_value;                                       \
-})
-
 char *readFile(const char *path);
 ObjString *copyString(VM *vm, const char *chars, int length);
 bool tableGet(Table *table, ObjString *key, Value *value);
@@ -245,6 +253,10 @@ void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
 bool tableSet(VM *vm, Table *table, ObjString *key, Value value);
 void defineNativeProperty(VM *vm, Table *table, const char *name, Value value);
 void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
+
+ObjModule *newModule(VM *vm, ObjString *name);
+int findBuiltinModule(char *name, int length);
+ObjModule *importBuiltinModule(VM *vm, int index);
 
 /* extensions */
 Table *vm_get_globals(VM *vm);

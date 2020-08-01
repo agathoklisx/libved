@@ -60,53 +60,57 @@ private Value charU8Native(VM *vm, int argCount, Value *args) {
     return OBJ_VAL(copyString(vm, buf, len));
 }
 
-private void createU8Class(VM *vm) {
+ObjModule *createU8Class(VM *vm) {
     ObjString *name = copyString(vm, "U8", 2);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define U8 methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorNative);
-    defineNative(vm, &klass->methods, "validate", validateU8Native);
-    defineNative(vm, &klass->methods, "get_code_at", getcodeAtU8Native);
-    defineNative(vm, &klass->methods, "character", charU8Native);
+    defineNative(vm, &module->values, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "validate", validateU8Native);
+    defineNative(vm, &module->values, "get_code_at", getcodeAtU8Native);
+    defineNative(vm, &module->values, "character", charU8Native);
 
     /**
      * Define U8 properties
      */
 
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
 
     Table *table = vm_get_globals (vm);
-    tableSet(vm, table, name, OBJ_VAL(klass));
+    tableSet(vm, table, name, OBJ_VAL(module));
     pop(vm);
     pop(vm);
+
+    return module;
 }
 
-private void createEdClass(VM *vm) {
+ObjModule *createEdClass(VM *vm) {
     ObjString *name = copyString(vm, "Ed", 2);
     push(vm, OBJ_VAL(name));
-    ObjClassNative *klass = newClassNative(vm, name);
-    push(vm, OBJ_VAL(klass));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
 
     /**
      * Define Ed methods
      */
-    defineNative(vm, &klass->methods, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "strerror", strerrorNative);
 
     /**
      * Define Ed properties
      */
 
-    defineNativeProperty(vm, &klass->properties, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
 
     Table *table = vm_get_globals (vm);
-    tableSet(vm, table, name, OBJ_VAL(klass));
+    tableSet(vm, table, name, OBJ_VAL(module));
     pop(vm);
     pop(vm);
+
+    return module;
 }
 
 public void __init_led__ (VM *vm) {
