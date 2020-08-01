@@ -87,7 +87,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     case 'B': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
-          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED))
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNNAMED))
         retval = __u_open_link_on_browser__ (*thisp, Buf.get.fname (*thisp));
       }
       break;
@@ -96,7 +96,7 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     case 'I': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
-          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNNAMED)) {
         Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
         ifnot (NULL is lines) {
           retval = __interpret__ (thisp, Vstring.join (lines, "\n")->bytes);
@@ -533,7 +533,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
 }
 
 private void __u_add_expr_register_cb__ (ed_t *this) {
-  Ed.set.expr_register_cb (this, __u_expr_register_cb__);
+  Ed.set.expr_reg_cb (this, __u_expr_register_cb__);
 }
 #endif /* HAS_PROGRAMMING_LANGUAGE */
 

@@ -948,7 +948,7 @@ Search:
   In all the cases the window state should be restored afterwards.
 
   The sample Application that provides the main() function, can also read
-  from standard input to an unamed buffer. Thus it can be used as a pager:
+  from standard input to an unnamed buffer. Thus it can be used as a pager:
 
      git diff "$@" | vedas --ftype=diff --pager "$@"
 

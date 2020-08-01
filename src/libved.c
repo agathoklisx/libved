@@ -65,7 +65,7 @@ private int cstring_eq_n  (const char *sa, const char *sb, size_t n) {
   return (0 == cstring_cmp_n (sa, sb, n));
 }
 
-private char *byte_in_str (const char *s, int c) {
+private char *cstring_byte_in_str (const char *s, int c) {
   const char *sp = s;
   while (*sp != c) {
     if (*sp == 0) return NULL;
@@ -74,12 +74,12 @@ private char *byte_in_str (const char *s, int c) {
   return (char *) sp;
 }
 
-private char *nullbyte_in_str (const char *s) {
-  return byte_in_str (s, 0);
+private char *cstring_byte_null_in_str (const char *s) {
+  return cstring_byte_in_str (s, 0);
 }
 
-private char *byte_in_str_r (const char *s, int c) {
-  const char *sp = nullbyte_in_str (s);
+private char *cstring_byte_in_str_r (const char *s, int c) {
+  const char *sp = cstring_byte_null_in_str (s);
   if (sp == s) return NULL;
   while (*--sp != c)
     if (sp == s) return NULL;
@@ -135,7 +135,7 @@ private size_t byte_cp_all (char *dest, const char *src, size_t nelem) {
 }
 
 private size_t cstring_cat (char *dest, size_t dest_sz, const char *src) {
-  char *dp = nullbyte_in_str (dest);
+  char *dp = cstring_byte_null_in_str (dest);
   size_t len = dp - dest;
   size_t i = 0;
 
@@ -203,7 +203,7 @@ private char  *cstring_dup (const char *src, size_t len) {
 }
 
 private char  *cstring_trim_end (char *bytes, char c) {
-  char *sp = nullbyte_in_str (bytes);
+  char *sp = cstring_byte_null_in_str (bytes);
   sp--;
 
   while (sp >= bytes) {
@@ -231,7 +231,7 @@ private char  *cstring_substr (char *dest, size_t len, char *src, size_t src_len
 
 /* this is for integers (i wonder maybe is better to use *printf() - but i hate to
    do it, because of the short code and its focus to this specific functionality) */
-private char *itoa (int value, char *result, int base) {
+private char *cstring_itoa (int value, char *result, int base) {
   if (base < 2 || base > 36) {
     *result = '\0';
     return result;
@@ -310,7 +310,7 @@ private cstring_T __init_cstring__ (void) {
     .self = SelfInit (cstring,
       .cp = cstring_cp,
       .eq = cstring_eq,
-      .itoa = itoa,
+      .itoa = cstring_itoa,
       .cat = cstring_cat,
       .dup = cstring_dup,
       .eq_n = cstring_eq_n,
@@ -318,15 +318,16 @@ private cstring_T __init_cstring__ (void) {
       .cmp_n = cstring_cmp_n,
       .substr = cstring_substr,
       .cp_fmt = cstring_cp_fmt,
-      .byte_in_str = byte_in_str,
-      .byte_in_str_r = byte_in_str_r,
       .bytes_in_str = strstr,
       .extract_word_at = cstring_extract_word_at,
       .trim = SubSelfInit (cstring, trim,
         .end = cstring_trim_end,
       ),
       .byte = SubSelfInit (cstring, byte,
-        .mv = cstring_byte_mv
+        .mv = cstring_byte_mv,
+        .in_str = cstring_byte_in_str,
+        .in_str_r = cstring_byte_in_str_r,
+        .null_in_str = cstring_byte_null_in_str
       ),
     )
   );
@@ -1726,7 +1727,7 @@ private string_t *string_replace_with_fmt (string_t *this, const char *fmt, ...)
 }
 
 private string_t *string_trim_end (string_t *this, char c) {
-  char *sp = nullbyte_in_str (this->bytes);
+  char *sp = cstring_byte_null_in_str (this->bytes);
   sp--;
 
   while (sp >= this->bytes) {
@@ -2306,7 +2307,7 @@ private int is_digit (int c) {
 }
 
 private int is_hexchar (int c) {
-  return (c >= '0' and c <= '9') or byte_in_str ("abcdefABCDEF", c);
+  return (c >= '0' and c <= '9') or cstring_byte_in_str ("abcdefABCDEF", c);
 }
 
 private int is_lower (int c) {
@@ -2326,7 +2327,7 @@ private int is_alpha (int c) {
 }
 
 private int is_idpunct (int c) {
-  return NULL isnot byte_in_str (".:_", c);
+  return NULL isnot cstring_byte_in_str (".:_", c);
 }
 
 private int is_identifier (int c) {
@@ -2335,12 +2336,12 @@ private int is_identifier (int c) {
 
 private int is_notquote (int chr) {
   uchar c = (unsigned char) chr;
-  return NULL is byte_in_str ("\"\n", c);
+  return NULL is cstring_byte_in_str ("\"\n", c);
 }
 
 private int is_metacharacter (const unsigned char *s) {
   static const char *metacharacters = "^$().[]*+?|\\Ssdbfnrtv";
-  return byte_in_str (metacharacters, *s) != NULL;
+  return cstring_byte_in_str (metacharacters, *s) != NULL;
 }
 
 private int is_quantifier (const char *re) {
@@ -3017,7 +3018,7 @@ private ssize_t file_append (char *fname, char *bytes, ssize_t size) {
   return __file_write__ (fname, bytes, size, "a+");
 }
 
-private void tmpfname_free (tmpfname_t *this) {
+private void file_tmpfname_free (tmpfname_t *this) {
   ifnot (this) return;
   ifnot (NULL is this->fname) {
     unlink (this->fname->bytes);
@@ -3027,7 +3028,7 @@ private void tmpfname_free (tmpfname_t *this) {
   free (this);
 }
 
-private tmpfname_t *tmpfname_new (char *dname, char *prefix) {
+private tmpfname_t *file_tmpfname_new (char *dname, char *prefix) {
   static unsigned int seed = 12252;
   if (NULL is dname) return NULL;
   ifnot (is_directory (dname)) return NULL;
@@ -3036,7 +3037,7 @@ private tmpfname_t *tmpfname_new (char *dname, char *prefix) {
 
   char bpid[6];
   pid_t pid = getpid ();
-  itoa ((int) pid, bpid, 10);
+  cstring_itoa ((int) pid, bpid, 10);
 
   int len = bytelen (dname) + bytelen (bpid) + bytelen (prefix) + 10;
 
@@ -3101,7 +3102,7 @@ again:
 
 theerror:
   ifnot (NULL is this) {
-    tmpfname_free (this);
+    file_tmpfname_free (this);
     this = NULL;
   }
 
@@ -3123,8 +3124,8 @@ private file_T __init_file__ (void) {
       .write = file_write,
       .append = file_append,
       .tmpfname = SubSelfInit (file, tmpfname,
-        .new = tmpfname_new,
-        .free = tmpfname_free
+        .new = file_tmpfname_new,
+        .free = file_tmpfname_free
       )
     )
   );
@@ -3339,7 +3340,7 @@ private dir_T __init_dir__ (void) {
 
 private char *path_basename (char *name) {
   ifnot (name) return name;
-  char *p = nullbyte_in_str (name);
+  char *p = cstring_byte_null_in_str (name);
   if (p is NULL) p = name + bytelen (name) + 1;
   if (p - 1 is name and IS_DIR_SEP (*(p - 1)))
     return p - 1;
@@ -3368,7 +3369,7 @@ private char *path_basename_sans_extname (char *name) {
 
 private char *path_extname (char *name) {
   ifnot (name) return name;
-  char *p = nullbyte_in_str (name);
+  char *p = cstring_byte_null_in_str (name);
   if (p is NULL) p = name + bytelen (name) + 1;
   while (p > name and (*(p - 1) isnot '.')) --p;
   if (p is name) return "";
@@ -3492,7 +3493,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
   /* Iterate over path components in `left' */
   while (left_len isnot 0) {
     /* Extract the next path component and adjust `left' and its length */
-    p = byte_in_str (left, '/');
+    p = cstring_byte_in_str (left, '/');
     s = p ? p : left + left_len;
 
     if (s - left >= PATH_MAX) {
@@ -3534,7 +3535,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       /* Strip the last path component except when we have single "/" */
       if (resolved_len > 1) {
         resolved[resolved_len - 1] = '\0';
-        q = byte_in_str_r (resolved, '/') + 1;
+        q = cstring_byte_in_str_r (resolved, '/') + 1;
         *q = '\0';
         resolved_len = q - resolved;
       }
@@ -3574,7 +3575,7 @@ private char *path_real (const char *path, char resolved[PATH_MAX]) {
       } else if (resolved_len > 1) {
         /* Strip the last path component. */
         resolved[resolved_len - 1] = '\0';
-        q = byte_in_str_r (resolved, '/') + 1;
+        q = cstring_byte_in_str_r (resolved, '/') + 1;
         *q = '\0';
         resolved_len = q - resolved;
       }
@@ -3894,7 +3895,7 @@ private int term_reset (term_t *this) {
  */
 /* it should work the same, under xterm, rxvt-unicode, st and linux terminals */
 /* it also handles utf8 byte sequences, so it should return the integer represanation */
-private utf8 term_get_input (term_t *this) {
+private utf8 term_input_get (term_t *this) {
   char c;
   int n;
   char buf[5];
@@ -4192,7 +4193,7 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
     vstring_t *vs = AllocType (vstring);
     vs->data = string_new (8);
 
-    l_p = strstr (l_p, "\n");
+    l_p = cstring_byte_in_str (l_p, '\n');
 
     if (NULL is l_p) {
       string_append (vs->data, f_p);
@@ -4271,7 +4272,7 @@ private term_T __init_term__ (void) {
         .set_color = term_screen_set_color
       ),
       .__Input__ = SubSelfInit (term, input,
-        .get = term_get_input
+        .get = term_input_get
       )
     )
   );
@@ -4981,7 +4982,7 @@ private Action_t *buf_action_new (buf_t *this) {
   return AllocType (Action);
 }
 
-private void buf_free_action (buf_t *this, Action_t *action) {
+private void buf_action_free (buf_t *this, Action_t *action) {
   (void) this;
   action_t *act = stack_pop (action, action_t);
   while (act) {
@@ -5019,7 +5020,7 @@ private void __buf_redo_clear__ (buf_t *this) {
 
   Action_t *action = buf_redo_pop (this);
   while (action) {
-    buf_free_action (this, action);
+    buf_action_free (this, action);
     action = buf_redo_pop (this);
   }
 
@@ -5032,7 +5033,7 @@ private void __buf_undo_clear__ (buf_t *this) {
 
   Action_t *action = buf_vundo_pop (this);
   while (action isnot NULL) {
-    buf_free_action (this, action);
+    buf_action_free (this, action);
     action = buf_vundo_pop (this);
   }
   $my(undo)->num_items = 0; $my(undo)->cur_idx = 0;
@@ -5047,7 +5048,7 @@ private void buf_undo_clear (buf_t *this) {
 private void vundo_push (buf_t *this, Action_t *action) {
   if ($my(undo)->num_items > $myroots(max_num_undo_entries)) {
     Action_t *tmp = list_pop_tail ($my(undo), Action_t);
-    buf_free_action  (this, tmp);
+    buf_action_free  (this, tmp);
   }
 
   ifnot ($my(undo)->state & VUNDO_RESET)
@@ -5061,7 +5062,7 @@ private void vundo_push (buf_t *this, Action_t *action) {
 private void redo_push (buf_t *this, Action_t *action) {
   if ($my(redo)->num_items > $myroots(max_num_undo_entries)) {
     Action_t *tmp = list_pop_tail ($my(redo), Action_t);
-    buf_free_action  (this, tmp);
+    buf_action_free  (this, tmp);
   }
 
   current_list_prepend ($my(redo), action);
@@ -5287,7 +5288,7 @@ syn_t HL_DB[] = {
 
 #define IsSeparator(c)                          \
   ((c) is ' ' or (c) is '\t' or (c) is '\0' or  \
-   byte_in_str (",.()+-/=*~%<>[]:;}@", (c)) isnot NULL)
+   cstring_byte_in_str (",.()+-/=*~%<>[]:;}@", (c)) isnot NULL)
 
 #define IGNORE(c) ((c) > '~' || (c) <= ' ')
 
@@ -5306,7 +5307,7 @@ private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
   row_t *it = row->prev;
 
   for (int i = 0; i < MAX_BACKTRACK_LINES_FOR_ML_COMMENTS and it; i++) {
-    if (NULL isnot strstr (it->data->bytes, $my(syn)->multiline_comment_end))
+    ifnot (NULL is strstr (it->data->bytes, $my(syn)->multiline_comment_end))
       break;
 
     char *sp = strstr (it->data->bytes, $my(syn)->multiline_comment_start);
@@ -5440,7 +5441,7 @@ parse_char:
 
     ifnot (NULL is $my(syn->operators)) {
       int lidx = idx;
-      while (NULL isnot byte_in_str ($my(syn)->operators, c)) {
+      while (NULL isnot cstring_byte_in_str ($my(syn)->operators, c)) {
         ADD_COLORED_CHAR (c, HL_OPERATOR);
         if (++idx is len) goto theend;
         c = line[idx];
@@ -5587,7 +5588,7 @@ theloop:
 
       if (balanced.has_opening_string) continue;
 
-      char *sp = byte_in_str ($my(syn)->balanced_pairs, c);
+      char *sp = cstring_byte_in_str ($my(syn)->balanced_pairs, c);
       ifnot (NULL is sp) {
         if (i isnot 0 and data->bytes[i-1] is '\'' and
           (data->num_bytes - 1 > i and data->bytes[i+1] is '\'')) continue;
@@ -6074,7 +6075,7 @@ private void buf_jump_push (buf_t *this, mark_t *mark) {
 
 private int mark_get_idx (int c) {
   char marks[] = MARKS; /* this is for tcc */
-  char *m = byte_in_str (marks, c);
+  char *m = cstring_byte_in_str (marks, c);
   if (NULL is m) return -1;
   return m - marks;
 }
@@ -6088,7 +6089,7 @@ private int mark_set (buf_t *this, int mark) {
   state_set (&$my(marks)[mark]);
   $my(marks)[mark].cur_idx = this->cur_idx;
 
-  if (mark isnot MARK_UNAMED)
+  if (mark isnot MARK_UNNAMED)
     MSG("set [%c] mark", MARKS[mark]);
 
   buf_jump_push (this, &$my(marks)[mark]);
@@ -6105,7 +6106,7 @@ private int mark_goto (buf_t *this) {
   if (NOTHING_TODO is buf_mark_restore (this, mark))
     return NOTHING_TODO;
 
-  $my(marks)[MARK_UNAMED] = t;
+  $my(marks)[MARK_UNNAMED] = t;
 
   self(draw);
   return DONE;
@@ -6140,8 +6141,8 @@ private int buf_jump (buf_t *this, int dir) {
     $my(jumps)->cur_idx++;
 
 theend:
-  state_set (&$my(marks)[MARK_UNAMED]);
-  $my(marks)[MARK_UNAMED].cur_idx = this->cur_idx;
+  state_set (&$my(marks)[MARK_UNNAMED]);
+  $my(marks)[MARK_UNNAMED].cur_idx = this->cur_idx;
 
   buf_mark_restore (this, jump->mark);
   self(draw);
@@ -6689,7 +6690,7 @@ private void buf_set_backup (buf_t *this, int backup, char *suffix) {
       or NULL isnot $my(backupfile)
       or NULL is suffix
       or ($my(flags) & BUF_IS_SPECIAL)
-      or cstring_eq ($my(fname), UNAMED))
+      or cstring_eq ($my(fname), UNNAMED))
     return;
 
   size_t len = bytelen (suffix);
@@ -6741,13 +6742,13 @@ private void buf_set_as_non_existant (buf_t *this) {
   $my(flags) &= ~FILE_EXISTS;
 }
 
-private void buf_set_as_unamed (buf_t *this) {
-  size_t len = bytelen (UNAMED);
-  /* static size_t len = bytelen (UNAMED); fails on tcc with:
+private void buf_set_as_unnamed (buf_t *this) {
+  size_t len = bytelen (UNNAMED);
+  /* static size_t len = bytelen (UNNAMED); fails on tcc with:
    * error: initializer element is not constant
    */
   $my(fname) = mem_should_realloc ($my(fname), PATH_MAX + 1, len + 1);
-  cstring_cp ($my(fname), len + 1, UNAMED, len);
+  cstring_cp ($my(fname), len + 1, UNNAMED, len);
   self(set.as.non_existant);
 }
 
@@ -6757,11 +6758,11 @@ private void buf_set_as_pager (buf_t *this) {
 
 private int buf_set_fname (buf_t *this, char *filename) {
   int is_null = (NULL is filename);
-  int is_unamed = (is_null ? 0 : cstring_eq (filename, UNAMED));
-  size_t len = ((is_null or is_unamed) ? 0 : bytelen (filename));
+  int is_unnamed = (is_null ? 0 : cstring_eq (filename, UNNAMED));
+  size_t len = ((is_null or is_unnamed) ? 0 : bytelen (filename));
 
-  if (is_null or 0 is len or is_unamed) {
-    buf_set_as_unamed (this);
+  if (is_null or 0 is len or is_unnamed) {
+    buf_set_as_unnamed (this);
     return OK;
   }
 
@@ -6803,13 +6804,13 @@ private int buf_set_fname (buf_t *this, char *filename) {
   if (fname_exists) {
     ifnot (file_is_reg (fname->bytes)) {
       VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_NOT_A_REGULAR_FILE, fname->bytes);
-      buf_set_as_unamed (this);
+      buf_set_as_unnamed (this);
       return NOTOK;
     }
 
     if (file_is_elf (fname->bytes)) {
       VED_MSG_ERROR(MSG_FILE_EXISTS_BUT_IS_AN_OBJECT_FILE, fname->bytes);
-      buf_set_as_unamed (this);
+      buf_set_as_unnamed (this);
       return NOTOK;
     }
 
@@ -6913,7 +6914,7 @@ private int buf_com_save_image (buf_t *this, rline_t *rl) {
 }
 
 private ssize_t buf_read_fname (buf_t *this) {
-  if ($my(fname) is NULL or cstring_eq ($my(fname), UNAMED)) return NOTOK;
+  if ($my(fname) is NULL or cstring_eq ($my(fname), UNNAMED)) return NOTOK;
 
   FILE *fp = fopen ($my(fname), "r");
 
@@ -7681,14 +7682,14 @@ private void ed_check_msg_status (ed_t *this) {
   }
 }
 
-private buf_t *ed_get_buf (ed_t *this, char *wname, char *bname) {
+private buf_t *ed_buf_get (ed_t *this, char *wname, char *bname) {
   int idx;
   win_t *w = self(get.win_by_name, wname, &idx);
   ifnot (w) return NULL;
   return Win.get.buf_by_name (w, bname, &idx);
 }
 
-private int ed_change_buf (ed_t *this, buf_t **thisp, char *wname, char *bname) {
+private int ed_buf_change (ed_t *this, buf_t **thisp, char *wname, char *bname) {
   self(win.change, thisp, NO_COMMAND, wname, NO_OPTION, NO_FORCE);
   return buf_change_bufname (thisp, bname);
 }
@@ -7730,14 +7731,14 @@ private buf_t *ed_search_buf (ed_t *ed) {
   return this;
 }
 
-private buf_t *ed_scratch_buf (ed_t *this) {
+private buf_t *ed_get_scratch_buf (ed_t *this) {
   return ed_special_buf (this, VED_SCRATCH_WIN, VED_SCRATCH_BUF, 1, 0);
 }
 
 private void ed_append_toscratch (ed_t *this, int clear_first, char *bytes) {
   buf_t *buf = self(buf.get, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   if (NULL is buf)
-    buf = ed_scratch_buf (this);
+    buf = ed_get_scratch_buf (this);
 
   if (clear_first) Buf.clear (buf);
 
@@ -7766,7 +7767,7 @@ private int ed_scratch (ed_t *this, buf_t **bufp, int at_eof) {
   ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
     self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
     ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
-      ed_scratch_buf (this);
+      ed_get_scratch_buf (this);
       self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
     }
   }
@@ -8538,7 +8539,7 @@ private int buf_grep (buf_t **thisp, char *pat, Vstring_t *fnames) {
   $my(video)->col_pos = $my(cur_video_col);
   buf_normal_down (this, 1, DONOT_ADJUST_COL, DONOT_DRAW);
   ifnot (cstring_eq ($from((*thisp), fname), VED_SEARCH_BUF))
-    ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
+    ed_buf_change ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
   else
     self(draw);
 
@@ -8649,7 +8650,7 @@ theend:
       buf_normal_eol (this);
     self(draw);
   } else
-    buf_free_action (this, action);
+    buf_action_free (this, action);
 
   Re.free (re);
   ifnot (NULL is substr) string_free (substr);
@@ -8692,7 +8693,7 @@ private int buf_selection_to_X_word_actions_cb (buf_t **thisp, int fidx, int lid
   return DONE;
 }
 
-private void register_free (Reg_t *rg) {
+private void reg_free (Reg_t *rg) {
   reg_t *reg = rg->head;
   while (reg) {
     reg_t *tmp = reg->next;
@@ -8704,7 +8705,7 @@ private void register_free (Reg_t *rg) {
   rg->head = NULL;
 }
 
-private Reg_t *ed_register_get (ed_t *this, int regidx) {
+private Reg_t *ed_reg_get (ed_t *this, int regidx) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
 
   Reg_t *rg = NULL;
@@ -8716,13 +8717,13 @@ private Reg_t *ed_register_get (ed_t *this, int regidx) {
   return rg;
 }
 
-private Reg_t *ed_register_new (ed_t *this, int regidx) {
-  Reg_t *rg = ed_register_get (this, regidx);
-  register_free (rg);
+private Reg_t *ed_reg_new (ed_t *this, int regidx) {
+  Reg_t *rg = ed_reg_get (this, regidx);
+  reg_free (rg);
   return rg;
 }
 
-private void ed_register_init_all (ed_t *this) {
+private void ed_reg_init_all (ed_t *this) {
   for (int i = 0; i < NUM_REGISTERS; i++)
     $my(regs)[i] = (Reg_t) {.reg = REGISTERS[i]};
 
@@ -8732,15 +8733,15 @@ private void ed_register_init_all (ed_t *this) {
   $my(regs)[REG_RDONLY].head->prev = NULL;
 }
 
-private int ed_register_get_idx (ed_t *this, int c) {
+private int ed_reg_get_idx (ed_t *this, int c) {
   (void) this;
   if (c is 0x17) c = REG_CURWORD_CHR;
   char regs[] = REGISTERS; /* this is for tcc */
-  char *r = byte_in_str (regs, c);
+  char *r = cstring_byte_in_str (regs, c);
   return (NULL isnot r) ? (r - regs) : NOTOK;
 }
 
-private Reg_t *ed_register_append (ed_t *this, int regidx, int type, reg_t *reg) {
+private Reg_t *ed_reg_append (ed_t *this, int regidx, int type, reg_t *reg) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
   Reg_t *rg = NULL;
   if (regidx isnot REG_SHARED)
@@ -8755,7 +8756,7 @@ private Reg_t *ed_register_append (ed_t *this, int regidx, int type, reg_t *reg)
   return rg;
 }
 
-private Reg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
+private Reg_t *ed_reg_push (ed_t *this, int regidx, int type, reg_t *reg) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
   Reg_t *rg = NULL;
   if (regidx isnot REG_SHARED)
@@ -8769,7 +8770,7 @@ private Reg_t *ed_register_push (ed_t *this, int regidx, int type, reg_t *reg) {
   return rg;
 }
 
-private Reg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg) {
+private Reg_t *ed_reg_push_r (ed_t *this, int regidx, int type, reg_t *reg) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
   Reg_t *rg = NULL;
   if (regidx isnot REG_SHARED)
@@ -8779,7 +8780,7 @@ private Reg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg)
 
   reg_t *it = rg->head;
   if (it is NULL)
-    return ed_register_push (this, regidx, type, reg);
+    return ed_reg_push (this, regidx, type, reg);
 
   rg->reg = regidx;
   rg->type = type;
@@ -8796,50 +8797,50 @@ private Reg_t *ed_register_push_r (ed_t *this, int regidx, int type, reg_t *reg)
   return rg;
 }
 
-private Reg_t *ed_register_push_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
+private Reg_t *ed_reg_push_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
   reg_t *reg = AllocType (reg);
   reg->data = String.new_with (bytes);
   if (dir is REVERSE_ORDER)
-    return ed_register_push_r (this, regidx, type, reg);
-  return ed_register_push (this, regidx, type, reg);
+    return ed_reg_push_r (this, regidx, type, reg);
+  return ed_reg_push (this, regidx, type, reg);
 }
 
-private Reg_t *ed_register_set (ed_t *this, int regidx, int type, reg_t *reg) {
-  ed_register_new (this, regidx);
-  return ed_register_push (this, regidx, type, reg);
+private Reg_t *ed_reg_set_ (ed_t *this, int regidx, int type, reg_t *reg) {
+  ed_reg_new (this, regidx);
+  return ed_reg_push (this, regidx, type, reg);
 }
 
-private int ed_register_is_special (ed_t *this, int regidx) {
+private int ed_reg_is_special (ed_t *this, int regidx) {
   (void) this; // maybe in future
   if (REG_SEARCH > regidx or (regidx > REG_EXPR and regidx < REG_CURWORD))
     return NOTOK;
   return OK;
 }
 
-private Reg_t *ed_register_set_api (ed_t *this, int c, int type, char *bytes, int dir) {
-  int regidx = ed_register_get_idx (this, c);
+private Reg_t *ed_reg_set (ed_t *this, int c, int type, char *bytes, int dir) {
+  int regidx = ed_reg_get_idx (this, c);
   if (NOTOK is regidx) return NULL;
-  ed_register_new (this, regidx);
-  return ed_register_push_with (this, regidx, type, bytes, dir);
+  ed_reg_new (this, regidx);
+  return ed_reg_push_with (this, regidx, type, bytes, dir);
 }
 
-private Reg_t *ed_register_setidx_api (ed_t *this, int regidx, int type, char *bytes, int dir) {
-  ed_register_new (this, regidx);
-  return ed_register_push_with (this, regidx, type, bytes, dir);
+private Reg_t *ed_reg_setidx (ed_t *this, int regidx, int type, char *bytes, int dir) {
+  ed_reg_new (this, regidx);
+  return ed_reg_push_with (this, regidx, type, bytes, dir);
 }
 
-private int ed_register_expression (ed_t *this, buf_t *buf, int regidx) {
-  for (int i = 0; i < $my(num_expr_register_cbs); i++) {
-    int retval = $my(expr_register_cbs)[i] (this, buf, regidx);
+private int ed_reg_expression (ed_t *this, buf_t *buf, int regidx) {
+  for (int i = 0; i < $my(num_expr_reg_cbs); i++) {
+    int retval = $my(expr_reg_cbs)[i] (this, buf, regidx);
     if (retval isnot NO_CALLBACK_FUNCTION) return retval;
   }
 
   return NOTOK;
 }
 
-private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
-  if (NOTOK is ed_register_is_special (this, regidx))
+private int ed_reg_special_set (ed_t *this, buf_t *buf, int regidx) {
+  if (NOTOK is ed_reg_is_special (this, regidx))
     return NOTHING_TODO;
 
   switch (regidx) {
@@ -8847,7 +8848,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
       {
         histitem_t *his = $my(history)->search->head;
         if (NULL is his) return NOTOK;
-        ed_register_push_with (this, regidx, CHARWISE, his->data->bytes, DEFAULT_ORDER);
+        ed_reg_push_with (this, regidx, CHARWISE, his->data->bytes, DEFAULT_ORDER);
         return DONE;
       }
 
@@ -8857,15 +8858,15 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         h_rlineitem_t *it = $my(history)->rline->head;
         if (NULL is it) return ERROR;
         string_t *str = vstring_join (it->data->line, "");
-        ed_register_push_with (this, regidx, CHARWISE, str->bytes, DEFAULT_ORDER);
+        ed_reg_push_with (this, regidx, CHARWISE, str->bytes, DEFAULT_ORDER);
 
         string_free (str);
         return DONE;
       }
 
     case REG_FNAME:
-      ed_register_new (this, regidx);
-      ed_register_push_with (this, regidx, CHARWISE, $from(buf, fname), DEFAULT_ORDER);
+      ed_reg_new (this, regidx);
+      ed_reg_push_with (this, regidx, CHARWISE, $from(buf, fname), DEFAULT_ORDER);
       return DONE;
 
     case REG_PLUS:
@@ -8873,7 +8874,7 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
       {
         FILE *fp = ed_file_pointer_from_X (this, (REG_STAR is regidx) ? X_PRIMARY : X_CLIPBOARD);
         if (NULL is fp) return ERROR;
-        ed_register_new (this, regidx);
+        ed_reg_new (this, regidx);
         size_t len = 0;
         char *line = NULL;
 
@@ -8888,8 +8889,8 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
               type = LINEWISE;
             }
 
-            ed_register_push_with (this, regidx, type, line, REVERSE_ORDER);
-            //ed_register_push_with (this, regidx, type, line, DEFAULT_ORDER);
+            ed_reg_push_with (this, regidx, type, line, REVERSE_ORDER);
+            //ed_reg_push_with (this, regidx, type, line, DEFAULT_ORDER);
           }
         }
 
@@ -8903,15 +8904,15 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
         char word[MAXLEN_WORD]; int fidx, lidx;
         ifnot (NULL is buf_get_current_word (buf, word, Notword, Notword_len,
             &fidx, &lidx)) {
-          ed_register_new (this, regidx);
-          ed_register_push_with (this, regidx, CHARWISE, word, DEFAULT_ORDER);
+          ed_reg_new (this, regidx);
+          ed_reg_push_with (this, regidx, CHARWISE, word, DEFAULT_ORDER);
         } else
           return ERROR;
       }
       return DONE;
 
     case REG_EXPR:
-      return ed_register_expression (this, buf, regidx);
+      return ed_reg_expression (this, buf, regidx);
 
     case REG_SHARED:
       $my(regs)[REG_SHARED] = $from($my(root), shared_reg)[0];
@@ -8924,15 +8925,15 @@ private int ed_register_special_set (ed_t *this, buf_t *buf, int regidx) {
   return NOTHING_TODO;
 }
 
-private Reg_t *ed_register_set_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
+private Reg_t *ed_reg_set_with (ed_t *this, int regidx, int type, char *bytes, int dir) {
   if (regidx is REG_BLACKHOLE) return &$my(regs)[REG_BLACKHOLE];
 
-  ed_register_new (this, regidx);
+  ed_reg_new (this, regidx);
   reg_t *reg = AllocType (reg);
   reg->data = String.new_with (bytes);
   if (-1 is dir)
-    return ed_register_push_r (this, regidx, type, reg);
-  return ed_register_push (this, regidx, type, reg);
+    return ed_reg_push_r (this, regidx, type, reg);
+  return ed_reg_push (this, regidx, type, reg);
 }
 
 private utf8 buf_quest (buf_t *this, char *qu, utf8 *chs, int len) {
@@ -9082,7 +9083,7 @@ thediff:;
     }
   }
 
-  tmpfname_free (tmpn);
+  File.tmpfname.free (tmpn);
 
   return retval;
 }
@@ -9101,7 +9102,7 @@ private int ed_quit (ed_t *ed, int force, int global) {
       if ($my(flags) & BUF_IS_SPECIAL
           or 0 is ($my(flags) & BUF_IS_MODIFIED)
           or ($my(flags) & BUF_IS_PAGER)
-          or cstring_eq ($my(fname), UNAMED))
+          or cstring_eq ($my(fname), UNNAMED))
         goto bufnext;
 
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'c', 'C','d'};
@@ -9489,7 +9490,7 @@ private int buf_normal_page_down (buf_t *this, int count) {
       or this->num_items - $my(video_first_row_idx) < ONE_PAGE + 1)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNAMED);
+  mark_set (this, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9525,7 +9526,7 @@ private int buf_normal_page_up (buf_t *this, int count) {
   if ($my(video_first_row_idx) is 0 or this->num_items < ONE_PAGE)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNAMED);
+  mark_set (this, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9560,7 +9561,7 @@ private int buf_normal_page_up (buf_t *this, int count) {
 private int buf_normal_bof (buf_t *this, int draw) {
   if (this->cur_idx is 0) return NOTHING_TODO;
 
-  mark_set (this, MARK_UNAMED);
+  mark_set (this, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9585,7 +9586,7 @@ private int buf_normal_eof (buf_t *this, int draw) {
       goto draw;
   }
 
-  mark_set (this, MARK_UNAMED);
+  mark_set (this, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9621,7 +9622,7 @@ private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   if (lnr <= 0 or lnr is currow_idx + 1 or lnr > this->num_items)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNAMED);
+  mark_set (this, MARK_UNNAMED);
 
   if (lnr < currow_idx + 1)
     return buf_normal_up (this, currow_idx - lnr + 1, ADJUST_COL, draw);
@@ -9670,7 +9671,7 @@ private int buf_normal_delete_eol (buf_t *this, int regidx) {
   char buf[len + 1];
   cstring_cp (buf, len + 1, $mycur(data)->bytes + $mycur(cur_col_idx), len);
 
-  ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
+  ed_reg_set_with ($my(root), regidx, CHARWISE, buf, 0);
 
   String.delete_numbytes_at ($mycur(data),
      $mycur(data)->num_bytes - $mycur(cur_col_idx), $mycur(cur_col_idx));
@@ -9842,7 +9843,7 @@ private int buf_normal_delete (buf_t *this, int count, int regidx) {
 
     stack_push (action, act);
     vundo_push (this, action);
-    ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
+    ed_reg_set_with ($my(root), regidx, CHARWISE, buf, 0);
   }
 
   $my(flags) |= BUF_IS_MODIFIED;
@@ -9897,11 +9898,13 @@ private int buf_word_math (buf_t *this, int count, utf8 com) {
 
   char new[32]; new[0] = '\0';
   if (type is 'd')
-    itoa (nr, new, 10);
+    cstring_itoa (nr, new, 10);
   else {
     char s[16];
-    if (type is 'o') itoa (nr, s, 8);
-    else itoa (nr, s, 16);
+    if (type is 'o')
+       cstring_itoa (nr, s, 8);
+    else
+       cstring_itoa (nr, s, 16);
     snprintf (new, 32, "0%s%s", ('x' is type ? "x" : ""), s);
   }
 
@@ -10318,10 +10321,10 @@ private int buf_normal_handle_ctrl_w (buf_t **thisp) {
       return buf_win_only (this);
 
     case 'n':
-      return buf_enew_fname (thisp, UNAMED);
+      return buf_enew_fname (thisp, UNNAMED);
 
     case 's':
-      return buf_split (thisp, UNAMED);
+      return buf_split (thisp, UNNAMED);
 
     case 'l':
     case ARROW_RIGHT_KEY:
@@ -10460,7 +10463,7 @@ private int buf_delete_word (buf_t *this, int regidx) {
 
   stack_push (action, act);
   vundo_push (this, action);
-  ed_register_set_with ($my(root), regidx, CHARWISE, word, 0);
+  ed_reg_set_with ($my(root), regidx, CHARWISE, word, 0);
 
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw_current_row);
@@ -10482,16 +10485,16 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
   Reg_t *rg = NULL;
   int reg_append = ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z');
                                        /* optimization for large buffers */
-  int perfom_reg = (regidx isnot REG_UNAMED or count < ($my(dim)->num_rows * 20)) and
+  int perfom_reg = (regidx isnot REG_UNNAMED or count < ($my(dim)->num_rows * 20)) and
                     regidx isnot REG_INTERNAL;
 
   if (perfom_reg) {
     if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
       if (reg_append) {
         ridx = REG_INTERNAL;
-        rg = ed_register_new ($my(root), ridx);
+        rg = ed_reg_new ($my(root), ridx);
       } else {
-        rg = ed_register_new ($my(root), regidx);
+        rg = ed_reg_new ($my(root), regidx);
       }
     }
   }
@@ -10508,7 +10511,7 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
 
     /* with large buffers, this really slowdown a lot the operation */
     if (perfom_reg) {
-      rg = ed_register_push_with (
+      rg = ed_reg_push_with (
         $my(root), ridx, LINEWISE, $mycur(data)->bytes, REVERSE_ORDER);
       rg->cur_col_idx = $mycur(cur_col_idx);
       rg->first_col_idx = $mycur(first_col_idx);
@@ -10544,7 +10547,7 @@ theend:
   $my(flags) |= BUF_IS_MODIFIED;
   if (perfom_reg) {
     if (reg_append) {
-      ed_register_append ($my(root), regidx, LINEWISE, rg->head);
+      ed_reg_append ($my(root), regidx, LINEWISE, rg->head);
       $myroots(regs)[REG_INTERNAL].head = NULL;
     }
 
@@ -10569,7 +10572,7 @@ private int buf_normal_change_case (buf_t *this) {
   else if ('A' <= c and c <= 'Z')
     buf[0] = c + ('a' - 'A');
   else {
-    char *p = byte_in_str (CASE_A, $mycur(data)->bytes[$mycur(cur_col_idx)]);
+    char *p = cstring_byte_in_str (CASE_A, $mycur(data)->bytes[$mycur(cur_col_idx)]);
     if (NULL is p) {
       if (c > 0x80) {
         utf8 new;
@@ -10668,9 +10671,9 @@ private int buf_normal_Yank (buf_t *this, int count, int regidx) {
   if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
     if (reg_append) {
       ridx = REG_INTERNAL;
-      rg = ed_register_new ($my(root), ridx);
+      rg = ed_reg_new ($my(root), ridx);
     } else {
-      rg = ed_register_new ($my(root), regidx);
+      rg = ed_reg_new ($my(root), regidx);
     }
   }
 
@@ -10679,7 +10682,7 @@ private int buf_normal_Yank (buf_t *this, int count, int regidx) {
   for (int i = 0; i < count; i++) {
     self(current.set, (currow_idx + count - 1) - i);
     if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
-      rg = ed_register_push_with (
+      rg = ed_reg_push_with (
           $my(root), ridx, LINEWISE, $mycur(data)->bytes, DEFAULT_ORDER);
       rg->cur_col_idx = $mycur(cur_col_idx);
       rg->first_col_idx = $mycur(first_col_idx);
@@ -10694,7 +10697,7 @@ private int buf_normal_Yank (buf_t *this, int count, int regidx) {
         (REG_STAR is regidx ? X_PRIMARY : X_CLIPBOARD));
 
   if (reg_append) {
-    ed_register_append ($my(root), regidx, LINEWISE, rg->head);
+    ed_reg_append ($my(root), regidx, LINEWISE, rg->head);
     $myroots(regs)[REG_INTERNAL].head = NULL;
   }
 
@@ -10722,7 +10725,7 @@ private int buf_normal_yank (buf_t *this, int count, int regidx) {
   buf[bufidx] = '\0';
 
   if (regidx isnot REG_STAR and regidx isnot REG_PLUS) {
-    ed_register_set_with ($my(root), regidx, CHARWISE, buf, 0);
+    ed_reg_set_with ($my(root), regidx, CHARWISE, buf, 0);
   } else
     ed_selection_to_X ($my(root), buf, bufidx, (REG_STAR is regidx
         ? X_PRIMARY : X_CLIPBOARD));
@@ -10732,7 +10735,7 @@ private int buf_normal_yank (buf_t *this, int count, int regidx) {
 }
 
 private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
-  if (ERROR is ed_register_special_set ($my(root), this, regidx))
+  if (ERROR is ed_reg_special_set ($my(root), this, regidx))
     return NOTHING_TODO;
 
   Reg_t *rg = &$my(regs)[regidx];
@@ -10888,7 +10891,7 @@ private int buf_delete_inner (buf_t *this, utf8 c, int regidx) {
   stack_push (action, act);
 
   vundo_push (this, action);
-  ed_register_set_with ($my(root), regidx, CHARWISE, word, 0);
+  ed_reg_set_with ($my(root), regidx, CHARWISE, word, 0);
 
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw_current_row);
@@ -11113,7 +11116,7 @@ do {                                        \
 #define VIS_HNDL_CASE_REG(reg)                                              \
   case '"':                                                                 \
     if (-1 isnot (reg)) goto theend;                                        \
-    (reg) = ed_register_get_idx ($my(root), Input.get ($my(term_ptr))); \
+    (reg) = ed_reg_get_idx ($my(root), Input.get ($my(term_ptr))); \
     continue
 
 #define VIS_HNDL_CASE_INT(count)                                            \
@@ -11346,7 +11349,7 @@ handle_char:
           this->cur_idx = $my(vis)[0].fidx;
         }
 
-        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNAMED);
+        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNNAMED);
 
         if (c is 'd')
           buf_delete_line (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
@@ -11418,11 +11421,11 @@ handle_char:
         }
 
         {
-          ed_register_new ($my(root), REG_SHARED);
+          ed_reg_new ($my(root), REG_SHARED);
           row_t *row = this->current;
 
           for (int i = $my(vis)[0].fidx; i <= $my(vis)[0].lidx; i++) {
-            ed_register_push_with ($my(root), REG_SHARED, LINEWISE,
+            ed_reg_push_with ($my(root), REG_SHARED, LINEWISE,
                 row->data->bytes, REVERSE_ORDER);
             row = row->next;
           }
@@ -11603,7 +11606,7 @@ handle_char:
       case 'x':
       case 'y':
       case 'Y':
-        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNAMED);
+        if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNNAMED);
 
         if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
           VISUAL_ADJUST_IDXS($my(vis)[0]);
@@ -11821,7 +11824,7 @@ handle_char:
 
       case 'x':
       case 'd':
-        if (-1 is reg) reg = REG_UNAMED;
+        if (-1 is reg) reg = REG_UNNAMED;
         {
           Action_t *action = AllocType (Action);
           Action_t *baction =AllocType (Action);
@@ -11927,7 +11930,7 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
   Action_t *baction = buf_vundo_pop (this);
   action_t *act = AllocType (action);
   state_cp (act, baction->head);
-  buf_free_action (this, baction);
+  buf_action_free (this, baction);
 
   stack_push (action, act);
   vundo_push (this, action);
@@ -12185,8 +12188,8 @@ theend:
 }
 
 private int buf_write (buf_t *this, int force) {
-  if (cstring_eq ($my(fname), UNAMED)) {
-    VED_MSG_ERROR(MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER);
+  if (cstring_eq ($my(fname), UNNAMED)) {
+    VED_MSG_ERROR(MSG_CAN_NOT_WRITE_AN_UNNAMED_BUFFER);
     return NOTHING_TODO;
   }
 
@@ -13300,7 +13303,7 @@ redo:;
         toklen = i-len;
       } else if (tok[0] is '-') {
         type |= RL_TOK_ARG;
-        ifnot (NULL is strstr (tok, "="))
+        ifnot (NULL is cstring_byte_in_str (tok, '='))
           type |= RL_TOK_ARG_OPTION;
       } else {
         if (rl->com >= VED_COM_BUF_DELETE_FORCE and
@@ -13785,11 +13788,11 @@ private void rline_write (rline_t *rl) {
 
 private void rline_reg (rline_t *rl) {
   ed_t *this = rl->ed;
-  int regidx = ed_register_get_idx (this, Input.get ($my(term)));
+  int regidx = ed_reg_get_idx (this, Input.get ($my(term)));
   if (NOTOK is regidx) return;
 
   buf_t *buf = self(get.current_buf);
-  if (ERROR is ed_register_special_set (this, buf, regidx))
+  if (ERROR is ed_reg_special_set (this, buf, regidx))
     return;
 
   Reg_t *rg = &$my(regs)[regidx];
@@ -14155,7 +14158,7 @@ argtype_succeed:
         goto arg_type;
       }
 
-      char *glob = byte_in_str (arg->argname->bytes, '*');
+      char *glob = cstring_byte_in_str (arg->argname->bytes, '*');
       ifnot (NULL is glob) {
         dirlist_t *dlist = NULL;
         string_t *dir = string_new (16);
@@ -14324,7 +14327,7 @@ private int rline_parse_arg_buf_range (rline_t *rl, arg_t *arg, buf_t *this) {
     return NOTOK;
   }
 
-  char *sp = strstr (arg->argval->bytes, ",");
+  char *sp = Cstring.byte.in_str (arg->argval->bytes, ',');
 
   if (NULL is sp) {
     sp = arg->argval->bytes;
@@ -14413,7 +14416,7 @@ private int buf_test_key (buf_t *this) {
     Cursor.hide ($my(term_ptr));
     c = Input.get ($my(term_ptr));
     snprintf (str, 128, "dec: %d hex: 0x%x octal: 0%o bin: %s char: %s",
-        c, c, c, itoa (c, bin, 2), ustring_character (c, chr, &len));
+        c, c, c, cstring_itoa (c, bin, 2), ustring_character (c, chr, &len));
     MSG(str);
     if (c is ESCAPE_KEY) break;
   }
@@ -14638,19 +14641,19 @@ private void ed_set_init_record_cb (ed_t *this, InitRecord_cb cb) {
   $my(init_record_cb) = cb;
 }
 
-private void ed_set_expr_register_cb (ed_t *this, ExprRegister_cb cb) {
-  $my(num_expr_register_cbs)++;
-  ifnot ($my(num_expr_register_cbs) - 1)
-    $my(expr_register_cbs) = Alloc (sizeof (ExprRegister_cb));
+private void ed_set_expr_reg_cb (ed_t *this, ExprRegister_cb cb) {
+  $my(num_expr_reg_cbs)++;
+  ifnot ($my(num_expr_reg_cbs) - 1)
+    $my(expr_reg_cbs) = Alloc (sizeof (ExprRegister_cb));
   else
-    $my(expr_register_cbs) = Realloc ($my(expr_register_cbs), sizeof (ExprRegister_cb) * $my(num_expr_register_cbs));
+    $my(expr_reg_cbs) = Realloc ($my(expr_reg_cbs), sizeof (ExprRegister_cb) * $my(num_expr_reg_cbs));
 
-  $my(expr_register_cbs)[$my(num_expr_register_cbs) - 1] = cb;
+  $my(expr_reg_cbs)[$my(num_expr_reg_cbs) - 1] = cb;
 }
 
-private void ed_free_expr_register_cbs (ed_t *this) {
-  ifnot ($my(num_expr_register_cbs)) return;
-  free ($my(expr_register_cbs));
+private void ed_free_expr_reg_cbs (ed_t *this) {
+  ifnot ($my(num_expr_reg_cbs)) return;
+  free ($my(expr_reg_cbs));
 }
 
 private int buf_rline (buf_t **thisp, rline_t *rl) {
@@ -14745,7 +14748,7 @@ exec:
          if (NULL isnot fname)
            String.replace_with ($myroots(ed_str), fname->argval->bytes);
          else
-           String.replace_with ($myroots(ed_str), UNAMED);
+           String.replace_with ($myroots(ed_str), UNNAMED);
 
           retval = EXIT_THIS;
           $myroots(state) |= ED_NEW;
@@ -14774,7 +14777,7 @@ exec:
          if (NULL isnot fname)
            retval = buf_enew_fname (thisp, fname->argval->bytes);
          else
-           retval = buf_enew_fname (thisp, UNAMED);
+           retval = buf_enew_fname (thisp, UNNAMED);
         }
         goto theend;
 
@@ -14804,11 +14807,11 @@ exec:
       goto theend;
 
     case VED_COM_SEARCHES:
-      retval = ed_change_buf ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
+      retval = ed_buf_change ($my(root), thisp, VED_SEARCH_WIN, VED_SEARCH_BUF);
       goto theend;
 
     case VED_COM_DIFF_BUF:
-      retval = ed_change_buf ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
+      retval = ed_buf_change ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
       goto theend;
 
     case VED_COM_DIFF:
@@ -14868,7 +14871,7 @@ exec:
         if (is_special_win) goto theend;
         arg_t *fname = Rline.get.arg (rl, RL_ARG_FILENAME);
         if (NULL is fname)
-          retval = buf_split (thisp, UNAMED);
+          retval = buf_split (thisp, UNNAMED);
         else
           retval = buf_split (thisp, fname->argval->bytes);
       }
@@ -15091,10 +15094,10 @@ private buf_t *buf_insert_char_rout (buf_t *this, utf8 c, string_t *cur_insert) 
 private int buf_insert_reg (buf_t **thisp, string_t *cur_insert) {
   buf_t *this = *thisp;
   MSG ("insert register (charwise mode):");
-  int regidx = ed_register_get_idx ($my(root), Input.get ($my(term_ptr)));
+  int regidx = ed_reg_get_idx ($my(root), Input.get ($my(term_ptr)));
   if (NOTOK is regidx) return NOTHING_TODO;
 
-  if (ERROR is ed_register_special_set ($my(root), this, regidx))
+  if (ERROR is ed_reg_special_set ($my(root), this, regidx))
     return NOTHING_TODO;
 
   Reg_t *rg = &$my(regs)[regidx];
@@ -15601,7 +15604,7 @@ private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
          return NOTHING_TODO;
 
        buf[len] = '\0';
-       buf_delete_word (this, REG_UNAMED);
+       buf_delete_word (this, REG_UNNAMED);
        return buf_insert (thisp, 0, buf);
      }
 
@@ -15613,7 +15616,7 @@ private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
       ifnot (Ustring.change_case (buf, word, len, type))
         return NOTHING_TODO;
       buf[len] = '\0';
-      buf_delete_word (this, REG_UNAMED);
+      buf_delete_word (this, REG_UNNAMED);
       return buf_insert (thisp, 0, buf);
     }
   }
@@ -15841,7 +15844,7 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
      case '@':
       retval = NOTOK;
       if (0 is (($my(flags) & BUF_IS_SPECIAL)) and
-          0 is Cstring.eq ($my(basename), UNAMED)) {
+          0 is Cstring.eq ($my(basename), UNNAMED)) {
         Vstring_t *lines = File.readlines ($my(fname), NULL, NULL, NULL);
         char *buf = Vstring.to.cstring (lines, ADD_NL);
         if (NULL is buf)
@@ -15852,7 +15855,7 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
         break;
       }
 
-      if (Cstring.eq ($my(basename), UNAMED) or
+      if (Cstring.eq ($my(basename), UNNAMED) or
           Cstring.eq ($my(basename), VED_SCRATCH_BUF)) {
         char *buf = self(get.contents, ADD_NL);
         retval = buf_interpret (thisp, buf);
@@ -15905,7 +15908,7 @@ private void ed_syn_append (ed_t *this, syn_t syn) {
 
 #define whereis_c(c_) ({                \
 	int idx_ = arlen - 1;               \
-    char *sp = byte_in_str (chars, c_); \
+    char *sp = cstring_byte_in_str (chars, c_); \
     if (sp isnot NULL) idx_ = sp-chars; \
     idx_;                               \
 })
@@ -15970,7 +15973,7 @@ private void ed_free (ed_t *this) {
 
     for (int i = 0; i < NUM_REGISTERS; i++) {
       if (i is REG_SHARED) continue;
-      register_free (&$my(regs)[i]);
+      reg_free (&$my(regs)[i]);
     }
 
     for (int i = 0; i <= NUM_RECORDS; i++)
@@ -15988,7 +15991,7 @@ private void ed_free (ed_t *this) {
 
     ed_free_rline_cbs (this);
     ed_free_on_normal_g_cbs (this);
-    ed_free_expr_register_cbs (this);
+    ed_free_expr_reg_cbs (this);
     ed_free_lw_mode_cbs (this);
     ed_free_cw_mode_cbs (this);
     ed_free_file_mode_cbs (this);
@@ -16010,7 +16013,7 @@ private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
 }
 
 private void ed_init_special_win (ed_t *this) {
-  ed_scratch_buf (this);
+  ed_get_scratch_buf (this);
   ed_msg_buf (this);
   ed_diff_buf (this);
   ed_search_buf (this);
@@ -16063,7 +16066,7 @@ private ssize_t __record_header_len__ (ed_t *this) {
 
   size_t len = bytelen (buf);
 
-  while (*sp and (buf = Cstring.byte_in_str (sp, '\n')) isnot NULL) {
+  while (*sp and (buf = Cstring.byte.in_str (sp, '\n')) isnot NULL) {
     len++;
     sp = buf + 1;
   }
@@ -16129,7 +16132,7 @@ private int buf_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int count, int re
      return NOTHING_TODO;
 
   if (regidx < 0 or regidx >= NUM_REGISTERS)
-    regidx = REG_UNAMED;
+    regidx = REG_UNNAMED;
 
   int retval = NOTHING_TODO;
   switch (this->on_normal_beg (thisp, com, count, regidx)) {
@@ -16392,7 +16395,7 @@ handle_com:
     case '-':
     case '_':
       if ('A' <= REGISTERS[regidx] and REGISTERS[regidx] <= 'Z') {
-        register_free (&$myroots(regs)[regidx]);
+        reg_free (&$myroots(regs)[regidx]);
         retval = DONE;
       } else
           retval = NOTHING_TODO;
@@ -16447,7 +16450,7 @@ handle_char:
 
       case '"':
         if (-1 isnot regidx) goto exec_block;
-        regidx = ed_register_get_idx (ed, Input.get ($my(term_ptr)));
+        regidx = ed_reg_get_idx (ed, Input.get ($my(term_ptr)));
         goto get_char;
 
       case '1'...'9':
@@ -16564,7 +16567,7 @@ private Class (ed) *editor_new (void) {
         .word_actions = ed_set_word_actions,
         .file_mode_actions = ed_set_file_mode_actions,
         .on_normal_g_cb = ed_set_normal_on_g_cb,
-        .expr_register_cb = ed_set_expr_register_cb,
+        .expr_reg_cb = ed_set_expr_reg_cb,
         .lang_map = ed_set_lang_map,
         .record_cb = ed_set_record_cb,
         .i_record_cb = ed_set_i_record_cb,
@@ -16576,7 +16579,7 @@ private Class (ed) *editor_new (void) {
         ),
         .bufname = ed_get_bufname,
         .current_buf = ed_get_current_buf,
-        .scratch_buf = ed_scratch_buf,
+        .scratch_buf = ed_get_scratch_buf,
         .current_win = ed_get_current_win,
         .current_win_idx = ed_get_current_win_idx,
         .state = ed_get_state,
@@ -16595,8 +16598,8 @@ private Class (ed) *editor_new (void) {
         .get_ftype_idx = ed_syn_get_ftype_idx
       ),
       .reg = SubSelfInit (ed, reg,
-        .set = ed_register_set_api,
-        .setidx = ed_register_setidx_api
+        .set = ed_reg_set,
+        .setidx = ed_reg_setidx
       ),
       .append = SubSelfInit (ed, append,
         .win = ed_append_win,
@@ -16616,8 +16619,8 @@ private Class (ed) *editor_new (void) {
         .new_with = ed_rline_new_with
       ),
       .buf = SubSelfInit (ed, buf,
-        .change = ed_change_buf,
-        .get = ed_get_buf
+        .change = ed_buf_change,
+        .get = ed_buf_get
       ),
       .win = SubSelfInit (ed, win,
         .init = ed_win_init,
@@ -16738,7 +16741,7 @@ private Class (ed) *editor_new (void) {
           .show_statusline = buf_set_show_statusline,
           .modified = buf_set_modified,
           .as = SubSelfInit (bufset, as,
-            .unamed = buf_set_as_unamed,
+            .unnamed = buf_set_as_unnamed,
             .non_existant = buf_set_as_non_existant,
             .pager = buf_set_as_pager
           ),
@@ -16790,7 +16793,7 @@ private Class (ed) *editor_new (void) {
         ),
         .action = SubSelfInit (buf, action,
           .new = buf_action_new,
-          .free = buf_free_action,
+          .free = buf_action_free,
           .set_with = buf_action_set_with,
           .set_current = buf_action_set_current,
           .push = buf_action_push
@@ -16973,7 +16976,7 @@ private ed_t *ed_init (E_T *E) {
 
   this->name_gen = ('z' - 'a') + 1;
 
-  ed_register_init_all (this);
+  ed_reg_init_all (this);
 
   ed_init_syntaxes (this);
 
@@ -17622,7 +17625,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
   for (int i = 0; i < $my(num_at_exit_cbs); i++)
     $my(at_exit_cbs)[i] ();
 
-  register_free (&$my(shared_reg)[0]);
+  reg_free (&$my(shared_reg)[0]);
 
   if ($my(image_name) isnot NULL)
     free ($my(image_name));
@@ -17893,7 +17896,7 @@ private void i_get_span (i_t *this, int (*testfn) (int)) {
 }
 
 private int isoperator (int c) {
-  return NULL isnot byte_in_str ("+-/*=<>&|^", c);
+  return NULL isnot cstring_byte_in_str ("+-/*=<>&|^", c);
 }
 
 private Sym * i_lookup_sym (i_t *this, Istring_t name) {
@@ -17931,7 +17934,7 @@ private int i_do_next_token (i_t *this, int israw) {
     c = i_get_char (this);
   }
 
-  if ((c is '/' and i_peek_char (this, 0) is  '/') or c is '#') {
+  if (c is '#') {
     do
       c = i_get_char (this);
     while (c >= 0 and c isnot '\n');
@@ -17940,7 +17943,7 @@ private int i_do_next_token (i_t *this, int israw) {
     r = c;
 
   } else if (IS_DIGIT (c)) {
-    if (c is '0' and NULL isnot byte_in_str ("xX", i_peek_char (this, 0))
+    if (c is '0' and NULL isnot cstring_byte_in_str ("xX", i_peek_char (this, 0))
         and is_hexchar (i_peek_char(this, 1))) {
       i_get_char (this);
       i_ignore_first_char (this);

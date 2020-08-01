@@ -257,11 +257,12 @@
 
 #define FTYPE_DEFAULT 0
 
-#define UNAMED          "[No Name]"
+#define UNNAMED         "[No Name]"
 #define BACKUP_SUFFIX   "~"
-#define FIRST_FRAME 0
+
+#define FIRST_FRAME  0
 #define SECOND_FRAME 1
-#define THIRD_FRAME 2
+#define THIRD_FRAME  2
 
 #define BACKSPACE_KEY   010
 #define ESCAPE_KEY      033
@@ -979,7 +980,7 @@ NewType (ed_init_opts,
   .autosave = 0,                                 \
   .backupfile = 0,                               \
   .backup_suffix = BACKUP_SUFFIX,                \
-  .flags = 0, .fname = UNAMED, __VA_ARGS__}
+  .flags = 0, .fname = UNNAMED, __VA_ARGS__}
 
 #define FTYPE_QUAL(...) (ftype_t) {              \
   .name = "",                                    \
@@ -1162,6 +1163,10 @@ NewSubSelf (cstring, trim,
 
 NewSubSelf (cstring, byte,
   size_t (*mv) (char *, size_t, size_t, size_t, size_t);
+  char
+    *(*null_in_str) (const char *),
+    *(*in_str) (const char *, int),
+    *(*in_str_r) (const char *, int);
 );
 
 NewSelf (cstring,
@@ -1173,9 +1178,7 @@ NewSelf (cstring,
     *(*substr) (char *, size_t, char *, size_t, size_t),
     *(*extract_word_at) (char *, size_t, char *, size_t, char *, size_t, int, int *, int *),
     *(*itoa) (int, char *, int),
-    *(*dup) (const char *, size_t),
-    *(*byte_in_str) (const char *, int),
-    *(*byte_in_str_r) (const char *, int);
+    *(*dup) (const char *, size_t);
 
   int
     (*eq) (const char *, const char *),
@@ -1552,7 +1555,7 @@ NewSubSelf (buf, get,
 NewSubSelf (bufset, as,
   void
     (*pager) (buf_t *),
-    (*unamed) (buf_t *),
+    (*unnamed) (buf_t *),
     (*non_existant) (buf_t *);
 );
 
@@ -1820,7 +1823,7 @@ NewSubSelf (ed, set,
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
      (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
-     (*expr_register_cb) (ed_t *, ExprRegister_cb),
+     (*expr_reg_cb) (ed_t *, ExprRegister_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
      (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),

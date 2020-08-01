@@ -134,7 +134,7 @@ enum {
 
 #define MARKS          "`abcdghjklqwertyuiopzxcvbnm1234567890"
 #define NUM_MARKS      37
-#define MARK_UNAMED    0
+#define MARK_UNNAMED   0
 
 /* this produce wrong results when compiled with tcc
   char *r = strchr (REGISTERS, register); r - REGISTERS;
@@ -148,7 +148,7 @@ enum {
 #define REG_SHARED_CHR  '`'
 
 enum {
-  REG_UNAMED = 0,
+  REG_UNNAMED = 0,
   REG_SEARCH,
   REG_PROMPT,
   REG_FNAME,
@@ -226,7 +226,7 @@ enum {
   MSG_BUF_IS_READ_ONLY,
   MSG_ON_WRITE_BUF_ISNOT_MODIFIED_AND_NO_FORCE,
   MSG_ON_BD_IS_MODIFIED_AND_NO_FORCE,
-  MSG_CAN_NOT_WRITE_AN_UNAMED_BUFFER,
+  MSG_CAN_NOT_WRITE_AN_UNNAMED_BUFFER,
   MSG_CAN_NOT_DETERMINATE_CURRENT_DIR
 };
 
@@ -242,7 +242,7 @@ enum {
 9:buffer is read only.\
 10:buffer has not been modified, use w! to force.\
 11:buffer has been modified, use bd! to delete it without writing.\
-12:can not write an unamed buffer.\
+12:can not write an unnamed buffer.\
 13:can not get current directory!!!."
 
 #define MSG_ERRNO(errno__) \
@@ -1034,8 +1034,8 @@ NewProp (ed,
   int num_syntaxes;
   syn_t syntaxes[NUM_SYNTAXES];
 
-  int num_expr_register_cbs;
-  ExprRegister_cb *expr_register_cbs;
+  int num_expr_reg_cbs;
+  ExprRegister_cb *expr_reg_cbs;
 
   int num_at_exit_cbs;
   EdAtExit_cb *at_exit_cbs;

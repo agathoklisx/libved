@@ -1480,7 +1480,7 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
 
   char lword[len + 1];
   int i = 0;
-  while (i < len and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
+  while (i < len and NULL isnot Cstring.byte.in_str (SPELL_NOTWORD, word[i])) {
     fidx++;
     len--;
     i++;
@@ -1489,7 +1489,7 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
   int j = 0;
   int orig_len = len;
   len = 0;
-  while (i < orig_len and NULL is Cstring.byte_in_str (SPELL_NOTWORD, word[i])) {
+  while (i < orig_len and NULL is Cstring.byte.in_str (SPELL_NOTWORD, word[i])) {
     lword[j++] = word[i++];
     len++;
   }
@@ -1498,7 +1498,7 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
 
   if (i isnot len) {
     i = len - 1;
-    while (i >= 0 and NULL isnot Cstring.byte_in_str (SPELL_NOTWORD, word[i--])) {
+    while (i >= 0 and NULL isnot Cstring.byte.in_str (SPELL_NOTWORD, word[i--])) {
       lidx--;
       len--;
     }
@@ -1783,7 +1783,7 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     case 'S': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
-          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNNAMED)) {
         rline_t *rl = Ed.rline.new (E.get.current (THIS_E));
         string_t *str = String.new_with ("spell --range=%");
         Rline.set.visibility (rl, NO);
@@ -1802,7 +1802,7 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
     case 'C': {
       int flags = Buf.get.flags (*thisp);
       if (0 is (flags & BUF_IS_SPECIAL) and
-          0 is Cstring.eq (Buf.get.basename (*thisp), UNAMED)) {
+          0 is Cstring.eq (Buf.get.basename (*thisp), UNNAMED)) {
         Vstring_t *lines = File.readlines (Buf.get.fname (*thisp), NULL, NULL, NULL);
         ifnot (NULL is lines) {
           retval = __tcc_compile__ (thisp, Vstring.join (lines, "\n"));
