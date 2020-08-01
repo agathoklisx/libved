@@ -1169,6 +1169,7 @@ NewSelf (cstring,
   SubSelf (cstring, byte) byte;
 
   char
+    *(*bytes_in_str) (const char *, const char *),
     *(*substr) (char *, size_t, char *, size_t, size_t),
     *(*extract_word_at) (char *, size_t, char *, size_t, char *, size_t, int, int *, int *),
     *(*itoa) (int, char *, int),

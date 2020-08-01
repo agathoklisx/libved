@@ -87,6 +87,29 @@ private char *byte_in_str_r (const char *s, int c) {
   return (char *) sp;
 }
 
+/* the same function under a different name is 25-30 times slower */
+private char *strstr (const char *str, const char *substr) {
+  while (*str != '\0') {
+    if (*str == *substr) {
+      const char *spa = str + 1;
+      const char *spb = substr + 1;
+
+      while (*spa && *spb){
+        if (*spa != *spb)
+          break;
+        spa++; spb++;
+      }
+
+      if (*spb == '\0')
+        return (char *) str;
+    }
+
+    str++;
+  }
+
+  return NULL;
+}
+
 private size_t byte_cp (char *dest, const char *src, size_t nelem) {
   const char *sp = src;
   size_t len = 0;
@@ -297,6 +320,7 @@ private cstring_T __init_cstring__ (void) {
       .cp_fmt = cstring_cp_fmt,
       .byte_in_str = byte_in_str,
       .byte_in_str_r = byte_in_str_r,
+      .bytes_in_str = strstr,
       .extract_word_at = cstring_extract_word_at,
       .trim = SubSelfInit (cstring, trim,
         .end = cstring_trim_end,
@@ -17677,10 +17701,21 @@ public void __deinit_ed__ (Class (E) **thisp) {
 private int i_parse_stmt (i_t *, int);
 private int i_parse_expr (i_t *, ival_t *);
 
-static inline unsigned i_StringGetLen (Istring_t s) { return (unsigned)s.len_; }
-static inline const char *i_StringGetPtr (Istring_t s) { return (const char *)(ival_t)s.ptr_; }
-static inline void i_StringSetLen (Istring_t *s, unsigned len) { s->len_ = len; }
-static inline void i_StringSetPtr (Istring_t *s, const char *ptr) { s->ptr_ = ptr; }
+static inline unsigned i_StringGetLen (Istring_t s) {
+  return (unsigned)s.len_;
+}
+
+static inline const char *i_StringGetPtr (Istring_t s) {
+  return (const char *)(ival_t)s.ptr_;
+}
+
+static inline void i_StringSetLen (Istring_t *s, unsigned len) {
+  s->len_ = len;
+}
+
+static inline void i_StringSetPtr (Istring_t *s, const char *ptr) {
+  s->ptr_ = ptr;
+}
 
 private int i_StringEq (Istring_t ai, Istring_t bi) {
   const char *a, *b;
