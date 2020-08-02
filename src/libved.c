@@ -8227,11 +8227,11 @@ private int __buf_search__ (buf_t *this, Search_t *sch) {
       sch->found = 1;
 
       sch->match = Alloc ((size_t) (re->match_len) + 1);
-      cstring_cp (sch->match, re->match_len + 1, re->match_ptr, re->match_len);
+      Cstring.cp (sch->match, re->match_len + 1, re->match_ptr, re->match_len);
 
       sch->col = re->match_idx;
       sch->prefix = Alloc ((size_t) sch->col + 1);
-      cstring_cp (sch->prefix, sch->col + 1, sch->row->data->bytes, sch->col);
+      Cstring.cp (sch->prefix, sch->col + 1, sch->row->data->bytes, sch->col);
 
       sch->end = sch->row->data->bytes + re->retval;
       retval = OK;
@@ -8459,7 +8459,7 @@ private int buf_grep_on_normal (buf_t **thisp, utf8 com, int count, int regidx) 
 
   if (com isnot '\r' and com isnot 'q') return 0;
   if (com is 'q') {
-    if (NOTHING_TODO is ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+    if (NOTHING_TODO is Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
        NULL, NO_OPTION, NO_FORCE))
       return EXIT_THIS;
     return -1;
@@ -10338,16 +10338,16 @@ private int buf_normal_handle_ctrl_w (buf_t **thisp) {
 
     case 'l':
     case ARROW_RIGHT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
+      return Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
           NULL, NO_OPTION, NO_FORCE);
 
     case 'h':
     case ARROW_LEFT_KEY:
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV,
+      return Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV,
           NULL, NO_OPTION, NO_FORCE);
 
     case '`':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+      return Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
           NULL, NO_OPTION, NO_FORCE);
 
     default:
@@ -10409,11 +10409,11 @@ private int buf_normal_handle_comma (buf_t **thisp) {
       return buf_change (thisp, VED_COM_BUF_CHANGE_PREV_FOCUSED);
 
     case '.':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+      return Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_PREV_FOCUSED,
           NULL, NO_OPTION, NO_FORCE);
 
     case '/':
-      return ed_win_change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
+      return Ed.win.change ($my(root), thisp, VED_COM_WIN_CHANGE_NEXT,
           NULL, NO_OPTION, NO_FORCE);
 
     case ';':
@@ -14966,19 +14966,19 @@ exec:
     case VED_COM_WIN_CHANGE_PREV_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
+      retval = Ed.win.change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_WIN_CHANGE_NEXT_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_NEXT; //__fallthrough__;
     case VED_COM_WIN_CHANGE_NEXT:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
+      retval = Ed.win.change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_WIN_CHANGE_PREV_FOCUSED_ALIAS:
       rl->com = VED_COM_WIN_CHANGE_PREV_FOCUSED; //__fallthrough__;
     case VED_COM_WIN_CHANGE_PREV_FOCUSED:
-      retval = ed_win_change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
+      retval = Ed.win.change ($my(root), thisp, rl->com, NULL, 0, NO_FORCE);
       goto theend;
 
     case VED_COM_BUF_DELETE_FORCE_ALIAS:
@@ -16478,7 +16478,7 @@ exec_block:
         if (cmd_retv is BUF_QUIT) {
           retval = buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
           if (retval is NOTHING_TODO) {
-            retval = ed_win_change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
+            retval = Ed.win.change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
                 NULL, 0, NO_FORCE);
             if (retval is NOTHING_TODO)
               cmd_retv = EXIT_THIS;
@@ -17669,7 +17669,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
  * - an instance can be passed as a first argument
  * - \ as the last character in the line is a continuation character
  * - syntax_error() got a char * argument, that describes the error
- * - added ignore_next_char() to ignore next token
+ * - added ignore_next_char() to ignore next char in parseptr
  * - print* function references got a FILE * argument
  * - remove abort() and disable exit()
  * - add is, isnot, true, false, ifnot, OK and NOTOK keywords
@@ -17854,21 +17854,16 @@ private int i_out_of_mem (i_t *this) {
   return I_ERR_NOMEM;
 }
 
-private int i_peek_char (i_t *this, unsigned int n) {
-  if (i_StringGetLen (this->parseptr) <= n) return -1;
-  return *(i_StringGetPtr (this->parseptr) + n);
-}
-
 private void i_reset_token (i_t *this) {
   i_StringSetLen (&this->token, 0);
   i_StringSetPtr (&this->token, i_StringGetPtr (this->parseptr));
 }
 
-private void i_ignore_last_char (i_t *this) {
+private void i_ignore_last_token (i_t *this) {
   i_StringSetLen (&this->token, i_StringGetLen (this->token) - 1);
 }
 
-private void i_ignore_first_char (i_t *this) {
+private void i_ignore_first_token (i_t *this) {
   i_StringSetPtr (&this->token, i_StringGetPtr (this->token) + 1);
   i_StringSetLen (&this->token, i_StringGetLen (this->token) - 1);
 }
@@ -17878,14 +17873,19 @@ private void i_ignore_next_char (i_t *this) {
   i_StringSetLen (&this->parseptr, i_StringGetLen (this->parseptr) - 1);
 }
 
+private int i_peek_char (i_t *this, unsigned int n) {
+  if (i_StringGetLen (this->parseptr) <= n) return -1;
+  return *(i_StringGetPtr (this->parseptr) + n);
+}
+
 private int i_get_char (i_t *this) {
-  int c;
-  unsigned len = i_StringGetLen (this->parseptr);
-  const char *ptr;
+  unsigned int len = i_StringGetLen (this->parseptr);
+
   ifnot (len) return -1;
 
-  ptr = i_StringGetPtr (this->parseptr);
-  c = *ptr++;
+  const char *ptr = i_StringGetPtr (this->parseptr);
+  int c = *ptr++;
+
   --len;
 
   i_StringSetPtr (&this->parseptr, ptr);
@@ -17897,12 +17897,29 @@ private int i_get_char (i_t *this) {
 private void i_unget_char (i_t *this) {
   i_StringSetLen (&this->parseptr, i_StringGetLen (this->parseptr) + 1);
   i_StringSetPtr (&this->parseptr, i_StringGetPtr (this->parseptr) - 1);
-  i_ignore_last_char (this);
+  i_ignore_last_token (this);
+}
+
+private int i_ignore_ws (i_t *this) {
+  int c;
+  for (;;) {
+    c = i_get_char (this);
+
+    if (is_space (c)) {
+      i_reset_token (this);
+    } else
+      break;
+  }
+
+  return c;
 }
 
 private void i_get_span (i_t *this, int (*testfn) (int)) {
   int c;
-  do c = i_get_char (this);  while (testfn (c));
+  do
+    c = i_get_char (this);
+  while (testfn (c));
+
   if (c isnot -1) i_unget_char (this);
 }
 
@@ -17925,24 +17942,19 @@ private Sym * i_lookup_sym (i_t *this, Istring_t name) {
 private int i_do_next_token (i_t *this, int israw) {
   int c;
   int r = -1;
+
   Sym *sym = NULL;
 
   this->tokenSym = NULL;
   i_reset_token (this);
-  for (;;) {
-    c = i_get_char (this);
 
-    if (is_space (c))
-      i_reset_token (this);
-    else
-      break;
-  }
+  c = i_ignore_ws (this);
 
   if (c is '\\' and i_peek_char (this, 0) is '\n') {
     this->linenum++;
     i_ignore_next_char (this);
     i_reset_token (this);
-    c = i_get_char (this);
+    c = i_ignore_ws (this);
   }
 
   if (c is '#') {
@@ -17954,11 +17966,11 @@ private int i_do_next_token (i_t *this, int israw) {
     r = c;
 
   } else if (IS_DIGIT (c)) {
-    if (c is '0' and NULL isnot cstring_byte_in_str ("xX", i_peek_char (this, 0))
+    if (c is '0' and NULL isnot Cstring.byte.in_str ("xX", i_peek_char (this, 0))
         and is_hexchar (i_peek_char(this, 1))) {
       i_get_char (this);
-      i_ignore_first_char (this);
-      i_ignore_first_char (this);
+      i_ignore_first_token (this);
+      i_ignore_first_token (this);
       i_get_span (this, is_hexchar);
       r = I_TOK_HEX_NUMBER;
     } else {
@@ -17971,12 +17983,13 @@ private int i_do_next_token (i_t *this, int israw) {
       if (c is '\\') i_get_char (this);
       int max = 4;
       r = I_TOK_SYNTAX_ERR;
-      /* add multibyte support */
+
+      /* multibyte support */
       do {
         c = i_get_char (this);
         if (c is '\'') {
-          i_ignore_first_char (this);
-          i_ignore_last_char (this);
+          i_ignore_first_token (this);
+          i_ignore_last_token (this);
           r = I_TOK_CHAR;
           break;
         }
@@ -18019,7 +18032,7 @@ private int i_do_next_token (i_t *this, int israw) {
         ++bracket;
     }
 
-    i_ignore_last_char (this);
+    i_ignore_last_token (this);
     r = I_TOK_STRING;
 
   } else if (c is '"') {
@@ -18030,7 +18043,7 @@ private int i_do_next_token (i_t *this, int israw) {
       i_get_span (this, is_notquote);
       c = i_get_char (this);
       if (c < 0) return I_TOK_SYNTAX_ERR;
-      i_ignore_last_char (this);
+      i_ignore_last_token (this);
     } else {
       this->state &= ~(FUNC_CALL_BUILTIN);
       size_t len = 0;
@@ -18065,7 +18078,10 @@ private int i_do_next_token (i_t *this, int israw) {
   return r;
 }
 
-private int i_next_token (i_t *this) { return i_do_next_token (this, 0); }
+private int i_next_token (i_t *this) {
+  return i_do_next_token (this, 0);
+}
+
 private int i_next_raw_token (i_t *this) { return i_do_next_token (this, 1); }
 
 private int i_push (i_t *this, ival_t x) {
@@ -18174,7 +18190,7 @@ private int i_parse_char (i_t *this, ival_t *vp, Istring_t token) {
     if (ptr[1] is 'r') { *vp = '\r'; return I_OK; }
     if (ptr[1] is '\\') { *vp = '\\'; return I_OK; }
     if (ptr[1] is '\'') { *vp = '\''; return I_OK; }
-    return this->syntax_error (this, "unkown escape sequence");
+    return this->syntax_error (this, "unknown escape sequence");
   }
 
   if (ptr[0] >= ' ' and ptr[0] <= '~') {
@@ -18186,8 +18202,9 @@ private int i_parse_char (i_t *this, ival_t *vp, Istring_t token) {
     }
   }
 
+  /* multibyte support */
   int len = 0;
-  utf8 c = ustring_get_code_at ((char *) ptr, 4, 0, &len);
+  utf8 c = Ustring.get.code_at ((char *) ptr, 4, 0, &len);
 
   if ('\'' isnot ptr[len])
     return this->syntax_error (this, "error while taking character literal");
@@ -18222,7 +18239,7 @@ private int i_parse_string (i_t *this, Istring_t str, int saveStrings, int topLe
       continue;
     }
     else
-      return this->syntax_error (this, "evaluated string failed, unkown token");
+      return this->syntax_error (this, "evaluated string failed, unknown token");
   }
 
   this->parseptr = savepc;
@@ -18392,7 +18409,8 @@ private int i_parse_stmt (i_t *this, int saveStrings) {
   if (c is I_TOK_VARDEF) {
     // a definition var a=x
     c = i_next_raw_token (this); // we want to get VAR_SYMBOL directly
-    if (c isnot I_TOK_SYMBOL) return this->syntax_error (this, "expected symbol");
+    if (c isnot I_TOK_SYMBOL)
+      return this->syntax_error (this, "expected symbol");
 
     if (saveStrings)
       name = i_dup_string (this, this->token);
@@ -18413,8 +18431,7 @@ private int i_parse_stmt (i_t *this, int saveStrings) {
     name = this->token;
     s = this->tokenSym;
     c = i_next_token (this);
-    // we expect the "=" operator
-    // verify that it is "="
+    // we expect the "=" operator, so verify that it is "="
     if (i_StringGetPtr (this->token)[0] isnot '=' or
         i_StringGetLen(this->token) isnot 1)
       return this->syntax_error (this, "expected =");

@@ -95,6 +95,8 @@ int main (int argc, char **argv) {
     ifnot (OK is I.load_file (E.get.iclass (THIS_E), load_file))
       goto theend;
 
+    if (exit) goto theend;
+
     signal (SIGWINCH, sigwinch_handler);
 
     this = E.get.current (THIS_E);
