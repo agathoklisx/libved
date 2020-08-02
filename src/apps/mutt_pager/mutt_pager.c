@@ -381,7 +381,7 @@ private win_t *__init_me__ (ed_t *this, char *fname) {
 
   buf_t *buf = Win.buf.init (w, FIRST_FRAME, ZERO_FLAGS);
   Buf.set.show_statusline (buf, UNSET);
-  Buf.set.fname (buf, UNAMED);
+  Buf.set.fname (buf, UNNAMED);
   Buf.set.ftype (buf, Ed.syn.get_ftype_idx (this, "mail_hdrs"));
   Buf.set.normal.at_beg_cb (buf, __on_normal_beg);
   Win.append_buf (w, buf);

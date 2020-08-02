@@ -1658,7 +1658,8 @@ NewSubSelf (buf, normal,
     (*page_up) (buf_t *, int),
     (*end_word) (buf_t *, int, int, int),
     (*page_down) (buf_t *, int),
-    (*goto_linenr) (buf_t *, int, int);
+    (*goto_linenr) (buf_t *, int, int),
+    (*replace_char_with) (buf_t *, utf8);
 );
 
 NewSelf (buf,

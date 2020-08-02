@@ -8048,7 +8048,7 @@ private void buf_set_draw_statusline (buf_t *this) {
 private string_t *get_current_number (buf_t *this, int *fidx) {
   if ($mycur(data)->num_bytes is 0) return NULL;
 
-  string_t *nb = string_new (8);
+  string_t *nb = String.new (8);
   int type = 'd';
   int issign = 0;
 
@@ -8061,24 +8061,27 @@ private string_t *get_current_number (buf_t *this, int *fidx) {
 
     if (type is 'x') {
       if ('0' isnot c) goto theerror;
-      string_prepend_byte (nb, c);
+      String.prepend_byte (nb, c);
       *fidx = idx + 1;
       break;
     }
 
     if (IS_DIGIT (c) or IsAlsoAHex (c)) {
-      string_prepend_byte (nb, c);
+      String.prepend_byte (nb, c);
       continue;
     }
 
     if (c is 'x') {
       if (type is 'x') goto theerror;
       type = 'x';
-      string_prepend_byte (nb, c);
+      String.prepend_byte (nb, c);
       continue;
     }
 
-    if (c is '-') { issign = 1; idx--; }
+    if (c is '-') {
+      issign = 1; idx--;
+    }
+
     *fidx = idx + 2;
     break;
   }
@@ -8090,14 +8093,14 @@ private string_t *get_current_number (buf_t *this, int *fidx) {
     c = $mycur(data)->bytes[idx++];
 
     if (IS_DIGIT (c) or IsAlsoAHex (c)) {
-      string_append_byte (nb, c);
+      String.append_byte (nb, c);
       continue;
     }
 
     if (c is 'x') {
       if (type is 'x') goto theerror;
       if (nb->num_bytes isnot 1 and nb->bytes[0] isnot '0') goto theerror;
-      string_append_byte (nb, c);
+      String.append_byte (nb, c);
       type = 'x';
       continue;
     }
@@ -8149,12 +8152,12 @@ private string_t *get_current_number (buf_t *this, int *fidx) {
   goto theend;
 
 theerror:
-  string_free (nb);
+  String.free (nb);
   return NULL;
 
 theend:
-  if (issign) string_prepend_byte (nb, '-');
-  string_prepend_byte (nb, type);
+  if (issign) String.prepend_byte (nb, '-');
+  String.prepend_byte (nb, type);
   return nb;
 }
 
@@ -9630,6 +9633,20 @@ private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   return buf_normal_down (this, lnr - currow_idx - 1, ADJUST_COL, draw);
 }
 
+private int buf_normal_replace_char_with (buf_t *this, utf8 c) {
+  ed_record ($my(root), "buf_normal_replace_char_with (buf, %d)", c);
+
+  char buf[5]; int len;
+  ustring_character (c, buf, &len);
+  int clen = ustring_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
+  String.replace_numbytes_at_with ($mycur(data), clen,
+    $mycur(cur_col_idx), buf);
+
+  $my(flags) |= BUF_IS_MODIFIED;
+  self(draw_current_row);
+  return DONE;
+}
+
 private int buf_normal_replace_char (buf_t *this) {
   if ($mycur(data)->num_bytes is 0) return NOTHING_TODO;
 
@@ -9642,15 +9659,8 @@ private int buf_normal_replace_char (buf_t *this) {
   vundo_push (this, action);
 
   utf8 c = Input.get ($my(term_ptr));
-  char buf[5]; int len;
-  ustring_character (c, buf, &len);
-  int clen = ustring_charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
-  String.replace_numbytes_at_with ($mycur(data), clen,
-    $mycur(cur_col_idx), buf);
 
-  $my(flags) |= BUF_IS_MODIFIED;
-  self(draw_current_row);
-  return DONE;
+  return self(normal.replace_char_with, c);
 }
 
 private int buf_normal_delete_eol (buf_t *this, int regidx) {
@@ -16808,7 +16818,8 @@ private Class (ed) *editor_new (void) {
           .page_up = buf_normal_page_up,
           .end_word = buf_normal_end_word,
           .page_down = buf_normal_page_down,
-          .goto_linenr = buf_normal_goto_linenr
+          .goto_linenr = buf_normal_goto_linenr,
+          .replace_char_with = buf_normal_replace_char_with
         ),
         .draw = buf_draw,
         .flush = buf_flush,
@@ -19024,6 +19035,10 @@ ival_t i_buf_normal_goto_linenr (i_t *this, buf_t *buf, int linenum, int draw) {
   return Buf.normal.goto_linenr (buf, linenum, draw);
 }
 
+ival_t i_buf_normal_replace_char_with (i_t *this, buf_t *buf, utf8 c) {
+  return Buf.normal.replace_char_with (buf, c);
+}
+
 struct ifun_t {
   const char *name;
   ival_t val;
@@ -19049,6 +19064,7 @@ struct ifun_t {
   { "buf_normal_page_up",    (ival_t) i_buf_normal_page_up, 2},
   { "buf_normal_page_down",  (ival_t) i_buf_normal_page_down, 2},
   { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
+  { "buf_normal_replace_char_with", (ival_t) i_buf_normal_replace_char_with, 2},
   { "buf_draw",              (ival_t) i_buf_draw, 1},
   { "buf_init_fname",        (ival_t) i_buf_init_fname, 2},
   { "buf_substitute",        (ival_t) i_buf_substitute, 7},
