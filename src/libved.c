@@ -5866,6 +5866,13 @@ private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
     return OK;
   }
 
+  arg = rline_get_anytype_arg (rl, "persistent-layout");
+  ifnot (NULL is arg) {
+    int save = atoi (arg->bytes);
+    Root.set.persistent_layout ($OurRoot, save);
+    return OK;
+  }
+
   if (rline_arg_exists (rl, "backupfile")) {
     arg = rline_get_anytype_arg (rl, "backup-suffix");
     self(set.backup, 1, (NULL is arg ? BACKUP_SUFFIX : arg->bytes));
@@ -13666,6 +13673,7 @@ private void ed_init_commands (ed_t *this) {
   $my(commands)[i] = NULL;
   $my(num_commands) = VED_COM_END;
 
+  ed_append_command_arg (this, "set", "--persistent-layout=", 20);
   ed_append_command_arg (this, "set", "--enable-writing", 16);
   ed_append_command_arg (this, "set", "--backup-suffix=", 16);
   ed_append_command_arg (this, "set", "--no-backupfile", 15);
@@ -17004,7 +17012,8 @@ private ed_t *ed_init (E_T *E) {
   ed_set_word_actions_default (this);
   ed_set_file_mode_actions_default (this);
 
-  $my(name) = ed_name_gen (&$from(E, name_gen), "ed:", 3);
+  $my(name) = ed_name_gen (&$OurRoots(name_gen), "ed:", 3);
+  $OurRoots(orig_num_items)++;
 
   return this;
 }
@@ -17200,11 +17209,13 @@ private int E_save_image (Class (E) *this, char *name) {
        "var draw = 1\n"
        "var donot_draw = 0\n"
        "var save_image = %d\n"
+       "var persistent_layout = %d\n"
        "var ed_cur_idx = %d\n"
        "var win_cur_idx = %d\n"
        "var buf_cur_idx = %d\n",
     $my(num_items),
     $my(save_image),
+    $my(persistent_layout),
     $my(cur_idx),
     $my(current)->cur_idx,
     $my(current)->current->cur_idx);
@@ -17283,7 +17294,8 @@ next_win:
   string_append_fmt (img, "\n"
         "e_set_image_file (\"%s\")\n"
         "e_set_image_name (\"%s\")\n"
-        "e_set_save_image (save_image)\n\n"
+        "e_set_save_image (save_image)\n"
+        "e_set_persistent_layout (persistent_layout)\n\n"
         "ed = e_set_ed_by_idx (ed_cur_idx)\n"
         "cwin = ed_set_current_win (ed, win_cur_idx)\n"
         "win_set_current_buf (cwin, buf_cur_idx, donot_draw)\n\n"
@@ -17320,6 +17332,10 @@ private void E_set_image_name (E_T *this, char *name) {
 
 private void E_set_save_image (E_T *this, int val) {
   $my(save_image) = val;
+}
+
+private void E_set_persistent_layout (E_T *this, int val) {
+  $my(persistent_layout) = val;
 }
 
 private void E_set_state (E_T *this, int state) {
@@ -17491,7 +17507,11 @@ main:
 
   if (($my(state) & ED_EXIT)) {
     if ($my(save_image))
-      self(save_image, $my(image_name));
+      if (
+          ($my(num_items) is 1 and $my(orig_num_items) is 1) or
+          ($my(num_items) is 1 and $my(persistent_layout) is 0) or
+          ($my(num_items) is $my(orig_num_items) and $my(persistent_layout) is 1))
+        self(save_image, $my(image_name));
 
     self(delete, $my(cur_idx), FORCE);
 
@@ -17580,6 +17600,7 @@ public Class (E) *__init_ed__ (char *name) {
         .image_name = E_set_image_name,
         .image_file = E_set_image_file,
         .save_image = E_set_save_image,
+        .persistent_layout = E_set_persistent_layout,
         .at_exit_cb = E_set_at_exit_cb,
         .at_init_cb = E_set_at_init_cb,
         .next = E_set_next,
@@ -17609,6 +17630,8 @@ public Class (E) *__init_ed__ (char *name) {
   $my(shared_reg)[0] = (Reg_t) {.reg = REG_SHARED_CHR};
   $my(image_name) = NULL;
   $my(save_image) = 0;
+  $my(persistent_layout) = 0;
+  $my(orig_num_items) = 0;
 
   return this;
 }
@@ -18946,6 +18969,11 @@ ival_t i_e_set_save_image (i_t *this, int val) {
   return I_OK;
 }
 
+ival_t i_e_set_persistent_layout (i_t *this, int val) {
+  Root.set.persistent_layout ($OurRoot, val);
+  return I_OK;
+}
+
 ival_t i_e_set_image_name (i_t *this, char *name) {
   Root.set.image_name ($OurRoot, name);
   free (name);
@@ -19066,6 +19094,7 @@ struct ifun_t {
   { "e_set_ed_next",         (ival_t) i_e_set_ed_next, 0},
   { "e_set_ed_by_idx",       (ival_t) i_e_set_ed_by_idx, 1},
   { "e_set_save_image",      (ival_t) i_e_set_save_image, 1},
+  { "e_set_persistent_layout", (ival_t) i_e_set_persistent_layout, 1},
   { "e_set_image_name",      (ival_t) i_e_set_image_name, 1},
   { "e_set_image_file",      (ival_t) i_e_set_image_file, 1},
   { "e_get_ed_num",          (ival_t) i_e_get_ed_num, 0},

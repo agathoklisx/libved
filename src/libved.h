@@ -2018,6 +2018,7 @@ NewClass (ed,
 NewSubSelf (E, set,
   void
     (*save_image) (E_T *, int),
+    (*persistent_layout) (E_T *, int),
     (*image_name) (E_T *, char *),
     (*image_file) (E_T *, char *),
     (*state) (E_T *, int),

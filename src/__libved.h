@@ -1060,6 +1060,7 @@ NewProp (E,
     *image_file;
 
   int
+    persistent_layout,
     save_image,
     state,
     error_state,
@@ -1070,6 +1071,7 @@ NewProp (E,
   ed_t *tail;
   ed_t *current;
    int  cur_idx;
+   int  orig_num_items;
    int  num_items;
    int  prev_idx;
 

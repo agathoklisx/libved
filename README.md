@@ -707,7 +707,7 @@ Search:
   :searches              (change focus to the `search' window/buffer)
   :messages              (change focus to the message window/buffer)
   :testkey               (test keyboard keys)
-  :set options           (set options for current buffer
+  :set option            (set option for current buffer and control editor behavior)
                           --ftype=[string] set filetype
                           --tabwidth=[int] set tabwidth
                           --shiftwidth=[int] set shiftwidth
@@ -717,6 +717,8 @@ Search:
                           --autosave=[int] set in minutes the interval, (used
                             at the end of insert mode to autosave buffer)
                           --enable-writing this will enable writing (buffer contents)
+                          --save-image=[1|0] enable saving editor layout at exit
+                          --persistent-layout=[1|0] [en|dis]able persistent editor layout
   :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
                           whole file is assumed)
   :@bufbackup             backup file as (dirname(fname)/.basename(fname)`suffix',
