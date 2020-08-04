@@ -17,7 +17,6 @@ static uenv_t *Uenv = NULL;
 
 #include "../lib/sys/com/man.c"
 #include "../lib/sys/com/battery.c"
-#include "../lib/sys/com/mkdir.c"
 #include "../lib/sys/com/stat.c"
 
 /* the callback function that is called on 'W' in normal mode */
@@ -183,21 +182,6 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   if (Cstring.eq (com->bytes, "`battery")) {
     retval = sys_battery_info (NULL, 1);
 
-  } else if (Cstring.eq (com->bytes, "`mkdir")) {
-    Vstring_t *dirs = Rline.get.arg_fnames (rl, 1);
-    if (NULL is dirs) goto theend;
-
-    int is_verbose = Rline.arg.exists (rl, "verbose");
-
-    mode_t def_mode = S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH; // 0755
-
-    string_t *mode_s = Rline.get.anytype_arg (rl, "mode");
-
-    mode_t mode = (NULL is mode_s ? def_mode : (uint) strtol (mode_s->bytes, NULL, 8));
-
-    retval = sys_mkdir (dirs->tail->data->bytes, mode, is_verbose);
-    Vstring.free (dirs);
-
   } else if (Cstring.eq (com->bytes, "`man")) {
     Vstring_t *names = Rline.get.arg_fnames (rl, 1);
     if (NULL is names) goto theend;
@@ -224,13 +208,13 @@ theend:
 
 private void __u_add_rline_commands__ (ed_t *this) {
  /* sys defined commands can begin with '`': associated with shell syntax */
-  int num_commands = 4;
-  char *commands[] = {"`mkdir", "`man", "`stat", "`battery", NULL};
-  int num_args[] = {3, 0, 1, 0, 0};
-  int flags[] = {RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, RL_ARG_FILENAME, 0, 0};
+  int num_commands = 3;
+  char *commands[] = {"`man", "`stat", "`battery", NULL};
+  int num_args[] = {1, 1, 0, 0};
+  int flags[] = {RL_ARG_FILENAME, RL_ARG_FILENAME, 0, 0};
+
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "`man", "--section=", 10);
-  Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
 
   Ed.set.rline_cb (this, __u_rline_cb__);
 }

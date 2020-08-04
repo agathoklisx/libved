@@ -392,6 +392,7 @@ NewSubSelf (sys, get,
 
 NewSelf (sys,
   SubSelf (sys, get) get;
+  int (*mkdir) (char *, mode_t, int, int);
 );
 
 NewClass (sys,

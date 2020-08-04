@@ -476,6 +476,65 @@ private string_t *sys_get_env (Class (sys) *this, char *name) {
   return $my(shared_str);
 }
 
+private int sys_mkdir (char *dir, mode_t mode, int verbose, int parents) {
+  ed_t *ed = E.get.current (THIS_E);
+
+  int retval = OK;
+  char *dname = NULL;
+
+  ifnot (parents)
+    goto makethisdir;
+
+  if (Cstring.eq (dir, "."))
+    return OK;
+
+  dname = Path.dirname (dir);
+
+  if (Cstring.eq (dname, "/"))
+    goto theend;
+
+  if ((retval = Sys.mkdir (dname, mode, verbose, parents)) isnot OK)
+    goto theend;
+
+makethisdir:
+  if (mkdir (dir, mode) isnot OK) {
+    if (errno isnot EEXIST) {
+      Msg.error (ed, "failed to create directory %s, %s", dir, Error.string (ed, errno));
+      retval = -1;
+      goto theend;
+    }
+
+    if (Dir.is_directory (dir))
+      Msg.send_fmt (ed, COLOR_WARNING, "directory `%s' exists", dir);
+    else
+      Msg.error (ed, "Not a directory `%s'", dir);
+
+    goto theend;
+  }
+
+  if (verbose) {
+    struct stat st;
+    if (NOTOK is stat (dir, &st)) {
+      Msg.error (ed, "failed to stat directory `%s', %s", dir, Error.string (ed, errno));
+      retval = NOTOK;
+      goto theend;
+    }
+
+    char mode_string[16];
+    Vsys.stat.mode_to_string (mode_string, st.st_mode);
+    char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
+
+    Msg.send_fmt (ed, COLOR_YELLOW, "created directory `%s', with mode: %s (%s)",
+       dir, mode_oct + 1, mode_string);
+  }
+
+theend:
+  ifnot (NULL is dname)
+    free (dname);
+
+  return retval;
+}
+
 private Class (sys) *__init_sys__ (void) {
   Class (sys) *this = AllocClass (sys);
   $my(env) = AllocType (sysenv);
@@ -496,8 +555,9 @@ private Class (sys) *__init_sys__ (void) {
   this->self = SelfInit (sys,
     .get = SubSelfInit (sys, get,
       .env = sys_get_env
-     )
-   );
+    ),
+    .mkdir = sys_mkdir
+  );
 
    return this;
 }
@@ -1947,8 +2007,23 @@ private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   if (Cstring.eq (com->bytes, "@info")) {
     retval = __ex_com_info__ (thisp, rl);
     goto theend;
+
   } else if (Cstring.eq (com->bytes, "spell")) {
     retval = __buf_spell__ (thisp, rl);
+
+  } else if (Cstring.eq (com->bytes, "`mkdir")) {
+    Vstring_t *dirs = Rline.get.arg_fnames (rl, 1);
+    if (NULL is dirs) goto theend;
+
+    int is_verbose = Rline.arg.exists (rl, "verbose");
+    int parents = Rline.arg.exists (rl, "parents");
+    string_t *mode_s = Rline.get.anytype_arg (rl, "mode");
+
+    mode_t def_mode = S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH; // 0755
+    mode_t mode = (NULL is mode_s ? def_mode : (uint) strtol (mode_s->bytes, NULL, 8));
+
+    retval = Sys.mkdir (dirs->tail->data->bytes, mode, is_verbose, parents);
+    Vstring.free (dirs);
   }
 
 theend:
@@ -1957,17 +2032,20 @@ theend:
 }
 
 private void __ex_add_rline_commands__ (ed_t *this) {
-  int num_commands = 1;
-  char *commands[] = {"@info", NULL};
-  int num_args[] = {0, 0};
-  int flags[] = {0, 0};
+  int num_commands = 3;
+  char *commands[] = {"@info", "`mkdir", "spell", NULL};
+  int num_args[] = {0, 2, 1, 0};
+  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, RL_ARG_RANGE, 0};
+
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "@info", "--buf", 5);
   Ed.append.command_arg (this, "@info", "--win", 5);
-  Ed.append.command_arg (this, "@info", "--ed", 5);
+  Ed.append.command_arg (this, "@info", "--ed",  4);
 
-  Ed.append.rline_command (this, "spell", 1, RL_ARG_RANGE);
-  Ed.append.command_arg (this, "spell", "--edit", 6);
+  Ed.append.command_arg (this, "spell",  "--edit", 6);
+
+  Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
+  Ed.append.command_arg (this, "`mkdir", "--parents", 9);
 
   Ed.set.rline_cb (this, __ex_rline_cb__);
 }
