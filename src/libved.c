@@ -5823,78 +5823,74 @@ private int buf_com_substitute (buf_t *this, rline_t *rl, int *retval) {
   return *retval;
 }
 
-private int buf_com_set (buf_t *this, rline_t *rl, int *retval) {
+private int buf_com_set (buf_t *this, rline_t *rl) {
+  int draw = 0;
+
   string_t *arg = rline_get_anytype_arg (rl, "ftype");
   ifnot (NULL is arg) {
     int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
     syn_t syn = $myroots(syntaxes)[idx];
-    if (cstring_eq (syn.filetype, $my(ftype)->name))
-      return *retval;
-
-    buf_free_ftype (this);
-    $my(ftype) = syn.init (this);
-    cstring_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
-    goto theend;
+    ifnot (cstring_eq (syn.filetype, $my(ftype)->name)) {
+      buf_free_ftype (this);
+      $my(ftype) = syn.init (this);
+      cstring_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
+      draw = 1;
+    }
   }
 
   arg = rline_get_anytype_arg (rl, "tabwidth");
   ifnot (NULL is arg) {
     $my(ftype)->tabwidth = atoi (arg->bytes);
     buf_normal_bol (this);
-    goto theend;
+    draw = 1;
   }
 
   arg = rline_get_anytype_arg (rl, "shiftwidth");
   ifnot (NULL is arg) {
     $my(ftype)->shiftwidth = atoi (arg->bytes);
     buf_normal_bol (this);
-    goto theend;
+    draw = 1;
   }
 
   arg = rline_get_anytype_arg (rl, "autosave");
   ifnot (NULL is arg) {
     long minutes = atol (arg->bytes);
-    ifnot (minutes) return *retval;
-    self(set.autosave, minutes);
-    return OK;
+    if (minutes)
+      self(set.autosave, minutes);
   }
 
   arg = rline_get_anytype_arg (rl, "save-image");
-  ifnot (NULL is arg) {
-    int save = atoi (arg->bytes);
-    Root.set.save_image ($OurRoot, save);
-    return OK;
-  }
+  ifnot (NULL is arg)
+    Root.set.save_image ($OurRoot, atoi (arg->bytes));
+
+  arg = rline_get_anytype_arg (rl, "image-file");
+  ifnot (NULL is arg)
+    Root.set.image_file ($OurRoot, arg->bytes);
+
+  arg = rline_get_anytype_arg (rl, "image-name");
+  ifnot (NULL is arg)
+    Root.set.image_name ($OurRoot, arg->bytes);
 
   arg = rline_get_anytype_arg (rl, "persistent-layout");
-  ifnot (NULL is arg) {
-    int save = atoi (arg->bytes);
-    Root.set.persistent_layout ($OurRoot, save);
-    return OK;
-  }
+  ifnot (NULL is arg)
+    Root.set.persistent_layout ($OurRoot, atoi (arg->bytes));
 
   if (rline_arg_exists (rl, "backupfile")) {
     arg = rline_get_anytype_arg (rl, "backup-suffix");
     self(set.backup, 1, (NULL is arg ? BACKUP_SUFFIX : arg->bytes));
-    return OK;
   }
 
-  if (rline_arg_exists (rl, "no-backupfile")) {
+  if (rline_arg_exists (rl, "no-backupfile"))
     ifnot (NULL is $my(backupfile)) {
       free ($my(backupfile));
       $my(backupfile) = NULL;
     }
 
-    return OK;
-  }
-
   if (rline_arg_exists (rl, "enable-writing"))
     $my(enable_writing) = 1;
 
-  return *retval;
+  if (draw) self(draw);
 
-theend:
-  self(draw);
   return OK;
 }
 
@@ -13679,6 +13675,8 @@ private void ed_init_commands (ed_t *this) {
   ed_append_command_arg (this, "set", "--no-backupfile", 15);
   ed_append_command_arg (this, "set", "--shiftwidth=", 13);
   ed_append_command_arg (this, "set", "--save-image=", 13);
+  ed_append_command_arg (this, "set", "--image-file=", 13);
+  ed_append_command_arg (this, "set", "--image-name=", 13);
   ed_append_command_arg (this, "set", "--backupfile", 12);
   ed_append_command_arg (this, "set", "--tabwidth=", 11);
   ed_append_command_arg (this, "set", "--autosave=", 11);
@@ -14964,7 +14962,7 @@ exec:
       goto theend;
 
     case VED_COM_BUF_SET:
-      retval = buf_com_set (*thisp, rl, &retval);
+      retval = buf_com_set (*thisp, rl);
       goto theend;
 
     case VED_COM_BUF_BACKUP:
@@ -17154,55 +17152,12 @@ private ed_t *E_set_prev (E_T *this) {
   return E_set_current (this, idx);
 }
 
-private int E_save_image (Class (E) *this, char *name) {
-  ifnot ($my(num_items)) return NOTOK;
 
-  if (NULL is name)
-    if ($my(current) isnot NULL)
-      if ($my(current)->current isnot NULL)
-        if ($my(current)->current->current isnot NULL)
-          name = path_basename ($from ($my(current)->current->current, fname));
+private string_t *E_create_image (Class (E) *this) {
+  if (NULL is $my(image_name) or NULL is $my(image_file))
+    return NULL;
 
-  if (NULL is name) return NOTOK;
-
-  int retval = NOTOK;
-
-  string_t *img = string_new_with (name);
-
-  char *extname = path_extname (img->bytes);
-
-  size_t exlen = bytelen (extname);
-  if (exlen) {
-    if (exlen isnot img->num_bytes) {
-      char *p = img->bytes + img->num_bytes - 1;
-      while (*p isnot '.') {
-        p--;
-        string_clear_at (img, img->num_bytes - 1);
-      }
-    } else  // .file
-      string_append_byte (img, '.');
-  } else
-    string_append_byte (img, '.');
-
-  ifnot (path_is_absolute (img->bytes)) {
-    string_prepend (img, "/scripts/");
-    string_prepend (img, self(get.env, "i_dir")->bytes);
-  }
-
-  string_append (img, "i");
-
-  self(set.image_file, img->bytes);
-
-  char *iname = path_basename_sans_extname (img->bytes);
-  self(set.image_name, iname);
-  free (iname);
-
-  FILE *fp = fopen (img->bytes, "w");
-  if (NULL is fp) goto theend;
-
-  string_clear (img);
-
-  string_append_fmt (img,
+  string_t *img = string_new_with_fmt (
        "var ed_instances = %d\n"
        "var flags = 0\n"
        "var frame_zero = 0\n"
@@ -17303,12 +17258,75 @@ next_win:
      $my(image_file),
      $my(image_name));
 
-  fprintf (fp, "%s\n", img->bytes);
-  fclose (fp);
+  return img;
+}
+
+private int E_save_image (Class (E) *this, char *name) {
+  ifnot ($my(num_items)) return NOTOK;
+
+  if (NULL is name and NULL is $my(image_file))
+    if ($my(current) isnot NULL)
+      if ($my(current)->current isnot NULL)
+        if ($my(current)->current->current isnot NULL)
+          name = path_basename ($from ($my(current)->current->current, fname));
+
+  string_t *fname = NULL;
+  char *iname = NULL;
+
+  ifnot (NULL is name) {
+    fname = string_new_with (name);
+    iname = cstring_dup (name, bytelen (name));
+  } else {
+    if (NULL is $my(image_file))
+      return NOTOK;
+
+    ifnot (NULL is $my(image_name))
+      iname = cstring_dup ($my(image_name), bytelen ($my(image_name)));
+    else
+      iname = path_basename_sans_extname ($my(image_file));
+
+    fname = string_new_with ($my(image_file));
+  }
+
+  int retval = NOTOK;
+
+  char *extname = path_extname (fname->bytes);
+
+  size_t exlen = bytelen (extname);
+  if (exlen) {
+    if (exlen isnot fname->num_bytes) {
+      char *p = fname->bytes + fname->num_bytes - 1;
+      while (*p isnot '.') {
+        p--;
+        string_clear_at (fname, fname->num_bytes - 1);
+      }
+    } else  // .file
+      string_append_byte (fname, '.');
+  } else
+    string_append_byte (fname, '.');
+
+  ifnot (path_is_absolute (fname->bytes)) {
+    string_prepend (fname, "/scripts/");
+    string_prepend (fname, self(get.env, "i_dir")->bytes);
+  }
+
+  string_append (fname, "i");
+
+  self(set.image_file, fname->bytes);
+  self(set.image_name, iname);
+
+  string_t *image = self(create_image);
+
+  FILE *fp = fopen (fname->bytes, "w");
+  if (NULL is fp) goto theend;
+
+  fprintf (fp, "%s\n", image->bytes);
   retval = OK;
 
 theend:
-  string_free (img);
+  free (iname);
+  string_free (fname);
+  string_free (image);
   return retval;
 }
 
@@ -17318,7 +17336,32 @@ private void E_set_image_file (E_T *this, char *name) {
   ifnot (NULL is $my(image_file))
     free ($my(image_file));
 
-  $my(image_file) = cstring_dup (name, bytelen (name));
+  char *cwd = NULL;
+
+  size_t len = bytelen (name);
+
+  char *extname = path_extname (name);
+  size_t exlen = bytelen (extname);
+
+  int hasnot_ext = (0 is exlen or (exlen and 0 is cstring_eq (extname, ".i")));
+
+  if (hasnot_ext) len += 2;
+
+  ifnot (path_is_absolute (name)) {
+    cwd = dir_current ();
+    if (NULL is cwd) return;
+    len += bytelen (cwd) + 1;
+  }
+
+  $my(image_file) = Alloc (len + 1);
+
+  ifnot (path_is_absolute (name))
+    cstring_cp_fmt ($my(image_file), len + 1, "%s/%s", cwd, name);
+  else
+    cstring_cp ($my(image_file), len + 1, name, len - (hasnot_ext ? 2 : 0));
+
+  if (hasnot_ext)
+    cstring_cat ($my(image_file), len + 1, ".i");
 }
 
 private void E_set_image_name (E_T *this, char *name) {
@@ -17492,8 +17535,12 @@ main:
   }
 
   if (($my(state) & ED_EXIT_ALL) or ($my(state) & ED_EXIT_ALL_FORCE)) {
-    if ($my(save_image))
-      self(save_image, $my(image_name));
+    if ($my(save_image)) {
+      if (NULL is $my(image_file))
+        self(save_image, $my(image_name));
+      else
+        self(save_image, NULL);
+    }
 
     if (NOTOK is self(exit_all)) {
       ed = self(get.current);
@@ -17510,8 +17557,12 @@ main:
       if (
           ($my(num_items) is 1 and $my(orig_num_items) is 1) or
           ($my(num_items) is 1 and $my(persistent_layout) is 0) or
-          ($my(num_items) is $my(orig_num_items) and $my(persistent_layout) is 1))
-        self(save_image, $my(image_name));
+          ($my(num_items) is $my(orig_num_items) and $my(persistent_layout) is 1)) {
+        if (NULL is $my(image_file))
+          self(save_image, $my(image_name));
+        else
+          self(save_image, NULL);
+      }
 
     self(delete, $my(cur_idx), FORCE);
 
@@ -17583,6 +17634,7 @@ public Class (E) *__init_ed__ (char *name) {
       .delete = E_delete,
       .exit_all = E_exit_all,
       .save_image = E_save_image,
+      .create_image = E_create_image,
       .get = SubSelfInit (E, get,
         .current = E_get_current,
         .head = E_get_head,

@@ -2062,6 +2062,8 @@ NewSelf (E,
     (*main) (E_T *, buf_t *),
     (*exit_all) (E_T *),
     (*delete) (E_T *, int, int);
+
+  string_t *(*create_image) (E_T *);
 );
 
 NewClass (this,

@@ -708,7 +708,7 @@ Search:
   :messages              (change focus to the message window/buffer)
   :testkey               (test keyboard keys)
   :set option            (set option for current buffer and control editor behavior)
-                          --ftype=[string] set filetype
+                          --ftype=`ftype' set `ftype' as filetype
                           --tabwidth=[int] set tabwidth
                           --shiftwidth=[int] set shiftwidth
                           --backupfile set backup
@@ -718,6 +718,8 @@ Search:
                             at the end of insert mode to autosave buffer)
                           --enable-writing this will enable writing (buffer contents)
                           --save-image=[1|0] enable saving editor layout at exit
+                          --image-file=`file' save image to `file'
+                          --image-name=`name' save image as `name'
                           --persistent-layout=[1|0] [en|dis]able persistent editor layout
   :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
                           whole file is assumed)
