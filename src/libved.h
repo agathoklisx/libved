@@ -1133,24 +1133,26 @@ NewSubSelf (ustring, get,
 NewSelf (ustring,
   SubSelf (ustring, get) get;
 
+  Ustring_t *(*new) (void);
+  void (*free) (Ustring_t *);
+
+  ustring_t *(*encode) (Ustring_t *, char *, size_t, int, int, int);
+
   char *(*character) (utf8, char *, int *);
 
   int
-    (*swap_case) (char *, char *, size_t len),
-    (*change_case) (char *, char *, size_t len, int),
+    (*width) (char *, int),
     (*charlen) (uchar),
     (*is_lower) (utf8),
-    (*is_upper) (utf8);
+    (*is_upper) (utf8),
+    (*swap_case) (char *, char *, size_t len),
+    (*change_case) (char *, char *, size_t len, int);
 
   size_t (*validate) (unsigned char *, size_t, char **, int *);
 
   utf8
     (*to_lower) (utf8),
     (*to_upper) (utf8);
-
-  void (*free) (Ustring_t *);
-  Ustring_t *(*new) (void);
-  ustring_t *(*encode) (Ustring_t *, char *, size_t, int, int, int);
 );
 
 NewClass (ustring,
@@ -1650,6 +1652,8 @@ NewSubSelf (buf, action,
 NewSubSelf (buf, normal,
   int
     (*up) (buf_t *, int, int, int),
+    (*bol) (buf_t *),
+    (*eol) (buf_t *),
     (*bof) (buf_t *, int),
     (*eof) (buf_t *, int),
     (*down) (buf_t *, int, int, int),
@@ -1659,23 +1663,29 @@ NewSubSelf (buf, normal,
     (*end_word) (buf_t *, int, int, int),
     (*page_down) (buf_t *, int),
     (*goto_linenr) (buf_t *, int, int),
+    (*change_case) (buf_t *),
     (*replace_char_with) (buf_t *, utf8);
+);
+
+NewSubSelf (buf, insert,
+  int (*string) (buf_t *, char *, size_t, int);
 );
 
 NewSelf (buf,
   SubSelf (buf, current) current;
+  SubSelf (buf, to) to;
   SubSelf (buf, set) set;
   SubSelf (buf, get) get;
   SubSelf (buf, syn) syn;
-  SubSelf (buf, ftype) ftype;
-  SubSelf (buf, to) to;
+  SubSelf (buf, row) row;
   SubSelf (buf, isit) isit;
   SubSelf (buf, free) free;
-  SubSelf (buf, row) row;
   SubSelf (buf, read) read;
   SubSelf (buf, iter) iter;
+  SubSelf (buf, ftype) ftype;
   SubSelf (buf, action) action;
   SubSelf (buf, normal) normal;
+  SubSelf (buf, insert) insert;
 
   void
     (*draw) (buf_t *),
@@ -1687,6 +1697,7 @@ NewSelf (buf,
     *(*info) (buf_t *);
 
   int
+    (*search) (buf_t *, char, char *, utf8),
     (*write) (buf_t *, int),
     (*substitute) (buf_t *, char *, char *, int, int, int, int),
     (*backupfile) (buf_t *);
