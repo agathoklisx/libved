@@ -92,8 +92,11 @@ int main (int argc, char **argv) {
   win_t *w = NULL;
 
   if (load_file isnot NULL) {
-    ifnot (OK is I.load_file (E.get.iclass (THIS_E), load_file))
+    retval = I.load_file (E.get.iclass (THIS_E), load_file);
+    ifnot (OK is retval) {
+      retval = 1;
       goto theend;
+    }
 
     if (exit) goto theend;
 

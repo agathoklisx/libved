@@ -47,6 +47,7 @@
 #define RL_POST_PROCESS (1 << 10)
 #define RL_SET_POS (1 << 11)
 #define RL_EXEC (1 << 12)
+#define RL_FIRST_CHAR_COMPLETION (1 << 13)
 
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)
@@ -545,9 +546,14 @@ NewType (rline,
     com,
     range[2],
     state,
-    opts;
+    opts,
+    trigger_first_char_completion;
 
-  utf8 c;
+  utf8
+      c,
+      first_chars[8];
+  int first_chars_len;
+
   term_t *term;
   ed_t *ed;
 
@@ -556,11 +562,11 @@ NewType (rline,
   video_t *cur_video;
 
   Vstring_t *line;
-   arg_t *head;
-   arg_t *tail;
-   arg_t *current;
-     int  cur_idx;
-     int  num_items;
+  arg_t *head;
+  arg_t *tail;
+  arg_t *current;
+    int  cur_idx;
+    int  num_items;
 
   string_t *render;
 

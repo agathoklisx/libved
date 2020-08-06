@@ -13300,14 +13300,14 @@ private string_t *rline_get_command (rline_t *rl) {
 }
 
 private int rline_tab_completion (rline_t *rl) {
+  ed_t *this = rl->ed;
   ifnot (rl->line->num_items) return RL_OK;
   int retval = RL_OK;
-  ed_t *this = rl->ed;
   buf_t *curbuf = this->current->current;
 
   string_t *currline = NULL;  // otherwise segfaults on certain conditions
 redo:;
-  currline = vstring_join (rl->line, "");
+  currline = Vstring.join (rl->line, "");
   char *sp = currline->bytes + rl->line->cur_idx;
   char *cur = sp;
 
@@ -13330,20 +13330,19 @@ redo:;
     $from(curbuf, shared_int) = rl->com;
     String.replace_with ($from(curbuf, shared_str), currline->bytes);
 
-
     if (rl->com isnot RL_NO_COMMAND) {
-      if (cstring_eq_n (tok, "--fname=", 8)) {
+      if (Cstring.eq_n (tok, "--fname=", 8)) {
         type |= RL_TOK_ARG_FILENAME;
         int len = 8 + (tok[8] is '"');
         char tmp[toklen - len + 1];
         int i;
         for (i = len; i < toklen; i++) tmp[i-len] = tok[i];
         tmp[i-len] = '\0';
-        cstring_cp (tok, tok_stacklen, tmp, i-len);
+        Cstring.cp (tok, tok_stacklen, tmp, i-len);
         toklen = i-len;
       } else if (tok[0] is '-') {
         type |= RL_TOK_ARG;
-        ifnot (NULL is cstring_byte_in_str (tok, '='))
+        ifnot (NULL is Cstring.byte.in_str (tok, '='))
           type |= RL_TOK_ARG_OPTION;
       } else {
         if (rl->com >= VED_COM_BUF_DELETE_FORCE and
@@ -13387,7 +13386,7 @@ redo:;
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
 
     menu->patlen = bytelen (item);
-    cstring_cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
+    Cstring.cp (menu->pat, MAXLEN_PAT, item, menu->patlen);
 
     if (type & RL_TOK_ARG_FILENAME) menu->state |= MENU_FINALIZE;
 
@@ -13400,8 +13399,8 @@ redo:;
   if (type & RL_TOK_ARG_FILENAME) {
     ifnot (menu->state & MENU_REDO)
       if (rl->com isnot VED_COM_READ_SHELL and rl->com isnot VED_COM_SHELL) {
-        string_prepend ($from(curbuf, shared_str), "--fname=\"");
-        string_append_byte ($from(curbuf, shared_str), '"');
+        String.prepend ($from(curbuf, shared_str), "--fname=\"");
+        String.append_byte ($from(curbuf, shared_str), '"');
       }
 
     item = $from(curbuf, shared_str)->bytes;
@@ -13412,7 +13411,7 @@ redo:;
     int lidx = fidx + orig_len;
     while (fidx++ < lidx) {
       vstring_t *tmp = current_list_pop (rl->line, vstring_t);
-      string_free (tmp->data);
+      String.free (tmp->data);
       free (tmp);
     }
   }
@@ -13848,6 +13847,14 @@ private void rline_reg (rline_t *rl) {
   }
 }
 
+private int array_any_int (int *ar, size_t len, int c) {
+  for (size_t i = 0; i < len; i++)
+    if (ar[i] is c)
+      return 1;
+
+  return 0;
+}
+
 private rline_t *rline_edit (rline_t *rl) {
   ed_t *this = rl->ed; (void) this;
   vstring_t *ch;
@@ -13864,11 +13871,15 @@ private rline_t *rline_edit (rline_t *rl) {
     else
       rl->state &= ~RL_WRITE;
 
-    if (rl->state & RL_BREAK) goto theend;
+    if (rl->state & RL_BREAK)
+      goto theend;
   }
 
-  if (rl->state & RL_PROCESS_CHAR) goto process_char;
-  if (rl->state & RL_INSERT_CHAR) goto insert_char;
+  if (rl->state & RL_PROCESS_CHAR)
+    goto process_char;
+
+  if (rl->state & RL_INSERT_CHAR)
+    goto insert_char;
 
   for (;;) {
 thecontinue:
@@ -13893,6 +13904,18 @@ thecontinue:
 process_char:
     rl->state &= ~RL_PROCESS_CHAR;
 
+    if (rl->line->num_items is 1) {
+      if (array_any_int (rl->first_chars, rl->first_chars_len, rl->c)) {
+        if (rl->opts & RL_OPT_HAS_TAB_COMPLETION) {
+          if (rl->trigger_first_char_completion) {
+            rl->state |= (RL_INSERT_CHAR|RL_FIRST_CHAR_COMPLETION);
+            goto insert_char;
+          }
+        }
+      }
+    }
+
+theloop:
     switch (rl->c) {
       case ESCAPE_KEY:
       case '\r':
@@ -13973,9 +13996,12 @@ process_char:
       case '\t':
         ifnot (rl->opts & RL_OPT_HAS_TAB_COMPLETION) goto post_process;
         retval = rl->tab_completion (rl);
+
         switch (retval) {
-          case RL_PROCESS_CHAR: goto process_char;
+          case RL_PROCESS_CHAR:
+            goto process_char;
         }
+
         goto post_process;
 
       default:
@@ -13994,11 +14020,11 @@ insert_char:
 
         if (rl->c < 0x80) {
           ch = AllocType (vstring);
-          ch->data = string_new_with_fmt ("%c", rl->c);
+          ch->data = String.new_with_fmt ("%c", rl->c);
         } else {
           ch = AllocType (vstring);
           char buf[5]; int len;
-          ch->data = string_new_with (ustring_character (rl->c, buf, &len));
+          ch->data = String.new_with (Ustring.character (rl->c, buf, &len));
         }
 
         if (rl->line->cur_idx is rl->line->num_items - 1 and ' ' is rl->line->current->data->bytes[0]) {
@@ -14013,8 +14039,17 @@ insert_char:
         else
           current_list_append (rl->line, ch);
 
-        if (rl->state & RL_BREAK) goto theend;
+        if (rl->state & RL_BREAK)
+          goto theend;
+
+        if (rl->state & RL_FIRST_CHAR_COMPLETION) {
+            rl->state &= ~RL_FIRST_CHAR_COMPLETION;
+            rl->c = '\t';
+            goto theloop;
+        }
+
         goto post_process;
+
     }
 
 post_process:
@@ -16574,6 +16609,12 @@ private rline_t *ed_rline_new (ed_t *this) {
   rl->commands = $my(commands);
   rl->commands_len = $my(num_commands);
   rl->tab_completion = rline_tab_completion;
+  rl->trigger_first_char_completion = 1;
+  rl->first_chars[0] = '~';
+  rl->first_chars[1] = '`';
+  rl->first_chars[2] = '@';
+  rl->first_chars_len = 3;
+
   return rl;
 }
 
@@ -18190,7 +18231,9 @@ private int i_next_token (i_t *this) {
   return i_do_next_token (this, 0);
 }
 
-private int i_next_raw_token (i_t *this) { return i_do_next_token (this, 1); }
+private int i_next_raw_token (i_t *this) {
+  return i_do_next_token (this, 1);
+}
 
 private int i_push (i_t *this, ival_t x) {
   --this->valptr;
@@ -18799,9 +18842,9 @@ private int i_parse_while (i_t *this) {
 
 again:
   err = i_parse_if (this);
-  if (err == I_ERR_OK_ELSE) {
+  if (err is I_ERR_OK_ELSE) {
     return I_OK;
-  } else if (err == I_OK) {
+  } else if (err is I_OK) {
     this->parseptr = savepc;
     goto again;
   }
@@ -18880,7 +18923,7 @@ private int i_eval_string (i_t *this, const char *buf, int saveStrings, int topL
 private int i_eval_file (i_t *this, const char *filename) {
   char script[this->max_script_size];
 
-  ifnot (file_exists (filename)) {
+  ifnot (File.exists (filename)) {
     this->print_fmt_bytes (this->err_fp, "%s: doesn't exists\n", filename);
     return NOTOK;
   }
@@ -18889,7 +18932,7 @@ private int i_eval_file (i_t *this, const char *filename) {
   FILE *fp = fopen (filename, "r");
   if (NULL is fp) {
     this->print_fmt_bytes (this->err_fp, "%s\n",
-        ed_error_string ($OurRoots(current), errno));
+        Error.string ($OurRoots(current), errno));
     return NOTOK;
   }
 
@@ -19017,8 +19060,6 @@ private int i_get_current_idx (Class (i) *this) {
 private ival_t i_exit (ival_t inst, int code) {
   (void) inst;
   return I_OK; // ignore
-
-  //__deinit_this__ (&__THIS__);
   exit (code);
 }
 
@@ -19385,7 +19426,6 @@ private Class (i) *__init_i__ (Class (E) *e) {
   $my(__Cstring__) = &e->__Ed__->__Cstring__;
   $my(__Vstring__) = &e->__Ed__->__Vstring__;
   $my(__Ustring__) = &e->__Ed__->__Ustring__;
-
 
   return this;
 }

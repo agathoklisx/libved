@@ -347,6 +347,10 @@
   But see at the very last section of this document (ERRORS - WARNINGS - BUGS),
   for issues/details.
 
+  Platforms:
+  The constant development environment is Void-Linux. It is also confirmed that
+  builds and run on macOS. It would be desirable to built also on BSD's.
+
   Command line invocation:
     Usage: veda[s] [options] [filename]
 
@@ -363,7 +367,7 @@
        --ex-com="command"    run an editor command at the startup (see Utility)
        --load-file=file      evaluate file with libved code (see Scripting)
        --pager               behave like a pager
-       --exit                exit quickly (called after --ex-com)
+       --exit                exit quickly (called after --ex-com and|or --load-file)
 
   Interface and Semantics:
   The is almost a vi[m] like interface and is based on modes, with some of the
@@ -378,7 +382,7 @@
 
       filename - line number/total lines - current idx - line len - char integer
 
-    - the message line is the last line on screen; the message should be cleared
+    - the message line is the last line on screen; any message should be cleared
       after a keypress
 
     - the prompt row position is one before the message line
@@ -640,6 +644,7 @@ Search:
     - filenames
 
   Command completion is triggered when the cursor is at the first word token.
+  (note: and also by default, and when the first char is one of the "`~@" set).
 
   Arg completion is triggered when the first char word token is an '-' or
   when the current command, gets a bufname as an argument.
