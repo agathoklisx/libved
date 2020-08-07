@@ -51,8 +51,11 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
   Term.reset (term);
   InterpretResult retval = L.compile (L_CUR_STATE, bytes);
   (void) retval;
+  fprintf (stdout, "\nHit any key to continue\n");
   Term.set_mode (term, 'r');
+  Cursor.hide (term);
   Input.get (term);
+  Cursor.show (term);
   Term.set (term);
   win_t *w = Ed.get.current_win (ed);
   int idx = Win.get.current_buf_idx (w);
