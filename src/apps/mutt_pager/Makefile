@@ -36,9 +36,12 @@ THIS_STATICLIB := $(SYSLIBDIR)/$(THIS_LIB).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
-DEBUG_FLAGS := -Wextra -Wno-override-init -Werror -Wshadow -Wall -Wunused-function -Wunused-macros
-# -fsanitize=undefined
-# -Wpedantic
+DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros
+
+ifeq ($(CC), clang)
+  # -Wno-override-init: is for designated initializers and clang complains
+  BASE_FLAGS  +=  -Wno-override-init
+endif
 
 SHARED_CFLAGS := -shared -fPIC
 STATIC_CFLAGS := -static

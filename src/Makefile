@@ -39,18 +39,23 @@ THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
-DEBUG_FLAGS := -Wextra -Wno-override-init -Wshadow -Wall -Wunused-function -Wunused-macros
-# -Wno-override-init: is for designated initializers and included in Wextra
+DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros
+
+ifeq ($(CC), clang)
+  # -Wno-override-init: is for designated initializers and clang complains
+  BASE_FLAGS  +=  -Wno-override-init
+endif
 
 ifneq (-$(CC), -tcc)
   DEBUG_FLAGS += -Werror
-# while compiling tinyexpr tcc warns with: assigment discards qualifiers
-# from pointer target type
-# -Wno-error=discarded-qualifiers doesn't have effect
+  # while compiling tinyexpr tcc warns with: assigment discards qualifiers
+  # from pointer target type
+  # -Wno-error=discarded-qualifiers doesn't have effect
 endif
 
 # DEBUG_FLAGS += -fsanitize=undefined
-# -Wpedantic if turn on this gives: ISO C forbids braced-groups within expressions
+# if turn on -Wpedantic gcc gives: ISO C forbids braced-groups within expressions
+# (this is for statement expressions)
 
 SHARED_CFLAGS := -shared -fPIC
 STATIC_CFLAGS := -static
@@ -67,8 +72,8 @@ endif
 
 ifeq (-$(CC), -gcc)
   FLAGS += -Wno-implicit-fallthrough
-# for gcc < 7 version
-#  FLAGS += -Wimplicit-fallthrough=0
+  # for gcc < 7 version
+  #  FLAGS += -Wimplicit-fallthrough=0
 endif
 
 DEBUG := 0
