@@ -1097,8 +1097,6 @@ NewProp (E,
 
 private int  win_edit_fname (win_t *, buf_t **, char *, int, int, int, int);
 
-private int  buf_normal_bol (buf_t *);
-private int  buf_normal_eol (buf_t *);
 private int  buf_normal_eof (buf_t *, int);
 private int  buf_normal_left (buf_t *, int, int);
 private int  buf_normal_right (buf_t *, int, int);
@@ -1117,7 +1115,7 @@ private int  buf_insert (buf_t **, utf8, char *);
 private int  buf_change_bufname (buf_t **, char *);
 private int  buf_insert_complete_filename (buf_t **);
 private int  buf_grep_on_normal (buf_t **, utf8, int, int);
-private int  buf_open_fname_under_cursor (buf_t **, int, int, int);
+private int  buf_open_fname_under_cursor (buf_t **, int, int, int, int);
 
 private void ed_resume (ed_t *);
 private void ed_suspend (ed_t *);
@@ -1141,13 +1139,12 @@ private int        is_directory (char *);
 private int        fd_read (int, char *, size_t);
 private long       vsys_get_clock_sec (clockid_t clock_id);
 private string_t  *vsys_which (char *, char *);
-private Vstring_t    *cstring_chop (char *, char, Vstring_t *, StrChop_cb, void *);
+private Vstring_t  *cstring_chop (char *, char, Vstring_t *, StrChop_cb, void *);
 private dirlist_t *dir_list (char *, int);
 
 private Class (i) *__init_i__ (Class (E) *);
 private void __deinit_i__ (Class (i) **);
 
-//private int isspace (int);
 
 /* this code belongs to? */
 static const utf8 offsetsFromUTF8[6] = {

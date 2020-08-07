@@ -168,7 +168,7 @@ private int __on_normal_beg (buf_t **thisp, int com, int count, int regidx) {
       return EXIT_THIS;
 
     case ' ':
-      Buf.normal.page_down (this, 1);
+      Buf.normal.page_down (this, 1, DRAW);
       return -1;
 
     default: break;
