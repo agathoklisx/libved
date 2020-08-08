@@ -48,10 +48,11 @@ make                                                \
     CLEAR_BLANKLINES=1                              \
     TAB_ON_INSERT_MODE_INDENTS=0                    \
     TABWIDTH=8                                      \
-    CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=1 \
-    SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1           \
-    SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \
+    CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=0 \
+    SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=0           \
+    SMALL_E_ON_NORMAL_GOES_INSERT_MODE=0            \
     BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
-    BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
+    BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=0       \
+    BACKSPACE_ON_NORMAL_GOES_UP=1                   \
     BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN=1          \
     veda-shared

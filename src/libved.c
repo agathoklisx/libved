@@ -5758,6 +5758,7 @@ private ftype_t *__ftype_set__ (ftype_t *this, ftype_t q) {
   this->tab_indents = q.tab_indents;
   this->cr_on_normal_is_like_insert_mode = q.cr_on_normal_is_like_insert_mode;
   this->backspace_on_normal_is_like_insert_mode = q.backspace_on_normal_is_like_insert_mode;
+  this->backspace_on_normal_goes_up = q.backspace_on_normal_goes_up;
   this->backspace_on_insert_goes_up_and_join = q.backspace_on_insert_goes_up_and_join;
   this->backspace_on_first_idx_remove_trailing_spaces = q.backspace_on_first_idx_remove_trailing_spaces;
   this->small_e_on_normal_goes_insert_mode = q.small_e_on_normal_goes_insert_mode;
@@ -16386,8 +16387,19 @@ handle_com:
             $my(flags) |= BUF_IS_MODIFIED;
             self(draw_current_row);
           }
+
           retval = DONE;
+          break;
         }
+
+        ifnot ($my(ftype)->backspace_on_normal_goes_up)
+          break;
+
+        if (NOTHING_TODO is self(normal.up, 1, DONOT_ADJUST_COL, DONOT_DRAW))
+          break;
+
+        if (NOTHING_TODO is self(normal.eol, DRAW))
+          self(draw);
 
         break;
       }

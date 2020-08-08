@@ -265,14 +265,19 @@
   UNDO_NUM_ENTRIES (num) this set the undo entries (default 40)
   RLINE_HISTORY_NUM_ENTRIES (num) this set the readline num history commands (default 20)
   CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) on normal mode a carriage
-                         return can behave, as it was in insert mode (default 1)
-  SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
-  BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
+                         return can behave, as it was in insert mode (default 0)
+  SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 0)
+  BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 0)
+  BACKSPACE_ON_NORMAL_GOES_UP (1|0) mimic vim behavior (default 1)
   BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN (1|0) mimic vim behavior (default 1)
   BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES (1|0) when the cursor is on the
                          first column, backspace removes trailing ws (default 1)
+             (note: this is ignored if BACKSPACE_ON_NORMAL_GOES_UP has been set)
   SMALL_E_ON_NORMAL_GOES_INSERT_MODE (1|0) 'e' in normal mode after operation
-                         enters insert mode (default 1)
+                         enters insert mode (default 0)
+  Note that because of the established expectations, the defaults set in such way
+  to mimic vim's behavior, though they never get extensive testing, as they never
+  being used extensively, except at the development testing phase.
 
   The next option provides a way to extend the behavior and|or as an API
   documentation, and [wa]is intended for development, but it got so many features

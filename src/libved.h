@@ -65,6 +65,15 @@
 #define BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE 1
 #endif
 
+#ifndef BACKSPACE_ON_NORMAL_GOES_UP
+#define BACKSPACE_ON_NORMAL_GOES_UP 1
+#else
+#if (BACKSPACE_ON_NORMAL_GOES_UP == 1)
+#undef  BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES
+#define BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES 0
+#endif
+#endif
+
 #ifndef BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN
 #define BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN 1
 #endif
@@ -793,6 +802,7 @@ NewType (ftype,
     clear_blanklines,
     cr_on_normal_is_like_insert_mode,
     backspace_on_normal_is_like_insert_mode,
+    backspace_on_normal_goes_up,
     backspace_on_insert_goes_up_and_join,
     backspace_on_first_idx_remove_trailing_spaces,
     space_on_normal_is_like_insert_mode,
@@ -997,6 +1007,7 @@ NewType (ed_init_opts,
   .clear_blanklines = CLEAR_BLANKLINES,          \
   .cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
+  .backspace_on_normal_goes_up = BACKSPACE_ON_NORMAL_GOES_UP, \
   .backspace_on_insert_goes_up_and_join = BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN, \
   .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
   .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
