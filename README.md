@@ -268,6 +268,7 @@
                          return can behave, as it was in insert mode (default 1)
   SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
   BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE (1|0) likewise (default 1)
+  BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN (1|0) mimic vim behavior (default 1)
   BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES (1|0) when the cursor is on the
                          first column, backspace removes trailing ws (default 1)
   SMALL_E_ON_NORMAL_GOES_INSERT_MODE (1|0) 'e' in normal mode after operation

@@ -5758,6 +5758,7 @@ private ftype_t *__ftype_set__ (ftype_t *this, ftype_t q) {
   this->tab_indents = q.tab_indents;
   this->cr_on_normal_is_like_insert_mode = q.cr_on_normal_is_like_insert_mode;
   this->backspace_on_normal_is_like_insert_mode = q.backspace_on_normal_is_like_insert_mode;
+  this->backspace_on_insert_goes_up_and_join = q.backspace_on_insert_goes_up_and_join;
   this->backspace_on_first_idx_remove_trailing_spaces = q.backspace_on_first_idx_remove_trailing_spaces;
   this->small_e_on_normal_goes_insert_mode = q.small_e_on_normal_goes_insert_mode;
   this->space_on_normal_is_like_insert_mode = q.space_on_normal_is_like_insert_mode;
@@ -15355,6 +15356,27 @@ handle_char:
             if (retv) self(draw_current_row);
           goto get_char;
         }
+
+        if (0 is $my(ftype)->backspace_on_insert_goes_up_and_join or
+            this->cur_idx is 0)
+          goto get_char;
+
+
+        buf_insert_change_line (this, ARROW_UP_KEY, &action, DONOT_DRAW);
+
+        self(normal.eol, DONOT_DRAW);
+        ADD_TRAILING_NEW_LINE;
+
+        if (DONE is self(normal.join, DONOT_DRAW)) {
+          Action_t *laction = buf_vundo_pop (this);
+          action_t *lact = laction->head->next;
+          free (lact->bytes); free (lact);
+          stack_push (action, laction->head);
+          free (laction);
+        }
+
+        self(normal.right, 1, DONOT_DRAW);
+        self(draw);
 
         goto get_char;
 

@@ -38,13 +38,10 @@ THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
+# -Wno-override-init: is for designated initializers and both compilers complain
+BASE_FLAGS  +=  -Wno-override-init
 
 DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros
-
-ifeq ($(CC), clang)
-  # -Wno-override-init: is for designated initializers and clang complains
-  BASE_FLAGS  +=  -Wno-override-init
-endif
 
 ifneq (-$(CC), -tcc)
   DEBUG_FLAGS += -Werror
@@ -94,6 +91,7 @@ SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE := 1
 SMALL_E_ON_NORMAL_GOES_INSERT_MODE := 1
 BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES := 1
 BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE := 1
+BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN := 1
 
 LIBOPTS += -DLIBVED_DIR='"$(SYSDIR)"'
 LIBOPTS += -DLIBVED_DATADIR='"$(SYSDATADIR)"'
@@ -108,6 +106,7 @@ LIBOPTS += -DCARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE=$(CARRIAGE_RETURN_ON_
 LIBOPTS += -DSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=$(SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE)
 LIBOPTS += -DSMALL_E_ON_NORMAL_GOES_INSERT_MODE=$(SMALL_E_ON_NORMAL_GOES_INSERT_MODE)
 LIBOPTS += -DBACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=$(BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES)
+LIBOPTS += -DBACKSPACE_ON_INSERT_GOES_UP_AND_JOIN=$(BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN)
 
 #----------------------------------------------------------#
 LIBFLAGS := -I. -I$(SYSINCDIR) $(FLAGS)

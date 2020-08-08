@@ -53,4 +53,5 @@ make                                                \
     SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \
     BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
     BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
+    BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN=1          \
     veda-shared

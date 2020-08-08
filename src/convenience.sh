@@ -48,7 +48,7 @@ make                                                \
     SYSTMPDIR=$SYSTMPDIR                            \
     HAS_PROGRAMMING_LANGUAGE=1                      \
     HAS_USER_EXTENSIONS=1                           \
-    HAS_JSON=1                                      \
+    HAS_JSON=0                                      \
     HAS_TCC=0                                       \
     HAS_LOCAL_EXTENSIONS=0                          \
     CLEAR_BLANKLINES=1                              \
@@ -59,4 +59,5 @@ make                                                \
     SMALL_E_ON_NORMAL_GOES_INSERT_MODE=1            \
     BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES=1 \
     BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE=1       \
+    BACKSPACE_ON_INSERT_GOES_UP_AND_JOIN=1          \
     veda-shared
