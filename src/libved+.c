@@ -1497,7 +1497,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
         return SPELL_OK;
       }
 
-      Buf.action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
+      Buf.Action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
           iter->line->bytes, iter->line->num_bytes);
       String.replace_numbytes_at_with (iter->line, spell->word_len, fidx, inp->bytes);
       String.free (inp);
@@ -1506,7 +1506,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
     }
 
     default: {
-      Buf.action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
+      Buf.Action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
           iter->line->bytes, iter->line->num_bytes);
       it = spell->guesses->head;
       for (int k = '1'; k < c; k++) it = it->next;
@@ -1533,8 +1533,8 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
     return NOTOK;
   }
 
-  Action_t *action = Buf.action.new (*thisp);
-  Buf.action.set_current (*thisp, action, REPLACE_LINE);
+  Action_t *action = Buf.Action.new (*thisp);
+  Buf.Action.set_current (*thisp, action, REPLACE_LINE);
 
   int len = lidx - fidx + 1;
 
@@ -1580,11 +1580,11 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
 
 theend:
   if (retval is SPELL_CHANGED_WORD) {
-    Buf.action.push (*thisp, action);
+    Buf.Action.push (*thisp, action);
     Buf.draw (*thisp);
     retval = SPELL_OK;
   } else
-    Buf.action.free (*thisp, action);
+    Buf.Action.free (*thisp, action);
 
   Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
   return retval;
@@ -1617,8 +1617,8 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     return NOTOK;
   }
 
-  Action_t *action = Buf.action.new (*thisp);
-  Buf.action.set_current (*thisp, action, REPLACE_LINE);
+  Action_t *action = Buf.Action.new (*thisp);
+  Buf.Action.set_current (*thisp, action, REPLACE_LINE);
 
   int buf_changed = 0;
 
@@ -1666,10 +1666,10 @@ itnext:
 
 theend:
   if (buf_changed) {
-    Buf.action.push (*thisp, action);
+    Buf.Action.push (*thisp, action);
     Buf.draw (*thisp);
   } else
-    Buf.action.free (*thisp, action);
+    Buf.Action.free (*thisp, action);
 
   Buf.iter.free (*thisp, iter);
   Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);

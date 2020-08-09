@@ -4917,7 +4917,7 @@ private char *buf_get_line_data (buf_t *this, Ustring_t *line) {
 private int buf_adjust_col (buf_t *this, int nth, int isatend) {
   if (this->current is NULL) return 1;
 
-  ustring_encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
+  Ustring.encode ($my(line), $mycur(data)->bytes, $mycur(data)->num_bytes,
       CLEAR, $my(ftype)->tabwidth, $mycur(cur_col_idx));
 
   int hasno_len = ($mycur(data)->num_bytes is 0 or NULL is $my(line));
@@ -4979,36 +4979,19 @@ private int buf_adjust_col (buf_t *this, int nth, int isatend) {
   return $my(video)->col_pos;
 }
 
-private Action_t *buf_action_new (buf_t *this) {
-  (void) this;
-  return AllocType (Action);
-}
-
-private void buf_action_free (buf_t *this, Action_t *action) {
-  (void) this;
-  action_t *act = stack_pop (action, action_t);
-  while (act) {
-    free (act->bytes);
-    free (act);
-    act = stack_pop (action, action_t);
-  }
-
-  free (action);
-}
-
-#define vundo_set(act, type__)                           \
+#define undo_set(act, type__)                            \
   (act)->type = (type__);                                \
   state_set(act)
 
-#define vundo_restore(act)                               \
+#define undo_restore(act)                                \
   state_restore(act)
 
-private void buf_vundo_init (buf_t *this) {
+private void buf_undo_init (buf_t *this) {
   if (NULL is $my(undo)) $my(undo) = AllocType (undo);
   if (NULL is $my(redo)) $my(redo) = AllocType (undo);
 }
 
-private Action_t *buf_vundo_pop (buf_t *this) {
+private Action_t *buf_undo_pop (buf_t *this) {
   return current_list_pop ($my(undo), Action_t);
 }
 
@@ -5020,10 +5003,10 @@ private Action_t *buf_redo_pop (buf_t *this) {
 private void __buf_redo_clear__ (buf_t *this) {
   if ($my(redo)->head is NULL) return;
 
-  Action_t *action = buf_redo_pop (this);
+  Action_t *action = self(redo.pop);
   while (action) {
-    buf_action_free (this, action);
-    action = buf_redo_pop (this);
+    self(Action.free, action);
+    action = self(redo.pop);
   }
 
   $my(redo)->num_items = 0; $my(redo)->cur_idx = 0;
@@ -5033,10 +5016,10 @@ private void __buf_redo_clear__ (buf_t *this) {
 private void __buf_undo_clear__ (buf_t *this) {
   if ($my(undo)->head is NULL) return;
 
-  Action_t *action = buf_vundo_pop (this);
+  Action_t *action = self(undo.pop);
   while (action isnot NULL) {
-    buf_action_free (this, action);
-    action = buf_vundo_pop (this);
+    self(Action.free, action);
+    action = self(undo.pop);
   }
   $my(undo)->num_items = 0; $my(undo)->cur_idx = 0;
   $my(undo)->head = $my(undo)->tail = $my(undo)->current = NULL;
@@ -5047,10 +5030,10 @@ private void buf_undo_clear (buf_t *this) {
   __buf_redo_clear__ (this);
 }
 
-private void vundo_push (buf_t *this, Action_t *action) {
+private void buf_undo_push (buf_t *this, Action_t *action) {
   if ($my(undo)->num_items > $myroots(max_num_undo_entries)) {
     Action_t *tmp = list_pop_tail ($my(undo), Action_t);
-    buf_action_free  (this, tmp);
+    self(Action.free, tmp);
   }
 
   ifnot ($my(undo)->state & VUNDO_RESET)
@@ -5061,25 +5044,25 @@ private void vundo_push (buf_t *this, Action_t *action) {
   current_list_prepend ($my(undo), action);
 }
 
-private void redo_push (buf_t *this, Action_t *action) {
+private void buf_redo_push (buf_t *this, Action_t *action) {
   if ($my(redo)->num_items > $myroots(max_num_undo_entries)) {
     Action_t *tmp = list_pop_tail ($my(redo), Action_t);
-    buf_action_free  (this, tmp);
+    self(Action.free, tmp);
   }
 
   current_list_prepend ($my(redo), action);
 }
 
-private int vundo_insert (buf_t *this, action_t *act, Action_t *redoact) {
+private int buf_undo_insert (buf_t *this, Action_t *redoact, action_t *act) {
   ifnot (this->num_items) return DONE;
 
-  action_t *ract = AllocType (action);
+  action_t *ract = self(action.new);
   self(current.set, act->idx);
   buf_adjust_view (this);
   ract->type = DELETE_LINE;
-  vundo_set (ract, DELETE_LINE);
+  undo_set (ract, DELETE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  ract->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   self(current.delete);
@@ -5087,32 +5070,32 @@ private int vundo_insert (buf_t *this, action_t *act, Action_t *redoact) {
   if (this->num_items) {
     self(current.set, act->cur_idx);
     buf_adjust_marks (this, DELETE_LINE, act->idx, act->idx);
-    vundo_restore (act);
+    undo_restore (act);
   }
 
   return DONE;
 }
 
-private int vundo_delete_line (buf_t *this, action_t *act, Action_t *redoact) {
-  action_t *ract = AllocType (action);
+private int buf_undo_delete_line (buf_t *this, Action_t *redoact, action_t *act) {
+  action_t *ract = self(action.new);
   row_t *row = self(row.new_with, act->bytes);
   if (this->num_items) {
     if (act->idx >= this->num_items) {
       self(current.set, this->num_items - 1);
       buf_adjust_view (this);
-      vundo_set (ract, INSERT_LINE);
+      undo_set (ract, INSERT_LINE);
       self(current.append, row);
       ract->idx = this->cur_idx;
     } else {
       self(current.set, act->idx);
       buf_adjust_view (this);
-      vundo_set (ract, INSERT_LINE);
+      undo_set (ract, INSERT_LINE);
       self(current.prepend, row);
       ract->idx = this->cur_idx;
     }
     stack_push (redoact, ract);
     buf_adjust_marks (this, INSERT_LINE, act->idx, act->idx + 1);
-    vundo_restore (act);
+    undo_restore (act);
   } else {
     this->head = row;
     this->tail = row;
@@ -5120,7 +5103,7 @@ private int vundo_delete_line (buf_t *this, action_t *act, Action_t *redoact) {
     this->current = this->head;
     this->num_items = 1;
     buf_adjust_view (this);
-    vundo_set (ract, INSERT_LINE);
+    undo_set (ract, INSERT_LINE);
     stack_push (redoact, ract);
     //  $my(video_first_row_idx) = this->cur_idx;
     //  self(current.append, row);
@@ -5132,19 +5115,19 @@ private int vundo_delete_line (buf_t *this, action_t *act, Action_t *redoact) {
   return DONE;
 }
 
-private int vundo_replace_line (buf_t *this, action_t *act, Action_t *redoact) {
+private int buf_undo_replace_line (buf_t *this, Action_t *redoact, action_t *act) {
   self(current.set, act->idx);
 
-  action_t *ract = AllocType (action);
+  action_t *ract = self(action.new);
   self(set.row.idx, act->idx, act->row_pos - $my(dim)->first_row, act->col_pos);
-  vundo_set (ract, REPLACE_LINE);
+  undo_set (ract, REPLACE_LINE);
   ract->idx = this->cur_idx;
-  ract->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  ract->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (redoact, ract);
 
   String.replace_with ($mycur(data), act->bytes);
 
-  vundo_restore (act);
+  undo_restore (act);
   return DONE;
 }
 
@@ -5152,27 +5135,27 @@ private int vundo_replace_line (buf_t *this, action_t *act, Action_t *redoact) {
 /* generally speaking the undo/redo basic functionality seems to be
  * working. what is not working always perfect, is the state of the
  * screen, i thing on redoing'it, so this has a very serious bug */
-private int vundo (buf_t *this, utf8 com) {
+private int buf_undo_exec (buf_t *this, utf8 com) {
   Action_t *action = NULL;
   if (com is 'u')
-    action = buf_vundo_pop (this);
+    action = self(undo.pop);
   else
-    action = buf_redo_pop (this);
+    action = self(redo.pop);
 
   if (NULL is action) return NOTHING_TODO;
 
   action_t *act = stack_pop (action, action_t);
 
-  Action_t *redoact = AllocType (Action);
+  Action_t *redoact = self(Action.new);
 
   while (act) {
     if (act->type is DELETE_LINE)
-      vundo_delete_line (this, act, redoact);
+      self(undo.delete_line, redoact, act);
     else
       if (act->type is REPLACE_LINE)
-        vundo_replace_line (this, act, redoact);
+        self(undo.replace_line, redoact, act);
       else
-        vundo_insert (this, act, redoact);
+        self(undo.insert, redoact, act);
 
     free (act->bytes);
     free (act);
@@ -5180,10 +5163,10 @@ private int vundo (buf_t *this, utf8 com) {
   }
 
   if (com is 'u')
-    redo_push (this, redoact);
+    self(redo.push, redoact);
   else {
     $my(undo)->state |= VUNDO_RESET;
-    vundo_push (this, redoact);
+    self(undo.push, redoact);
   }
 
   free (action);
@@ -5192,28 +5175,67 @@ private int vundo (buf_t *this, utf8 com) {
   return DONE;
 }
 
-private void buf_action_set_current (buf_t *this, Action_t *action, int type) {
-  action_t *act = AllocType (action);
-  vundo_set (act, type);
+private Action_t *buf_Action_new (buf_t *this) {
+  (void) this;
+  return AllocType (Action);
+}
+
+private void buf_Action_free (buf_t *this, Action_t *action) {
+  (void) this;
+  action_t *act = stack_pop (action, action_t);
+  while (act) {
+    free (act->bytes);
+    free (act);
+    act = stack_pop (action, action_t);
+  }
+
+  free (action);
+}
+
+private void buf_Action_set_current (buf_t *this, Action_t *action, int type) {
+  action_t *act = self(action.new);
+  undo_set (act, type);
   act->idx = this->cur_idx;
-  act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 }
 
-private void buf_action_set_with (buf_t *this, Action_t *action,
+private void buf_Action_set_with (buf_t *this, Action_t *action,
                      int type, int idx, char *bytes, size_t len) {
-  action_t *act = AllocType (action);
-  vundo_set (act, type);
+  action_t *act = self(action.new);
+  undo_set (act, type);
   act->idx = ((idx < 0 or idx >= this->num_items) ? this->cur_idx : idx);
   if (NULL is bytes)
-    act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+    act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   else
-    act->bytes = cstring_dup (bytes, len);
+    act->bytes = Cstring.dup (bytes, len);
+
   stack_push (action, act);
 }
 
-private void buf_action_push (buf_t *this, Action_t *action) {
-  vundo_push (this, action);
+private void buf_Action_push (buf_t *this, Action_t *action) {
+  self(undo.push, action);
+}
+
+action_t *buf_action_new (buf_t *this) {
+  (void) this;
+  return AllocType(action);
+}
+
+action_t *buf_action_new_with (buf_t *this, int type, int idx, char *bytes, size_t len) {
+  action_t *action = self(action.new);
+  undo_set (action, type);
+  action->idx = idx;
+  action->bytes = Cstring.dup (bytes, len);
+  return action;
+}
+
+void buf_action_free (buf_t *this, action_t *action) {
+  (void) this;
+  if (NULL is action) return;
+  ifnot (NULL is action->bytes)
+    free (action->bytes);
+  free (action);
 }
 
 /* a highlight theme derived from tte editor, fork of kilo editor,
@@ -6192,7 +6214,7 @@ private bufiter_t *buf_iter_next (buf_t *unused, bufiter_t *this) {
 }
 
 private void buf_free_undo (buf_t *this) {
-  buf_undo_clear (this);
+  self(undo.clear);
   free ($my(undo));
   free ($my(redo));
 }
@@ -7298,7 +7320,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(regs) = &$myroots(regs)[0];
   $my(video) = $myroots(video);
 
-  buf_vundo_init (this);
+  self(undo.init);
   buf_jumps_init (this);
 
   $my(shared_str) = String.new (128);
@@ -8590,11 +8612,9 @@ private int buf_substitute (buf_t *this, char *pat, char *sub, int global,
   int flags = 0;
   regexp_t *re = Re.new (pat, flags, RE_MAX_NUM_CAPTURES, Re.compile);
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
-  act->idx = this->cur_idx;
-  act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new_with, REPLACE_LINE, this->cur_idx,
+      $mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   row_t *it = this->head;
@@ -8651,11 +8671,10 @@ searchandsub:;
       }
     }
 
-    act = AllocType (action);
-    vundo_set (act, REPLACE_LINE);
-    act->idx = idx - 1;
-    act->bytes = Cstring.dup (it->data->bytes, it->data->num_bytes);
-    stack_push (action, act);
+    action_t *sact = self(action.new_with, REPLACE_LINE, idx - 1,
+      it->data->bytes, it->data->num_bytes);
+    stack_push (action, sact);
+
     String.replace_numbytes_at_with (it->data, re->match_len, re->match_idx + bidx,
       substr->bytes);
     done_substitution = 1;
@@ -8677,15 +8696,16 @@ thenext:
 theend:
   if (retval is DONE) {
     $my(flags) |= BUF_IS_MODIFIED;
-    vundo_push (this, action);
+    self(undo.push, action);
+
     if ($mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes)
       self(normal.eol, DONOT_DRAW);
     self(draw);
   } else
-    buf_action_free (this, action);
+    self(Action.free, action);
 
   Re.free (re);
-  ifnot (NULL is substr) string_free (substr);
+  ifnot (NULL is substr) String.free (substr);
 
   return retval;
 }
@@ -9394,7 +9414,7 @@ private int buf_normal_end_word (buf_t *this, int count, int run_insert_mode, in
    }
 
     if (NOTHING_TODO is retval) break;
-    if (NOTHING_TODO is (retval = buf_normal_right (this, 1, DONOT_DRAW))) break;
+    if (NOTHING_TODO is (retval = self(normal.right, 1, DONOT_DRAW))) break;
   }
 
   if (cur_idx is $mycur(cur_col_idx)) {
@@ -9692,13 +9712,13 @@ private int buf_normal_replace_char_with (buf_t *this, utf8 c) {
 private int buf_normal_replace_char (buf_t *this) {
   if ($mycur(data)->num_bytes is 0) return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   utf8 c = Input.get ($my(term_ptr));
 
@@ -9711,13 +9731,13 @@ private int buf_normal_delete_eol (buf_t *this, int regidx, int draw) {
     // or $mycur(cur_col_idx) is (int) $mycur(data)->num_bytes - clen)
     return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   int len = $mycur(data)->num_bytes - $mycur(cur_col_idx);
   char buf[len + 1];
@@ -9750,9 +9770,9 @@ private int buf_normal_delete_eol (buf_t *this, int regidx, int draw) {
 
 private int buf_insert_new_line (buf_t **thisp, utf8 com) {
   buf_t *this = *thisp;
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, INSERT_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, INSERT_LINE);
 
   int new_idx = this->cur_idx + ('o' is com ? 1 : -1);
   int currow_idx = this->cur_idx;
@@ -9783,7 +9803,7 @@ private int buf_insert_new_line (buf_t **thisp, utf8 com) {
   }
 
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   if (currow_idx > new_idx) {int t = new_idx; new_idx = currow_idx; currow_idx = t;}
   buf_adjust_marks (this, INSERT_LINE, currow_idx, new_idx);
@@ -9797,21 +9817,21 @@ private int buf_normal_join (buf_t *this, int draw) {
   if (this->num_items is 0 or this->num_items - 1 is this->cur_idx)
     return NOTHING_TODO;
 
-  Action_t *action = self(action.new);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (action, act);
 
   row_t *row = buf_current_pop_next (this);
-  action_t *act2 = AllocType (action);
-  vundo_set (act2, DELETE_LINE);
+  action_t *act2 = self(action.new);
+  undo_set (act2, DELETE_LINE);
   act2->idx = this->cur_idx + 1;
   act2->bytes = Cstring.dup (row->data->bytes, row->data->num_bytes);
 
   stack_push (action, act2);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   if (row->data->num_bytes isnot 0) {
     RM_TRAILING_NEW_LINE;
@@ -9839,9 +9859,9 @@ private int buf_normal_delete (buf_t *this, int count, int regidx, int draw) {
   int perfom_undo = is_norm_mode or IS_MODE (VISUAL_MODE_CW) or IS_MODE (VISUAL_MODE_BW);
 
   if (perfom_undo) {
-    action = AllocType (Action);
-    act = AllocType (action);
-    vundo_set (act, REPLACE_LINE);
+    action = self(Action.new);
+    act = self(action.new);
+    undo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
     act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   }
@@ -9894,7 +9914,7 @@ private int buf_normal_delete (buf_t *this, int count, int regidx, int draw) {
     act->first_col_idx = $mycur(first_col_idx);
 
     stack_push (action, act);
-    vundo_push (this, action);
+    self(undo.push, action);
     ed_reg_set_with ($my(root), regidx, CHARWISE, buf, 0);
   }
 
@@ -9914,14 +9934,14 @@ private int buf_inc_dec_char (buf_t *this, int count, utf8 com) {
   if (c < ' ' or (c > 126 and c < 161) or (c > 254 and c < 902) or c > 974)
     return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   char ch[5]; int len; ustring_character (c, ch, &len);
   int clen = Ustring.charlen ((uchar) $mycur(data)->bytes[$mycur(cur_col_idx)]);
@@ -9960,14 +9980,14 @@ private int buf_word_math (buf_t *this, int count, utf8 com) {
     snprintf (new, 32, "0%s%s", ('x' is type ? "x" : ""), s);
   }
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   action = stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   String.replace_numbytes_at_with ($mycur(data), word->num_bytes - 1, fidx, new);
   $my(flags) |= BUF_IS_MODIFIED;
@@ -10065,13 +10085,13 @@ private int buf_complete_word (buf_t **thisp) {
 
   char *word = menu_create ($my(root), menu);
   if (word isnot NULL) {
-    Action_t *action = AllocType (Action);
-    action_t *act = AllocType (action);
-    vundo_set (act, REPLACE_LINE);
+    Action_t *action = self(Action.new);
+    action_t *act = self(action.new);
+    undo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
     act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
-    vundo_push (this, action);
+    self(undo.push, action);
     String.delete_numbytes_at ($mycur(data), orig_patlen, $my(shared_int));
     String.insert_at ($mycur(data), word, $my(shared_int));
     buf_normal_end_word (this, 1, 0, DONOT_DRAW);
@@ -10154,13 +10174,13 @@ private int buf_complete_line (buf_t *this) {
   char *line = menu_create ($my(root), menu);
 
   if (line isnot NULL) {
-    Action_t *action = AllocType (Action);
-    action_t *act = AllocType (action);
-    vundo_set (act, REPLACE_LINE);
+    Action_t *action = self(Action.new);
+    action_t *act = self(action.new);
+    undo_set (act, REPLACE_LINE);
     act->idx = this->cur_idx;
     act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
-    vundo_push (this, action);
+    self(undo.push, action);
     String.clear ($mycur(data));
     String.append ($mycur(data), line);
     $my(flags) |= BUF_IS_MODIFIED;
@@ -10499,9 +10519,9 @@ private int buf_delete_word (buf_t *this, int regidx) {
   if (NULL is buf_get_current_word (this, word, Notword, Notword_len, &fidx, &lidx))
     return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
@@ -10516,7 +10536,7 @@ private int buf_delete_word (buf_t *this, int regidx) {
   String.delete_numbytes_at ($mycur(data), bytelen (word), fidx);
 
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
   ed_reg_set_with ($my(root), regidx, CHARWISE, word, 0);
 
   $my(flags) |= BUF_IS_MODIFIED;
@@ -10533,7 +10553,7 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
 
-  Action_t *action = AllocType (Action);
+  Action_t *action = self(Action.new);
 
   int ridx = regidx;
   Reg_t *rg = NULL;
@@ -10557,8 +10577,8 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
   int lidx = fidx + count - 1;
 
   for (int idx = fidx; idx <= lidx; idx++) {
-    action_t *act = AllocType (action);
-    vundo_set (act, DELETE_LINE);
+    action_t *act = self(action.new);
+    undo_set (act, DELETE_LINE);
     act->idx = this->cur_idx;
     act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
@@ -10611,7 +10631,7 @@ theend:
 
   self(draw);
 
-  vundo_push (this, action);
+  self(undo.push, action);
   return DONE;
 }
 
@@ -10649,14 +10669,14 @@ private int buf_normal_change_case (buf_t *this) {
   buf[1] = '\0';
 
 setaction:
-  action = AllocType (Action);
-  act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  action = self(Action.new);
+  act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   String.replace_numbytes_at_with ($mycur(data), bytelen (buf), $mycur(cur_col_idx), buf);
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
   self(draw_current_row);
 
 theend:
@@ -10673,9 +10693,9 @@ private int buf_indent (buf_t *this, int count, utf8 com) {
     if (Cstring.eq (VISUAL_MODE_LW, $my(mode)))
       ifnot ($mycur(data)->num_bytes) return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
@@ -10707,7 +10727,7 @@ private int buf_indent (buf_t *this, int count, utf8 com) {
   }
 
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw_current_row);
   return DONE;
@@ -10798,7 +10818,7 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
 
   if (NULL is reg) return NOTHING_TODO;
 
-  Action_t *action = AllocType (Action);
+  Action_t *action = self(Action.new);
 
   row_t *currow = this->current;
   int currow_idx = this->cur_idx;
@@ -10814,10 +10834,10 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
   int linewise_num = 0;
 
   while (reg isnot NULL) {
-    action_t *act = AllocType (action);
+    action_t *act = self(action.new);
     if (rg->type is LINEWISE) {
       row_t *row = self(row.new_with, reg->data->bytes);
-      vundo_set (act, INSERT_LINE);
+      undo_set (act, INSERT_LINE);
       linewise_num++;
 
       if ('p' is com)
@@ -10827,7 +10847,7 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
 
       act->idx = this->cur_idx;
     } else {
-      vundo_set (act, REPLACE_LINE);
+      undo_set (act, REPLACE_LINE);
       act->idx = this->cur_idx;
       act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
       String.insert_at ($mycur(data), reg->data->bytes, $mycur(cur_col_idx) +
@@ -10842,7 +10862,7 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
       reg = reg->next;
   }
 
-  vundo_push (this, action);
+  self(undo.push, action);
 
   if (rg->type is LINEWISE) {
 
@@ -10927,9 +10947,9 @@ private int buf_delete_inner (buf_t *this, utf8 c, int regidx) {
     word[i] = $mycur(data)->bytes[fidx + i];
   word[len] = '\0';
 
-  Action_t *action = AllocType (Action);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
 
@@ -10945,7 +10965,7 @@ private int buf_delete_inner (buf_t *this, utf8 c, int regidx) {
 
   stack_push (action, act);
 
-  vundo_push (this, action);
+  self(undo.push, action);
   ed_reg_set_with ($my(root), regidx, CHARWISE, word, 0);
 
   $my(flags) |= BUF_IS_MODIFIED;
@@ -11027,8 +11047,8 @@ private int buf_insert_change_line (buf_t *this, utf8 c, Action_t **action, int 
     this->cur_idx--;
     buf_adjust_marks (this, INSERT_LINE, this->cur_idx, this->cur_idx + 1);
 
-    action_t *act = AllocType (action);
-    vundo_set (act, INSERT_LINE);
+    action_t *act = self(action.new);
+    undo_set (act, INSERT_LINE);
 
     $my(cur_video_col) = $my(video)->col_pos = $my(video)->first_col;
     $mycur(first_col_idx) = $mycur(cur_col_idx) = 0;
@@ -11043,8 +11063,8 @@ private int buf_insert_change_line (buf_t *this, utf8 c, Action_t **action, int 
     return DONE;
   }
 
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
   stack_push (*action, act);
@@ -11370,11 +11390,11 @@ handle_char:
         }
 
         {
-          Action_t *action = AllocType (Action);
+          Action_t *action = self(Action.new);
 
           for (int i = $my(vis)[0].fidx; i <= $my(vis)[0].lidx; i++) {
             if (DONE is buf_indent (this, count, c)) {
-              Action_t *laction = buf_vundo_pop (this);
+              Action_t *laction = self(undo.pop);
               action_t *act = stack_pop (laction, action_t);
               stack_push (action, act);
               free (laction);
@@ -11386,7 +11406,7 @@ handle_char:
             }
           }
 
-          vundo_push (this, action);
+          self(undo.push, action);
 
           VISUAL_RESTORE_STATE ($my(vis)[1], mark);
           if (c is '<' and $mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes - 1) {
@@ -11836,8 +11856,8 @@ handle_char:
           string_t *str = self(input_box, row, $my(vis)[0].fidx + 1,
               DONOT_ABORT_ON_ESCAPE, NULL);
 
-          Action_t *action = AllocType (Action);
-          Action_t *baction =AllocType (Action);
+          Action_t *action = self(Action.new);
+          Action_t *baction =self(Action.new);
 
           for (int idx = $my(vis)[1].fidx; idx <= $my(vis)[1].lidx; idx++) {
             self(current.set, idx);
@@ -11851,13 +11871,13 @@ handle_char:
                 self(normal.delete, $my(vis)[0].lidx - $my(vis)[0].fidx + 1,
                     REG_BLACKHOLE, DONOT_DRAW);
 
-              Action_t *paction = buf_vundo_pop (this);
+              Action_t *paction = self(undo.pop);
               action_t *act = stack_pop (paction, action_t);
               stack_push (baction, act);
               free (paction);
             } else {
-              action_t *act = AllocType (action);
-              vundo_set (act, REPLACE_LINE);
+              action_t *act = self(action.new);
+              undo_set (act, REPLACE_LINE);
               act->idx = this->cur_idx;
               act->bytes = cstring_dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
               stack_push (baction, act);
@@ -11876,7 +11896,7 @@ handle_char:
           }
 
           free (baction);
-          vundo_push (this, action);
+          self(undo.push, action);
         }
 
         VISUAL_RESTORE_STATE ($my(vis)[1], mark);
@@ -11886,8 +11906,8 @@ handle_char:
       case 'd':
         if (-1 is reg) reg = REG_UNNAMED;
         {
-          Action_t *action = AllocType (Action);
-          Action_t *baction =AllocType (Action);
+          Action_t *action = self(Action.new);
+          Action_t *baction =self(Action.new);
 
           VISUAL_ADJUST_IDXS($my(vis)[0]);
           VISUAL_ADJUST_IDXS($my(vis)[1]);
@@ -11900,7 +11920,7 @@ handle_char:
             int lidx__ = (int) $mycur(data)->num_bytes < $my(vis)[0].lidx ?
               (int) $mycur(data)->num_bytes : $my(vis)[0].lidx;
             self(normal.delete, lidx__ - $my(vis)[0].fidx + 1, reg, DONOT_DRAW);
-            Action_t *paction = buf_vundo_pop (this);
+            Action_t *paction = self(undo.pop);
             action_t *act = stack_pop (paction, action_t);
 
             stack_push (baction, act);
@@ -11913,7 +11933,7 @@ handle_char:
           }
 
           free (baction);
-          vundo_push (this, action);
+          self(undo.push, action);
         }
 
         VISUAL_RESTORE_STATE ($my(vis)[1], mark);
@@ -11974,11 +11994,11 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
   self(read.fname);
 
   self(normal.bof, DONOT_DRAW);
-  Action_t *action = buf_vundo_pop (this);
+  Action_t *action = self(undo.pop);
 
   for (;;) {
-    action_t *act = AllocType (action);
-    vundo_set (act, INSERT_LINE);
+    action_t *act = self(action.new);
+    undo_set (act, INSERT_LINE);
     act->idx = this->cur_idx;
     act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
     stack_push (action, act);
@@ -11987,13 +12007,13 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
 
   self(current.set, 0);
   buf_delete_line (this, 1, REG_BLACKHOLE);
-  Action_t *baction = buf_vundo_pop (this);
-  action_t *act = AllocType (action);
+  Action_t *baction = self(undo.pop);
+  action_t *act = self(action.new);
   state_cp (act, baction->head);
-  buf_action_free (this, baction);
+  self(Action.free, baction);
 
   stack_push (action, act);
-  vundo_push (this, action);
+  self(undo.push, action);
 
   if (this->num_items is 0) buf_on_no_length (this);
 
@@ -12317,7 +12337,7 @@ private int buf_read_from_fp (buf_t *this, FILE *stream, fp_t *fp) {
   (void) stream;
   mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
   row_t *row = this->current;
-  Action_t *action = AllocType (Action);
+  Action_t *Action = self(Action.new);
 
   char *line = NULL;
   size_t len = 0;
@@ -12325,19 +12345,19 @@ private int buf_read_from_fp (buf_t *this, FILE *stream, fp_t *fp) {
   ssize_t nread;
   while (-1 isnot (nread = ed_readline_from_fp (&line, &len, fp->fp))) {
     t_len += nread;
-    action_t *act = AllocType (action);
-    vundo_set (act, INSERT_LINE);
-    buf_current_append_with (this, line);
+    action_t *act = self(action.new);
+    undo_set (act, INSERT_LINE);
+    self(current.append_with, line);
     act->idx = this->cur_idx;
-    stack_push (action, act);
+    stack_push (Action, act);
   }
 
   ifnot (NULL is line) free (line);
 
   ifnot (t_len)
-    free (action);
+    free (Action);
   else
-    vundo_push (this, action);
+    self(undo.push, Action);
 
   $my(flags) |= BUF_IS_MODIFIED;
   state_restore (&t);
@@ -12560,7 +12580,7 @@ change:
 
 private void buf_clear (buf_t *this) {
   self(free.rows);
-  buf_undo_clear (this);
+  self(undo.clear);
   this->head = this->tail = this->current = NULL;
   this->cur_idx = 0; this->num_items = 0;
   buf_on_no_length (this);
@@ -15236,9 +15256,9 @@ private int buf_insert (buf_t **thisp, utf8 com, char *bytes) {
   char prev_mode[MAXLEN_MODE];
   Cstring.cp (prev_mode, MAXLEN_MODE, $my(mode), MAXLEN_MODE - 1);
 
-  Action_t *action = self(action.new);
-  action_t *act = AllocType (action);
-  vundo_set (act, REPLACE_LINE);
+  Action_t *action = self(Action.new);
+  action_t *act = self(action.new);
+  undo_set (act, REPLACE_LINE);
   act->idx = this->cur_idx;
   act->num_bytes = $mycur(data)->num_bytes;
   act->bytes = Cstring.dup ($mycur(data)->bytes, $mycur(data)->num_bytes);
@@ -15369,7 +15389,7 @@ handle_char:
         ADD_TRAILING_NEW_LINE;
 
         if (DONE is self(normal.join, DONOT_DRAW)) {
-          Action_t *laction = buf_vundo_pop (this);
+          Action_t *laction = self(undo.pop);
           action_t *lact = laction->head->next;
           free (lact->bytes); free (lact);
           stack_push (action, laction->head);
@@ -15491,7 +15511,7 @@ theend:
     String.replace_with ($my(last_insert), $my(cur_insert)->bytes);
 
   if (NULL isnot action->head)
-    vundo_push (this, action);
+    self(undo.push, action);
   else
     free (action);
 
@@ -16510,7 +16530,7 @@ handle_com:
 
     case CTRL('r'):
     case 'u':
-      retval = vundo (this, com); break;
+      retval = self(undo.exec, com); break;
 
     case CTRL('l'):
       Win.draw (ed->current);
@@ -16933,12 +16953,31 @@ private Class (ed) *editor_new (void) {
           .new = buf_iter_new,
           .next = buf_iter_next
         ),
+        .Action = SubSelfInit (buf, Action,
+          .new = buf_Action_new,
+          .free = buf_Action_free,
+          .set_with = buf_Action_set_with,
+          .set_current = buf_Action_set_current,
+          .push = buf_Action_push
+        ),
         .action = SubSelfInit (buf, action,
           .new = buf_action_new,
           .free = buf_action_free,
-          .set_with = buf_action_set_with,
-          .set_current = buf_action_set_current,
-          .push = buf_action_push
+          .new_with = buf_action_new_with
+        ),
+        .undo = SubSelfInit (buf, undo,
+          .pop = buf_undo_pop,
+          .push = buf_undo_push,
+          .init = buf_undo_init,
+          .exec = buf_undo_exec,
+          .clear = buf_undo_clear,
+          .insert = buf_undo_insert,
+          .delete_line = buf_undo_delete_line,
+          .replace_line = buf_undo_replace_line
+        ),
+        .redo = SubSelfInit (buf, redo,
+          .pop = buf_redo_pop,
+          .push = buf_redo_push
         ),
         .normal = SubSelfInit (buf, normal,
           .up = buf_normal_up,

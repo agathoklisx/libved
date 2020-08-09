@@ -5,9 +5,9 @@ EDNAME       := veda
 API := 0
 REV := 2
 
-THISDIR := $(shell (cd . && pwd))
-# macOs doesn't have realpath by default (available through coreutils)
+# macOS doesn't have realpath by default (available through coreutils)
 # THISDIR := $(shell realpath .)
+THISDIR := $(shell (cd . && pwd))
 
 THIS_LIBVERS  :=  $(API).$(REV)
 
@@ -38,10 +38,16 @@ THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
-# -Wno-override-init: is for designated initializers and both compilers complain
-BASE_FLAGS  +=  -Wno-override-init
 
-DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros
+DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros -Wno-override-init
+
+# -Wno-override-init: is for designated initializers and both compilers complain.
+# it is included in extra in gcc, but clang needs this unconditionally
+ifneq ($(DEBUG), 1)
+  ifeq (-$(CC), -clang)
+    BASE_FLAGS  +=  -Wno-override-init
+  endif
+endif
 
 ifneq (-$(CC), -tcc)
   DEBUG_FLAGS += -Werror

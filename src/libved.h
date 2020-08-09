@@ -1657,13 +1657,46 @@ NewSubSelf (buf, read,
   int (*from_fp) (buf_t *, FILE *, fp_t *);
 );
 
-NewSubSelf (buf, action,
+NewSubSelf (buf, Action,
   Action_t *(*new) (buf_t *);
   void
     (*free) (buf_t *, Action_t *),
     (*set_with) (buf_t *, Action_t *, int, int, char *, size_t),
     (*set_current) (buf_t *, Action_t *, int),
     (*push) (buf_t *this, Action_t *);
+);
+
+NewSubSelf (buf, action,
+  action_t
+    *(*new) (buf_t *),
+    *(*new_with) (buf_t *, int, int, char *, size_t);
+
+  void
+    (*free) (buf_t *, action_t *);
+);
+
+NewSubSelf (buf, undo,
+  void
+    (*init) (buf_t *),
+    (*push) (buf_t *, Action_t *),
+    (*clear) (buf_t *);
+
+  int
+    (*exec) (buf_t *, utf8),
+    (*insert) (buf_t *, Action_t *, action_t *),
+    (*delete_line) (buf_t *, Action_t *, action_t *),
+    (*replace_line) (buf_t *, Action_t *, action_t *);
+
+  Action_t
+    *(*pop) (buf_t *this);
+);
+
+NewSubSelf (buf, redo,
+  void
+    (*push) (buf_t *, Action_t *);
+
+  Action_t
+    *(*pop) (buf_t *this);
 );
 
 NewSubSelf (buf, normal,
@@ -1703,7 +1736,10 @@ NewSelf (buf,
   SubSelf (buf, read) read;
   SubSelf (buf, iter) iter;
   SubSelf (buf, ftype) ftype;
+  SubSelf (buf, Action) Action;
   SubSelf (buf, action) action;
+  SubSelf (buf, undo) undo;
+  SubSelf (buf, redo) redo;
   SubSelf (buf, normal) normal;
   SubSelf (buf, insert) insert;
 
