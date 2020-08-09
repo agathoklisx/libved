@@ -559,8 +559,9 @@ AllocErrorHandlerF AllocErrorHandler;
   buf_;                                                               \
 })
 
-#define ___Me__  Me
+#define __Me__  Me
 #define __this__ this
+#define __thisp__ thisp
 #define __prop__ prop
 #define __self__ self
 #define __root__ root
@@ -576,8 +577,10 @@ AllocErrorHandlerF AllocErrorHandler;
 #define NewProp(__p__, ...) DeclareProp(__p__); struct Prop(__p__) {__VA_ARGS__}
 #define $myprop __this__->__prop__
 #define $my(__p__) __this__->__prop__->__p__
-#define $self(__f__) $myprop->___Me__->self.__f__
+#define $self(__f__) $myprop->__Me__->self.__f__
+#define $selfp(__f__) (*__thisp__)->prop->__Me__->self.__f__
 #define self(__f__, ...) $self(__f__)(__this__, ##__VA_ARGS__)
+#define selfp(__f__, ...) $selfp(__f__)(__thisp__, ##__VA_ARGS__)
 #define My(__C__) $my(__C__)->self
 //#define $from(__v__) __v__->__prop__
 #define $from(__v__, __p__) __v__->__prop__->__p__
@@ -607,38 +610,39 @@ AllocErrorHandlerF AllocErrorHandler;
   __s__;                                               \
 })
 
+DeclareType (fp);
+DeclareType (reg);
+DeclareType (Reg);
+DeclareType (arg);
+DeclareType (row);
+DeclareType (dim);
+DeclareType (syn);
+DeclareType (undo);
+DeclareType (term);
+DeclareType (hist);
+DeclareType (menu);
+DeclareType (mark);
+DeclareType (video);
+DeclareType (rline);
+DeclareType (ftype);
+DeclareType (regexp);
+DeclareType (search);
+DeclareType (Search);
+DeclareType (action);
+DeclareType (Action);
 DeclareType (string);
+DeclareType (dirlist);
+DeclareType (dirwalk);
 DeclareType (vstring);
 DeclareType (Vstring);
 DeclareType (ustring);
 DeclareType (Ustring);
-DeclareType (search);
-DeclareType (Search);
-DeclareType (reg);
-DeclareType (Reg);
-DeclareType (action);
-DeclareType (Action);
-DeclareType (undo);
-DeclareType (regexp);
-DeclareType (term);
-DeclareType (video);
-DeclareType (arg);
-DeclareType (rline);
-DeclareType (hist);
-DeclareType (h_rlineitem);
 DeclareType (histitem);
-DeclareType (ftype);
-DeclareType (menu);
-DeclareType (row);
-DeclareType (dim);
-DeclareType (syn);
-DeclareType (fp);
-DeclareType (dirlist);
-DeclareType (dirwalk);
+DeclareType (h_rlineitem);
 
-DeclareType (bufiter);
 DeclareType (buf);
 DeclareProp (buf);
+DeclareType (bufiter);
 
 DeclareType (win);
 DeclareProp (win);
@@ -657,9 +661,9 @@ DeclareSelf (i);
 DeclareProp (i);
 DeclareClass (i);
 
-DeclareClass (E);
 DeclareProp (E);
 DeclareSelf (E);
+DeclareClass (E);
 
 /* this might make things harder for the reader, because hides details, but if
  * something is gonna change in future, if it's not just a signle change it is
@@ -1611,6 +1615,8 @@ NewSubSelf (buf, syn,
 );
 
 NewSubSelf (buf, ftype,
+  void (*free) (buf_t *);
+
   ftype_t
      *(*init) (buf_t *, int, FtypeAutoIndent_cb),
      *(*set)  (buf_t *, int, ftype_t);
@@ -1641,6 +1647,7 @@ NewSubSelf (buf, current,
 
 NewSubSelf (buf, free,
   void
+     (*line) (buf_t *),
      (*info) (buf_t *, bufinfo_t **),
      (*row) (buf_t *, row_t *),
      (*rows) (buf_t *);
@@ -1676,6 +1683,7 @@ NewSubSelf (buf, action,
 
 NewSubSelf (buf, undo,
   void
+    (*free) (buf_t *),
     (*init) (buf_t *),
     (*push) (buf_t *, Action_t *),
     (*clear) (buf_t *);
@@ -1698,29 +1706,91 @@ NewSubSelf (buf, redo,
     *(*pop) (buf_t *this);
 );
 
+NewSubSelf (bufnormal, visual,
+  int
+    (*bw) (buf_t *),
+    (*lw) (buf_t **),
+    (*cw) (buf_t **);
+);
+
+NewSubSelf (bufnormal, handle,
+  int
+    (*g) (buf_t **, int),
+    (*G) (buf_t *, int),
+    (*d) (buf_t *, int, int),
+    (*c) (buf_t **, int, int),
+    (*W) (buf_t **),
+    (*F) (buf_t **),
+    (*comma) (buf_t **),
+    (*ctrl_w) (buf_t **);
+);
+
 NewSubSelf (buf, normal,
+  SubSelf (bufnormal, handle) handle;
+  SubSelf (bufnormal, visual) visual;
+
   int
     (*up) (buf_t *, int, int, int),
     (*bol) (buf_t *, int),
     (*eol) (buf_t *, int),
     (*bof) (buf_t *, int),
     (*eof) (buf_t *, int),
+    (*put) (buf_t *, int, utf8),
     (*join) (buf_t *, int),
+    (*yank) (buf_t *, int, int),
+    (*Yank) (buf_t *, int, int),
     (*down) (buf_t *, int, int, int),
     (*left) (buf_t *, int, int),
     (*right) (buf_t *, int, int),
     (*delete) (buf_t *, int, int, int),
+    (*noblnk) (buf_t *),
     (*page_up) (buf_t *, int, int),
     (*end_word) (buf_t *, int, int, int),
     (*page_down) (buf_t *, int, int),
     (*delete_eol) (buf_t *, int, int),
     (*change_case) (buf_t *),
     (*goto_linenr) (buf_t *, int, int),
-    (*replace_char_with) (buf_t *, utf8);
+    (*replace_character) (buf_t *),
+    (*replace_character_with) (buf_t *, utf8);
 );
 
 NewSubSelf (buf, insert,
-  int (*string) (buf_t *, char *, size_t, int);
+  int
+    (*mode) (buf_t **, utf8, char *),
+    (*string) (buf_t *, char *, size_t, int),
+    (*new_line) (buf_t **, utf8);
+);
+
+NewSubSelf (buf, delete,
+  int
+    (*word) (buf_t *, int),
+    (*line) (buf_t *, int, int);
+);
+
+NewSubSelf (buf, jump,
+  void (*push) (buf_t *, mark_t *);
+  int (*to) (buf_t *, int);
+);
+
+NewSubSelf (buf, jumps,
+  void
+     (*free) (buf_t *),
+     (*init) (buf_t *);
+);
+
+NewSubSelf (buf, mark,
+  int
+    (*set) (buf_t *, int),
+    (*jump) (buf_t *),
+    (*restore) (buf_t *, mark_t *);
+);
+
+NewSubSelf (buf, adjust,
+  void
+    (*view) (buf_t *),
+    (*marks) (buf_t *, int, int, int);
+
+  int (*col) (buf_t *, int, int);
 );
 
 NewSelf (buf,
@@ -1732,15 +1802,20 @@ NewSelf (buf,
   SubSelf (buf, row) row;
   SubSelf (buf, isit) isit;
   SubSelf (buf, free) free;
+  SubSelf (buf, undo) undo;
+  SubSelf (buf, redo) redo;
   SubSelf (buf, read) read;
   SubSelf (buf, iter) iter;
+  SubSelf (buf, mark) mark;
+  SubSelf (buf, jump) jump;
+  SubSelf (buf, jumps) jumps;
   SubSelf (buf, ftype) ftype;
   SubSelf (buf, Action) Action;
   SubSelf (buf, action) action;
-  SubSelf (buf, undo) undo;
-  SubSelf (buf, redo) redo;
   SubSelf (buf, normal) normal;
+  SubSelf (buf, delete) delete;
   SubSelf (buf, insert) insert;
+  SubSelf (buf, adjust) adjust;
 
   void
     (*draw) (buf_t *),
@@ -1752,8 +1827,9 @@ NewSelf (buf,
     *(*info) (buf_t *);
 
   int
-    (*search) (buf_t *, char, char *, utf8),
     (*write) (buf_t *, int),
+    (*search) (buf_t *, char, char *, utf8),
+    (*indent) (buf_t *, int, utf8),
     (*substitute) (buf_t *, char *, char *, int, int, int, int),
     (*backupfile) (buf_t *);
 

@@ -4820,6 +4820,39 @@ private int buf_mark_restore (buf_t *this, mark_t *mark) {
   return DONE;
 }
 
+private ustring_t *buf_get_line_nth (Ustring_t *line, int idx) {
+  line->current = line->head;
+  int i = 0;
+  while (line->current) {
+    if (i is idx or (i + (line->current->len - 1) is idx))
+      return line->current;
+
+    i += line->current->len;
+    line->current = line->current->next;
+  }
+
+  if (i is idx or (i + (line->tail->len - 1) is idx))
+    return line->tail;
+  return NULL;
+}
+
+private ustring_t *buf_get_line_idx (Ustring_t *line, int idx) {
+  int cidx = current_list_set (line, idx);
+  if (cidx is INDEX_ERROR) return NULL;
+  return line->current;
+}
+
+private char *buf_get_line_data (buf_t *this, Ustring_t *line) {
+  ifnot (line->num_items) return "";
+  String.clear ($my(shared_str));
+  ustring_t *it = line->head;
+  while (it) {
+    String.append ($my(shared_str), it->buf);
+    it = it->next;
+  }
+  return $my(shared_str)->bytes;
+}
+
 private void buf_adjust_view (buf_t *this) {
   $my(video_first_row) = this->current;
   $my(video_first_row_idx) = this->cur_idx;
@@ -4879,39 +4912,6 @@ private void buf_adjust_marks (buf_t *this, int type, int fidx, int lidx) {
       mark->row_pos++;
     }
   }
-}
-
-private ustring_t *buf_get_line_nth (Ustring_t *line, int idx) {
-  line->current = line->head;
-  int i = 0;
-  while (line->current) {
-    if (i is idx or (i + (line->current->len - 1) is idx))
-      return line->current;
-
-    i += line->current->len;
-    line->current = line->current->next;
-  }
-
-  if (i is idx or (i + (line->tail->len - 1) is idx))
-    return line->tail;
-  return NULL;
-}
-
-private ustring_t *buf_get_line_idx (Ustring_t *line, int idx) {
-  int cidx = current_list_set (line, idx);
-  if (cidx is INDEX_ERROR) return NULL;
-  return line->current;
-}
-
-private char *buf_get_line_data (buf_t *this, Ustring_t *line) {
-  ifnot (line->num_items) return "";
-  String.clear ($my(shared_str));
-  ustring_t *it = line->head;
-  while (it) {
-    String.append ($my(shared_str), it->buf);
-    it = it->next;
-  }
-  return $my(shared_str)->bytes;
 }
 
 private int buf_adjust_col (buf_t *this, int nth, int isatend) {
@@ -5058,7 +5058,7 @@ private int buf_undo_insert (buf_t *this, Action_t *redoact, action_t *act) {
 
   action_t *ract = self(action.new);
   self(current.set, act->idx);
-  buf_adjust_view (this);
+  self(adjust.view);
   ract->type = DELETE_LINE;
   undo_set (ract, DELETE_LINE);
   ract->idx = this->cur_idx;
@@ -5069,7 +5069,7 @@ private int buf_undo_insert (buf_t *this, Action_t *redoact, action_t *act) {
 
   if (this->num_items) {
     self(current.set, act->cur_idx);
-    buf_adjust_marks (this, DELETE_LINE, act->idx, act->idx);
+    self(adjust.marks, DELETE_LINE, act->idx, act->idx);
     undo_restore (act);
   }
 
@@ -5082,19 +5082,19 @@ private int buf_undo_delete_line (buf_t *this, Action_t *redoact, action_t *act)
   if (this->num_items) {
     if (act->idx >= this->num_items) {
       self(current.set, this->num_items - 1);
-      buf_adjust_view (this);
+      self(adjust.view);
       undo_set (ract, INSERT_LINE);
       self(current.append, row);
       ract->idx = this->cur_idx;
     } else {
       self(current.set, act->idx);
-      buf_adjust_view (this);
+      self(adjust.view);
       undo_set (ract, INSERT_LINE);
       self(current.prepend, row);
       ract->idx = this->cur_idx;
     }
     stack_push (redoact, ract);
-    buf_adjust_marks (this, INSERT_LINE, act->idx, act->idx + 1);
+    self(adjust.marks, INSERT_LINE, act->idx, act->idx + 1);
     undo_restore (act);
   } else {
     this->head = row;
@@ -5102,7 +5102,7 @@ private int buf_undo_delete_line (buf_t *this, Action_t *redoact, action_t *act)
     this->cur_idx = 0;
     this->current = this->head;
     this->num_items = 1;
-    buf_adjust_view (this);
+    self(adjust.view);
     undo_set (ract, INSERT_LINE);
     stack_push (redoact, ract);
     //  $my(video_first_row_idx) = this->cur_idx;
@@ -5247,7 +5247,7 @@ char *default_extensions[] = {".txt", NULL};
 char *c_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *c_keywords[] = {
     "is I", "isnot I", "or I", "and I", "if I", "for I", "return I", "else I",
-    "ifnot I", "private I", "self I", "this V", "NULL K", "OK K", "NOTOK K",
+    "ifnot I", "private I", "self I", "selfp I", "this V", "NULL K", "OK K", "NOTOK K",
     "switch I", "while I", "break I", "continue I", "do I", "default I", "goto I",
     "case I", "free F", "$my V", "My V", "$mycur V", "uint T", "int T", "size_t T",
     "utf8 T", "char T", "uchar T", "sizeof T", "void T", "$from V", "thisp V",
@@ -5747,7 +5747,7 @@ private ftype_t *__ftype_new__ (syn_t *syn) {
   return this;
 }
 
-private void buf_free_ftype (buf_t *this) {
+private void buf_ftype_free (buf_t *this) {
   if (this is NULL or $myprop is NULL or $my(ftype) is NULL) return;
   String.free ($my(ftype)->on_emptyline);
   free ($my(ftype));
@@ -5847,12 +5847,12 @@ private int buf_com_set (buf_t *this, rline_t *rl) {
 
   string_t *arg = rline_get_anytype_arg (rl, "ftype");
   ifnot (NULL is arg) {
-    int idx = ed_syn_get_ftype_idx ($my(root), arg->bytes);
+    int idx = Ed.syn.get_ftype_idx ($my(root), arg->bytes);
     syn_t syn = $myroots(syntaxes)[idx];
-    ifnot (cstring_eq (syn.filetype, $my(ftype)->name)) {
-      buf_free_ftype (this);
+    ifnot (Cstring.eq (syn.filetype, $my(ftype)->name)) {
+      self(ftype.free);
       $my(ftype) = syn.init (this);
-      cstring_cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
+      Cstring.cp ($my(ftype)->name, MAXLEN_FTYPE_NAME, $my(syn)->filetype, MAXLEN_FTYPE_NAME - 1);
       draw = 1;
     }
   }
@@ -5953,7 +5953,7 @@ private ftype_t *buf_syn_init_i (buf_t *this) {
 }
 
 private ftype_t *buf_syn_init (buf_t *this) {
-  return buf_ftype_init (this, FTYPE_DEFAULT, buf_ftype_autoindent);
+  return self(ftype.init, FTYPE_DEFAULT, buf_ftype_autoindent);
 }
 
 private void buf_set_ftype (buf_t *this, int ftype) {
@@ -5994,7 +5994,7 @@ private void buf_set_ftype (buf_t *this, int ftype) {
      }
   }
 
-  $my(ftype) = buf_syn_init (this);
+  $my(ftype) = self(syn.init);
 }
 
 private void buf_set_modified (buf_t *this) {
@@ -6058,7 +6058,7 @@ private void buf_free_line (buf_t *this) {
   free ($my(line));
 }
 
-private void buf_free_jumps (buf_t *this) {
+private void buf_jumps_free (buf_t *this) {
   jump_t *jump = $my(jumps)->head;
   while (jump) {
     jump_t *tmp = jump->next;
@@ -6102,7 +6102,7 @@ private int mark_get_idx (int c) {
   return m - marks;
 }
 
-private int mark_set (buf_t *this, int mark) {
+private int buf_mark_set (buf_t *this, int mark) {
   if (mark < 0) {
     mark = mark_get_idx (Input.get ($my(term_ptr)));
     if (-1 is mark) return NOTHING_TODO;
@@ -6114,18 +6114,18 @@ private int mark_set (buf_t *this, int mark) {
   if (mark isnot MARK_UNNAMED)
     MSG("set [%c] mark", MARKS[mark]);
 
-  buf_jump_push (this, &$my(marks)[mark]);
+  self(jump.push, &$my(marks)[mark]);
   return DONE;
 }
 
-private int mark_goto (buf_t *this) {
+private int buf_mark_jump (buf_t *this) {
   int c = mark_get_idx (Input.get ($my(term_ptr)));
   if (-1 is c) return NOTHING_TODO;
 
   mark_t *mark = &$my(marks)[c];
   mark_t t;  state_set (&t);  t.cur_idx = this->cur_idx;
 
-  if (NOTHING_TODO is buf_mark_restore (this, mark))
+  if (NOTHING_TODO is self(mark.restore, mark))
     return NOTHING_TODO;
 
   $my(marks)[MARK_UNNAMED] = t;
@@ -6134,7 +6134,7 @@ private int mark_goto (buf_t *this) {
   return DONE;
 }
 
-private int buf_jump (buf_t *this, int dir) {
+private int buf_jump_to (buf_t *this, int dir) {
   ifnot ($my(jumps)->num_items) return NOTHING_TODO;
 
   jump_t *jump = $my(jumps)->head;
@@ -6155,7 +6155,7 @@ private int buf_jump (buf_t *this, int dir) {
 
   if ($my(jumps)->cur_idx is 0) { // and $my(jumps)->num_items is 1) {
     mark_t m; state_set (&m); m.cur_idx = this->cur_idx;
-    buf_jump_push (this, &m);
+    self(jump.push, &m);
   }
 
   $my(jumps)->old_idx = $my(jumps)->cur_idx;
@@ -6166,7 +6166,7 @@ theend:
   state_set (&$my(marks)[MARK_UNNAMED]);
   $my(marks)[MARK_UNNAMED].cur_idx = this->cur_idx;
 
-  buf_mark_restore (this, jump->mark);
+  self(mark.restore, jump->mark);
   self(draw);
   return DONE;
 }
@@ -6206,7 +6206,7 @@ private bufiter_t *buf_iter_next (buf_t *unused, bufiter_t *this) {
   return this;
 }
 
-private void buf_free_undo (buf_t *this) {
+private void buf_undo_free (buf_t *this) {
   self(undo.clear);
   free ($my(undo));
   free ($my(redo));
@@ -7128,20 +7128,22 @@ private void buf_free_rows (buf_t *this) {
   row_t *row = this->head;
   while (row) {
     row_t *next = row->next;
-    buf_free_row (this, row);
+    self(free.row, row);
     row = next;
   }
 }
 
 private void buf_free (buf_t *this) {
   if (this is NULL) return;
-  buf_free_rows (this);
+
+  self(free.rows);
 
   if ($myprop is NULL) return;
 
   if ($my(fname) isnot NULL) free ($my(fname));
 
   free ($my(cwd));
+
   ifnot (NULL is $my(backupfile))
     free ($my(backupfile));
 
@@ -7149,10 +7151,10 @@ private void buf_free (buf_t *this) {
   String.free ($my(shared_str));
   String.free ($my(cur_insert));
 
-  buf_free_line (this);
-  buf_free_ftype (this);
-  buf_free_undo (this);
-  buf_free_jumps (this);
+  self(free.line);
+  self(ftype.free);
+  self(undo.free);
+  self(jumps.free);
 
   free ($myprop);
   free (this);
@@ -7314,7 +7316,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   $my(video) = $myroots(video);
 
   self(undo.init);
-  buf_jumps_init (this);
+  self(jumps.init);
 
   $my(shared_str) = String.new (128);
   $my(statusline) = String.new (64);
@@ -9415,10 +9417,11 @@ private int buf_normal_end_word (buf_t *this, int count, int run_insert_mode, in
     }
   }
 
-  if (retval is DONE) buf_normal_left (this, 1, DONOT_DRAW);
+  if (retval is DONE) self(normal.left, 1, DONOT_DRAW);
   if (run_insert_mode) {
     if (draw) self(draw);
-    return buf_insert (&this, 'i', NULL);
+    buf_t **thisp = &this;
+    return selfp(insert.mode, 'i', NULL);
   }
 
   if (IS_SPACE ($mycur(data)->bytes[$mycur(cur_col_idx)]))
@@ -9469,7 +9472,7 @@ private int buf_normal_up (buf_t *this, int count, int adjust_col, int draw) {
   currow_idx -= count;
   self(current.set, currow_idx);
 
-  int col_pos = adjust_col ? buf_adjust_col (this, nth, isatend) : $my(video)->first_col;
+  int col_pos = adjust_col ? self(adjust.col, nth, isatend) : $my(video)->first_col;
   int row = $my(video)->row_pos;
   int orig_count = count;
 
@@ -9516,7 +9519,7 @@ private int buf_normal_down (buf_t *this, int count, int adjust_col, int draw) {
 
   self(current.set, currow_idx);
 
-  int col_pos = adjust_col ? buf_adjust_col (this, nth, isatend) : $my(video)->first_col;
+  int col_pos = adjust_col ? self(adjust.col, nth, isatend) : $my(video)->first_col;
 
   int row = $my(video)->row_pos;
   int orig_count = count;
@@ -9544,7 +9547,7 @@ private int buf_normal_page_down (buf_t *this, int count, int draw) {
       or this->num_items - $my(video_first_row_idx) < ONE_PAGE + 1)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNNAMED);
+  self(mark.set, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9569,7 +9572,7 @@ private int buf_normal_page_down (buf_t *this, int count, int draw) {
   self(current.set, currow_idx);
   self(set.video_first_row, frow);
   $my(video)->row_pos = $my(cur_video_row) = row;
-  $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, nth, isatend);
+  $my(video)->col_pos = $my(cur_video_col) = self(adjust.col, nth, isatend);
   if (draw) self(draw);
   return DONE;
 }
@@ -9580,7 +9583,7 @@ private int buf_normal_page_up (buf_t *this, int count, int draw) {
   if ($my(video_first_row_idx) is 0 or this->num_items < ONE_PAGE)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNNAMED);
+  self(mark.set, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9606,7 +9609,7 @@ private int buf_normal_page_up (buf_t *this, int count, int draw) {
   self(current.set, curlnr);
   self(set.video_first_row, frow);
   $my(video)->row_pos = $my(cur_video_row) = row;
-  $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, nth, isatend);
+  $my(video)->col_pos = $my(cur_video_col) = self(adjust.col, nth, isatend);
 
   if (draw) self(draw);
   return DONE;
@@ -9615,7 +9618,7 @@ private int buf_normal_page_up (buf_t *this, int count, int draw) {
 private int buf_normal_bof (buf_t *this, int draw) {
   if (this->cur_idx is 0) return NOTHING_TODO;
 
-  mark_set (this, MARK_UNNAMED);
+  self(mark.set, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9626,7 +9629,7 @@ private int buf_normal_bof (buf_t *this, int draw) {
   self(current.set, 0);
 
   $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
-  $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, nth, isatend);
+  $my(video)->col_pos = $my(cur_video_col) = self(adjust.col, nth, isatend);
 
   if (draw) self(draw);
   return DONE;
@@ -9640,7 +9643,7 @@ private int buf_normal_eof (buf_t *this, int draw) {
       goto do_draw;
   }
 
-  mark_set (this, MARK_UNNAMED);
+  self(mark.set, MARK_UNNAMED);
 
   int nth = THIS_LINE_PTR_IS_AT_NTH_POS;
   int isatend = $my(state) & PTR_IS_AT_EOL;
@@ -9649,7 +9652,7 @@ private int buf_normal_eof (buf_t *this, int draw) {
 
   self(current.set, this->num_items - 1);
 
-  $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, nth, isatend);
+  $my(video)->col_pos = $my(cur_video_col) = self(adjust.col, nth, isatend);
 
   if (this->num_items < ONE_PAGE) {
     $my(video)->row_pos = $my(cur_video_row) =
@@ -9676,7 +9679,7 @@ private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   if (lnr <= 0 or lnr is currow_idx + 1 or lnr > this->num_items)
     return NOTHING_TODO;
 
-  mark_set (this, MARK_UNNAMED);
+  self(mark.set, MARK_UNNAMED);
 
   if (lnr < currow_idx + 1)
     return self(normal.up, currow_idx - lnr + 1, ADJUST_COL, draw);
@@ -9684,8 +9687,8 @@ private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   return self(normal.down, lnr - currow_idx - 1, ADJUST_COL, draw);
 }
 
-private int buf_normal_replace_char_with (buf_t *this, utf8 c) {
-  ed_record ($my(root), "buf_normal_replace_char_with (buf, %d)", c);
+private int buf_normal_replace_character_with (buf_t *this, utf8 c) {
+  ed_record ($my(root), "buf_normal_replace_character_with (buf, %d)", c);
 
   char buf[5]; int len;
   Ustring.character (c, buf, &len);
@@ -9698,7 +9701,7 @@ private int buf_normal_replace_char_with (buf_t *this, utf8 c) {
   return DONE;
 }
 
-private int buf_normal_replace_char (buf_t *this) {
+private int buf_normal_replace_character (buf_t *this) {
   if ($mycur(data)->num_bytes is 0) return NOTHING_TODO;
 
   Action_t *Action = self(Action.new);
@@ -9707,7 +9710,7 @@ private int buf_normal_replace_char (buf_t *this) {
 
   utf8 c = Input.get ($my(term_ptr));
 
-  return self(normal.replace_char_with, c);
+  return self(normal.replace_character_with, c);
 }
 
 private int buf_normal_delete_eol (buf_t *this, int regidx, int draw) {
@@ -9787,11 +9790,11 @@ private int buf_insert_new_line (buf_t **thisp, utf8 com) {
   self(undo.push, Action);
 
   if (currow_idx > new_idx) {int t = new_idx; new_idx = currow_idx; currow_idx = t;}
-  buf_adjust_marks (this, INSERT_LINE, currow_idx, new_idx);
+  self(adjust.marks, INSERT_LINE, currow_idx, new_idx);
 
   $my(flags) |= BUF_IS_MODIFIED;
   self(draw);
-  return buf_insert (thisp, com, NULL);
+  return selfp(insert.mode, com, NULL);
 }
 
 private int buf_normal_join (buf_t *this, int draw) {
@@ -9817,7 +9820,7 @@ private int buf_normal_join (buf_t *this, int draw) {
     String.append ($mycur(data), row->data->bytes);
   }
 
-  buf_adjust_marks (this, DELETE_LINE, this->cur_idx, this->cur_idx + 1);
+  self(adjust.marks, DELETE_LINE, this->cur_idx, this->cur_idx + 1);
   $my(flags) |= BUF_IS_MODIFIED;
   self(free.row, row);
   if (draw) self(draw);
@@ -9885,6 +9888,7 @@ private int buf_normal_delete (buf_t *this, int count, int regidx, int draw) {
     action->cur_col_idx = $mycur(cur_col_idx);
     action->first_col_idx = $mycur(first_col_idx);
 
+    Action = self(Action.new);
     stack_push (Action, action);
     self(undo.push, Action);
     ed_reg_set_with ($my(root), regidx, CHARWISE, buf, 0);
@@ -10395,7 +10399,7 @@ private int buf_normal_handle_g (buf_t **thisp, int count) {
 
     case 'v':
       $my(state) |= BUF_LW_RESELECT;
-      return buf_normal_visual_lw (thisp);
+      return selfp(normal.visual.lw);
 
     default:
       for (int i = 0; i < $myroots(num_on_normal_g_cbs); i++) {
@@ -10413,7 +10417,7 @@ private int buf_normal_handle_G (buf_t *this, int count) {
   if (1 isnot count)
     return self(normal.goto_linenr, count, DRAW);
 
-  return self(normal.eof, DONOT_DRAW);
+  return self(normal.eof, DRAW);
 }
 
 private int buf_normal_handle_comma (buf_t **thisp) {
@@ -10545,8 +10549,8 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
 
   if (this->num_items is 0) buf_on_no_length (this);
 
-  $my(video)->col_pos = $my(cur_video_col) = buf_adjust_col (this, nth, isatend);
-  buf_adjust_marks (this, DELETE_LINE, fidx, lidx);
+  $my(video)->col_pos = $my(cur_video_col) = self(adjust.col, nth, isatend);
+  self(adjust.marks, DELETE_LINE, fidx, lidx);
 
   if (this->num_items is 1 and $my(cur_video_row) isnot $my(dim)->first_row)
     $my(video)->row_pos = $my(cur_video_row) = $my(dim)->first_row;
@@ -10563,7 +10567,7 @@ private int buf_delete_line (buf_t *this, int count, int regidx) {
 
   if ($my(video_first_row_idx) > this->cur_idx or
       $my(video_first_row_idx) < this->cur_idx)
-    buf_adjust_view (this);
+    self(adjust.view);
 
 theend:
   $my(flags) |= BUF_IS_MODIFIED;
@@ -10808,7 +10812,7 @@ private int buf_normal_put (buf_t *this, int regidx, utf8 com) {
   self(undo.push, Action);
 
   if (rg->type is LINEWISE) {
-    buf_adjust_marks (this, INSERT_LINE, this->cur_idx, this->cur_idx + linewise_num);
+    self(adjust.marks, INSERT_LINE, this->cur_idx, this->cur_idx + linewise_num);
 
     if ('p' is com) {
       this->current = currow;
@@ -10913,15 +10917,15 @@ private int buf_normal_handle_c (buf_t **thisp, int count, int regidx) {
   utf8 c = Input.get ($my(term_ptr));
   switch (c) {
     case 'w':
-      buf_delete_word (this, regidx);
-      return buf_insert (thisp, 'c', NULL);
+      self(delete.word, regidx);
+      return selfp(insert.mode, 'c', NULL);
 
     case 'i':
       c = Input.get ($my(term_ptr));
       if (NOTHING_TODO is buf_delete_inner (this, c, regidx))
         return NOTHING_TODO;
 
-      return buf_insert (thisp, 'c', NULL);
+      return selfp(insert.mode, 'c', NULL);
   }
 
   return NOTHING_TODO;
@@ -10946,10 +10950,10 @@ private int buf_normal_handle_d (buf_t *this, int count, int reg) {
     case 'g':
     case HOME_KEY:
     case 'd':
-      return buf_delete_line (this, count, reg);
+      return self(delete.line, count, reg);
 
     case 'w':
-      return buf_delete_word (this, reg);
+      return self(delete.word, reg);
 
     default:
       return NOTHING_TODO;
@@ -10979,7 +10983,7 @@ private int buf_insert_change_line (buf_t *this, utf8 c, Action_t **action, int 
 
     this->current = this->current->prev;
     this->cur_idx--;
-    buf_adjust_marks (this, INSERT_LINE, this->cur_idx, this->cur_idx + 1);
+    self(adjust.marks, INSERT_LINE, this->cur_idx, this->cur_idx + 1);
 
     action_t *act = self(action.new);
     undo_set (act, INSERT_LINE);
@@ -11327,7 +11331,7 @@ handle_char:
           Action_t *Action = self(Action.new);
 
           for (int i = $my(vis)[0].fidx; i <= $my(vis)[0].lidx; i++) {
-            if (DONE is buf_indent (this, count, c)) {
+            if (DONE is self(indent, count, c)) {
               Action_t *Laction = self(undo.pop);
               action_t *action = stack_pop (Laction, action_t);
               stack_push (Action, action);
@@ -11344,7 +11348,7 @@ handle_char:
 
           VISUAL_RESTORE_STATE ($my(vis)[1], mark);
           if (c is '<' and $mycur(cur_col_idx) >= (int) $mycur(data)->num_bytes - 1) {
-            buf_normal_noblnk (this);
+            self(normal.noblnk);
             VISUAL_ADJUST_COL ($mycur(cur_col_idx));
           }
         }
@@ -11365,9 +11369,9 @@ handle_char:
         if (-1 is reg or c is 'Y') reg = (c is 'Y' ? REG_STAR : REG_UNNAMED);
 
         if (c is 'd')
-          buf_delete_line (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+          self(delete.line, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
         else {
-          buf_normal_Yank (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+          self(normal.Yank, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
           VISUAL_RESTORE_STATE ($my(vis)[1], mark);
         }
 
@@ -11630,7 +11634,7 @@ handle_char:
         if (c is 'd' or c is 'x')
           self(normal.delete, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg, DONOT_DRAW);
         else
-          buf_normal_yank (this, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
+          self(normal.yank, $my(vis)[0].lidx - $my(vis)[0].fidx + 1, reg);
 
         goto theend;
 
@@ -11795,7 +11799,7 @@ handle_char:
 
           for (int idx = $my(vis)[1].fidx; idx <= $my(vis)[1].lidx; idx++) {
             self(current.set, idx);
-            buf_adjust_view (this);
+            self(adjust.view);
             VISUAL_ADJUST_COL ($my(vis)[0].fidx);
 
             if (c is 'c') {
@@ -11846,7 +11850,7 @@ handle_char:
 
           for (int idx = $my(vis)[1].fidx; idx <= $my(vis)[1].lidx; idx++) {
             self(current.set, idx);
-            buf_adjust_view (this);
+            self(adjust.view);
             VISUAL_ADJUST_COL ($my(vis)[0].fidx);
             if ((int) $mycur(data)->num_bytes < $my(vis)[0].fidx + 1) continue;
             int lidx__ = (int) $mycur(data)->num_bytes < $my(vis)[0].lidx ?
@@ -11924,7 +11928,7 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
 
   int cur_idx = this->cur_idx;
   self(normal.bof, DONOT_DRAW);
-  buf_delete_line (this, this->num_items, REG_BLACKHOLE);
+  self(delete.line, this->num_items, REG_BLACKHOLE);
   self(read.fname);
 
   self(normal.bof, DONOT_DRAW);
@@ -11940,7 +11944,7 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
   }
 
   self(current.set, 0);
-  buf_delete_line (this, 1, REG_BLACKHOLE);
+  self(delete.line, 1, REG_BLACKHOLE);
   Action_t *baction = self(undo.pop);
   action_t *act = self(action.new);
   state_cp (act, baction->head);
@@ -15177,7 +15181,7 @@ private int buf_insert_reg (buf_t **thisp, string_t *cur_insert) {
   return DONE;
 }
 
-private int buf_insert (buf_t **thisp, utf8 com, char *bytes) {
+private int buf_insert_mode (buf_t **thisp, utf8 com, char *bytes) {
   buf_t *this = *thisp;
   utf8 c = 0;
   if (com is '\n') {
@@ -15674,8 +15678,8 @@ private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
          return NOTHING_TODO;
 
        buf[len] = '\0';
-       buf_delete_word (this, REG_UNNAMED);
-       return buf_insert (thisp, 0, buf);
+       self(delete.word, REG_UNNAMED);
+       return selfp(insert.mode, 0, buf);
      }
 
    case 'L':
@@ -15686,8 +15690,8 @@ private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
       ifnot (Ustring.change_case (buf, word, len, type))
         return NOTHING_TODO;
       buf[len] = '\0';
-      buf_delete_word (this, REG_UNNAMED);
-      return buf_insert (thisp, 0, buf);
+      self(delete.word, REG_UNNAMED);
+      return selfp(insert.mode, 0, buf);
     }
   }
   return NOTHING_TODO;
@@ -16195,7 +16199,7 @@ private void ed_deinit_record (ed_t *this) {
   Msg.send_fmt (this, COLOR_MSG, "End of Recording into [%d]", $my(record_idx) + 1);
 }
 
-private int buf_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int count, int regidx) {
+private int ed_buf_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int count, int regidx) {
   buf_t *this = *thisp;
 
   if (0 >= count or count > this->num_items)
@@ -16265,16 +16269,16 @@ handle_com:
       retval = self(search, com, NULL, -1); break;
 
     case 'm':
-      retval = mark_set (this, -1); break;
+      retval = self(mark.set, -1); break;
 
     case '`':
-      retval = mark_goto (this); break;
+      retval = self(mark.jump); break;
 
     case CTRL('o'):
-      retval = buf_jump (this, RIGHT_DIRECTION); break;
+      retval = self(jump.to, RIGHT_DIRECTION); break;
 
     case CTRL('i'):
-      retval = buf_jump (this, LEFT_DIRECTION); break;
+      retval = self(jump.to, LEFT_DIRECTION); break;
 
     case '~':
       retval = self(normal.change_case); break;
@@ -16284,17 +16288,17 @@ handle_com:
       retval = buf_word_math (this, count, com); break;
 
     case '^':
-      retval = buf_normal_noblnk (this); break;
+      retval = self(normal.noblnk); break;
 
     case '>':
     case '<':
-      retval = buf_indent (this, count, com); break;
+      retval = self(indent, count, com); break;
 
     case 'y':
-      retval = buf_normal_yank (this, count, regidx); break;
+      retval = self(normal.yank, count, regidx); break;
 
     case 'Y':
-      retval = buf_normal_Yank (this, count, regidx); break;
+      retval = self(normal.Yank, count, regidx); break;
 
     case ' ':
       ifnot ($my(ftype)->space_on_normal_is_like_insert_mode) break;
@@ -16305,14 +16309,11 @@ handle_com:
       (&$my(regs)[REG_RDONLY])->head->data->num_bytes = 1;
       (&$my(regs)[REG_RDONLY])->head->next = NULL;
       (&$my(regs)[REG_RDONLY])->head->prev = NULL;
-      retval = buf_normal_put (this, REG_RDONLY, 'P'); break;
+      retval = self(normal.put, REG_RDONLY, 'P'); break;
 
     case 'p':
     case 'P':
-      retval = buf_normal_put (this, regidx, com); break;
-
-    case 'd':
-      retval = buf_normal_handle_d (this, count, regidx); break;
+      retval = self(normal.put, regidx, com); break;
 
     case 'x':
     case DELETE_KEY:
@@ -16366,23 +16367,37 @@ handle_com:
       retval = self(normal.eol, DRAW); break;
 
     case CTRL('w'):
-      retval = buf_normal_handle_ctrl_w (thisp); break;
+      retval = selfp(normal.handle.ctrl_w); break;
 
     case 'g':
-      retval = buf_normal_handle_g (thisp, count); break;
+      retval = selfp(normal.handle.g, count); break;
+
+    case 'd':
+      retval = self(normal.handle.d, count, regidx); break;
 
     case 'G':
-      retval = buf_normal_handle_G (this, count); break;
+      retval = self(normal.handle.G, count); break;
 
     case ',':
-      retval = buf_normal_handle_comma (thisp); break;
+      retval = selfp(normal.handle.comma); break;
+
+    case 'c':
+      retval = selfp(normal.handle.c, count, regidx); break;
+
+    case 'W':
+      retval = selfp(normal.handle.W);
+      break;
+
+    case 'F':
+      retval = selfp(normal.handle.F);
+      break;
 
     case '0':
       retval = self(normal.bol, DRAW); break;
 
     case 'E':
     case 'e':
-      retval = buf_normal_end_word (this, count,
+      retval = self(normal.end_word, count,
         ($my(ftype)->small_e_on_normal_goes_insert_mode is 1 and 'e' is com), DRAW);
       this = *thisp;
       break;
@@ -16415,33 +16430,30 @@ handle_com:
       retval = self(normal.bof, DRAW); break;
 
     case END_KEY:
-      retval = self(normal.eof, DONOT_DRAW); break;
+      retval = self(normal.eof, DRAW); break;
 
     case CTRL('v'):
-      retval = buf_normal_visual_bw (this); break;
+      retval = self(normal.visual.bw); break;
 
     case 'V':
-      retval = buf_normal_visual_lw (thisp); break;
+      retval = selfp(normal.visual.lw); break;
 
     case 'v':
-      retval = buf_normal_visual_cw (thisp); break;
+      retval = selfp(normal.visual.cw); break;
 
     case 'D':
       retval = self(normal.delete_eol, regidx, DRAW); break;
 
     case 'r':
-      retval = buf_normal_replace_char (this); break;
-
-    case 'c':
-      retval = buf_normal_handle_c (thisp, count, regidx); break;
+      retval = self(normal.replace_character); break;
 
     case 'C':
        self(normal.delete_eol, regidx, DRAW);
-       retval = buf_insert (thisp, com, NULL); break;
+       retval = selfp(insert.mode, com, NULL); break;
 
     case 'o':
     case 'O':
-      retval = buf_insert_new_line (thisp, com); break;
+      retval = selfp(insert.new_line, com); break;
 
     case '\r':
       ifnot ($my(ftype)->cr_on_normal_is_like_insert_mode) break;
@@ -16451,7 +16463,7 @@ handle_com:
     case 'i':
     case 'a':
     case 'A':
-      retval = buf_insert (thisp, com, NULL); break;
+      retval = selfp(insert.mode, com, NULL); break;
 
     case CTRL('r'):
     case 'u':
@@ -16464,14 +16476,6 @@ handle_com:
     case CTRL('j'):
       $myroots(state) |= ED_SUSPENDED;
       return EXIT_THIS;
-
-    case 'W':
-      retval = buf_normal_handle_W (thisp);
-      break;
-
-    case 'F':
-      retval = buf_normal_handle_F (thisp);
-      break;
 
     case '-':
     case '_':
@@ -16541,7 +16545,7 @@ handle_char:
       default:
 exec_block:
 
-        cmd_retv = buf_normal_cmd (ed, &this, c, count, regidx);
+        cmd_retv = ed_buf_normal_cmd (ed, &this, c, count, regidx);
 
         if (cmd_retv is DONE or cmd_retv is NOTHING_TODO)
           goto new_state;
@@ -16787,7 +16791,8 @@ private Class (ed) *editor_new (void) {
         .free = SubSelfInit (buf, free,
           .row = buf_free_row,
           .rows = buf_free_rows,
-          .info = buf_free_info
+          .info = buf_free_info,
+          .line = buf_free_line
         ),
         .get = SubSelfInit (buf, get,
           .info = SubSelfInit (bufget, info,
@@ -16845,8 +16850,9 @@ private Class (ed) *editor_new (void) {
           .parser = buf_syn_parser
         ),
         .ftype = SubSelfInit (buf, ftype,
-          .init = buf_ftype_init,
           .set = buf_ftype_set,
+          .init = buf_ftype_init,
+          .free = buf_ftype_free
         ),
         .to = SubSelfInit (buf, to,
           .video = buf_to_video
@@ -16892,6 +16898,7 @@ private Class (ed) *editor_new (void) {
         .undo = SubSelfInit (buf, undo,
           .pop = buf_undo_pop,
           .push = buf_undo_push,
+          .free = buf_undo_free,
           .init = buf_undo_init,
           .exec = buf_undo_exec,
           .clear = buf_undo_clear,
@@ -16904,32 +16911,77 @@ private Class (ed) *editor_new (void) {
           .push = buf_redo_push
         ),
         .normal = SubSelfInit (buf, normal,
+          .handle = SubSelfInit (bufnormal, handle,
+            .d = buf_normal_handle_d,
+            .G = buf_normal_handle_G,
+            .g = buf_normal_handle_g,
+            .c = buf_normal_handle_c,
+            .W = buf_normal_handle_W,
+            .F = buf_normal_handle_F,
+            .comma = buf_normal_handle_comma,
+            .ctrl_w = buf_normal_handle_ctrl_w,
+          ),
+          .visual = SubSelfInit (bufnormal, visual,
+            .bw = buf_normal_visual_bw,
+            .lw = buf_normal_visual_lw,
+            .cw = buf_normal_visual_cw
+          ),
           .up = buf_normal_up,
           .bof = buf_normal_bof,
           .bol = buf_normal_bol,
           .eof = buf_normal_eof,
           .eol = buf_normal_eol,
+          .put = buf_normal_put,
           .join = buf_normal_join,
+          .yank = buf_normal_yank,
+          .Yank = buf_normal_Yank,
           .down = buf_normal_down,
           .left = buf_normal_left,
           .right = buf_normal_right,
           .delete = buf_normal_delete,
+          .noblnk =  buf_normal_noblnk,
           .page_up = buf_normal_page_up,
           .end_word = buf_normal_end_word,
           .page_down = buf_normal_page_down,
           .delete_eol = buf_normal_delete_eol,
           .goto_linenr = buf_normal_goto_linenr,
           .change_case = buf_normal_change_case,
-          .replace_char_with = buf_normal_replace_char_with
+          .replace_character = buf_normal_replace_character,
+          .replace_character_with = buf_normal_replace_character_with
+        ),
+        .delete = SubSelfInit (buf, delete,
+          .word = buf_delete_word,
+          .line = buf_delete_line
         ),
         .insert = SubSelfInit (buf, insert,
-          .string = buf_insert_string
+          .string = buf_insert_string,
+          .mode = buf_insert_mode,
+          .new_line = buf_insert_new_line,
+        ),
+        .adjust = SubSelfInit (buf, adjust,
+          .col = buf_adjust_col,
+          .view = buf_adjust_view,
+          .marks = buf_adjust_marks
+        ),
+        .jump = SubSelfInit (buf, jump,
+          .to = buf_jump_to,
+          .push = buf_jump_push
+        ),
+        .jumps = SubSelfInit (buf, jumps,
+          .free = buf_jumps_free,
+          .init = buf_jumps_init
+        ),
+        .mark = SubSelfInit (buf, mark,
+          .set = buf_mark_set,
+          .jump = buf_mark_jump,
+          .restore = buf_mark_restore
         ),
         .draw = buf_draw,
         .clear = buf_clear,
         .flush = buf_flush,
         .write = buf_write,
         .search = buf_search,
+        .indent = buf_indent,
         .input_box = buf_input_box,
         .init_fname = buf_init_fname,
         .substitute = buf_substitute,
@@ -19231,8 +19283,8 @@ ival_t i_buf_normal_goto_linenr (i_t *this, buf_t *buf, int linenum, int draw) {
   return Buf.normal.goto_linenr (buf, linenum, draw);
 }
 
-ival_t i_buf_normal_replace_char_with (i_t *this, buf_t *buf, utf8 c) {
-  return Buf.normal.replace_char_with (buf, c);
+ival_t i_buf_normal_replace_character_with (i_t *this, buf_t *buf, utf8 c) {
+  return Buf.normal.replace_character_with (buf, c);
 }
 
 ival_t i_buf_normal_change_case (i_t *this, buf_t *buf) {
@@ -19278,7 +19330,7 @@ struct ifun_t {
   { "buf_normal_page_down",  (ival_t) i_buf_normal_page_down, 3},
   { "buf_normal_change_case",(ival_t) i_buf_normal_change_case, 1},
   { "buf_normal_goto_linenr",(ival_t) i_buf_normal_goto_linenr, 3},
-  { "buf_normal_replace_char_with", (ival_t) i_buf_normal_replace_char_with, 2},
+  { "buf_normal_replace_character_with", (ival_t) i_buf_normal_replace_character_with, 2},
   { "buf_insert_string",     (ival_t) i_buf_insert_string, 3},
   { "buf_search",            (ival_t) i_buf_search, 4},
   { "buf_draw",              (ival_t) i_buf_draw, 1},
