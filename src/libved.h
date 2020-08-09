@@ -1662,8 +1662,7 @@ NewSubSelf (buf, Action,
   void
     (*free) (buf_t *, Action_t *),
     (*set_with) (buf_t *, Action_t *, int, int, char *, size_t),
-    (*set_current) (buf_t *, Action_t *, int),
-    (*push) (buf_t *this, Action_t *);
+    (*set_with_current) (buf_t *, Action_t *, int);
 );
 
 NewSubSelf (buf, action,

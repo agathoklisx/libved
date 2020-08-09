@@ -1434,7 +1434,7 @@ public void __deinit_spell__ (spell_T *this) {
 }
 
 private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
-        Action_t **action, int fidx, int lidx, bufiter_t *iter) {
+        Action_t **Action, int fidx, int lidx, bufiter_t *iter) {
   ed_t *ed = E.get.current (THIS_E);
   char prefix[fidx + 1];
   char lpart[iter->line->num_bytes - lidx];
@@ -1497,7 +1497,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
         return SPELL_OK;
       }
 
-      Buf.Action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
+      Buf.Action.set_with (*thisp, *Action, REPLACE_LINE, iter->idx,
           iter->line->bytes, iter->line->num_bytes);
       String.replace_numbytes_at_with (iter->line, spell->word_len, fidx, inp->bytes);
       String.free (inp);
@@ -1506,7 +1506,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
     }
 
     default: {
-      Buf.Action.set_with (*thisp, *action, REPLACE_LINE, iter->idx,
+      Buf.Action.set_with (*thisp, *Action, REPLACE_LINE, iter->idx,
           iter->line->bytes, iter->line->num_bytes);
       it = spell->guesses->head;
       for (int k = '1'; k < c; k++) it = it->next;
@@ -1516,6 +1516,7 @@ private utf8 __spell_question__ (spell_t *spell, buf_t **thisp,
       return SPELL_CHANGED_WORD;
     }
   }
+
   return SPELL_OK;
 }
 
@@ -1533,8 +1534,8 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
     return NOTOK;
   }
 
-  Action_t *action = Buf.Action.new (*thisp);
-  Buf.Action.set_current (*thisp, action, REPLACE_LINE);
+  Action_t *Action = Buf.Action.new (*thisp);
+  Buf.Action.set_with_current (*thisp, Action, REPLACE_LINE);
 
   int len = lidx - fidx + 1;
 
@@ -1576,15 +1577,15 @@ private int __spell_word__ (buf_t **thisp, int fidx, int lidx,
     goto theend;
   }
 
-  retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
+  retval = __spell_question__ (spell, thisp, &Action, fidx, lidx, iter);
 
 theend:
   if (retval is SPELL_CHANGED_WORD) {
-    Buf.Action.push (*thisp, action);
+    Buf.undo.push (*thisp, Action);
     Buf.draw (*thisp);
     retval = SPELL_OK;
   } else
-    Buf.Action.free (*thisp, action);
+    Buf.Action.free (*thisp, Action);
 
   Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
   return retval;
@@ -1617,8 +1618,8 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
     return NOTOK;
   }
 
-  Action_t *action = Buf.Action.new (*thisp);
-  Buf.Action.set_current (*thisp, action, REPLACE_LINE);
+  Action_t *Action = Buf.Action.new (*thisp);
+  Buf.Action.set_with_current (*thisp, Action, REPLACE_LINE);
 
   int buf_changed = 0;
 
@@ -1653,7 +1654,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
 
       if (retval >= SPELL_WORD_IS_CORRECT) continue;
 
-      retval = __spell_question__ (spell, thisp, &action, fidx, lidx, iter);
+      retval = __spell_question__ (spell, thisp, &Action, fidx, lidx, iter);
       if (SPELL_ERROR is retval) goto theend;
       if (SPELL_CHANGED_WORD is retval) {
         retval = SPELL_OK;
@@ -1666,10 +1667,10 @@ itnext:
 
 theend:
   if (buf_changed) {
-    Buf.Action.push (*thisp, action);
+    Buf.undo.push (*thisp, Action);
     Buf.draw (*thisp);
   } else
-    Buf.Action.free (*thisp, action);
+    Buf.Action.free (*thisp, Action);
 
   Buf.iter.free (*thisp, iter);
   Spell.free (spell, SPELL_DONOT_CLEAR_DICTIONARY);
