@@ -5696,6 +5696,9 @@ private int buf_evaluate_lw_mode_cb (buf_t **thisp, int fidx, int lidx, Vstring_
   if (c isnot '@') return NO_CALLBACK_FUNCTION;
 
   buf_t *this = *thisp;
+  ifnot ($from($my(root), env)->uid)
+    return NO_CALLBACK_FUNCTION;
+
   char *str = Vstring.to.cstring (vstr, ADD_NL);
   return buf_interpret (thisp, str);
 }
@@ -6390,25 +6393,30 @@ private venv_t *venv_new (void) {
 #else
   env->my_dir = string_new_with (LIBVED_DIR);
 #endif
-  __env_check_directory__ (env->my_dir->bytes, "libved directory", 1, 0, 0);
+  if (env->uid)
+    __env_check_directory__ (env->my_dir->bytes, "libved directory", 1, 0, 0);
 
 #ifndef LIBVED_TMPDIR
   env->tmp_dir = string_new_with_fmt ("%s/tmp", env->my_dir->bytes);
 #else
   env->tmp_dir = string_new_with (LIBVED_TMPDIR);
 #endif
-  __env_check_directory__ (env->tmp_dir->bytes, "temp directory", 1, 1, 0);
+  if (env->uid)
+    __env_check_directory__ (env->tmp_dir->bytes, "temp directory", 1, 1, 0);
 
 #ifndef LIBVED_DATADIR
   env->data_dir = string_new_with_fmt ("%s/data", env->my_dir->bytes);
 #else
   env->data_dir = string_new_with (LIBVED_DATADIR);
 #endif
-  __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
+  if (env->uid)
+    __env_check_directory__ (env->data_dir->bytes, "data directory", 1, 1, 0);
 
   env->i_dir = string_new_with_fmt ("%s/i", env->data_dir->bytes);
-  __env_check_directory__ (env->i_dir->bytes, "integrated interpreter directory", 1, 1, 0);
-  __env_check_directory__ (STR_FMT("%s/scripts", env->i_dir->bytes), "integrated interpreter scripts directory", 1, 1, 0);
+  if (env->uid)
+    __env_check_directory__ (env->i_dir->bytes, "integrated interpreter directory", 1, 1, 0);
+  if (env->uid)
+    __env_check_directory__ (STR_FMT("%s/scripts", env->i_dir->bytes), "integrated interpreter scripts directory", 1, 1, 0);
 
   char *path = getenv ("PATH");
   env->path = (path is NULL) ? NULL : string_new_with (path);
@@ -8031,7 +8039,8 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
     loop (pad) String.append ($from(ed, topline), " ");
 
   String.append_fmt ($myroots(topline), "%s%s", tmnow, TERM_COLOR_RESET);
-  String.prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT, COLOR_TOPLINE);
+  String.prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT,
+      $from(ed, env)->uid ? COLOR_TOPLINE : COLOR_SU);
   Video.set.row_with ($my(video), 0, $myroots(topline)->bytes);
 }
 
@@ -15615,7 +15624,8 @@ private void ed_history_add (ed_t *this, Vstring_t *hist, int what) {
 }
 
 private void ed_history_write (ed_t *this) {
-   if (-1 is access ($my(env)->data_dir->bytes, F_OK|R_OK)) return;
+   if (0 is $my(env)->uid or -1 is access ($my(env)->data_dir->bytes, F_OK|R_OK))
+     return;
    ifnot (Dir.is_directory ($my(env)->data_dir->bytes)) return;
    size_t dirlen = $my(env)->data_dir->num_bytes;
    char fname[dirlen + 32];
@@ -15644,7 +15654,9 @@ private void ed_history_write (ed_t *this) {
 }
 
 private void ed_history_read (ed_t *this) {
-   if (-1 is access ($my(env)->data_dir->bytes, F_OK|R_OK)) return;
+   if (0 is $my(env)->uid or -1 is access ($my(env)->data_dir->bytes, F_OK|R_OK))
+     return;
+
    ifnot (Dir.is_directory ($my(env)->data_dir->bytes)) return;
 
    size_t dirlen = $my(env)->data_dir->num_bytes;
@@ -15788,7 +15800,7 @@ private void ed_set_cw_mode_actions_default (ed_t *this) {
     "+send selected area to XA_CLIPBOARD\n"
     "*send selected area to XA_PRIMARY";
 
- self(set.cw_mode_actions, chars, ARRLEN(chars), actions, NULL);
+  self(set.cw_mode_actions, chars, ARRLEN(chars), actions, NULL);
 }
 
 private void ed_set_lw_mode_actions (ed_t *this, utf8 *chars, int len,
@@ -15854,8 +15866,10 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
   utf8 vc[] = {'v'}; char vact[] = "validate string for invalid utf8 sequences";
   self(set.lw_mode_actions, vc, 1, vact, buf_validate_utf8_lw_mode_cb);
 
-  utf8 ev[] = {'@'}; char evact[] = "@evaluate selected lines";
-  self(set.lw_mode_actions, ev, 1, evact, buf_evaluate_lw_mode_cb);
+  if ($my(env)->uid) {
+    utf8 ev[] = {'@'}; char evact[] = "@evaluate selected lines";
+    self(set.lw_mode_actions, ev, 1, evact, buf_evaluate_lw_mode_cb);
+  }
 }
 
 private void ed_free_file_mode_cbs (ed_t *this) {
@@ -15917,6 +15931,8 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
 
      case '@':
       retval = NOTOK;
+      ifnot ($from($my(root), env)->uid) break;
+
       if (0 is (($my(flags) & BUF_IS_SPECIAL)) and
           0 is Cstring.eq ($my(basename), UNNAMED)) {
         Vstring_t *lines = File.readlines ($my(fname), NULL, NULL, NULL);
@@ -15945,6 +15961,8 @@ private int buf_file_mode_actions_cb (buf_t **thisp, utf8 c, char *action) {
 }
 
 private void ed_set_file_mode_actions_default (ed_t *this) {
+  ifnot ($my(env)->uid) return;
+
   utf8 chars[] = {'w', 'v', '@'};
   char actions[] =
      "write buffer\n"

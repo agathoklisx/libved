@@ -1737,6 +1737,7 @@ private int __ex_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
 }
 
 private void __ex_add_word_actions__ (ed_t *this) {
+  ifnot (getuid ()) return;
   utf8 chr[] = {'S'};
   Ed.set.word_actions (this, chr, 1, "Spell word", __ex_word_actions_cb__);
 }
@@ -1745,6 +1746,8 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
   (void) vstr; (void) action;
 
   int retval = NO_CALLBACK_FUNCTION;
+
+  if (Cstring.eq_n (action, "Math", 4)) c = 'm';
 
   switch (c) {
     case 'S': {
@@ -1784,6 +1787,8 @@ private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vst
 }
 
 private void __ex_add_lw_mode_actions__ (ed_t *this) {
+  ifnot (getuid ()) return;
+
   int num_actions = 2;
 #ifdef HAS_TCC
   num_actions++;
@@ -1827,6 +1832,8 @@ private int __ex_cw_mode_cb__ (buf_t **thisp, int fidx, int lidx, string_t *str,
 }
 
 private void __ex_add_cw_mode_actions__ (ed_t *this) {
+  ifnot (getuid ()) return;
+
   int num_actions = 2;
   utf8 chars[] = {'S', 'm'};
   char actions[] =
@@ -1883,6 +1890,8 @@ private int __ex_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 }
 
 private void __ex_add_file_mode_actions__ (ed_t *this) {
+  ifnot (getuid ()) return;
+
   int num_actions = 1;
 
 #ifdef HAS_TCC
@@ -2010,6 +2019,7 @@ private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     goto theend;
 
   } else if (Cstring.eq (com->bytes, "spell")) {
+    ifnot (getuid ()) goto theend;
     retval = __buf_spell__ (thisp, rl);
 
   } else if (Cstring.eq (com->bytes, "`mkdir")) {
@@ -2033,20 +2043,25 @@ theend:
 }
 
 private void __ex_add_rline_commands__ (ed_t *this) {
-  int num_commands = 3;
-  char *commands[] = {"@info", "`mkdir", "spell", NULL};
-  int num_args[] = {0, 2, 1, 0};
-  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, RL_ARG_RANGE, 0};
+  uid_t uid = getuid ();
+
+  int num_commands = 2;
+  char *commands[] = {"@info", "`mkdir", NULL};
+  int num_args[] = {0, 2, 0};
+  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "@info", "--buf", 5);
   Ed.append.command_arg (this, "@info", "--win", 5);
   Ed.append.command_arg (this, "@info", "--ed",  4);
 
-  Ed.append.command_arg (this, "spell",  "--edit", 6);
-
   Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
   Ed.append.command_arg (this, "`mkdir", "--parents", 9);
+
+  if (uid) {
+    Ed.append.rline_command (this, "spell", 1, RL_ARG_RANGE);
+    Ed.append.command_arg (this, "spell",  "--edit", 6);
+  }
 
   Ed.set.rline_cb (this, __ex_rline_cb__);
 }
@@ -2081,7 +2096,8 @@ private void __deinit_ext__ (void) {
   __deinit_local__ ();
 #endif
 
-  __deinit_spell__ ( &(((Prop (this) *) __This__->prop))->spell);
+  if (getuid ())
+    __deinit_spell__ ( &(((Prop (this) *) __This__->prop))->spell);
 }
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
@@ -2225,19 +2241,25 @@ public Class (this) *__init_this__ (void) {
 
   __init_self__ (__This__);
 
-  ((Prop (this) *) this->prop)->spell =  __init_spell__ ();
-  ((Self (this) *) this->self)->spell = ((Prop (this) *) __This__->prop)->spell.self;
+  uid_t uid = getuid ();
+  if (uid) {
+    ((Prop (this) *) this->prop)->spell =  __init_spell__ ();
+    ((Self (this) *) this->self)->spell = ((Prop (this) *) __This__->prop)->spell.self;
+  }
 
   ((Prop (this) *) this->prop)->sys =  __init_sys__ ();
   ((Self (this) *) this->self)->sys = ((Prop (this) *) __This__->prop)->sys->self;
 
 #ifdef HAS_TCC
-  ((Prop (this) *) this->prop)->tcc =  __init_tcc__ ();
-  ((Self (this) *) this->self)->tcc = ((Prop (this) *) __This__->prop)->tcc.self;
+  if (uid) {
+    ((Prop (this) *) this->prop)->tcc =  __init_tcc__ ();
+    ((Self (this) *) this->self)->tcc = ((Prop (this) *) __This__->prop)->tcc.self;
+  }
 #endif
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
-  __init_l__ (1);
+  if (uid)
+    __init_l__ (1);
 #endif
 
   return __This__;
@@ -2252,8 +2274,10 @@ public void __deinit_this__ (Class (this) **thisp) {
 
   __deinit_ed__ (&this->__E__);
 
+  uid_t uid = getuid ();
 #ifdef HAS_PROGRAMMING_LANGUAGE
-  __deinit_l__ (&__L__);
+  if (uid)
+    __deinit_l__ (&__L__);
 #endif
 
   free (this->prop);

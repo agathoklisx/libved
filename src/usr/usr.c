@@ -117,6 +117,8 @@ private int __u_file_mode_cb__ (buf_t **thisp, utf8 c, char *action) {
 }
 
 private void __u_add_file_mode_actions__ (ed_t *this) {
+  ifnot (getuid ()) return;
+
   int num_actions = 1;
 #ifdef HAS_PROGRAMMING_LANGUAGE
   num_actions++;
@@ -136,10 +138,9 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 }
 
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr, utf8 c, char *action) {
-  (void) vstr; (void) fidx; (void) lidx;
+  (void) vstr; (void) fidx; (void) lidx; (void) action;
 
   int retval = NO_CALLBACK_FUNCTION;
-  if (Cstring.eq_n (action, "Math", 4)) c = 'm';
 
   switch (c) {
 
@@ -164,7 +165,8 @@ private void __u_add_lw_mode_actions__ (ed_t *this) {
   int num_actions = 0;
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
-  num_actions++;
+  if (getuid ())
+    num_actions++;
 #endif
 
 ifnot (num_actions) return;
@@ -542,7 +544,8 @@ private void __init_usr__ (ed_t *this) {
   __u_add_file_mode_actions__ (this);
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
-  __u_add_expr_register_cb__ (this);
+  if (getuid ())
+    __u_add_expr_register_cb__ (this);
 #endif
 
   Ed.set.on_normal_g_cb (this, __u_on_normal_g);
