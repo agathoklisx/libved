@@ -470,10 +470,73 @@ private string_t *sys_get_env (Class (sys) *this, char *name) {
   else if (Cstring.eq (name, "battery_dir"))
     String.replace_with_len ($my(shared_str), $my(env)->battery_dir->bytes,
       $my(env)->battery_dir->num_bytes);
+  else if (Cstring.eq (name, "man_exec"))
+    String.replace_with_len ($my(shared_str), $my(env)->man_exec->bytes,
+      $my(env)->man_exec->num_bytes);
   else
     String.clear ($my(shared_str));
 
   return $my(shared_str);
+}
+
+private int sys_man (buf_t **bufp, char *word, int section) {
+  string_t *man_exec = Sys.get.env (__SYS__, "man_exec");
+  if (NULL is man_exec) return NOTOK;
+
+  if (NULL is word) return NOTOK;
+
+  ed_t *ed = E.get.current (THIS_E);
+
+  int retval = NOTOK;
+  string_t *com;
+
+  buf_t *this = Ed.get.scratch_buf (ed);
+  Buf.clear (this);
+
+  if (File.exists (word)) {
+    if (Path.is_absolute (word))
+      com = String.new_with_fmt ("%s %s", man_exec->bytes, word);
+    else {
+      char *cwdir = Dir.current ();
+      com = String.new_with_fmt ("%s %s/%s", man_exec->bytes, cwdir, word);
+      free (cwdir);
+    }
+
+    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
+    goto theend;
+  }
+
+  int sections[9]; for (int i = 0; i < 9; i++) sections[i] = 0;
+  int def_sect = 2;
+
+  section = ((section <= 0 or section > 8) ? def_sect : section);
+  com = String.new_with_fmt ("%s -s %d %s", man_exec->bytes,
+     section, word);
+
+  int total_sections = 0;
+  for (int i = 1; i < 9; i++) {
+    sections[section] = 1;
+    total_sections++;
+    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
+    ifnot (retval) break;
+
+    while (sections[section] and total_sections < 8) {
+      if (section is 8) section = 1;
+      else section++;
+    }
+
+    String.replace_with_fmt (com, "%s -s %d %s", man_exec->bytes,
+        section, word);
+  }
+
+theend:
+  String.free (com);
+
+  Ed.scratch (ed, bufp, 0);
+  Buf.substitute (this, ".\b", "", GLOBAL, NO_INTERACTIVE, 0,
+      Buf.get.num_lines (this) - 1);
+  Buf.normal.bof (this, DRAW);
+  return (retval > 0 ? NOTOK : OK);
 }
 
 private int sys_mkdir (char *dir, mode_t mode, int verbose, int parents) {
@@ -550,13 +613,18 @@ private Class (sys) *__init_sys__ (void) {
   else
     $my(env)->battery_dir = String.new (0);
 
+  $my(env)->man_exec = Vsys.which ("man", E.get.env (THIS_E, "path")->bytes);
+  if (NULL is $my(env)->man_exec)
+    $my(env)->man_exec = String.new (0);
+
   $my(shared_str) = String.new (8);
 
   this->self = SelfInit (sys,
     .get = SubSelfInit (sys, get,
       .env = sys_get_env
     ),
-    .mkdir = sys_mkdir
+    .mkdir = sys_mkdir,
+    .man = sys_man
   );
 
    return this;
@@ -566,8 +634,11 @@ private void __deinit_sys__ (Class (sys) **thisp) {
   if (*thisp is NULL) return;
 
   Class (sys) *this = *thisp;
+
   String.free ($my(env)->sysname);
   String.free ($my(env)->battery_dir);
+  String.free ($my(env)->man_exec);
+
   free ($my(env));
 
   String.free ($my(shared_str));
@@ -1729,6 +1800,10 @@ private int __ex_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
       retval = __spell_word__ (thisp, fidx, lidx, it, word);
       break;
 
+    case 'm':
+      retval = Sys.man (thisp, word, -1);
+      break;
+
     default:
       break;
    }
@@ -1738,8 +1813,13 @@ private int __ex_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
 
 private void __ex_add_word_actions__ (ed_t *this) {
   ifnot (getuid ()) return;
-  utf8 chr[] = {'S'};
-  Ed.set.word_actions (this, chr, 1, "Spell word", __ex_word_actions_cb__);
+  int num_actions = 2;
+  utf8 chars[] = {'S', 'm'};
+  char actions[] =
+    "Spell word\n"
+    "man page";
+
+  Ed.set.word_actions (this, chars, num_actions, actions, __ex_word_actions_cb__);
 }
 
 private int __ex_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr, utf8 c, char *action) {
@@ -2035,6 +2115,16 @@ private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     retval = Sys.mkdir (dirs->tail->data->bytes, mode, is_verbose, parents);
     Vstring.free (dirs);
+
+  } else if (Cstring.eq (com->bytes, "`man")) {
+    Vstring_t *names = Rline.get.arg_fnames (rl, 1);
+    if (NULL is names) goto theend;
+
+    string_t *section = Rline.get.anytype_arg (rl, "section");
+    int sect_id = (NULL is section ? 0 : atoi (section->bytes));
+
+    retval = Sys.man (thisp, names->head->data->bytes, sect_id);
+    Vstring.free (names);
   }
 
 theend:

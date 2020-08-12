@@ -378,6 +378,7 @@ DeclareClass (sys);
 NewType (sysenv,
   string_t
     *sysname,
+    *man_exec,
     *battery_dir;
 );
 
@@ -393,6 +394,7 @@ NewSubSelf (sys, get,
 NewSelf (sys,
   SubSelf (sys, get) get;
   int (*mkdir) (char *, mode_t, int, int);
+  int (*man) (buf_t **, char *, int);
 );
 
 NewClass (sys,

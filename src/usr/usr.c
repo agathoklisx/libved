@@ -1,11 +1,9 @@
 
-#include <sys/stat.h> /* for mkdir() */
 #include <time.h>
 #include <pwd.h>
 #include <grp.h>
 
 NewType (uenv,
-  string_t *man_exec;
   string_t *elinks_exec;
 );
 
@@ -15,32 +13,19 @@ static uenv_t *Uenv = NULL;
  * this unit is being used as a vehicle to understand the needs and establish this
  * application layer */
 
-#include "../lib/sys/com/man.c"
 #include "../lib/sys/com/battery.c"
 #include "../lib/sys/com/stat.c"
 
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
                                       bufiter_t *it, char *word, utf8 c, char *action) {
-  (void) fidx; (void) lidx; (void) action; (void) it; (void) word; (void) thisp;
-
-  int retval = NOTOK;
-  (void) retval; // gcc complains here for no reason
-  switch (c) {
-    case 'm':
-      retval = sys_man (thisp, word, -1);
-      break;
-
-    default:
-      break;
-   }
-
-  return retval;
+  (void) fidx; (void) lidx; (void) action; (void) it; (void) word; (void) thisp; (void) c;
+  return NO_CALLBACK_FUNCTION;
 }
 
 private void __u_add_word_actions__ (ed_t *this) {
-  utf8 chr[] = {'m'};
-  Ed.set.word_actions (this, chr, 1, "man page", __u_word_actions_cb__);
+  (void) this;
+  return;
 }
 
 #ifdef HAS_PROGRAMMING_LANGUAGE
@@ -186,16 +171,6 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
   if (Cstring.eq (com->bytes, "`battery")) {
     retval = sys_battery_info (NULL, 1);
-
-  } else if (Cstring.eq (com->bytes, "`man")) {
-    Vstring_t *names = Rline.get.arg_fnames (rl, 1);
-    if (NULL is names) goto theend;
-
-    string_t *section = Rline.get.anytype_arg (rl, "section");
-    int sect_id = (NULL is section ? 0 : atoi (section->bytes));
-
-    retval = sys_man (thisp, names->head->data->bytes, sect_id);
-    Vstring.free (names);
 
   } else if (Cstring.eq (com->bytes, "`stat")) {
     Vstring_t *fnames = Rline.get.arg_fnames (rl, 1);
@@ -530,7 +505,6 @@ private void __init_usr__ (ed_t *this) {
   if (NULL is Uenv) {
     Uenv = AllocType (uenv);
     string_t *path = E.get.env (THIS_E, "path");
-    Uenv->man_exec = Vsys.which ("man", path->bytes);
     Uenv->elinks_exec = Vsys.which ("elinks", path->bytes);
   }
 
@@ -561,7 +535,6 @@ private void __init_usr__ (ed_t *this) {
 private void __deinit_usr__ (void) {
   if (NULL is Uenv) return;
 
-  String.free (Uenv->man_exec);
   String.free (Uenv->elinks_exec);
   free (Uenv);
 
