@@ -479,6 +479,89 @@ private string_t *sys_get_env (Class (sys) *this, char *name) {
   return $my(shared_str);
 }
 
+/* this prints to the message line (through an over simplistic way and only
+ * on Linux systems) the battery status and capacity */
+private int sys_battery_info (char *buf, int should_print) {
+  ed_t *ed = E.get.current (THIS_E);
+
+  int retval = NOTOK;
+
+  ifnot (Cstring.eq_n ("Linux", Sys.get.env (__SYS__, "sysname")->bytes, 5)) {
+    Msg.error (ed, "battery function implemented for Linux");
+    return NOTOK;
+  }
+
+  string_t *battery_dir = Sys.get.env (__SYS__, "battery_dir");
+  ifnot (battery_dir->num_bytes) {
+    Msg.error (ed, "battery directory hasn't been defined");
+    return NOTOK;
+  }
+
+  dirlist_t *dlist = Dir.list (battery_dir->bytes, 0);
+  char *cap = NULL;
+  char *status = NULL;
+
+  if (NULL is dlist) return NOTOK;
+
+  vstring_t *it = dlist->list->head;
+  while (it) {
+    ifnot (Cstring.cmp_n ("BAT", it->data->bytes, 3)) goto foundbat;
+    it = it->next;
+    }
+
+  goto theend;
+
+/* funny goto's (i like them (the goto's i mean)) */
+foundbat:;
+  /* some maybe needless verbosity */
+  char dir[64];
+  snprintf (dir, 64, "%s/%s/", battery_dir->bytes, it->data->bytes);
+  size_t len = bytelen (dir);
+  Cstring.cp (dir + len, 64 - len, "capacity", 8);
+  FILE *fp = fopen (dir, "r");
+  if (NULL is fp) goto theend;
+
+  size_t clen = 0;
+  ssize_t nread = getline (&cap, &clen, fp);
+  if (-1 is nread) goto theend;
+
+  cap[nread - 1] = '\0';
+  fclose (fp);
+
+  dir[len] = '\0';
+  Cstring.cp (dir + len, 64 - len, "status", 6);
+  fp = fopen (dir, "r");
+  if (NULL is fp) goto theend;
+
+/* here clen it should be zero'ed because on the second call the application
+ * segfaults (compiled with gcc and clang and at the first call with tcc);
+ * this is when the code tries to free both char *variables arguments to getline();
+ * this is as (clen) possibly interpeted as the length of the buffer
+ */
+  clen = 0;
+
+  nread = getline (&status, &clen, fp);
+  if (-1 is nread) goto theend;
+
+  status[nread - 1] = '\0';
+  fclose (fp);
+
+  retval = OK;
+
+  if (should_print)
+    Msg.send_fmt (ed, COLOR_YELLOW, "[Battery is %s, remaining %s%%]",
+        status, cap);
+
+  ifnot (NULL is buf) snprintf (buf, 64, "[Battery is %s, remaining %s%%]",
+      status, cap);
+
+theend:
+  ifnot (NULL is cap) free (cap);
+  ifnot (NULL is status) free (status);
+  dlist->free (dlist);
+  return retval;
+}
+
 private int sys_man (buf_t **bufp, char *word, int section) {
   string_t *man_exec = Sys.get.env (__SYS__, "man_exec");
   if (NULL is man_exec) return NOTOK;
@@ -624,7 +707,8 @@ private Class (sys) *__init_sys__ (void) {
       .env = sys_get_env
     ),
     .mkdir = sys_mkdir,
-    .man = sys_man
+    .man = sys_man,
+    .battery_info = sys_battery_info
   );
 
    return this;
@@ -2125,6 +2209,8 @@ private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
 
     retval = Sys.man (thisp, names->head->data->bytes, sect_id);
     Vstring.free (names);
+  } else if (Cstring.eq (com->bytes, "`battery")) {
+    retval = Sys.battery_info (NULL, 1);
   }
 
 theend:
@@ -2135,10 +2221,10 @@ theend:
 private void __ex_add_rline_commands__ (ed_t *this) {
   uid_t uid = getuid ();
 
-  int num_commands = 2;
-  char *commands[] = {"@info", "`mkdir", NULL};
-  int num_args[] = {0, 2, 0};
-  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, 0, 0};
+  int num_commands = 4;
+  char *commands[] = {"@info", "`mkdir", "`man", "`battery", NULL};
+  int num_args[] = {0, 2, 1, 0, 0};
+  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, RL_ARG_FILENAME, 0, 0};
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "@info", "--buf", 5);
@@ -2147,6 +2233,8 @@ private void __ex_add_rline_commands__ (ed_t *this) {
 
   Ed.append.command_arg (this, "`mkdir", "--mode=", 7);
   Ed.append.command_arg (this, "`mkdir", "--parents", 9);
+
+  Ed.append.command_arg (this, "`man", "--section=", 10);
 
   if (uid) {
     Ed.append.rline_command (this, "spell", 1, RL_ARG_RANGE);

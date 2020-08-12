@@ -13,7 +13,6 @@ static uenv_t *Uenv = NULL;
  * this unit is being used as a vehicle to understand the needs and establish this
  * application layer */
 
-#include "../lib/sys/com/battery.c"
 #include "../lib/sys/com/stat.c"
 
 /* the callback function that is called on 'W' in normal mode */
@@ -169,10 +168,7 @@ private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
   int retval = NOTOK;
   string_t *com = Rline.get.command (rl);
 
-  if (Cstring.eq (com->bytes, "`battery")) {
-    retval = sys_battery_info (NULL, 1);
-
-  } else if (Cstring.eq (com->bytes, "`stat")) {
+  if (Cstring.eq (com->bytes, "`stat")) {
     Vstring_t *fnames = Rline.get.arg_fnames (rl, 1);
     if (NULL is fnames) goto theend;
     retval = sys_stat (thisp, fnames->head->data->bytes);
@@ -188,13 +184,12 @@ theend:
 
 private void __u_add_rline_commands__ (ed_t *this) {
  /* sys defined commands can begin with '`': associated with shell syntax */
-  int num_commands = 3;
-  char *commands[] = {"`man", "`stat", "`battery", NULL};
-  int num_args[] = {1, 1, 0, 0};
-  int flags[] = {RL_ARG_FILENAME, RL_ARG_FILENAME, 0, 0};
+  int num_commands = 1;
+  char *commands[] = {"`stat", NULL};
+  int num_args[] = {1, 0};
+  int flags[] = {RL_ARG_FILENAME, 0};
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
-  Ed.append.command_arg (this, "`man", "--section=", 10);
 
   Ed.set.rline_cb (this, __u_rline_cb__);
 }

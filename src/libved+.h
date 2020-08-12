@@ -393,8 +393,11 @@ NewSubSelf (sys, get,
 
 NewSelf (sys,
   SubSelf (sys, get) get;
-  int (*mkdir) (char *, mode_t, int, int);
-  int (*man) (buf_t **, char *, int);
+  int
+    (*mkdir) (char *, mode_t, int, int),
+    (*man) (buf_t **, char *, int),
+    (*battery_info) (char *, int);
+
 );
 
 NewClass (sys,
