@@ -479,6 +479,89 @@ private string_t *sys_get_env (Class (sys) *this, char *name) {
   return $my(shared_str);
 }
 
+private string_t *__readlink__ (char *obj) {
+  string_t *link = String.new (PATH_MAX);
+
+  int loops = 0;
+readthelink:
+  link->num_bytes = readlink (obj, link->bytes, link->mem_size);
+  if (NOTOK is (ssize_t) link->num_bytes)
+    return link;
+
+  if (link->num_bytes is link->mem_size and loops++ is 0) {
+    String.reallocate (link, (link->mem_size / 2));
+    goto readthelink;
+  }
+
+  link->bytes[link->num_bytes] = '\0'; // readlink() does not append the nullbyte
+  return link;
+}
+
+private int sys_stat (buf_t **thisp, char *obj) {
+  ed_t *ed = E.get.current (THIS_E);
+
+  struct stat st;
+  if (NOTOK is lstat (obj, &st)) {
+    Msg.error (ed, "failed to lstat() file, %s", Error.string (ed, errno));
+    return NOTOK;
+  }
+
+  Ed.append.toscratch (ed, CLEAR, "==- stat output -==");
+
+  int islink = S_ISLNK (st.st_mode);
+  string_t *link = NULL;
+
+  if (islink) {
+    link = __readlink__ (obj);
+    if (NOTOK is (ssize_t) link->num_bytes) {
+      Msg.error (ed, "readlink(): %s", Error.string (ed, errno));
+      Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
+    } else
+      Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s -> %s", obj, link->bytes);
+  } else
+    Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
+
+theoutput:
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  Size: %ld,  Blocks: %ld,  I/O Block: %ld",
+      st.st_size, st.st_blocks, st.st_blksize);
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "Device: %ld,  Inode: %ld,  Links: %d",
+      st.st_dev, st.st_ino, st.st_nlink);
+
+  char mode_string[16];
+  Vsys.stat.mode_to_string (mode_string, st.st_mode);
+  char mode_oct[8]; snprintf (mode_oct, 8, "%o", st.st_mode);
+  struct passwd *pswd = getpwuid (st.st_uid);
+  struct group *grp = getgrgid (st.st_gid);
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR,
+  	"Access: (%s/%s), Uid: (%ld / %s), Gid: (%d / %s)\n",
+     mode_oct+2, mode_string, st.st_uid,
+    (NULL is pswd ? "NONE" : pswd->pw_name), st.st_gid,
+    (NULL is grp  ? "NONE" : grp->gr_name));
+  time_t atm = (long int) st.st_atime;
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "       Last Access: %s", Cstring.trim.end (ctime (&atm), '\n'));
+  time_t mtm = (long int) st.st_mtime;
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, " Last Modification: %s", Cstring.trim.end (ctime (&mtm), '\n'));
+  time_t ctm = (long int) st.st_ctime;
+  Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "Last Status Change: %s\n", Cstring.trim.end (ctime (&ctm), '\n'));
+
+  if (islink and NULL isnot link) {
+    islink = 0;
+    ifnot (Path.is_absolute (link->bytes)) {
+      char *dname = Path.dirname (obj);
+      String.prepend_fmt (link, "%s/", dname);
+      free (dname);
+    }
+    obj = link->bytes;
+    Ed.append.toscratch (ed, DONOT_CLEAR, "==- Link info -==");
+    Ed.append.toscratch_fmt (ed, DONOT_CLEAR, "  File: %s", obj);
+    if (OK is stat (link->bytes, &st)) goto theoutput;
+  }
+
+  String.free (link);
+  Ed.scratch (ed, thisp, NOT_AT_EOF);
+  return OK;
+}
+
 /* this prints to the message line (through an over simplistic way and only
  * on Linux systems) the battery status and capacity */
 private int sys_battery_info (char *buf, int should_print) {
@@ -708,7 +791,8 @@ private Class (sys) *__init_sys__ (void) {
     ),
     .mkdir = sys_mkdir,
     .man = sys_man,
-    .battery_info = sys_battery_info
+    .battery_info = sys_battery_info,
+    .stat = sys_stat
   );
 
    return this;
@@ -2211,6 +2295,11 @@ private int __ex_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
     Vstring.free (names);
   } else if (Cstring.eq (com->bytes, "`battery")) {
     retval = Sys.battery_info (NULL, 1);
+  } else if (Cstring.eq (com->bytes, "`stat")) {
+    Vstring_t *fnames = Rline.get.arg_fnames (rl, 1);
+    if (NULL is fnames) goto theend;
+    retval = Sys.stat (thisp, fnames->head->data->bytes);
+    Vstring.free (fnames);
   }
 
 theend:
@@ -2221,10 +2310,11 @@ theend:
 private void __ex_add_rline_commands__ (ed_t *this) {
   uid_t uid = getuid ();
 
-  int num_commands = 4;
-  char *commands[] = {"@info", "`mkdir", "`man", "`battery", NULL};
-  int num_args[] = {0, 2, 1, 0, 0};
-  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, RL_ARG_FILENAME, 0, 0};
+  int num_commands = 5;
+  char *commands[] = {"@info", "`mkdir", "`man", "`battery", "`stat", NULL};
+  int num_args[] = {0, 2, 1, 0, 1, 0};
+  int flags[] = {0, RL_ARG_FILENAME|RL_ARG_VERBOSE, RL_ARG_FILENAME, 0,
+      RL_ARG_FILENAME, 0};
 
   Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
   Ed.append.command_arg (this, "@info", "--buf", 5);

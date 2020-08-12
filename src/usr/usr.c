@@ -10,10 +10,8 @@ NewType (uenv,
 static uenv_t *Uenv = NULL;
 
 /* user sample extensions and basic system command[s], that since explore[s] the API,
- * this unit is being used as a vehicle to understand the needs and establish this
+ * this unit has being used initially, as a vehicle to understand the needs and establish this
  * application layer */
-
-#include "../lib/sys/com/stat.c"
 
 /* the callback function that is called on 'W' in normal mode */
 private int __u_word_actions_cb__ (buf_t **thisp, int fidx, int lidx,
@@ -164,34 +162,13 @@ ifnot (num_actions) return;
 
 /* this is the callback function that is called on the extended commands */
 private int __u_rline_cb__ (buf_t **thisp, rline_t *rl, utf8 c) {
-  (void) c;
-  int retval = NOTOK;
-  string_t *com = Rline.get.command (rl);
-
-  if (Cstring.eq (com->bytes, "`stat")) {
-    Vstring_t *fnames = Rline.get.arg_fnames (rl, 1);
-    if (NULL is fnames) goto theend;
-    retval = sys_stat (thisp, fnames->head->data->bytes);
-    Vstring.free (fnames);
-
-  } else
-    retval = RLINE_NO_COMMAND;
-
-theend:
-  String.free (com);
-  return retval;
+  (void) thisp; (void) rl; (void) c;
+  return RLINE_NO_COMMAND;
 }
 
 private void __u_add_rline_commands__ (ed_t *this) {
- /* sys defined commands can begin with '`': associated with shell syntax */
-  int num_commands = 1;
-  char *commands[] = {"`stat", NULL};
-  int num_args[] = {1, 0};
-  int flags[] = {RL_ARG_FILENAME, 0};
-
-  Ed.append.rline_commands (this, commands, num_commands, num_args, flags);
-
-  Ed.set.rline_cb (this, __u_rline_cb__);
+  (void) this;
+  return;
 }
 
 char __u_balanced_pairs[] = "()[]{}";

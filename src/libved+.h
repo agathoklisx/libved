@@ -396,6 +396,7 @@ NewSelf (sys,
   int
     (*mkdir) (char *, mode_t, int, int),
     (*man) (buf_t **, char *, int),
+    (*stat) (buf_t **, char *),
     (*battery_info) (char *, int);
 
 );
