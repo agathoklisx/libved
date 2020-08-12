@@ -2796,6 +2796,7 @@ private int re_match (regexp_t *re, const char *regexp, const char *s,
   info.total_caps = 0;
 
   int retval = re_foo (regexp, (int) bytelen(regexp), s, s_len, &info);
+
   if (0 <= retval) {
     re->match_idx = info.match_idx;
     re->match_len = info.match_len;
@@ -2822,6 +2823,7 @@ private int re_exec (regexp_t *re, char *buf, size_t buf_len) {
       re->pat->bytes[0] is '$' or
       re->pat->bytes[0] is '|'))
     return re->retval;
+
   do {
     struct re_cap cap[re->num_caps];
     for (int i = 0; i < re->num_caps; i++) cap[i].len = 0;
@@ -5834,7 +5836,11 @@ private int buf_com_substitute (buf_t *this, rline_t *rl, int *retval) {
     char subst[shiftwidth];
     for (int i = 0; i < shiftwidth; i++) subst[i] = ' ';
       subst[shiftwidth] = '\0';
-    return buf_substitute (this, "\t", subst, 1, interactive isnot NULL, rl->range[0], rl->range[1]);
+    return buf_substitute (this, "\t", subst, GLOBAL, interactive isnot NULL, rl->range[0], rl->range[1]);
+  }
+
+  if (rline_arg_exists (rl, "remove-doseol")) {
+    return buf_substitute (this, "\x0d", "", GLOBAL, interactive isnot NULL, rl->range[0], rl->range[1]);
   }
 
   if (pat is NULL or sub is NULL) return *retval;
@@ -13697,6 +13703,8 @@ private void ed_init_commands (ed_t *this) {
   ed_append_command_arg (this, "set", "--autosave=", 11);
   ed_append_command_arg (this, "set", "--ftype=", 8);
   ed_append_command_arg (this, "diff", "--origin", 8);
+  ed_append_command_arg (this, "substitute", "--remove-doseol", 15);
+  ed_append_command_arg (this, "s%",         "--remove-doseol", 15);
   ed_append_command_arg (this, "substitute", "--remove-tabs", 13);
   ed_append_command_arg (this, "s%",         "--remove-tabs", 13);
   ed_append_command_arg (this, "substitute", "--shiftwidth=", 13);
