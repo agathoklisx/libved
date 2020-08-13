@@ -2052,8 +2052,8 @@ private void __ex_add_lw_mode_actions__ (ed_t *this) {
 #ifdef HAS_TCC
     "Compile lines with tcc\n"
 #endif
-     "Spell line[s]\n"
-     "math expression";
+    "Spell line[s]\n"
+    "math expression";
 
   Ed.set.lw_mode_actions (this, chars, num_actions, actions, __ex_lw_mode_cb__);
 }
@@ -2440,22 +2440,35 @@ private void __init_self__ (Class (this) *this) {
  * my constant environ is fullscreen terminals. 
  */
 private void sigwinch_handler (int sig) {
-  (void) sig;
-  ed_t *ed = E.get.head (THIS_E);
+  signal (sig, sigwinch_handler);
+
   int cur_idx = E.get.current_idx (THIS_E);
+
+  ed_t *ed = E.get.head (THIS_E);
 
   while (ed) {
     Ed.set.screen_size (ed);
+
+    ifnot (OK is Ed.check_sanity (ed)) {
+      __deinit_this__ (&__This__);
+      exit (1);
+    }
+
     win_t *w = Ed.get.win_head (ed);
     while (w) {
       Ed.readjust.win_size (ed, w);
       w = Ed.get.win_next (ed, w);
     }
 
+    ifnot (E.get.next (THIS_E, ed))
+      break;
+
     ed = E.set.next (THIS_E);
   }
 
-  E.set.current (THIS_E, cur_idx);
+  ed = E.set.current (THIS_E, cur_idx);
+  win_t *w = Ed.get.current_win (ed);
+  Win.draw (w);
 }
 
 /* one idea is to hold with a question, to give some time to the
@@ -2551,7 +2564,6 @@ public void __deinit_this__ (Class (this) **thisp) {
   free (this->prop);
   free (this->self);
   free (this);
-
 
   *thisp = NULL;
 }

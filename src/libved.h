@@ -4,7 +4,11 @@
 #define MYNAME "veda"
 #define ED_INSTANCES 252
 
+#define MIN_LINES 8
+#define MIN_COLS  2
+
 #define MAX_FRAMES 3
+
 #define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
 #define DEFAULT_ON_EMPTY_LINE_STRING "~"
@@ -1150,6 +1154,16 @@ NewClass (term,
   Self (term) self;
 );
 
+NewSelf (fd,
+  int
+    (*read) (int, char *, size_t),
+    (*write) (int, char *, size_t);
+);
+
+NewClass (fd,
+  Self (fd) self;
+);
+
 NewSubSelf (ustring, get,
   utf8 (*code_at) (char *, size_t, int, int *);
 );
@@ -2052,26 +2066,20 @@ NewSubSelf (ed, draw,
   void (*current_win) (ed_t *);
 );
 
-NewSubSelf (ed, fd,
-  int (*read) (int, char *, size_t);
-  int (*write) (int, char *, size_t);
-);
-
 NewSelf (ed,
+  SubSelf (ed, sh) sh;
+  SubSelf (ed, buf) buf;
+  SubSelf (ed, win) win;
   SubSelf (ed, set) set;
   SubSelf (ed, get) get;
   SubSelf (ed, syn) syn;
   SubSelf (ed, reg) reg;
-  SubSelf (ed, append) append;
-  SubSelf (ed, readjust) readjust;
-  SubSelf (ed, rline) rline;
-  SubSelf (ed, buf) buf;
-  SubSelf (ed, win) win;
   SubSelf (ed, menu) menu;
-  SubSelf (ed, sh) sh;
-  SubSelf (ed, history) history;
   SubSelf (ed, draw) draw;
-  SubSelf (ed, fd) fd;
+  SubSelf (ed, rline) rline;
+  SubSelf (ed, append) append;
+  SubSelf (ed, history) history;
+  SubSelf (ed, readjust) readjust;
 
   void
     (*free) (ed_t *),
@@ -2081,6 +2089,7 @@ NewSelf (ed,
     (*resume) (ed_t *);
 
   int
+    (*check_sanity) (ed_t *),
     (*quit) (ed_t *, int, int),
     (*delete) (ed_t *, ed_T *, int, int),
     (*scratch) (ed_t *, buf_t **, int),
@@ -2140,6 +2149,7 @@ NewClass (ed,
   Class (i) __I__;
 
   Class (re) __Re__;
+  Class (fd) __Fd__;
   Class (msg) __Msg__;
   Class (dir) __Dir__;
   Class (vsys) __Vsys__;

@@ -66,14 +66,14 @@ int main (int argc, char **argv) {
   argparse_option_t options[] = {
     OPT_HELP (),
     OPT_GROUP("Options:"),
-    OPT_INTEGER('+', "line-nr", &linenr, "start at line number", NULL, 0, SHORT_OPT_HAS_NO_DASH),
-    OPT_INTEGER(0, "column", &column, "set pointer at column", NULL, 0, 0),
-    OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
     OPT_STRING(0, "ftype", &ftype, "set the file type", NULL, 0, 0),
-    OPT_INTEGER(0, "autosave", &autosave, "interval time in minutes to autosave buffer", NULL, 0, 0),
     OPT_STRING(0, "backup-suffix", &backup_suffix, "backup suffix (default: ~)", NULL, 0, 0),
     OPT_STRING(0, "exec-com", &exec_com, "execute command", NULL, 0, 0),
     OPT_STRING(0, "load-file", &load_file, "eval file", NULL, 0, 0),
+    OPT_INTEGER('+', "line-nr", &linenr, "start at line number", NULL, 0, SHORT_OPT_HAS_NO_DASH),
+    OPT_INTEGER(0, "column", &column, "set pointer at column", NULL, 0, 0),
+    OPT_INTEGER(0, "num-win", &num_win, "create new [num] windows", NULL, 0, 0),
+    OPT_INTEGER(0, "autosave", &autosave, "interval time in minutes to autosave buffer", NULL, 0, 0),
     OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
     OPT_BOOLEAN(0, "pager", &ispager, "behave as a pager", NULL, 0, 0),
     OPT_BOOLEAN(0, "exit", &exit, "exit", NULL, 0, 0),
@@ -103,6 +103,11 @@ int main (int argc, char **argv) {
     signal (SIGWINCH, sigwinch_handler);
 
     this = E.get.current (THIS_E);
+    ifnot (OK is Ed.check_sanity (this)) {
+      retval = 1;
+      goto theend;
+    }
+
     w = Ed.get.current_win (this);
     goto theloop;
   }
@@ -110,6 +115,10 @@ int main (int argc, char **argv) {
   num_win = (num_win < argc ? num_win : argc);
 
   this = E.new (THIS_E, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
+  if (NOTOK is Ed.check_sanity (this)) {
+    retval = 1;
+    goto theend;
+  }
 
   filetype = Ed.syn.get_ftype_idx (this, ftype);
 

@@ -267,6 +267,7 @@ enum {
   Class (E) *__E__;                 \
   Class (__me__) *Me;               \
   Class (re) *__Re__;               \
+  Class (fd) *__Fd__;               \
   Class (msg) *__Msg__;             \
   Class (dir) *__Dir__;             \
   Class (vsys) *__Vsys__;           \
@@ -502,6 +503,8 @@ NewType (video,
   string_t
     *render,
     *tmp_render;
+
+  Vstring_t *tmp_list;
 
   int
     fd,
@@ -1534,6 +1537,8 @@ do {                                                                \
 #define Win My(__Win__)
 #define Buf My(__Buf__)
 #define I My(__I__)
+
+#define Fd My(__Fd__)
 #define Re My(__Re__)
 #define Dir My(__Dir__)
 #define Msg My(__Msg__)

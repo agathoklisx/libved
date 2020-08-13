@@ -1775,7 +1775,8 @@ private void __deinit_string__ (string_T *this) {
   (void) this;
 }
 
-/* like an array semantics */
+/* array semantics type */
+
 private void vstring_clear (Vstring_t *this) {
   vstring_t *it = this->head;
   while (it) {
@@ -3679,6 +3680,15 @@ private int fd_write (int fd, char *buf, size_t len) {
   return retval;
 }
 
+private Class (fd) __init_fd__ () {
+  return ClassInit (fd,
+    .self = SelfInit (fd,
+      .read = fd_read,
+      .write = fd_write
+    )
+  );
+}
+
 private void term_screen_bell (term_t *this) {
   TERM_SEND_ESC_SEQ (TERM_BELL);
 }
@@ -3912,8 +3922,8 @@ private utf8 term_input_get (term_t *this) {
 
   switch (c) {
     case ESCAPE_KEY:
-      if (fd_read ($my(in_fd), buf, 1) is 0)
-         return ESCAPE_KEY;
+      ifnot (fd_read ($my(in_fd), buf, 1))
+        return ESCAPE_KEY;
 
       /* recent (revailed through CTRL-[other than CTRL sequence]) and unused */
       if ('z' >= buf[0] and buf[0] >= 'a') {
@@ -3925,18 +3935,18 @@ private utf8 term_input_get (term_t *this) {
         return 0;
       }
 
-      if (buf[0] isnot '[' && buf[0] isnot 'O')
+      if (buf[0] isnot '[' and buf[0] isnot 'O')
         return 0; // 65535 + buf[0];
 
       ifnot (fd_read ($my(in_fd), buf + 1, 1))
         return ESCAPE_KEY;
 
-      if (buf[0] == '[') {
-        if ('0' <= buf[1] && buf[1] <= '9') {
+      if (buf[0] is '[') {
+        if ('0' <= buf[1] and buf[1] <= '9') {
           ifnot (fd_read ($my(in_fd), buf + 2, 1))
-             return ESCAPE_KEY;
+            return ESCAPE_KEY;
 
-          if (buf[2] == '~') {
+          if (buf[2] is '~') {
             switch (buf[1]) {
               case '1': return HOME_KEY;
               case '2': return INSERT_KEY;
@@ -3948,7 +3958,7 @@ private utf8 term_input_get (term_t *this) {
               case '8': return END_KEY;
               default: return 0;
             }
-          } else if (buf[1] == '1') {
+          } else if (buf[1] is '1') {
             if (fd_read ($my(in_fd), buf, 1) is 0)
               return ESCAPE_KEY;
 
@@ -3963,7 +3973,7 @@ private utf8 term_input_get (term_t *this) {
               case '9': return FN_KEY(8);
               default: return 0;
             }
-          } else if (buf[1] == '2') {
+          } else if (buf[1] is '2') {
             if (fd_read ($my(in_fd), buf, 1) is 0)
               return ESCAPE_KEY;
 
@@ -3976,12 +3986,12 @@ private utf8 term_input_get (term_t *this) {
             }
           } else { /* CTRL_[key other than CTRL sequence] */
                    /* lower case */
-            if (buf[2] == 'h')
+            if (buf[2] is 'h')
               return INSERT_KEY; /* sample/test (logically return 0) */
             else
               return 0;
           }
-        } else if (buf[1] == '[') {
+        } else if (buf[1] is '[') {
           if (fd_read ($my(in_fd), buf, 1) is 0)
             return ESCAPE_KEY;
 
@@ -4007,7 +4017,7 @@ private utf8 term_input_get (term_t *this) {
             default: return 0;
           }
         }
-      } else if (buf[0] == 'O') {
+      } else if (buf[0] is 'O') {
         switch (buf[1]) {
           case 'A': return ARROW_UP_KEY;
           case 'B': return ARROW_DOWN_KEY;
@@ -4053,12 +4063,21 @@ private utf8 term_input_get (term_t *this) {
       return code;
     }
 
-    if (127 == c) return BACKSPACE_KEY;
+    if (127 is c) return BACKSPACE_KEY;
 
     return c;
   }
 
   return NOTOK;
+}
+
+private void video_alloc_list (video_t *this) {
+  this->tmp_list = vstring_new ();
+  for (int i = 0; i < this->num_rows; i++) {
+    vstring_t *vstr = AllocType (vstring);
+    vstr->data = string_new (this->num_cols);
+    current_list_append (this->tmp_list, vstr);
+  }
 }
 
 private video_t *video_new (int fd, int rows, int cols, int first_row, int first_col) {
@@ -4081,12 +4100,14 @@ private video_t *video_new (int fd, int rows, int cols, int first_row, int first
   this->render = string_new (cols);
   this->tmp_render = string_new (cols);
   this->rows = Alloc (sizeof (int) * this->num_rows);
+  video_alloc_list (this);
   return this;
 }
 
 private void video_free (video_t *this) {
   if (this is NULL) return;
 
+  vstring_free (this->tmp_list);
   vstring_t *it = this->head;
 
   while (it isnot NULL) {
@@ -4191,36 +4212,40 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
   f_p = bytes;
   char *l_p = bytes;
 
-  Vstring_t *vsa = vstring_new ();
+  Vstring_t *Vstr = this->tmp_list;
+  vstring_t *vstr = Vstr->head;
 
+  int num_items = 0;
   while (l_p) {
-    vstring_t *vs = AllocType (vstring);
-    vs->data = string_new (8);
+    string_clear (vstr->data);
 
     l_p = cstring_byte_in_str (l_p, '\n');
 
     if (NULL is l_p) {
-      string_append (vs->data, f_p);
+      string_append (vstr->data, f_p);
     } else {
       char line[l_p - f_p];
       int i = 0;
       while (f_p < l_p) line[i++] = *f_p++;
       f_p++; l_p++;
       line[i] = '\0';
-      string_append (vs->data, line);
+      string_append (vstr->data, line);
     }
 
-    current_list_append (vsa, vs);
+    if (++num_items is this->num_rows) break;
+    vstr = vstr->next;
   }
 
-  int num_rows = vsa->num_items;
+  int num_rows = num_items;
+
   int i = 0; while (i < num_rows - 1 and first_row > 2) {i++; first_row--;};
   num_rows = i + 1;
   int num_chars = last_col - first_col + 1;
 
   string_clear (this->tmp_render);
   string_append_fmt (this->tmp_render, "%s" TERM_SET_COLOR_FMT, TERM_CURSOR_HIDE, COLOR_BOX);
-  vstring_t *it = vsa->head;
+
+  vstring_t *it = Vstr->head;
   i = 0;
   while (i < num_rows) {
     this->rows[i] = (i + first_row);
@@ -4242,7 +4267,6 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
 
   string_append_fmt (this->tmp_render, "%s%s", TERM_COLOR_RESET, TERM_CURSOR_SHOW);
   video_flush (this, this->tmp_render);
-  vstring_free (vsa);
   return this;
 }
 
@@ -4753,7 +4777,11 @@ private dim_t **ed_dim_calc (ed_t *this, int num_rows, int num_frames,
   int dividers = has_dividers ? num_frames - 1 : 0;
   int rows = (num_frames * min_rows) + dividers + reserved;
 
-  if (num_rows < rows) return NULL;
+  if (num_rows < rows) {
+    Term.reset ($my(term));
+    fprintf (stderr, "Available LINES are less than the required to be functional\n");
+    exit (1);
+  }
 
   rows = (num_rows - dividers - reserved) / num_frames;
   int mod = (num_rows - dividers - reserved) % num_frames;
@@ -8035,18 +8063,20 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
   time_t tim = time (NULL);
   struct tm *tm = localtime (&tim);
 
-  String.replace_with_fmt ($from(ed, topline), "[%s] [pid %d]",
+  String.replace_with_fmt ($myroots(topline), "[%s] [pid %d]",
     $my(mode), $from(ed, env)->pid);
 
   char tmnow[32];
   strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
-  int pad = $my(dim->num_cols) - $from(ed, topline)->num_bytes - bytelen (tmnow);
+  int pad = $my(dim->num_cols) - $myroots(topline)->num_bytes - bytelen (tmnow);
   if (pad > 0)
-    loop (pad) String.append ($from(ed, topline), " ");
+    loop (pad) String.append ($myroots(topline), " ");
 
-  String.append_fmt ($myroots(topline), "%s%s", tmnow, TERM_COLOR_RESET);
+  String.append ($myroots(topline), tmnow);
+  String.clear_at ($myroots(topline), $my(dim)->num_cols);
+  String.append_fmt ($myroots(topline), TERM_COLOR_RESET);
   String.prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT,
-      $from(ed, env)->uid ? COLOR_TOPLINE : COLOR_SU);
+      $myroots(env)->uid ? COLOR_TOPLINE : COLOR_SU);
   Video.set.row_with ($my(video), 0, $myroots(topline)->bytes);
 }
 
@@ -15580,6 +15610,12 @@ private win_t *ed_set_current_win (ed_t *this, int idx) {
   return this->current;
 }
 
+private int ed_check_sanity (ed_t *this) {
+  if ($my(dim)->num_rows < MIN_LINES) return NOTOK;
+  if ($my(dim)->num_cols < MIN_COLS) return NOTOK;
+  return OK;
+}
+
 private void ed_set_screen_size (ed_t *this) {
   Term.reset ($my(term));
   Term.init_size ($my(term), $from(&$my(term), lines), $from(&$my(term), columns));
@@ -15594,6 +15630,8 @@ private void ed_set_screen_size (ed_t *this) {
   $my(prompt_row) = $my(msg_row) - 1;
   ifnot (NULL is $my(video)->rows) free ($my(video)->rows);
   $my(video)->rows = Alloc (sizeof (int) * $my(video)->num_rows);
+  Vstring.free ($my(video)->tmp_list);
+  video_alloc_list ($my(video));
 }
 
 private dim_t *ed_set_dim (ed_t *this, dim_t *dim, int f_row, int l_row,
@@ -16662,16 +16700,17 @@ private Class (ed) *editor_new (void) {
   *this = ClassInit (ed,
     .prop = this->prop,
     .self = SelfInit (ed,
-      .free_info = ed_free_info,
       .quit = ed_quit,
-      .scratch = ed_scratch,
-      .messages = ed_messages,
-      .resume = ed_resume,
-      .suspend = ed_suspend,
       .record = ed_record,
+      .resume = ed_resume,
+      .scratch = ed_scratch,
+      .suspend = ed_suspend,
       .question = ed_question,
+      .messages = ed_messages,
       .dim_calc = ed_dim_calc,
+      .free_info = ed_free_info,
       .dims_init = ed_dims_init,
+      .check_sanity = ed_check_sanity,
       .set = SubSelfInit (ed, set,
         .dim = ed_set_dim,
         .screen_size = ed_set_screen_size,
@@ -16752,10 +16791,6 @@ private Class (ed) *editor_new (void) {
       ),
       .sh = SubSelfInit (ed, sh,
         .popen = ed_sh_popen
-      ),
-      .fd = SubSelfInit (ed, fd,
-        .read = fd_read,
-        .write = fd_write
       ),
       .history = SubSelfInit (ed, history,
         .add = ed_history_add,
@@ -17036,6 +17071,7 @@ private Class (ed) *editor_new (void) {
       ),
     ),
     .__Re__ = __init_re__ (),
+    .__Fd__ = __init_fd__ (),
     .__Dir__ = __init_dir__ (),
     .__File__ = __init_file__ (),
     .__Path__ = __init_path__ (),
@@ -17108,6 +17144,7 @@ private ed_t *ed_init (E_T *E) {
   $my(env)  = $from($my(Me), env);
 
   $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
+
   $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
 
   $my(__Win__)     = &E->__Ed__->__Win__;
@@ -17136,6 +17173,7 @@ private ed_t *ed_init (E_T *E) {
 
   $my(video) = Video.new (OUTPUT_FD, $from($my(term), lines),
       $from($my(term), columns), 1, 1);
+
   Term.set ($my(term));
 
   $my(topline) = String.new ($from($my(term), columns));

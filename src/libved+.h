@@ -13,6 +13,7 @@ extern Class (this) *__This__;
 #define Win     __This__->__E__->__Ed__->__Win__.self
 #define Buf     __This__->__E__->__Ed__->__Buf__.self
 #define I       __This__->__E__->__Ed__->__I__.self
+#define Fd      __This__->__E__->__Ed__->__Fd__.self
 #define Re      __This__->__E__->__Ed__->__Re__.self
 #define Msg     __This__->__E__->__Ed__->__Msg__.self
 #define Dir     __This__->__E__->__Ed__->__Dir__.self
