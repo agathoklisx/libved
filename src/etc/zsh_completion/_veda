@@ -14,4 +14,5 @@ _arguments \
   '--backupfile[backup file at the initial reading]' \
   '--pager[behave as a pager]' \
   '--exit[exit]' \
+  '--exit-quick[exit when quiting the current buffer]' \
   '*:files:_files'

@@ -2489,6 +2489,7 @@ mutable public void __alloc_error_handler__ (int err, size_t size,
 
   exit (1);
 }
+
 private int __initialize__ (void) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */

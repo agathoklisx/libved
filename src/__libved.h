@@ -974,6 +974,7 @@ NewProp (ed,
 
   int
     state,
+    exit_quick,
     has_promptline,
     has_msgline,
     has_topline,

@@ -3926,17 +3926,15 @@ private utf8 term_input_get (term_t *this) {
         return ESCAPE_KEY;
 
       /* recent (revailed through CTRL-[other than CTRL sequence]) and unused */
-      if ('z' >= buf[0] and buf[0] >= 'a') {
-        /*
-         * if (fd_read ($my(in_fd), buf + 1, 1) is 0)
-         *   return ALT(buf[0]);
-         * else
-         */
+      if ('z' >= buf[0] and buf[0] >= 'a')
         return 0;
-      }
+
+      if (buf[0] is ESCAPE_KEY /* probably alt->arrow-key */)
+        ifnot (fd_read ($my(in_fd), buf, 1))
+          return 0;
 
       if (buf[0] isnot '[' and buf[0] isnot 'O')
-        return 0; // 65535 + buf[0];
+        return 0;
 
       ifnot (fd_read ($my(in_fd), buf + 1, 1))
         return ESCAPE_KEY;
@@ -7804,11 +7802,11 @@ private buf_t *ed_get_scratch_buf (ed_t *this) {
 private void ed_append_toscratch (ed_t *this, int clear_first, char *bytes) {
   buf_t *buf = self(buf.get, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
   if (NULL is buf)
-    buf = ed_get_scratch_buf (this);
+    buf = self(get.scratch_buf);
 
   if (clear_first) Buf.clear (buf);
 
-  Vstring_t *lines = cstring_chop (bytes, '\n', NULL, NO_CB_FN, NULL);
+  Vstring_t *lines = Cstring.chop (bytes, '\n', NULL, NO_CB_FN, NULL);
   vstring_t *it = lines->head;
 
   int ifclear = 0;
@@ -7819,7 +7817,8 @@ private void ed_append_toscratch (ed_t *this, int clear_first, char *bytes) {
       Buf.append_with (buf, it->data->bytes);
     it = it->next;
   }
-  vstring_free (lines);
+
+  Vstring.free (lines);
 }
 
 private void ed_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, ...) {
@@ -7830,15 +7829,15 @@ private void ed_append_toscratch_fmt (ed_t *this, int clear_first, char *fmt, ..
 }
 
 private int ed_scratch (ed_t *this, buf_t **bufp, int at_eof) {
-  ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+  ifnot (Cstring.eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
     self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
-    ifnot (cstring_eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
-      ed_get_scratch_buf (this);
+    ifnot (Cstring.eq ($from((*bufp), fname), VED_SCRATCH_BUF)) {
+      self(get.scratch_buf);
       self(buf.change, bufp, VED_SCRATCH_WIN, VED_SCRATCH_BUF);
     }
   }
 
-  if (at_eof) buf_normal_eof (*bufp, DRAW);
+  if (at_eof) Buf.normal.eof (*bufp, DRAW);
   else Buf.draw (*bufp);
 
   return DONE;
@@ -7846,10 +7845,10 @@ private int ed_scratch (ed_t *this, buf_t **bufp, int at_eof) {
 
 private int ed_messages (ed_t *this, buf_t **bufp, int at_eof) {
   self(buf.change, bufp, VED_MSG_WIN, VED_MSG_BUF);
-  ifnot (cstring_eq ($from((*bufp), fname), VED_MSG_BUF))
+  ifnot (Cstring.eq ($from((*bufp), fname), VED_MSG_BUF))
     return NOTHING_TODO;
 
-  if (at_eof) buf_normal_eof (*bufp, DRAW);
+  if (at_eof) Buf.normal.eof (*bufp, DRAW);
   else Buf.draw (*bufp);
 
   return DONE;
@@ -7866,7 +7865,7 @@ private void ed_append_message (ed_t *this, char *msg) {
   buf_t *buf = self(buf.get, VED_MSG_WIN, VED_MSG_BUF);
   ifnot (buf) return;
   Vstring_t unused;
-  cstring_chop (msg, '\n', &unused, ed_append_message_cb, (void *) buf);
+  Cstring.chop (msg, '\n', &unused, ed_append_message_cb, (void *) buf);
 }
 
 private void ed_append_message_fmt (ed_t *this, char *fmt, ...) {
@@ -7915,7 +7914,7 @@ private int ed_fmt_string_with_numchars (ed_t *this, string_t *dest,
 
   ifnot (src_len) return numchars;
 
-  ustring_t *it = ustring_encode ($my(uline), src, src_len, CLEAR, tabwidth, 0);
+  ustring_t *it = Ustring.encode ($my(uline), src, src_len, CLEAR, tabwidth, 0);
 
   ustring_t *tmp = it;
 
@@ -15634,6 +15633,10 @@ private void ed_set_screen_size (ed_t *this) {
   video_alloc_list ($my(video));
 }
 
+private void ed_set_exit_quick (ed_t *this, int val) {
+  $my(exit_quick) = val;
+}
+
 private dim_t *ed_set_dim (ed_t *this, dim_t *dim, int f_row, int l_row,
                                                    int f_col, int l_col) {
   (void) this;
@@ -16615,6 +16618,11 @@ exec_block:
           goto new_state;
 
         if (cmd_retv is BUF_QUIT) {
+          if ($from(ed, exit_quick)) {
+            cmd_retv = EXIT_ALL_FORCE;
+            goto exit_this;
+          }
+
           retval = buf_change (&this, VED_COM_BUF_CHANGE_PREV_FOCUSED);
           if (retval is NOTHING_TODO) {
             retval = Ed.win.change ($my(root), &this, VED_COM_WIN_CHANGE_PREV_FOCUSED,
@@ -16627,6 +16635,7 @@ exec_block:
             goto new_state;
         }
 
+exit_this:
         if (cmd_retv is EXIT_THIS or cmd_retv is EXIT_ALL or cmd_retv is EXIT_ALL_FORCE) {
           ifnot (($myroots(state) & ED_SUSPENDED)) {
             if (cmd_retv is EXIT_THIS)
@@ -16713,6 +16722,7 @@ private Class (ed) *editor_new (void) {
       .check_sanity = ed_check_sanity,
       .set = SubSelfInit (ed, set,
         .dim = ed_set_dim,
+        .exit_quick = ed_set_exit_quick,
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
         .topline = ed_set_topline,
@@ -17090,8 +17100,6 @@ private Class (ed) *editor_new (void) {
   this->__Cursor__.self = this->__Term__.self.__Cursor__;
   this->__Screen__.self = this->__Term__.self.__Screen__;
   this->__Input__.self = this->__Term__.self.__Input__;
-
-  this->state = this->error_state = 0;
 
   $my(video) = NULL;
   $my(term)  = NULL;

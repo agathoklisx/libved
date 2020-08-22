@@ -1979,6 +1979,7 @@ NewSubSelf (ed, get,
 NewSubSelf (ed, set,
    void
      (*state) (ed_t *, int),
+     (*exit_quick) (ed_t *, int),
      (*screen_size) (ed_t *),
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
@@ -2139,9 +2140,6 @@ NewClass (i,
 );
 
 NewClass (ed,
-   int error_state;
-   int state;
-
   Prop (ed) *prop;
   Self (ed)  self;
   Class (buf) __Buf__;

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+page=$1
+
+if [ -z $page ]; then exit 1; fi
+vedas --exec-com=\`man::$page --pager --exit-quick

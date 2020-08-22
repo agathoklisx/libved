@@ -55,6 +55,7 @@ int main (int argc, char **argv) {
   int
     retval = 0,
     exit = 0,
+    exit_quick = 0,
     filetype = FTYPE_DEFAULT,
     autosave = 0,
     backupfile = 0,
@@ -77,6 +78,7 @@ int main (int argc, char **argv) {
     OPT_BOOLEAN(0, "backupfile", &backupfile, "backup file at the initial reading", NULL, 0, 0),
     OPT_BOOLEAN(0, "pager", &ispager, "behave as a pager", NULL, 0, 0),
     OPT_BOOLEAN(0, "exit", &exit, "exit", NULL, 0, 0),
+    OPT_BOOLEAN(0, "exit-quick", &exit_quick, "exit when quiting current buffer", NULL, 0, 0),
     OPT_END()
   };
 
@@ -85,6 +87,7 @@ int main (int argc, char **argv) {
   argc = Argparse.exec (&argparser, argc, (const char **) argv);
 
   if (argc is -1) goto theend;
+
   E.set.at_init_cb (THIS_E, __init_ext__);
   E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
@@ -107,6 +110,9 @@ int main (int argc, char **argv) {
       retval = 1;
       goto theend;
     }
+
+    if (exit_quick)
+      Ed.set.exit_quick (this, 1);
 
     w = Ed.get.current_win (this);
     goto theloop;
@@ -185,6 +191,9 @@ int main (int argc, char **argv) {
     if (retval <= NOTOK) retval = 1;
     goto theend;
   }
+
+  if (exit_quick)
+    Ed.set.exit_quick (this, 1);
 
 theloop:;
   for (;;) {
