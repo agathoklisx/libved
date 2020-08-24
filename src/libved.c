@@ -3164,9 +3164,9 @@ private void dir_list_free (dirlist_t *dlist) {
 
 /* this needs a simplification and enhancement */
 private dirlist_t *dir_list (char *dir, int flags) {
-  (void) flags;
   if (NULL is dir) return NULL;
-  ifnot (is_directory (dir)) return NULL;
+  ifnot (flags & DIRLIST_DONOT_CHECK_DIRECTORY)
+    ifnot (is_directory (dir)) return NULL;
 
   DIR *dh = NULL;
   if (NULL is (dh = opendir (dir))) return NULL;
@@ -3904,11 +3904,12 @@ private int term_reset (term_t *this) {
   return OK;
 }
 
-/* this is an extended version of the same function of
- * the kilo editor at https://github.com/antirez/kilo.git
- */
-/* it should work the same, under xterm, rxvt-unicode, st and linux terminals */
-/* it also handles utf8 byte sequences, so it should return the integer represanation */
+/* This is an extended version of the same function of the kilo editor at:
+ * https://github.com/antirez/kilo.git
+ *
+ * It should work the same, under xterm, rxvt-unicode, st and linux terminals.
+ * It also handles UTF8 byte sequences and it should return the integer represantation
+ * of such sequence */
 private utf8 term_input_get (term_t *this) {
   char c;
   int n;
@@ -6655,8 +6656,12 @@ private char *buf_get_contents (buf_t *this, int addnl) {
   return buf;
 }
 
-private win_t *buf_get_parent (buf_t *this) {
+private win_t *buf_get_my_parent (buf_t *this) {
   return $my(parent);
+}
+
+private ed_t *buf_get_my_root (buf_t *this) {
+  return $my(root);
 }
 
 private char *buf_get_fname (buf_t *this) {
@@ -11826,7 +11831,6 @@ handle_char:
       case 'i':
       case 'I':
       case 'c':
-        VISUAL_ADJUST_IDXS($my(vis)[0]);
         {
           int row = $my(cur_video_row) - (2 < $my(cur_video_row));
           int index = $my(vis)[1].lidx;
@@ -11835,6 +11839,7 @@ handle_char:
               row--; index--;
             }
 
+          VISUAL_ADJUST_IDXS($my(vis)[1]);
           string_t *str = self(input_box, row, $my(vis)[0].fidx + 1,
               DONOT_ABORT_ON_ESCAPE, NULL);
 
@@ -16879,7 +16884,8 @@ private Class (ed) *editor_new (void) {
             .bytes_at = buf_get_row_bytes_at,
             .col_idx = buf_get_row_col_idx
           ),
-          .parent = buf_get_parent,
+          .my_parent = buf_get_my_parent,
+          .my_root = buf_get_my_root,
           .basename = buf_get_basename,
           .fname = buf_get_fname,
           .ftype_name = buf_get_ftype_name,

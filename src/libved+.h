@@ -192,7 +192,8 @@ NewProp (proc,
      stdin_fds[2],
      status,
      reset_term,
-     prompt_atend;
+     prompt_atend,
+     retval;
 
    size_t stdin_buf_size;
 
@@ -200,6 +201,8 @@ NewProp (proc,
    buf_t *buf;
    ed_t *ed;
    PopenRead_cb read;
+
+   void *object;
 );
 
 NewType (proc,
@@ -211,7 +214,8 @@ NewSelf (proc,
 
   void
     (*free) (proc_t *),
-    (*free_argv) (proc_t *);
+    (*free_argv) (proc_t *),
+    (*set_stdin) (proc_t *, char *, size_t);
 
   char **(*parse) (proc_t *, char *);
   int

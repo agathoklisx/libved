@@ -825,6 +825,8 @@ NewType (ftype,
   Balanced_cb balanced;
 );
 
+#define DIRLIST_DONOT_CHECK_DIRECTORY (1 << 0)
+
 NewType (dirlist,
   Vstring_t *list;
   char dir[PATH_MAX];
@@ -1589,7 +1591,8 @@ NewSubSelf (buf, get,
     (*current_video_row) (buf_t *),
     (*current_video_col) (buf_t *);
 
-  win_t *(*parent) (buf_t *);
+  win_t *(*my_parent) (buf_t *);
+  ed_t  *(*my_root) (buf_t *);
 );
 
 NewSubSelf (bufset, as,

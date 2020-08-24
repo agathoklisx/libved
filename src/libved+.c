@@ -1125,6 +1125,7 @@ private proc_t *proc_new (void) {
   $my(argv) = NULL;
   $my(reset_term) = 0;
   $my(prompt_atend) = 1;
+  $my(is_bg) = 0;
   return this;
 }
 
@@ -1134,8 +1135,11 @@ private int proc_wait (proc_t *this) {
   waitpid ($my(pid), &$my(status), 0);
  // waitpid ($my(pid), &$my(status), WNOHANG|WUNTRACED);
   if (WIFEXITED ($my(status)))
-    return WEXITSTATUS ($my(status));
-  return -1;
+    $my(retval) = WEXITSTATUS ($my(status));
+  else
+    $my(retval) = -1;
+
+  return $my(retval);
 }
 
 private int proc_read (proc_t *this) {
@@ -1305,6 +1309,14 @@ private int proc_open (proc_t *this) {
   return $my(pid);
 }
 
+private void proc_set_stdin (proc_t *this, char *buf, size_t size) {
+  if (NULL is buf) return;
+  $my(dup_stdin) = 1;
+  $my(stdin_buf) = Alloc (size + 1);
+  $my(stdin_buf_size) = size;
+  Cstring.cp ($my(stdin_buf), size + 1, buf, size);
+}
+
 private int proc_exec (proc_t *this, char *com) {
   int retval = 0;
 
@@ -1317,7 +1329,8 @@ private int proc_exec (proc_t *this, char *com) {
 
   proc_read (this);
 
-  retval = proc_wait (this);
+  ifnot ($my(is_bg))
+    retval = proc_wait (this);
 
 theend:
   if($my(reset_term))
@@ -1338,7 +1351,8 @@ private proc_T __init_proc__ (void) {
       .wait = proc_wait,
       .parse = proc_parse,
       .read = proc_read,
-      .exec = proc_exec
+      .exec = proc_exec,
+      .set_stdin = proc_set_stdin
     )
   );
 }
@@ -1834,7 +1848,7 @@ private int __buf_spell__ (buf_t **thisp, rline_t *rl) {
   int range[2];
   int edit = Rline.arg.exists (rl, "edit");
   if (edit) {
-    win_t *w = Buf.get.parent (*thisp);
+    win_t *w = Buf.get.my_parent (*thisp);
     Win.edit_fname (w, thisp, spell_get_dictionary ()->bytes, 0, 0, 1, 0);
     return OK;
   }
