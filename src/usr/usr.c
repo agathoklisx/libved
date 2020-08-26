@@ -1,7 +1,31 @@
 
-#include <time.h>
-#include <pwd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdarg.h>
+#ifndef __APPLE__
+#include <pty.h>
+#else
+#include <util.h>
+#endif
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <locale.h>
 #include <grp.h>
+#include <pwd.h>
+#include <time.h>
+#include <errno.h>
+
+#include <libved.h>
+#include <libved+.h>
+
+#ifdef HAS_JSON
+#include "../lib/json/json.h"
+#endif
 
 NewType (uenv,
   string_t *elinks_exec;

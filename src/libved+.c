@@ -16,8 +16,11 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <locale.h>
+#include <grp.h>
+#include <pwd.h>
 #include <time.h>
 #include <errno.h>
+
 
 #include "libved.h"
 #include "libved+.h"
@@ -427,7 +430,7 @@ end:
   return self->cpidx + self->argc;
 }
 
-private int argparse_help_cb (argparse_t *self, const argparse_option_t *option) {
+public int argparse_help_cb (argparse_t *self, const argparse_option_t *option) {
   (void)option;
   argparse_usage (self);
   return -1;
@@ -2348,7 +2351,7 @@ private void __ex_add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, __ex_rline_cb__);
 }
 
-private void __init_ext__ (Type (ed) *this) {
+public void __init_ext__ (Type (ed) *this) {
   __ex_add_rline_commands__ (this);
   __ex_add_cw_mode_actions__ (this);
   __ex_add_lw_mode_actions__ (this);
@@ -2369,7 +2372,7 @@ private void __init_ext__ (Type (ed) *this) {
   Ed.set.at_exit_cb (this, Ed.history.write);
 }
 
-private void __deinit_ext__ (void) {
+public void __deinit_ext__ (void) {
 #ifdef HAS_USER_EXTENSIONS
   __deinit_usr__ ();
 #endif
@@ -2453,7 +2456,7 @@ private void __init_self__ (Class (this) *this) {
 /* Surely not perfect handler. Never have the chance to test since
  * my constant environ is fullscreen terminals. 
  */
-private void sigwinch_handler (int sig) {
+public void sigwinch_handler (int sig) {
   signal (sig, sigwinch_handler);
 
   int cur_idx = E.get.current_idx (THIS_E);
@@ -2462,7 +2465,6 @@ private void sigwinch_handler (int sig) {
 
   while (ed) {
     Ed.set.screen_size (ed);
-
     ifnot (OK is Ed.check_sanity (ed)) {
       __deinit_this__ (&__This__);
       exit (1);
@@ -2482,7 +2484,12 @@ private void sigwinch_handler (int sig) {
 
   ed = E.set.current (THIS_E, cur_idx);
   win_t *w = Ed.get.current_win (ed);
+#ifdef HAS_TEMPORARY_WORKAROUND
+  buf_t * buf = Win.get.current_buf (w);
+  Buf.draw (buf);
+#else
   Win.draw (w);
+#endif
 }
 
 /* one idea is to hold with a question, to give some time to the
@@ -2570,8 +2577,8 @@ public void __deinit_this__ (Class (this) **thisp) {
 
   __deinit_ed__ (&this->__E__);
 
-  uid_t uid = getuid ();
 #ifdef HAS_PROGRAMMING_LANGUAGE
+  uid_t uid = getuid ();
   if (uid)
     __deinit_l__ (&__L__);
 #endif

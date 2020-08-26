@@ -110,7 +110,7 @@ void te_free_parameters(te_expr *n) {
 }
 
 
-void te_free(te_expr *n) {
+public void te_free(te_expr *n) {
     if (!n) return;
     te_free_parameters(n);
     free(n);
@@ -517,7 +517,7 @@ static te_expr *te_list(te_state *s) {
 #define M(e) te_eval(n->parameters[e])
 
 
-double te_eval(const te_expr *n) {
+public double te_eval(const te_expr *n) {
     if (!n) return NAN;
 
     switch(TYPE_MASK(n->type)) {
@@ -586,7 +586,7 @@ static void optimize(te_expr *n) {
 }
 
 
-te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error) {
+public te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error) {
     te_state s;
     s.start = s.next = expression;
     s.lookup = variables;

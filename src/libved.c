@@ -3628,7 +3628,10 @@ private path_T __init_path__ (void) {
 }
 
 #define CONTINUE_ON_EXPECTED_ERRNO(fd__)  \
-  if (errno == EINTR) continue;           \
+  if (errno == EINTR) {                   \
+    errno = 0;                            \
+    continue;                             \
+  }                                       \
   if (errno == EAGAIN) {                  \
     struct timeval tv;                    \
     fd_set read_fd;                       \
@@ -3637,6 +3640,7 @@ private path_T __init_path__ (void) {
     tv.tv_sec = 0;                        \
     tv.tv_usec = 100000;                  \
     select (fd__ + 1, &read_fd, NULL, NULL, &tv); \
+    errno = 0;                            \
     continue;                             \
    } do {} while (0)
 
@@ -4081,7 +4085,6 @@ private void video_alloc_list (video_t *this) {
 
 private video_t *video_new (int fd, int rows, int cols, int first_row, int first_col) {
   video_t *this = AllocType (video);
-
   loop (rows) {
     vstring_t *row = AllocType (vstring);
     row->data = string_new_with_len (" ", 1);
@@ -4120,6 +4123,7 @@ private void video_free (video_t *this) {
   string_free (this->tmp_render);
   free (this->rows);
   free (this);
+  this = NULL;
 }
 
 private void video_flush (video_t *this, string_t *render) {
@@ -7060,7 +7064,9 @@ private ssize_t buf_init_fname (buf_t *this, char *fname) {
 
 private void win_adjust_buf_dim (win_t *w) {
   buf_t *this = w->head;
+
   while (this) {
+    $my(video) = $myroots(video);
     $my(dim) = $from(w, frames_dim)[$my(at_frame)];
     $my(statusline_row) = $my(dim)->last_row;
     $my(video_first_row_idx) = this->cur_idx;
@@ -7068,7 +7074,8 @@ private void win_adjust_buf_dim (win_t *w) {
     $my(cur_video_row) = $my(dim)->first_row;
     for (int i = 0; i < 4 and $my(video_first_row_idx) and
         i < $my(dim)->num_rows - 1; i++) {
-      $my(video_first_row_idx)--; $my(video_first_row) = $my(video_first_row)->prev;
+      $my(video_first_row_idx)--;
+      $my(video_first_row) = $my(video_first_row)->prev;
       $my(cur_video_row)++;
     }
 
@@ -7567,9 +7574,8 @@ private void win_draw (win_t *w) {
 
 //  if (w->num_items is 0) return;
 
-  for (int i = $from(w, dim->first_row) - 1; i < $from(w, dim->last_row); i++) {
+  for (int i = $from(w, dim->first_row) - 1; i < $from(w, dim->last_row); i++)
     Video.set.row_with ($from(w, video), i, line);
-  }
 
   Win.set.video_dividers ($my(parent));
 
@@ -7584,6 +7590,7 @@ private void win_draw (win_t *w) {
   }
 
   this = w->head;
+
   Video.draw.all ($my(video));
 }
 
@@ -7729,9 +7736,12 @@ private void ed_win_readjust_size (ed_t *ed, win_t *this) {
     $my(frames_dim) = NULL;
   }
 
+  $my(video) = $myparents(video);
+
   self(dim_calc);
   self(adjust.buf_dim);
   self(set.video_dividers);
+
   $my(video)->row_pos = $from(this->current, cur_video_row);
   $my(video)->col_pos = $from(this->current, cur_video_col);
   if (this is $my(parent)->current) {
@@ -8075,7 +8085,6 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
   int pad = $my(dim->num_cols) - $myroots(topline)->num_bytes - bytelen (tmnow);
   if (pad > 0)
     loop (pad) String.append ($myroots(topline), " ");
-
   String.append ($myroots(topline), tmnow);
   String.clear_at ($myroots(topline), $my(dim)->num_cols);
   String.append_fmt ($myroots(topline), TERM_COLOR_RESET);
@@ -15632,10 +15641,10 @@ private void ed_set_screen_size (ed_t *this) {
   $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
-  ifnot (NULL is $my(video)->rows) free ($my(video)->rows);
-  $my(video)->rows = Alloc (sizeof (int) * $my(video)->num_rows);
-  Vstring.free ($my(video)->tmp_list);
-  video_alloc_list ($my(video));
+
+  Video.free ($my(video));
+  $my(video) = Video.new (OUTPUT_FD, $from($my(term), lines),
+      $from($my(term), columns), 1, 1);
 }
 
 private void ed_set_exit_quick (ed_t *this, int val) {

@@ -64,13 +64,13 @@ typedef lang_t l_T;
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
-private void sigwinch_handler (int sig);
+public void sigwinch_handler (int sig);
 
 DeclareType (argparse);
 DeclareType (argparse_option);
 
 typedef int argparse_callback (argparse_t *, const argparse_option_t *);
-int argparse_help_cb (argparse_t *, const argparse_option_t *);
+public int argparse_help_cb (argparse_t *, const argparse_option_t *);
 
 enum argparse_flag {
   ARGPARSE_STOP_AT_NON_OPTION = 1,
@@ -257,10 +257,10 @@ typedef struct te_variable {
 } te_variable;
 
 double te_interp(const char *expression, int *error);
-te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error);
-double te_eval(const te_expr *n);
+public te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error);
+public double te_eval(const te_expr *n);
 void te_print(const te_expr *n);
-void te_free(te_expr *n);
+public void te_free(te_expr *n);
 
 DeclareType (math);
 DeclareSelf (math);
@@ -450,8 +450,8 @@ NewProp (this,
   private void __deinit_local__ (void);
 #endif
 
-private void __init_ext__ (ed_t *);
-private void __deinit_ext__ (void);
+public void __init_ext__ (ed_t *);
+public void __deinit_ext__ (void);
 
 public Class (this) *__init_this__ (void);
 public void __deinit_this__ (Class (this) **);
