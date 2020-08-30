@@ -3812,7 +3812,7 @@ private void term_init_size (term_t *this, int *rows, int *cols) {
 /* three modes: 's' for sane, 'r' for raw and 'o' for original */
 private int term_sane_mode (term_t *this) {
   if ($my(mode) is 's') return OK;
-   if (isnotatty ($my(in_fd))) return NOTOK;
+    if (isnotatty ($my(in_fd))) return NOTOK;
 
   struct termios mode;
   while (NOTOK is tcgetattr ($my(in_fd), &mode))
@@ -5280,7 +5280,8 @@ char *default_extensions[] = {".txt", NULL};
 char *c_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *c_keywords[] = {
     "is I", "isnot I", "or I", "and I", "if I", "for I", "return I", "else I",
-    "ifnot I", "private I", "self I", "selfp I", "this V", "NULL K", "OK K", "NOTOK K",
+    "ifnot I", "ifnull I", "private I", "self I", "selfp I", "this V", "NULL K",
+    "OK K", "NOTOK K",
     "switch I", "while I", "break I", "continue I", "do I", "default I", "goto I",
     "case I", "free F", "$my V", "My V", "$mycur V", "uint T", "int T", "size_t T",
     "utf8 T", "char T", "uchar T", "sizeof T", "void T", "$from V", "thisp V",
@@ -15746,6 +15747,12 @@ private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
     case '*':
       return buf_selection_to_X_word_actions_cb (thisp, fidx, lidx, it, word, c, action);
 
+   case '`':
+     ed_reg_new ($my(root), REG_SHARED);
+     ed_reg_push_with ($my(root), REG_SHARED, CHARWISE,
+         word, NORMAL_ORDER);
+     return DONE;
+
    case '~': {
        size_t len = lidx - fidx + 1;
        char buf[len+1]; // though it alwars returns ok, this might change in future
@@ -15801,10 +15808,11 @@ private void ed_set_word_actions_default (ed_t *this) {
   $my(word_actions) = vstring_new ();
   $my(word_actions_chars) = NULL;
   $my(word_actions_chars_len) = 0;
-  utf8 chars[] = {'+', '*', '~', 'L', 'U', ESCAPE_KEY};
+  utf8 chars[] = {'+', '*', '`', '~', 'L', 'U', ESCAPE_KEY};
   char actions[] =
-    "+send selected area to XA_CLIPBOARD\n"
-    "*send selected area to XA_PRIMARY\n"
+    "+send selected word to XA_CLIPBOARD\n"
+    "*send selected word to XA_PRIMARY\n"
+    "`send selected word to shared register\n"
     "~swap case\n"
     "Lower (convert word to lower case)\n"
     "Upper (convert word to upper case)";
