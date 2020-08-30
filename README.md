@@ -516,6 +516,7 @@
  |     the scratch buffer (requires the man utility)     |
  |   - spell `word' (check if '`word' is mispelled)      |
  |                                                       |
+ | L                 | Line operations mode (via a selection menu)|
  | F                 | File operations mode (via a selection menu)|
  |                                                       |
  | ,                 |                                   |
@@ -613,19 +614,13 @@ Search:
 
   See at Regexp section for details.
 
-  On Normal mode, it is possible to map native language to normal mode commands.
-  Here is a sample:
-
-  int lmap[2][26] = {{
-    913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
-    925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
-    945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
-    957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
-  }};
-
-  Ed.set.lang_map (this, lmap);
-
-  These correspond to 'A'-'Z' and 'a'-'z' respectively.
+  Line operation mode:
+  This is triggered with 'L' in normal mode and for now can:
+    - send current line to shared register
+    - send current line to XA_CLIPBOARD (a LN appended)
+    - send current line to XA_CLIPBOARD (NO LN appended)
+    - send current line to XA_PRIMARY (a LN appended)
+    - send current line to XA_PRIMARY (NO LN appended)
 
   File operation mode:
   This is triggered with 'F' in normal mode and for now can:
@@ -643,6 +638,20 @@ Search:
   (note) Commands do not get a range as in vi[like], but from the command line
   switch --range=. Generally speaking the experience in the command line should
   feel more like a shell and specifically the zsh completion way.
+
+  On Normal mode, it is possible to map native language to normal mode commands.
+  Here is a sample:
+
+  int lmap[2][26] = {{
+    913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
+    925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
+    945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
+    957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
+  }};
+
+  Ed.set.lang_map (this, lmap);
+
+  These correspond to 'A'-'Z' and 'a'-'z' respectively.
 
   Auto completions (triggered with tab):
     - commands

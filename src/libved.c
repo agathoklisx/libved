@@ -10314,6 +10314,70 @@ private int ed_actions_token_cb (Vstring_t *str, char *tok, void *menu_o) {
   return OK;
 }
 
+private int ed_complete_line_mode_actions_cb (menu_t *menu) {
+  if (menu->state & MENU_INIT) {
+    menu->state &= ~MENU_INIT;
+  } else
+    menu_free_list (menu);
+
+  buf_t *this = menu->this;
+
+  Vstring_t *items;
+  items = Cstring.chop ($myroots(line_mode_actions), '\n', NULL, ed_actions_token_cb, menu);
+  menu->list = items;
+  menu->state |= (MENU_LIST_IS_ALLOCATED|MENU_REINIT_LIST);
+  return DONE;
+}
+
+private utf8 buf_complete_line_mode_actions (buf_t *this, char *action) {
+  int retval = DONE;
+  utf8 c = ESCAPE_KEY;
+
+  menu_t *menu = menu_new ($my(root), $my(video)->row_pos, *$my(prompt_row_ptr) - 2,
+    $my(video)->col_pos, ed_complete_line_mode_actions_cb, NULL, 0);
+  menu->this = this;
+  menu->return_if_one_item = ($myroots(line_mode_chars_len) isnot 1);
+
+  if ((retval = menu->retval) is NOTHING_TODO) goto theend;
+
+  char *item = menu_create ($my(root), menu);
+
+  if (item isnot NULL) {
+    c = *item;
+    char *tmp = item;
+    int i = 0;
+    for (; i < MAXLEN_WORD_ACTION - 1 and *tmp; i++)
+      action[i] = *tmp++;
+    action[i] = '\0';
+  }
+
+theend:
+  menu_free (menu);
+  return c;
+}
+
+private int buf_normal_handle_L (buf_t **thisp) {
+  buf_t *this = *thisp;
+
+  ifnot ($myroots(line_mode_chars_len)) return NOTHING_TODO;
+  char action[MAXLEN_WORD_ACTION];
+  utf8 c = buf_complete_line_mode_actions (this, action);
+
+  if (c is ESCAPE_KEY) return NOTHING_TODO;
+
+  int retval = NOTHING_TODO;
+
+  for (int i = 0; i < $myroots(num_line_mode_cbs); i++) {
+    if (NULL is $myroots(line_mode_cbs)[i]) continue;
+    retval = $myroots(line_mode_cbs)[i] (thisp, c, action,
+      $mycur(data)->bytes, $mycur(data)->num_bytes);
+    if (retval isnot NO_CALLBACK_FUNCTION) break;
+  }
+
+  retval = (retval is NO_CALLBACK_FUNCTION ? NOTHING_TODO : retval);
+  return retval;
+}
+
 private int ed_complete_file_actions_cb (menu_t *menu) {
   if (menu->state & MENU_INIT) {
     menu->state &= ~MENU_INIT;
@@ -15943,6 +16007,100 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
   }
 }
 
+private void ed_free_line_mode_cbs (ed_t *this) {
+  ifnot ($my(num_line_mode_cbs)) return;
+  free ($my(line_mode_cbs));
+  free ($my(line_mode_actions));
+  free ($my(line_mode_chars));
+}
+
+private void ed_set_line_mode_actions
+(ed_t *this, utf8 *chars, int len, char *actions, LineMode_cb cb) {
+  ifnot (len) return;
+  int tlen = $my(line_mode_chars_len) + len;
+
+  ifnot ($my(line_mode_chars_len)) {
+    $my(line_mode_chars) = Alloc (sizeof (int *) * len);
+    $my(line_mode_actions) = Cstring.dup (actions, bytelen (actions));
+  } else {
+    $my(line_mode_chars) = Realloc ($my(line_mode_chars), sizeof (int *) * tlen);
+    size_t alen = bytelen (actions);
+    size_t plen = bytelen ($my(line_mode_actions));
+    $my(line_mode_actions) = Realloc ($my(line_mode_actions), alen + plen + 2);
+    $my(line_mode_actions)[plen] = '\n';
+    for (size_t i = plen + 1, j = 0; i < alen + plen + 2; i++, j++) {
+      $my(line_mode_actions)[i] = actions[j];
+    }
+
+    $my(line_mode_actions)[alen + plen + 1] = '\0';
+  }
+
+  for (int i = $my(line_mode_chars_len), j = 0; i < tlen; i++, j++)
+    $my(line_mode_chars)[i] = chars[j];
+  $my(line_mode_chars_len) = tlen;
+
+  if (NULL is cb) return;
+
+  $my(num_line_mode_cbs)++;
+  ifnot ($my(num_line_mode_cbs) - 1)
+    $my(line_mode_cbs) = Alloc (sizeof (LineMode_cb));
+  else
+    $my(line_mode_cbs) = Realloc ($my(line_mode_cbs), sizeof (LineMode_cb) * $my(num_line_mode_cbs));
+
+  $my(line_mode_cbs)[$my(num_line_mode_cbs) -1] = cb;
+}
+
+private int buf_line_mode_actions_cb (buf_t **thisp, utf8 c, char *action, char *line, size_t size) {
+  buf_t *this = *thisp;
+
+  int retval = NO_CALLBACK_FUNCTION;
+  switch (c) {
+    case '+':
+    case '*':
+      goto x_selection;
+
+    case '`':
+      ed_reg_new ($my(root), REG_SHARED);
+      ed_reg_push_with ($my(root), REG_SHARED, LINEWISE,
+          line, NORMAL_ORDER);
+     return DONE;
+
+    default:
+      goto theend;
+  }
+
+x_selection:
+  switch (action[1]) {
+    case '-':
+      ed_selection_to_X ($my(root), line, size,
+          ('*' is c ? X_PRIMARY : X_CLIPBOARD));
+      break;
+
+    default:
+      ed_selection_to_X ($my(root), STR_FMT ("%s\n", line), size + 1,
+          ('*' is c ? X_PRIMARY : X_CLIPBOARD));
+  }
+  return DONE;
+
+theend:
+  return retval;
+}
+
+private void ed_set_line_mode_actions_default (ed_t *this) {
+  ifnot ($my(env)->uid) return;
+
+  utf8 chars[] = {'`', '+', '*'};
+  char actions[] =
+    "`send current line to shared register\n"
+    "+send current line to XA_CLIPBOARD (a LN appended)\n"
+    "+-send current line to XA_CLIPBOARD (NO LN appended)\n"
+    "*send current line to XA_PRIMARY (a LN appended)\n"
+    "*-send current line to XA_PRIMARY (NO LN appended)"
+    ;
+
+  self(set.line_mode_actions, chars, ARRLEN(chars), actions, buf_line_mode_actions_cb);
+}
+
 private void ed_free_file_mode_cbs (ed_t *this) {
   ifnot ($my(num_file_mode_cbs)) return;
   free ($my(file_mode_cbs));
@@ -16157,6 +16315,18 @@ private void ed_free (ed_t *this) {
     ed_free_expr_reg_cbs (this);
     ed_free_lw_mode_cbs (this);
     ed_free_cw_mode_cbs (this);
+    /* if there is a wonder about the tendency to alling lines
+     * into the same group of functionality, is because in cases
+     * like this, that introduced the line mode, this and another
+     * tendency to group the function(s|ality), close its other scope,
+     * allow me to follow and copy all the functions from the "old"
+     * file mode function(s|lity), to develop a bright new functionality in a matter
+     * of minutes and without thing a bit, by just copying the file mode
+     * function and substitute in visual mode "file/line", and
+     * using for the rest (proper function calling) C-E in normal mode
+     * (all that alling the line mode additions, previous to file mode) 
+     */
+    ed_free_line_mode_cbs (this);
     ed_free_file_mode_cbs (this);
 
     vstring_free ($my(word_actions));
@@ -16477,6 +16647,10 @@ handle_com:
       retval = selfp(normal.handle.W);
       break;
 
+    case 'L':
+      retval = selfp(normal.handle.L);
+      break;
+
     case 'F':
       retval = selfp(normal.handle.F);
       break;
@@ -16753,6 +16927,7 @@ private Class (ed) *editor_new (void) {
         .cw_mode_actions = ed_set_cw_mode_actions,
         .at_exit_cb = ed_set_at_exit_cb,
         .word_actions = ed_set_word_actions,
+        .line_mode_actions = ed_set_line_mode_actions,
         .file_mode_actions = ed_set_file_mode_actions,
         .on_normal_g_cb = ed_set_normal_on_g_cb,
         .expr_reg_cb = ed_set_expr_reg_cb,
@@ -17012,6 +17187,7 @@ private Class (ed) *editor_new (void) {
             .c = buf_normal_handle_c,
             .W = buf_normal_handle_W,
             .F = buf_normal_handle_F,
+            .L = buf_normal_handle_L,
             .comma = buf_normal_handle_comma,
             .ctrl_w = buf_normal_handle_ctrl_w,
           ),
@@ -17254,6 +17430,7 @@ private ed_t *ed_init (E_T *E) {
   ed_set_cw_mode_actions_default (this);
   ed_set_lw_mode_actions_default (this);
   ed_set_word_actions_default (this);
+  ed_set_line_mode_actions_default (this);
   ed_set_file_mode_actions_default (this);
 
   $my(name) = ed_name_gen (&$OurRoots(name_gen), "ed:", 3);

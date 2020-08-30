@@ -688,6 +688,7 @@ typedef int  (*MenuProcessList_cb) (menu_t *);
 typedef int  (*VisualLwMode_cb) (buf_t **, int, int, Vstring_t *, utf8, char *);
 typedef int  (*VisualCwMode_cb) (buf_t **, int, int, string_t *, utf8, char *);
 typedef int  (*WordActions_cb)  (buf_t **, int, int, bufiter_t *, char *, utf8, char *);
+typedef int  (*LineMode_cb)     (buf_t **, utf8, char *, char *, size_t);
 typedef int  (*FileActions_cb)  (buf_t **, utf8, char *);
 typedef int  (*BufNormalBeg_cb) (buf_t **, utf8, int, int);
 typedef int  (*BufNormalEnd_cb) (buf_t **, utf8, int, int);
@@ -1741,6 +1742,7 @@ NewSubSelf (bufnormal, handle,
     (*c) (buf_t **, int, int),
     (*W) (buf_t **),
     (*F) (buf_t **),
+    (*L) (buf_t **),
     (*comma) (buf_t **),
     (*ctrl_w) (buf_t **);
 );
@@ -1990,6 +1992,7 @@ NewSubSelf (ed, set,
      (*expr_reg_cb) (ed_t *, ExprRegister_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
+     (*line_mode_actions) (ed_t *, utf8 *, int, char *, LineMode_cb),
      (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),
      (*at_exit_cb) (ed_t *, EdAtExit_cb),
      (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),

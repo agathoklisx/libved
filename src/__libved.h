@@ -1001,17 +1001,6 @@ NewProp (ed,
   Reg_t regs[NUM_REGISTERS];
   rlcom_t **commands;
 
-  char
-    *lw_mode_actions,
-    *cw_mode_actions,
-    *bw_mode_actions,
-    *file_mode_actions;
-
-  utf8
-    *lw_mode_chars,
-    *cw_mode_chars,
-    *file_mode_chars,
-    *word_actions_chars;
 
   Ustring_t *uline;
 
@@ -1020,11 +1009,29 @@ NewProp (ed,
   int
     lw_mode_chars_len,
     cw_mode_chars_len,
+    line_mode_chars_len,
     file_mode_chars_len,
     word_actions_chars_len;
 
+  char
+    *lw_mode_actions,
+    *cw_mode_actions,
+    *bw_mode_actions,
+    *line_mode_actions,
+    *file_mode_actions;
+
+  utf8
+    *lw_mode_chars,
+    *cw_mode_chars,
+    *line_mode_chars,
+    *file_mode_chars,
+    *word_actions_chars;
+
   Vstring_t *word_actions;
   WordActions_cb *word_actions_cb;
+
+  int num_line_mode_cbs;
+  LineMode_cb *line_mode_cbs;
 
   int num_file_mode_cbs;
   FileActions_cb *file_mode_cbs;
