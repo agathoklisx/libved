@@ -31,24 +31,6 @@
 #define MENU_LIST_IS_ALLOCATED (1 << 6)
 #define MENU_REDO (1 << 7)
 
-#define RL_OPT_HAS_TAB_COMPLETION (1 << 0)
-#define RL_OPT_HAS_HISTORY_COMPLETION (1 << 1)
-
-#define RL_OK (1 << 0)
-#define RL_CONTINUE (1 << 1)
-#define RL_BREAK (1 << 2)
-#define RL_PROCESS_CHAR (1 << 3)
-#define RL_INSERT_CHAR (1 << 4)
-#define RL_CLEAR (1 << 5)
-#define RL_WRITE (1 << 6)
-#define RL_IS_VISIBLE (1 << 7)
-#define RL_CURSOR_HIDE (1 << 8)
-#define RL_CLEAR_FREE_LINE (1 << 9)
-#define RL_POST_PROCESS (1 << 10)
-#define RL_SET_POS (1 << 11)
-#define RL_EXEC (1 << 12)
-#define RL_FIRST_CHAR_COMPLETION (1 << 13)
-
 #define RL_TOK_COMMAND (1 << 0)
 #define RL_TOK_ARG (1 << 1)
 #define RL_TOK_ARG_SHORT (1 << 2)
@@ -539,22 +521,23 @@ NewType (rline,
   char prompt_char;
 
   int
+    com,
+    opts,
     rows,
+    state,
+    range[2],
     row_pos,
-    prompt_row,
     num_cols,
     num_rows,
     first_row,
     first_col,
-    com,
-    range[2],
-    state,
-    opts,
+    prompt_row,
     trigger_first_char_completion;
 
   utf8
-      c,
-      first_chars[8];
+    c,
+    first_chars[8];
+
   int first_chars_len;
 
   term_t *term;

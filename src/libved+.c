@@ -1286,8 +1286,8 @@ private int proc_open (proc_t *this) {
     }
 
     if ($my(read_stdout)) {
-      close ($my(stdout_fds)[PIPE_READ_END]);
       dup2 ($my(stdout_fds)[PIPE_WRITE_END], fileno (stdout));
+      close ($my(stdout_fds)[PIPE_READ_END]);
     }
 
     if ($my(dup_stdin)) {
@@ -1372,7 +1372,7 @@ private int ex_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   ifnot (NULL is read_cb)
     $my(read) = read_cb;
   else
-    if (redir_stdout)
+    if (redir_stdout or redir_stderr)
       $my(read) = Buf.read.from_fp;
 
   proc_parse (this, com);

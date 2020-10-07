@@ -267,6 +267,7 @@
 #define ED_NEXT             (1 << 5)
 #define ED_PREV             (1 << 6)
 #define ED_PREV_FOCUSED     (1 << 7)
+#define ED_PAUSE            (1 << 8)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
 #define LAST_INSTANCE_ERROR_STATE      (1 << 0)
@@ -358,6 +359,8 @@
 #define TERM_LAST_RIGHT_CORNER_LEN  12
 #define TERM_FIRST_LEFT_CORNER      "\033[H"
 #define TERM_FIRST_LEFT_CORNER_LEN  3
+#define TERM_NEXT_BOL              "\033E"
+#define TERM_NEXT_BOL_LEN           2
 #define TERM_BOL                    "\033[E"
 #define TERM_BOL_LEN                3
 #define TERM_GET_PTR_POS            "\033[6n"
@@ -446,6 +449,25 @@
 #define RL_ARG_VERBOSE     (1 << 8)
 #define RL_ARG_ANYTYPE     (1 << 9)
 #define RL_ARG_RECURSIVE   (1 << 10)
+
+#define RL_OK (1 << 0)
+#define RL_CONTINUE (1 << 1)
+#define RL_BREAK (1 << 2)
+#define RL_PROCESS_CHAR (1 << 3)
+#define RL_INSERT_CHAR (1 << 4)
+#define RL_CLEAR (1 << 5)
+#define RL_WRITE (1 << 6)
+#define RL_IS_VISIBLE (1 << 7)
+#define RL_CURSOR_HIDE (1 << 8)
+#define RL_CLEAR_FREE_LINE (1 << 9)
+#define RL_POST_PROCESS (1 << 10)
+#define RL_SET_POS (1 << 11)
+#define RL_EXEC (1 << 12)
+#define RL_FIRST_CHAR_COMPLETION (1 << 13)
+
+#define RL_OPT_HAS_TAB_COMPLETION (1 << 0)
+#define RL_OPT_HAS_HISTORY_COMPLETION (1 << 1)
+#define RL_OPT_RETURN_AFTER_TAB_COMPLETION (1 << 2)
 
 #define INDEX_ERROR            -1000
 #define NULL_PTR_ERROR         -1001
@@ -1364,9 +1386,11 @@ NewClass (smap,
 
 NewSubSelf (rline, set,
   void
+     (*line) (rline_t *, char *, size_t),
+     (*opts) (rline_t *, int),
+     (*state) (rline_t *, int),
      (*visibility) (rline_t *, int),
-     (*prompt_char) (rline_t *, char),
-     (*line) (rline_t *, char *, size_t);
+     (*prompt_char) (rline_t *, char);
 );
 
 NewSubSelf (rline, get,
@@ -1377,7 +1401,10 @@ NewSubSelf (rline, get,
 
   arg_t *(*arg) (rline_t *, int);
 
-  int (*buf_range) (rline_t *, buf_t *, int *);
+  int
+    (*opts) (rline_t *),
+    (*state) (rline_t *),
+    (*buf_range) (rline_t *, buf_t *, int *);
 
   Vstring_t *(*arg_fnames) (rline_t *, int);
 );
@@ -1627,6 +1654,7 @@ NewSubSelf (buf, set,
     (*video_first_row) (buf_t *, int),
     (*mode) (buf_t *, char *),
     (*show_statusline) (buf_t *, int),
+    (*on_emptyline) (buf_t *, string_t *),
     (*ftype) (buf_t *, int);
 );
 
@@ -1849,6 +1877,7 @@ NewSelf (buf,
     *(*info) (buf_t *);
 
   int
+    (*rline) (buf_t **, rline_t *),
     (*write) (buf_t *, int),
     (*search) (buf_t *, char, char *, utf8),
     (*indent) (buf_t *, int, utf8),
@@ -1978,28 +2007,32 @@ NewSubSelf (ed, get,
 
   term_t *(*term) (ed_t *);
 
+  string_t *(*topline) (ed_t *);
+
+  video_t *(*video) (ed_t *);
+
   void *(*callback_fun) (ed_t *, char *);
 );
 
 NewSubSelf (ed, set,
    void
      (*state) (ed_t *, int),
-     (*exit_quick) (ed_t *, int),
      (*screen_size) (ed_t *),
+     (*exit_quick) (ed_t *, int),
      (*topline) (ed_t *, buf_t *),
      (*rline_cb) (ed_t *, Rline_cb),
-     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
+     (*lang_map) (ed_t *, int[][26]),
+     (*record_cb) (ed_t *, Record_cb),
+     (*at_exit_cb) (ed_t *, EdAtExit_cb),
+     (*i_record_cb) (ed_t *, IRecord_cb),
      (*expr_reg_cb) (ed_t *, ExprRegister_cb),
+     (*init_record_cb) (ed_t *, InitRecord_cb),
+     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
+     (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
      (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
      (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
      (*line_mode_actions) (ed_t *, utf8 *, int, char *, LineMode_cb),
-     (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb),
-     (*at_exit_cb) (ed_t *, EdAtExit_cb),
-     (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
-     (*lang_map) (ed_t *, int[][26]),
-     (*record_cb) (ed_t *, Record_cb),
-     (*i_record_cb) (ed_t *, IRecord_cb),
-     (*init_record_cb) (ed_t *, InitRecord_cb);
+     (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb);
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, dim_t *, int, int, int, int);
@@ -2093,7 +2126,8 @@ NewSelf (ed,
     (*free_info) (ed_t *, edinfo_t **),
     (*record) (ed_t *, char *, ...),
     (*suspend) (ed_t *),
-    (*resume) (ed_t *);
+    (*resume) (ed_t *),
+    (*deinit_commands) (ed_t *);
 
   int
     (*check_sanity) (ed_t *),

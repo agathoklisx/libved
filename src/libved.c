@@ -3812,7 +3812,7 @@ private void term_init_size (term_t *this, int *rows, int *cols) {
 /* three modes: 's' for sane, 'r' for raw and 'o' for original */
 private int term_sane_mode (term_t *this) {
   if ($my(mode) is 's') return OK;
-    if (isnotatty ($my(in_fd))) return NOTOK;
+  if (isnotatty ($my(in_fd))) return NOTOK;
 
   struct termios mode;
   while (NOTOK is tcgetattr ($my(in_fd), &mode))
@@ -4138,7 +4138,7 @@ private void video_render_set_from_to (video_t *this, int frow, int lrow) {
     current_list_set (this, fidx++);
     string_append_fmt (this->render, TERM_GOTO_PTR_POS_FMT "%s%s%s",
         this->cur_idx + 1, this->first_col, TERM_LINE_CLR_EOL,
-        this->current->data->bytes, TERM_BOL);
+        this->current->data->bytes, TERM_NEXT_BOL);
   }
 
   string_append (this->render, TERM_CURSOR_SHOW);
@@ -4169,7 +4169,7 @@ private void video_draw_all (video_t *this) {
 
   loop (num_times - 1) {
     string_append_fmt (this->tmp_render, "%s%s%s", TERM_LINE_CLR_EOL,
-        row->data->bytes, TERM_BOL);
+        row->data->bytes, TERM_NEXT_BOL);
     row = row->next;
   }
 
@@ -5384,7 +5384,7 @@ private int buf_syn_has_mlcmnt (buf_t *this, row_t *row) {
   return found;
 }
 
-/* Sorry but the highlight system is ridicolous simple (word by word), but is fast and works for me in C */
+/* Sorry but the highlight system is ridiculously simple (word by word), but is fast and works for me in C */
 private char *buf_syn_parser (buf_t *this, char *line, int len, int index, row_t *row) {
   (void) index;
 
@@ -6755,6 +6755,11 @@ private void buf_set_autosave (buf_t *this, long minutes) {
   $my(autosave) = minutes * 60;
   ifnot ($my(saved_sec))
     Vsys.get.clock_sec (DEFAULT_CLOCK);
+}
+
+private void buf_set_on_emptyline (buf_t *this, string_t *str) {
+  String.free ($my(ftype)->on_emptyline);
+  $my(ftype)->on_emptyline = str;
 }
 
 private void buf_set_backup (buf_t *this, int backup, char *suffix) {
@@ -13390,6 +13395,14 @@ private string_t *rline_get_line (rline_t *rl) {
   return vstring_join (rl->line, "");
 }
 
+private int rline_get_state (rline_t *rl) {
+  return rl->state;
+}
+
+private int rline_get_opts (rline_t *rl) {
+  return rl->opts;
+}
+
 private string_t *rline_get_command (rline_t *rl) {
   string_t *str = string_new (8);
   vstring_t *it = rl->line->head;
@@ -13569,6 +13582,7 @@ private void ed_deinit_commands (ed_t *this) {
   }
 
   free ($my(commands)); $my(commands) = NULL;
+  $my(num_commands) = 0;
 }
 
 private void ed_realloc_command_arg (rlcom_t *rlcom, int num) {
@@ -14099,13 +14113,21 @@ theloop:
         goto post_process;
 
       case '\t':
-        ifnot (rl->opts & RL_OPT_HAS_TAB_COMPLETION) goto post_process;
+        ifnot (rl->opts & RL_OPT_HAS_TAB_COMPLETION)
+          goto post_process;
+
         retval = rl->tab_completion (rl);
+
+        if (rl->opts & RL_OPT_RETURN_AFTER_TAB_COMPLETION) {
+          rl->c = '\r';
+          goto theend;
+        }
 
         switch (retval) {
           case RL_PROCESS_CHAR:
             goto process_char;
         }
+
 
         goto post_process;
 
@@ -14168,7 +14190,7 @@ post_process:
     }
   }
 
-theend:;
+theend:
   rl->state &= ~RL_BREAK;
   return rl;
 }
@@ -14739,6 +14761,14 @@ private void rline_set_prompt_char (rline_t *rl, char c) {
   rl->prompt_char = c;
 }
 
+private void rline_set_opts (rline_t *rl, int opts) {
+  rl->opts = opts;
+}
+
+private void rline_set_state (rline_t *rl, int state) {
+  rl->state = state;
+}
+
 private void rline_set_visibility (rline_t *rl, int visible) {
   if (YES is visible)
     rl->state |= RL_IS_VISIBLE;
@@ -14756,17 +14786,21 @@ private rline_T __init_rline__ (void) {
       .parse = rline_parse,
       .write_and_break = rline_write_and_break,
       .get = SubSelfInit (rline, get,
-        .line = rline_get_line,
-        .command = rline_get_command,
-        .arg_fnames = rline_get_arg_fnames,
-        .anytype_arg = rline_get_anytype_arg,
         .arg = rline_get_arg,
-        .buf_range = rline_get_buf_range
+        .opts = rline_get_opts,
+        .line = rline_get_line,
+        .state = rline_get_state,
+        .command = rline_get_command,
+        .buf_range = rline_get_buf_range,
+        .arg_fnames = rline_get_arg_fnames,
+        .anytype_arg = rline_get_anytype_arg
       ),
       .set = SubSelfInit (rline, set,
-        .prompt_char = rline_set_prompt_char,
         .line = rline_set_line,
-        .visibility = rline_set_visibility
+        .opts = rline_set_opts,
+        .state = rline_set_state,
+        .visibility = rline_set_visibility,
+        .prompt_char = rline_set_prompt_char
       ),
       .arg = SubSelfInit (rline, arg,
        .exists = rline_arg_exists
@@ -14859,6 +14893,11 @@ exec:
     goto theend;
 
   rline_parse  (rl, this);
+
+  for (int i = 0; i < $myroots(num_rline_cbs); i++) {
+    retval = $myroots(rline_cbs)[i] (thisp, rl, rl->com);
+    if (retval isnot RLINE_NO_COMMAND) goto theend;
+  }
 
   switch (rl->com) {
     case VED_COM_WRITE_FORCE_ALIAS:
@@ -15172,28 +15211,28 @@ exec:
       }
       goto theend;
 
-     case VED_COM_TEST_KEY:
-       buf_test_key (this);
-       retval = DONE;
-       goto theend;
+    case VED_COM_TEST_KEY:
+      buf_test_key (this);
+      retval = DONE;
+      goto theend;
 
-      case VED_COM_SAVE_IMAGE:
-        retval = buf_com_save_image (this, rl);
-        goto theend;
+    case VED_COM_SAVE_IMAGE:
+      retval = buf_com_save_image (this, rl);
+      goto theend;
 
-      case VED_COM_EDIT_IMAGE:
-        retval = buf_com_edit_image (thisp, rl);
-        goto theend;
+    case VED_COM_EDIT_IMAGE:
+      retval = buf_com_edit_image (thisp, rl);
+      goto theend;
 
-      case VED_COM_VALIDATE_UTF8:
-        retval = buf_com_validate_utf8 (thisp, rl);
-        goto theend;
+    case VED_COM_VALIDATE_UTF8:
+      retval = buf_com_validate_utf8 (thisp, rl);
+      goto theend;
 
     default:
-      for (int i = 0; i < $myroots(num_rline_cbs); i++) {
-        retval = $myroots(rline_cbs)[i] (thisp, rl, rl->com);
-        if (retval isnot RLINE_NO_COMMAND) break;
-      }
+     // for (int i = 0; i < $myroots(num_rline_cbs); i++) {
+     //   retval = $myroots(rline_cbs)[i] (thisp, rl, rl->com);
+     //   if (retval isnot RLINE_NO_COMMAND) break;
+     // }
       goto theend;
   }
 
@@ -15632,6 +15671,14 @@ private void *ed_get_callback_fun (ed_t *this, char *fun) {
   return NULL;
 }
 
+private string_t *ed_get_topline (ed_t *this) {
+  return $my(topline);
+}
+
+private video_t *ed_get_video (ed_t *this) {
+  return $my(video);
+}
+
 private int ed_get_state (ed_t *this) {
   return $my(state);
 }
@@ -15675,10 +15722,6 @@ private buf_t *ed_get_bufname (ed_t *this, char *fname) {
   }
 
   return buf;
-}
-
-private void ed_set_state (ed_t *this, int state) {
-  $my(state) = state;
 }
 
 private win_t *ed_set_current_win (ed_t *this, int idx) {
@@ -16339,6 +16382,10 @@ private void ed_free (ed_t *this) {
   free (this);
 }
 
+private void ed_set_state (ed_t *this, int state) {
+  $my(state) = state;
+}
+
 private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
   for (int i = 0; i < 2; i++)
     for (int j = 0; j < ('z' - 'a') + 1; j++)
@@ -16842,18 +16889,18 @@ exit_this:
               $myroots(state) |= ED_EXIT_ALL_FORCE;
           }
 
-          retval = OK;
+          retval = cmd_retv;
           goto theend;
         }
 
         if (cmd_retv is WIN_EXIT) {
-                       /* at this point this (probably) is a null reference */
+          /* at this point this (probably) is a null reference */
           retval = ed_win_delete (ed, &this, NO_COUNT_SPECIAL);
 
           if (retval is DONE) goto new_state;
 
           ed->prop->state |= ED_EXIT;
-          retval = OK;
+          retval = cmd_retv;
           goto theend;
         }
     }
@@ -16916,45 +16963,49 @@ private Class (ed) *editor_new (void) {
       .free_info = ed_free_info,
       .dims_init = ed_dims_init,
       .check_sanity = ed_check_sanity,
+      .deinit_commands = ed_deinit_commands,
       .set = SubSelfInit (ed, set,
         .dim = ed_set_dim,
+        .state = ed_set_state,
+        .topline = ed_set_topline,
+        .rline_cb = ed_set_rline_cb,
+        .lang_map = ed_set_lang_map,
+        .record_cb = ed_set_record_cb,
+        .at_exit_cb = ed_set_at_exit_cb,
         .exit_quick = ed_set_exit_quick,
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
-        .topline = ed_set_topline,
-        .rline_cb = ed_set_rline_cb,
+        .expr_reg_cb = ed_set_expr_reg_cb,
+        .i_record_cb = ed_set_i_record_cb,
+        .word_actions = ed_set_word_actions,
+        .on_normal_g_cb = ed_set_normal_on_g_cb,
+        .init_record_cb = ed_set_init_record_cb,
         .lw_mode_actions = ed_set_lw_mode_actions,
         .cw_mode_actions = ed_set_cw_mode_actions,
-        .at_exit_cb = ed_set_at_exit_cb,
-        .word_actions = ed_set_word_actions,
         .line_mode_actions = ed_set_line_mode_actions,
-        .file_mode_actions = ed_set_file_mode_actions,
-        .on_normal_g_cb = ed_set_normal_on_g_cb,
-        .expr_reg_cb = ed_set_expr_reg_cb,
-        .lang_map = ed_set_lang_map,
-        .record_cb = ed_set_record_cb,
-        .i_record_cb = ed_set_i_record_cb,
-        .init_record_cb = ed_set_init_record_cb
+        .file_mode_actions = ed_set_file_mode_actions
       ),
       .get = SubSelfInit (ed, get,
         .info = SubSelfInit (edget, info,
           .as_type = ed_get_info_as_type
         ),
-        .bufname = ed_get_bufname,
-        .current_buf = ed_get_current_buf,
-        .scratch_buf = ed_get_scratch_buf,
-        .current_win = ed_get_current_win,
-        .current_win_idx = ed_get_current_win_idx,
+        .term = ed_get_term,
         .state = ed_get_state,
+        .video = ed_get_video,
+        .topline = ed_get_topline,
+        .num_win = ed_get_num_win,
+        .bufname = ed_get_bufname,
         .win_head = ed_get_win_head,
         .win_next = ed_get_win_next,
         .win_by_idx = ed_get_win_by_idx,
         .win_by_name = ed_get_win_by_name,
-        .num_win = ed_get_num_win,
+        .current_buf = ed_get_current_buf,
+        .scratch_buf = ed_get_scratch_buf,
+        .current_win = ed_get_current_win,
+        .callback_fun = ed_get_callback_fun,
+        .current_win_idx = ed_get_current_win_idx,
         .num_special_win = ed_get_num_special_win,
-        .term = ed_get_term,
-        .num_rline_commands = ed_get_num_rline_commands,
-        .callback_fun = ed_get_callback_fun
+        .num_rline_commands = ed_get_num_rline_commands
       ),
       .syn = SubSelfInit (ed, syn,
         .append = ed_syn_append,
@@ -17093,14 +17144,15 @@ private Class (ed) *editor_new (void) {
           .current_video_col = buf_get_current_video_col,
         ),
         .set = SubSelfInit (buf, set,
-          .fname = buf_set_fname,
-          .video_first_row = buf_set_video_first_row,
-          .ftype = buf_set_ftype,
           .mode = buf_set_mode,
+          .fname = buf_set_fname,
+          .ftype = buf_set_ftype,
           .backup = buf_set_backup,
-          .autosave = buf_set_autosave,
-          .show_statusline = buf_set_show_statusline,
           .modified = buf_set_modified,
+          .autosave = buf_set_autosave,
+          .on_emptyline = buf_set_on_emptyline,
+          .video_first_row = buf_set_video_first_row,
+          .show_statusline = buf_set_show_statusline,
           .as = SubSelfInit (bufset, as,
             .unnamed = buf_set_as_unnamed,
             .non_existant = buf_set_as_non_existant,
@@ -17249,6 +17301,7 @@ private Class (ed) *editor_new (void) {
         .draw = buf_draw,
         .clear = buf_clear,
         .flush = buf_flush,
+        .rline = buf_rline,
         .write = buf_write,
         .search = buf_search,
         .indent = buf_indent,
@@ -17744,6 +17797,7 @@ private int E_save_image (Class (E) *this, char *name) {
   if (NULL is fp) goto theend;
 
   fprintf (fp, "%s\n", image->bytes);
+  fclose (fp);
   retval = OK;
 
 theend:
@@ -17976,6 +18030,9 @@ main:
   }
 
   if (($my(state) & ED_EXIT)) {
+    if ($my(state) & ED_PAUSE)
+      return retval;
+
     if ($my(save_image))
       if (
           ($my(num_items) is 1 and $my(orig_num_items) is 1) or
@@ -19575,6 +19632,34 @@ ival_t i_buf_search (i_t *this, buf_t *buf, char com, char *str, int c) {
   return retval;
 }
 
+
+ival_t i_print_str (i_t *this, ival_t str) {
+  char *sp = (char *) str;
+  while (*sp)
+    this->print_byte (this->out_fp, *sp++);
+  return I_OK;
+}
+
+ival_t i_println_str (i_t *this, ival_t str) {
+  i_print_str (this, str);
+  this->print_byte (this->out_fp, '\n');
+  return I_OK;
+}
+
+ival_t i_free_str (i_t *this, ival_t str) {
+  (void) this;
+  char *sp = (char *) str;
+  free (sp);
+  return I_OK;
+}
+
+ival_t i_print_env (i_t *i, ed_t *this, char *str) {
+  string_t *env = E_get_env ($OurRoot, str);
+  free (str);
+  i->print_bytes (i->out_fp, env->bytes);
+  return I_OK;
+}
+
 struct ifun_t {
   const char *name;
   ival_t val;
@@ -19613,6 +19698,10 @@ struct ifun_t {
   { "win_append_buf",        (ival_t) i_win_append_buf, 2},
   { "win_set_current_buf",   (ival_t) i_win_set_current_buf, 3},
   { "win_get_current_buf",   (ival_t) i_win_get_current_buf, 1},
+  { "print_env",             (ival_t) i_print_env, 2},
+  { "print_str",             (ival_t) i_print_str, 1},
+  { "println_str",           (ival_t) i_println_str, 1},
+  { "free_str",              (ival_t) i_free_str, 1},
   { NULL, 0, 0}
 };
 
