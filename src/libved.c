@@ -16889,7 +16889,7 @@ exit_this:
               $myroots(state) |= ED_EXIT_ALL_FORCE;
           }
 
-          retval = cmd_retv;
+          retval = OK;
           goto theend;
         }
 
@@ -16900,7 +16900,7 @@ exit_this:
           if (retval is DONE) goto new_state;
 
           ed->prop->state |= ED_EXIT;
-          retval = cmd_retv;
+          retval = OK;
           goto theend;
         }
     }

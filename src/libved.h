@@ -484,7 +484,6 @@ enum {
   EXIT_ALL,
   EXIT_ALL_FORCE,
   WIN_EXIT,
-  BUF_EXIT,
   BUF_QUIT,
 };
 
