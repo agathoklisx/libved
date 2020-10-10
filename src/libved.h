@@ -479,12 +479,13 @@ enum {
   ERROR = -2,
   NOTHING_TODO = -1,
   DONE = 0,
-  NEWCHAR,
+  IGNORE_BLOCK,
   EXIT_THIS,
   EXIT_ALL,
   EXIT_ALL_FORCE,
   WIN_EXIT,
   BUF_QUIT,
+  NEWCHAR,
 };
 
 typedef signed int utf8;
@@ -1385,11 +1386,12 @@ NewClass (smap,
 
 NewSubSelf (rline, set,
   void
-     (*line) (rline_t *, char *, size_t),
-     (*opts) (rline_t *, int),
-     (*state) (rline_t *, int),
-     (*visibility) (rline_t *, int),
-     (*prompt_char) (rline_t *, char);
+    (*line) (rline_t *, char *, size_t),
+    (*opts) (rline_t *, int),
+    (*state) (rline_t *, int),
+    (*visibility) (rline_t *, int),
+    (*prompt_char) (rline_t *, char),
+    (*user_object) (rline_t *, void *);
 );
 
 NewSubSelf (rline, get,
@@ -1404,6 +1406,8 @@ NewSubSelf (rline, get,
     (*opts) (rline_t *),
     (*state) (rline_t *),
     (*buf_range) (rline_t *, buf_t *, int *);
+
+  void *(*user_object) (rline_t *);
 
   Vstring_t *(*arg_fnames) (rline_t *, int);
 );

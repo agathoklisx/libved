@@ -21,7 +21,6 @@
 #include <time.h>
 #include <errno.h>
 
-
 #include "libved.h"
 #include "libved+.h"
 #include "lib/lib+.h"

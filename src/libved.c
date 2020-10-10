@@ -9740,8 +9740,11 @@ do_draw:
 private int buf_normal_goto_linenr (buf_t *this, int lnr, int draw) {
   int currow_idx = this->cur_idx;
 
-  if (lnr <= 0 or lnr is currow_idx + 1 or lnr > this->num_items)
+  if (lnr <= 0 or lnr is currow_idx + 1)
     return NOTHING_TODO;
+
+  if (lnr > this->num_items)
+    lnr = this->num_items;
 
   self(mark.set, MARK_UNNAMED);
 
@@ -13399,6 +13402,10 @@ private int rline_get_state (rline_t *rl) {
   return rl->state;
 }
 
+private void *rline_get_user_object (rline_t *rl) {
+  return rl->user_object;
+}
+
 private int rline_get_opts (rline_t *rl) {
   return rl->opts;
 }
@@ -13868,6 +13875,7 @@ private rline_t *rline_new (ed_t *ed, term_t *this, InputGetch_cb getch,
   rl->num_cols = rline_calc_columns (rl, num_cols);
   rl->row_pos = rl->prompt_row;
   rl->fd = $my(out_fd);
+  rl->user_object = NULL;
   rl->render = string_new (num_cols);
   rl->line = vstring_new ();
   vstring_t *s = AllocType (vstring);
@@ -14761,6 +14769,10 @@ private void rline_set_prompt_char (rline_t *rl, char c) {
   rl->prompt_char = c;
 }
 
+private void rline_set_user_object (rline_t *rl, void *obj) {
+  rl->user_object = obj;
+}
+
 private void rline_set_opts (rline_t *rl, int opts) {
   rl->opts = opts;
 }
@@ -14780,9 +14792,9 @@ private rline_T __init_rline__ (void) {
   return ClassInit (rline,
     .self = SelfInit (rline,
       .edit = rline_edit,
-      .clear = rline_clear,
       .free = rline_free,
       .exec = rline_exec,
+      .clear = rline_clear,
       .parse = rline_parse,
       .write_and_break = rline_write_and_break,
       .get = SubSelfInit (rline, get,
@@ -14793,14 +14805,16 @@ private rline_T __init_rline__ (void) {
         .command = rline_get_command,
         .buf_range = rline_get_buf_range,
         .arg_fnames = rline_get_arg_fnames,
-        .anytype_arg = rline_get_anytype_arg
+        .anytype_arg = rline_get_anytype_arg,
+        .user_object = rline_get_user_object
       ),
       .set = SubSelfInit (rline, set,
         .line = rline_set_line,
         .opts = rline_set_opts,
         .state = rline_set_state,
         .visibility = rline_set_visibility,
-        .prompt_char = rline_set_prompt_char
+        .prompt_char = rline_set_prompt_char,
+        .user_object = rline_set_user_object
       ),
       .arg = SubSelfInit (rline, arg,
        .exists = rline_arg_exists
@@ -16517,7 +16531,7 @@ private int ed_buf_normal_cmd (ed_t *ed, buf_t **thisp, utf8 com, int count, int
   int retval = NOTHING_TODO;
   switch (this->on_normal_beg (thisp, com, count, regidx)) {
     case -1: goto theend;
-    case  1: goto atend;
+    case IGNORE_BLOCK: goto atend;
     case EXIT_THIS: return EXIT_THIS;
     default: break;
   }

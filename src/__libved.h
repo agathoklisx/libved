@@ -560,6 +560,7 @@ NewType (rline,
       int   commands_len;
 
   void *object;
+  void *user_object;
 
   InputGetch_cb getch;
   RlineAtBeg_cb at_beg;
