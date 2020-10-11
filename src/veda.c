@@ -91,6 +91,11 @@ int main (int argc, char **argv) {
   E.set.at_init_cb (THIS_E, __init_ext__);
   E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
+  /* minimal cooperation with libvwn */
+  char *vwm_env_exists = getenv ("VWM");
+  ifnot (NULL is vwm_env_exists)
+    E.set.state_bit (THIS_E, ED_DONOT_RESTORE_TERM_STATE);
+
   ed_t *this = NULL;
   win_t *w = NULL;
 
@@ -198,14 +203,13 @@ int main (int argc, char **argv) {
 theloop:;
   for (;;) {
     buf_t *buf = Ed.get.current_buf (this);
+
     retval = E.main (THIS_E, buf);
 
-    int state = E.get.state (THIS_E);
-
-    if ((state & ED_EXIT))
+    if (E.test.state_bit (THIS_E, ED_EXIT))
       break;
 
-    if ((state & ED_SUSPENDED)) {
+    if (E.test.state_bit (THIS_E, ED_SUSPENDED)) {
       if (E.get.num (THIS_E) is 1) {
         /* as an example, we simply create another independed instance */
         this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));

@@ -17457,6 +17457,7 @@ private ed_t *ed_init (E_T *E) {
   $my(rl_last_component) = Vstring.new ();
   $my(uline) = Ustring.new ();
 
+  $my(state) = UNSET;
   $my(msg_tabwidth) = 2;
   $my(msg_row) = $from($my(term), lines);
   $my(prompt_row) = $my(msg_row) - 1;
@@ -17876,6 +17877,18 @@ private void E_set_state (E_T *this, int state) {
   $my(state) = state;
 }
 
+private void E_set_state_bit (E_T *this, int bit) {
+  $my(state) |= bit;
+}
+
+private void E_unset_state_bit (E_T *this, int bit) {
+  $my(state) &= ~(bit);
+}
+
+private int E_test_state_bit (E_T *this, int bit) {
+  return $my(state) & (bit);
+}
+
 private Class (i) *E_get_i_class (E_T *this) {
   return $my(__I__);
 }
@@ -17990,42 +18003,44 @@ private int E_exit_all (Class (E) *this) {
 private int E_main (E_T *this, buf_t *buf) {
   ed_t *ed = $from(buf, root);
 
-  ed_set_state (ed, $my(state));
-
   int retval = 0;
 
 main:
+  $my(state) &= ~(ED_SUSPENDED|ED_EXIT);
+
   retval = ed_main (ed, buf);
+  int state = ed_get_state (ed);
 
-  $my(state) = ed_get_state (ed);
+  if (state & ED_EXIT)
+    $my(state) |= ED_EXIT;
 
-  if ($my(state) & ED_SUSPENDED) {
-    ed_set_state (ed, UNSET);
+  if (state & ED_SUSPENDED) {
+    $my(state) |= ED_SUSPENDED;
     ed_suspend (ed);
     return retval;
   }
 
-  if ($my(state) & ED_NEW) {
+  if (state & ED_NEW) {
     ed = E_new_editor (this, &buf, $from(ed, ed_str)->bytes);
     goto main;
   }
 
-  if ($my(state) & ED_NEXT) {
+  if (state & ED_NEXT) {
     ed = E_next_editor (this, &buf);
     goto main;
   }
 
-  if ($my(state) & ED_PREV) {
+  if (state & ED_PREV) {
     ed = E_prev_editor (this, &buf);
     goto main;
   }
 
-  if ($my(state) & ED_PREV_FOCUSED) {
+  if (state & ED_PREV_FOCUSED) {
     ed = E_prev_focused_editor (this, &buf);
     goto main;
   }
 
-  if (($my(state) & ED_EXIT_ALL) or ($my(state) & ED_EXIT_ALL_FORCE)) {
+  if ((state & ED_EXIT_ALL) or (state & ED_EXIT_ALL_FORCE)) {
     if ($my(save_image)) {
       if (NULL is $my(image_file))
         self(save_image, $my(image_name));
@@ -18044,7 +18059,7 @@ main:
   }
 
   if (($my(state) & ED_EXIT)) {
-    if ($my(state) & ED_PAUSE)
+    if (state & ED_PAUSE)
       return retval;
 
     if ($my(save_image))
@@ -18143,6 +18158,7 @@ public Class (E) *__init_ed__ (char *name) {
       ),
       .set = SubSelfInit (E, set,
         .state = E_set_state,
+        .state_bit = E_set_state_bit,
         .image_name = E_set_image_name,
         .image_file = E_set_image_file,
         .save_image = E_set_save_image,
@@ -18152,13 +18168,22 @@ public Class (E) *__init_ed__ (char *name) {
         .next = E_set_next,
         .prev = E_set_prev,
         .current = E_set_current
+      ),
+      .unset = SubSelfInit (E, unset,
+        .state_bit = E_unset_state_bit
+      ),
+      .test = SubSelfInit (E, test,
+        .state_bit = E_test_state_bit
       )
+
     ),
     .prop = $myprop,
     .__Ed__ =  editor_new ()
    );
 
   $my(Me) = this;
+
+  $my(state) = 0;
 
   if (NOTOK is Ed_init (this->__Ed__)) {
     __deinit_ed__ (&this);
@@ -18172,7 +18197,6 @@ public Class (E) *__init_ed__ (char *name) {
   cstring_cp ($my(name), MAXLEN_ED_NAME, name, MAXLEN_ED_NAME - 1);
   $my(name_gen) = ('z' - 'a') + 1;
   $my(cur_idx) = $my(prev_idx) = -1;
-  $my(state) = 0;
   $my(shared_reg)[0] = (Reg_t) {.reg = REG_SHARED_CHR};
   $my(image_name) = NULL;
   $my(save_image) = 0;
@@ -18190,8 +18214,10 @@ private void ed_deallocate_prop (ed_T *this) {
   $myprop = NULL;
 }
 
-private void deinit_ed (ed_T *this) {
-  Term.reset ($my(term));
+private void deinit_ed (ed_T *this, int restore_state) {
+  if (restore_state)
+    Term.reset ($my(term));
+
   ed_deallocate_prop (this);
 }
 
@@ -18213,7 +18239,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
   if ($my(image_file) isnot NULL)
     free ($my(image_file));
 
-  deinit_ed (this->__Ed__);
+  deinit_ed (this->__Ed__, 0 is ($my(state) & ED_DONOT_RESTORE_TERM_STATE));
 
   free (this->__Ed__);
 

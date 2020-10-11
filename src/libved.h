@@ -268,6 +268,7 @@
 #define ED_PREV             (1 << 6)
 #define ED_PREV_FOCUSED     (1 << 7)
 #define ED_PAUSE            (1 << 8)
+#define ED_DONOT_RESTORE_TERM_STATE (1 << 9)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
 #define LAST_INSTANCE_ERROR_STATE      (1 << 0)
@@ -2211,15 +2212,26 @@ NewClass (ed,
   Class (ustring) __Ustring__;
 );
 
+NewSubSelf (E, unset,
+  void
+    (*state_bit) (E_T *, int);
+);
+
+NewSubSelf (E, test,
+  int
+    (*state_bit) (E_T *, int);
+);
+
 NewSubSelf (E, set,
   void
+    (*state) (E_T *, int),
+    (*state_bit) (E_T *, int),
     (*save_image) (E_T *, int),
-    (*persistent_layout) (E_T *, int),
     (*image_name) (E_T *, char *),
     (*image_file) (E_T *, char *),
-    (*state) (E_T *, int),
+    (*at_exit_cb) (E_T *, EAtExit_cb),
     (*at_init_cb) (E_T *, EdAtInit_cb),
-    (*at_exit_cb) (E_T *, EAtExit_cb);
+    (*persistent_layout) (E_T *, int);
 
   ed_t
     *(*next) (E_T *),
@@ -2248,6 +2260,8 @@ NewSubSelf (E, get,
 NewSelf (E,
   SubSelf (E, get) get;
   SubSelf (E, set) set;
+  SubSelf (E, test) test;
+  SubSelf (E, unset) unset;
 
   ed_t
     *(*init) (E_T *, EdAtInit_cb),
