@@ -1,5 +1,5 @@
 
-    /* 33: common.h */
+    /* 35: common.h */
 #ifndef dictu_common_h
 #define dictu_common_h
 
@@ -10,7 +10,9 @@
 #define DEBUG_TRACE_GC
 #define DEBUG_TRACE_MEM
 
+#ifndef _MSC_VER
 #define COMPUTED_GOTO
+#endif
 
 #undef DEBUG_PRINT_CODE
 #undef DEBUG_TRACE_EXECUTION
@@ -26,7 +28,7 @@ typedef struct _vm VM;
 
 #endif
 
-    /* 34: value.h */
+    /* 36: value.h */
 #ifndef dictu_value_h
 #define dictu_value_h
 
@@ -54,7 +56,7 @@ typedef struct sObjFile ObjFile;
 
 typedef uint64_t Value;
 
-#define IS_BOOL(v)    (((v) & FALSE_VAL) == FALSE_VAL)
+#define IS_BOOL(v)    (((v) | 1) == TRUE_VAL)
 #define IS_NIL(v)     ((v) == NIL_VAL)
 #define IS_EMPTY(v)   ((v) == EMPTY_VAL)
 // If the NaN bits are set, it's not a number.
@@ -168,7 +170,7 @@ void printValue(Value value);
 
 #endif
 
-    /* 35: chunk.h */
+    /* 37: chunk.h */
 #ifndef dictu_chunk_h
 #define dictu_chunk_h
 
@@ -197,7 +199,7 @@ int addConstant(VM *vm, Chunk *chunk, Value value);
 
 #endif
 
-    /* 36: table.h */
+    /* 38: table.h */
 #ifndef dictu_table_h
 #define dictu_table_h
 
@@ -236,7 +238,7 @@ void grayTable(VM *vm, Table *table);
 
 #endif
 
-    /* 37: object.h */
+    /* 39: object.h */
 #ifndef dictu_object_h
 #define dictu_object_h
 
@@ -257,6 +259,7 @@ void grayTable(VM *vm, Table *table);
 #define AS_DICT(value)          ((ObjDict*)AS_OBJ(value))
 #define AS_SET(value)           ((ObjSet*)AS_OBJ(value))
 #define AS_FILE(value)          ((ObjFile*)AS_OBJ(value))
+#define AS_SOCKET(value)        ((ObjSocket*)AS_OBJ(value))
 
 #define IS_MODULE(value)          isObjType(value, OBJ_MODULE)
 #define IS_BOUND_METHOD(value)    isObjType(value, OBJ_BOUND_METHOD)
@@ -272,6 +275,7 @@ void grayTable(VM *vm, Table *table);
 #define IS_DICT(value)            isObjType(value, OBJ_DICT)
 #define IS_SET(value)             isObjType(value, OBJ_SET)
 #define IS_FILE(value)            isObjType(value, OBJ_FILE)
+#define IS_SOCKET(value)        isObjType(value, OBJ_SOCKET)
 
 typedef enum {
     OBJ_MODULE,
@@ -286,6 +290,7 @@ typedef enum {
     OBJ_DICT,
     OBJ_SET,
     OBJ_FILE,
+    OBJ_SOCKET,
     OBJ_UPVALUE
 } ObjType;
 
@@ -425,6 +430,14 @@ typedef struct {
     ObjClosure *method;
 } ObjBoundMethod;
 
+typedef struct {
+    Obj obj;
+    int socket;
+    int socketFamily;    /* Address family, e.g., AF_INET */
+    int socketType;      /* Socket type, e.g., SOCK_STREAM */
+    int socketProtocol;  /* Protocol type, usually 0 */
+} ObjSocket;
+
 ObjModule *newModule(VM *vm, ObjString *name);
 
 ObjBoundMethod *newBoundMethod(VM *vm, Value receiver, ObjClosure *method);
@@ -451,6 +464,8 @@ ObjSet *initSet(VM *vm);
 
 ObjFile *initFile(VM *vm);
 
+ObjSocket *newSocket(VM *vm, int sock, int socketFamily, int socketType, int socketProtocol);
+
 ObjUpvalue *newUpvalue(VM *vm, Value *slot);
 
 char *setToString(Value value);
@@ -470,7 +485,7 @@ static inline ObjType getObjType(Value value) {
 
 #endif
 
-    /* 38: scanner.h */
+    /* 40: scanner.h */
 #ifndef dictu_scanner_h
 #define dictu_scanner_h
 
@@ -530,7 +545,7 @@ Token scanToken();
 
 #endif
 
-    /* 39: compiler.h */
+    /* 41: compiler.h */
 #ifndef dictu_compiler_h
 #define dictu_compiler_h
 
@@ -639,7 +654,7 @@ void grayCompilerRoots(VM *vm);
 
 #endif
 
-    /* 40: vm.h */
+    /* 42: vm.h */
 #ifndef dictu_vm_h
 #define dictu_vm_h
 
@@ -669,7 +684,6 @@ struct _vm {
     Table globals;
     Table constants;
     Table strings;
-    Table imports;
     Table numberMethods;
     Table boolMethods;
     Table nilMethods;
@@ -680,6 +694,7 @@ struct _vm {
     Table fileMethods;
     Table classMethods;
     Table instanceMethods;
+    Table socketMethods;
     ObjString *initString;
     ObjString *replVar;
     ObjUpvalue *openUpvalues;
@@ -722,7 +737,7 @@ bool isFalsey(Value value);
 
 #endif
 
-    /* 41: natives.h */
+    /* 43: natives.h */
 #ifndef dictu_natives_h
 #define dictu_natives_h
 
@@ -731,7 +746,7 @@ void defineAllNatives(VM *vm);
 
 #endif //dictu_natives_h
 
-    /* 42: memory.h */
+    /* 44: memory.h */
 #ifndef dictu_memory_h
 #define dictu_memory_h
 
@@ -769,7 +784,7 @@ void freeObject(VM *vm, Obj *object);
 
 #endif
 
-    /* 43: util.h */
+    /* 45: util.h */
 #ifndef dictu_util_h
 #define dictu_util_h
 
@@ -786,7 +801,7 @@ Value boolNative(VM *vm, int argCount, Value *args);
 
 #endif //dictu_util_h
 
-    /* 44: bool.h */
+    /* 46: bool.h */
 #ifndef dictu_bool_h
 #define dictu_bool_h
 
@@ -795,7 +810,7 @@ void declareBoolMethods(VM *vm);
 
 #endif //dictu_bool_h
 
-    /* 45: class.h */
+    /* 47: class.h */
 #ifndef dictu_class_h
 #define dictu_class_h
 
@@ -805,7 +820,7 @@ void declareClassMethods(VM *vm);
 
 #endif //dictu_class_h
 
-    /* 46: copy.h */
+    /* 48: copy.h */
 #ifndef dictu_copy_h
 #define dictu_copy_h
 
@@ -819,7 +834,7 @@ ObjInstance *copyInstance(VM *vm, ObjInstance *oldInstance, bool shallow);
 
 #endif //dictu_copy_h
 
-    /* 47: dicts.h */
+    /* 49: dicts.h */
 #ifndef dictu_dicts_h
 #define dictu_dicts_h
 
@@ -829,7 +844,7 @@ void declareDictMethods(VM *vm);
 
 #endif //dictu_dicts_h
 
-    /* 48: files.h */
+    /* 50: files.h */
 #ifndef dictu_files_h
 #define dictu_files_h
 
@@ -839,7 +854,7 @@ void declareFileMethods(VM *vm);
 
 #endif //dictu_files_h
 
-    /* 49: instance.h */
+    /* 51: instance.h */
 #ifndef dictu_instance_h
 #define dictu_instance_h
 
@@ -849,7 +864,7 @@ void declareInstanceMethods(VM *vm);
 
 #endif //dictu_instance_h
 
-    /* 50: lists.h */
+    /* 52: lists.h */
 #ifndef dictu_lists_h
 #define dictu_lists_h
 
@@ -859,7 +874,7 @@ void declareListMethods(VM *vm);
 
 #endif //dictu_lists_h
 
-    /* 51: nil.h */
+    /* 53: nil.h */
 #ifndef dictu_nil_h
 #define dictu_nil_h
 
@@ -868,7 +883,7 @@ void declareNilMethods(VM *vm);
 
 #endif //dictu_nil_h
 
-    /* 52: number.h */
+    /* 54: number.h */
 #ifndef dictu_number_h
 #define dictu_number_h
 
@@ -877,7 +892,7 @@ void declareNumberMethods(VM *vm);
 
 #endif //dictu_number_h
 
-    /* 53: sets.h */
+    /* 55: sets.h */
 #ifndef dictu_sets_h
 #define dictu_sets_h
 
@@ -887,7 +902,7 @@ void declareSetMethods(VM *vm);
 
 #endif //dictu_sets_h
 
-    /* 54: strings.h */
+    /* 56: strings.h */
 #ifndef dictu_strings_h
 #define dictu_strings_h
 
@@ -897,7 +912,7 @@ void declareStringMethods(VM *vm);
 
 #endif //dictu_strings_h
 
-    /* 55: optionals.h */
+    /* 57: optionals.h */
 #ifndef dictu_optionals_h
 #define dictu_optionals_h
 
@@ -908,12 +923,8 @@ void declareStringMethods(VM *vm);
 #define SET_ERRNO(module_)                                              \
   defineNativeProperty(vm, &module_->values, "errno", NUMBER_VAL(errno))
 
-#define GET_ERRNO(module_)({                         \
-  Value errno_value = 0;                             \
-  ObjString *name = copyString(vm, "errno", 5);      \
-  tableGet(&module_->values, name, &errno_value);    \
-  errno_value;                                       \
-})
+#define RESET_ERRNO(module_)                                       \
+  defineNativeProperty(vm, &module_->values, "errno", 0)
 
 typedef ObjModule *(*BuiltinModule)(VM *vm);
 
@@ -924,11 +935,13 @@ typedef struct {
 
 ObjModule *importBuiltinModule(VM *vm, int index);
 
+Value getErrno(VM* vm, ObjModule* module);
+
 int findBuiltinModule(char *name, int length);
 
 #endif //dictu_optionals_h
 
-    /* 56: c.h */
+    /* 58: c.h */
 #ifndef dictu_c_h
 #define dictu_c_h
 
@@ -942,8 +955,20 @@ int findBuiltinModule(char *name, int length);
 #endif
 
 
+// error codes taken from https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/errno.h
+#ifdef __FreeBSD__
+#define EHWPOISON 133
+#define ENOSTR 60
+#define ENODATA 61
+#define ETIME 62
+#define ENOSR 63
+#endif
+
+
 #ifdef __APPLE__
 #define LAST_ERROR 106
+#elif defined(_WIN32)
+#define LAST_ERROR EWOULDBLOCK
 #else
 #define LAST_ERROR EHWPOISON
 #endif
@@ -957,7 +982,7 @@ Value strerrorNative(VM *, int, Value *);
 
 #endif //dictu_c_h
 
-    /* 57: env.h */
+    /* 59: env.h */
 #ifndef dictu_env_h
 #define dictu_env_h
 
@@ -969,7 +994,7 @@ ObjModule *createEnvClass(VM *vm);
 #ifndef DISABLE_HTTP
 
 
-    /* 58: http.h */
+    /* 60: http.h */
 #ifndef dictu_http_h
 #define dictu_http_h
 
@@ -991,7 +1016,7 @@ ObjModule *createHTTPClass(VM *vm);
 #endif //dictu_http_h
 #endif /* DISABLE_HTTP */
 
-    /* 59: jsonParseLib.h */
+    /* 61: jsonParseLib.h */
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
  * Copyright (C) 2012, 2013, 2014 James McLaughlin et al.  All rights reserved.
@@ -1271,7 +1296,7 @@ void json_value_free_ex (json_settings * settings,
 #endif
 
 
-    /* 60: jsonBuilderLib.h */
+    /* 62: jsonBuilderLib.h */
 
 /* vim: set et ts=3 sw=3 sts=3 ft=c:
  *
@@ -1427,7 +1452,7 @@ void json_builder_free (json_value *);
 #endif
 
 #endif
-    /* 61: json.h */
+    /* 63: json.h */
 #ifndef dictu_json_h
 #define dictu_json_h
 
@@ -1436,7 +1461,7 @@ ObjModule *createJSONClass(VM *vm);
 
 #endif //dictu_json_h
 
-    /* 62: math.h */
+    /* 64: math.h */
 #ifndef dictu_math_h
 #define dictu_math_h
 
@@ -1446,7 +1471,7 @@ ObjModule *createMathsClass(VM *vm);
 
 #endif //dictu_math_h
 
-    /* 63: path.h */
+    /* 65: path.h */
 #ifndef dictu_path_h
 #define dictu_path_h
 
@@ -1457,12 +1482,14 @@ ObjModule *createMathsClass(VM *vm);
 
 #ifdef _WIN32
 #define DIR_SEPARATOR '\\'
+#define DIR_ALT_SEPARATOR '/'
 #define DIR_SEPARATOR_AS_STRING "\\"
 #define DIR_SEPARATOR_STRLEN 1
 #define PATH_DELIMITER ';'
 #define PATH_DELIMITER_AS_STRING ";"
 #define PATH_DELIMITER_STRLEN 1
 #else
+
 #define HAS_REALPATH
 #define DIR_SEPARATOR '/'
 #define DIR_SEPARATOR_AS_STRING "/"
@@ -1472,22 +1499,27 @@ ObjModule *createMathsClass(VM *vm);
 #define PATH_DELIMITER_STRLEN 1
 #endif
 
+#ifdef DIR_ALT_SEPARATOR
+#define IS_DIR_SEPARATOR(c) ((c) == DIR_SEPARATOR || (c) == DIR_ALT_SEPARATOR)
+#else
 #define IS_DIR_SEPARATOR(c) (c == DIR_SEPARATOR)
+#endif
 
 
 ObjModule *createPathClass(VM *vm);
 
 #endif //dictu_path_h
 
-    /* 64: system.h */
+    /* 66: system.h */
 #ifndef dictu_system_h
 #define dictu_system_h
 
 
 #ifdef _WIN32
 #define REMOVE remove
-#define MKDIR(d, m) mkdir(d)
+#define MKDIR(d, m) ((void)m, _mkdir(d))
 #else
+#define HAS_ACCESS
 #define REMOVE unlink
 #define MKDIR(d, m) mkdir(d, m)
 #endif
@@ -1497,7 +1529,7 @@ void createSystemClass(VM *vm, int argc, const char *argv[]);
 
 #endif //dictu_system_h
 
-    /* 65: datetime.h */
+    /* 67: datetime.h */
 #ifndef dictu_datetime_h
 #define dictu_datetime_h
 
@@ -1507,3 +1539,25 @@ void createSystemClass(VM *vm, int argc, const char *argv[]);
 ObjModule *createDatetimeClass(VM *vm);
 
 #endif //dictu_datetime_h
+
+    /* 68: socket.h */
+#ifndef dictu_socket_h
+#define dictu_socket_h
+
+
+#ifdef __FreeBSD__
+#endif
+
+ObjModule *createSocketClass(VM *vm);
+
+#endif //dictu_socket_h
+
+    /* 69: random.h */
+#ifndef dictu_random_h
+#define dictu_random_h
+
+
+
+ObjModule *createRandomClass(VM *vm);
+
+#endif //dictu_random_h

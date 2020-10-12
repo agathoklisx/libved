@@ -18217,7 +18217,6 @@ private void ed_deallocate_prop (ed_T *this) {
 private void deinit_ed (ed_T *this, int restore_state) {
   if (restore_state)
     Term.reset ($my(term));
-
   ed_deallocate_prop (this);
 }
 

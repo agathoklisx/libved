@@ -1,7 +1,6 @@
 NAME    := lai
 VERSION := 0.1
 SYSDIR  :=
-
 BINDIR   = $(SYSDIR)/bin
 INCDIR   = $(SYSDIR)/include
 LIBDIR   = $(SYSDIR)/lib
@@ -32,7 +31,7 @@ endif
 SHARED_FLAGS :=
 STATIC_FLAGS = -DDISABLE_HTTP -static
 
-ENABLE_HTTP := 0
+ENABLE_HTTP := 1
 ifneq ($(ENABLE_HTTP), 0)
   SHARED_FLAGS += -lcurl
 else
@@ -43,7 +42,7 @@ INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
 
 shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
 
-$(INCDIR)/$(HEADER): clean-header
+$(INCDIR)/$(HEADER):
 	@$(CP) $(HEADER) $(INCDIR)
 
 $(LIBDIR)/lib$(NAME)-$(VERSION).so:

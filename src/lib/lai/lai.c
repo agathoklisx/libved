@@ -14,12 +14,11 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <curl/curl.h>
+#include <dirent.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <assert.h>
-
-#ifndef DISABLE_HTTP
-#include <curl/curl.h>
-#endif
 
 #include "__lai.h"
 
@@ -946,6 +945,16 @@ ObjUpvalue *newUpvalue(VM *vm, Value *slot) {
     return upvalue;
 }
 
+ObjSocket *newSocket(VM *vm, int sock, int socketFamily, int socketType, int socketProtocol) {
+    ObjSocket *socket = ALLOCATE_OBJ(vm, ObjSocket, OBJ_SOCKET);
+    socket->socket = sock;
+    socket->socketFamily = socketFamily;
+    socket->socketType = socketType;
+    socket->socketProtocol = socketProtocol;
+
+    return socket;
+}
+
 char *listToString(Value value) {
     int size = 50;
     ObjList *list = AS_LIST(value);
@@ -1273,7 +1282,8 @@ char *objectToString(Value value) {
                 snprintf(closureString, closure->function->name->length + 6, "<fn %s>", closure->function->name->chars);
             } else {
                 closureString = malloc(sizeof(char) * 9);
-                snprintf(closureString, 9, "%s", "<script>");
+                memcpy(closureString, "<script>", 8);
+                closureString[8] = '\0';
             }
 
             return closureString;
@@ -1288,7 +1298,8 @@ char *objectToString(Value value) {
                 snprintf(functionString, function->name->length + 6, "<fn %s>", function->name->chars);
             } else {
                 functionString = malloc(sizeof(char) * 5);
-                snprintf(functionString, 5, "%s", "<fn>");
+                memcpy(functionString, "<fn>", 4);
+                functionString[4] = '\0';
             }
 
             return functionString;
@@ -1300,7 +1311,8 @@ char *objectToString(Value value) {
 
         case OBJ_NATIVE: {
             char *nativeString = malloc(sizeof(char) * 12);
-            snprintf(nativeString, 12, "%s", "<native fn>");
+            memcpy(nativeString, "<native fn>", 11);
+            nativeString[11] = '\0';
             return nativeString;
         }
 
@@ -1331,9 +1343,17 @@ char *objectToString(Value value) {
         }
 
         case OBJ_UPVALUE: {
-            char *nativeString = malloc(sizeof(char) * 8);
-            snprintf(nativeString, 8, "%s", "upvalue");
-            return nativeString;
+            char *upvalueString = malloc(sizeof(char) * 8);
+            memcpy(upvalueString, "upvalue", 7);
+            upvalueString[7] = '\0';
+            return upvalueString;
+        }
+
+        case OBJ_SOCKET: {
+            char *socketString = malloc(sizeof(char) * 7);
+            memcpy(socketString, "socket", 6);
+            socketString[6] = '\0';
+            return socketString;
         }
     }
 
@@ -1686,14 +1706,14 @@ static Token identifier() {
 }
 
 static Token number() {
-    while (isDigit(scan_peek())) scan_advance();
+    while (isDigit(scan_peek()) || scan_peek() == '_') scan_advance();
 
     // Look for a fractional part.
     if (scan_peek() == '.' && isDigit(scan_peekNext())) {
         // Consume the "."
         scan_advance();
 
-        while (isDigit(scan_peek())) scan_advance();
+        while (isDigit(scan_peek()) || scan_peek() == '_') scan_advance();
     }
 
     return makeToken(TOKEN_NUMBER);
@@ -2185,18 +2205,18 @@ static void addLocal(Compiler *compiler, Token name) {
 
 // Allocates a local slot for the value currently on the stack, if
 // we're in a local scope.
-static void declareVariable(Compiler *compiler) {
+static void declareVariable(Compiler *compiler, Token *name) {
     // Global variables are implicitly declared.
     if (compiler->scopeDepth == 0) return;
 
     // See if a local variable with this name is already declared in this
     // scope.
-    Token *name = &compiler->parser->previous;
+    // Token *name = &compiler->parser->previous;
     for (int i = compiler->localCount - 1; i >= 0; i--) {
         Local *local = &compiler->locals[i];
         if (local->depth != -1 && local->depth < compiler->scopeDepth) break;
         if (identifiersEqual(name, &local->name)) {
-            error(compiler->parser, "Variable with this name already declared in this scope.");
+            errorAt(compiler->parser, name, "Variable with this name already declared in this scope.");
         }
     }
 
@@ -2213,7 +2233,7 @@ static uint8_t parseVariable(Compiler *compiler, const char *errorMessage, bool 
         return identifierConstant(compiler, &compiler->parser->previous);
     }
 
-    declareVariable(compiler);
+    declareVariable(compiler, &compiler->parser->previous);
     return 0;
 }
 
@@ -2485,8 +2505,29 @@ static void grouping(Compiler *compiler, bool canAssign) {
 static void comp_number(Compiler *compiler, bool canAssign) {
     UNUSED(canAssign);
 
-    double value = strtod(compiler->parser->previous.start, NULL);
+    // We allocate the whole range for the worst case.
+    // Also account for the null-byte.
+    char* buffer = (char *)malloc((compiler->parser->previous.length + 1) * sizeof(char));
+    char* current = buffer;
+
+    // Strip it of any underscores.
+    for(int i = 0; i < compiler->parser->previous.length; i++) {
+        char c = compiler->parser->previous.start[i];
+
+        if (c != '_') {
+            *(current++) = c;
+        }
+    }
+
+    // Terminate the string with a null character.
+    *current = '\0';
+
+    // Parse the string.
+    double value = strtod(buffer, NULL);
     emitConstant(compiler, NUMBER_VAL(value));
+
+    // Free the malloc'd buffer.
+    free(buffer);
 }
 
 static void or_(Compiler *compiler, bool canAssign) {
@@ -3106,7 +3147,7 @@ static void parseClassBody(Compiler *compiler) {
 static void classDeclaration(Compiler *compiler) {
     consume(compiler, TOKEN_IDENTIFIER, "Expect class name.");
     uint8_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
-    declareVariable(compiler);
+    declareVariable(compiler, &compiler->parser->previous);
 
     ClassCompiler classCompiler;
     setupClassCompiler(compiler, &classCompiler, false);
@@ -3149,7 +3190,7 @@ static void abstractClassDeclaration(Compiler *compiler) {
 
     consume(compiler, TOKEN_IDENTIFIER, "Expect class name.");
     uint8_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
-    declareVariable(compiler);
+    declareVariable(compiler, &compiler->parser->previous);
 
     ClassCompiler classCompiler;
     setupClassCompiler(compiler, &classCompiler, true);
@@ -3187,7 +3228,7 @@ static void abstractClassDeclaration(Compiler *compiler) {
 static void traitDeclaration(Compiler *compiler) {
     consume(compiler, TOKEN_IDENTIFIER, "Expect trait name.");
     uint8_t nameConstant = identifierConstant(compiler, &compiler->parser->previous);
-    declareVariable(compiler);
+    declareVariable(compiler, &compiler->parser->previous);
 
     ClassCompiler classCompiler;
     setupClassCompiler(compiler, &classCompiler, false);
@@ -3212,19 +3253,49 @@ static void funDeclaration(Compiler *compiler) {
 }
 
 static void varDeclaration(Compiler *compiler, bool constant) {
-    do {
-        uint8_t global = parseVariable(compiler, "Expect variable name.", constant);
+    if (match(compiler, TOKEN_LEFT_BRACKET)) {
+        Token variables[255];
+        int varCount = 0;
 
-        if (match(compiler, TOKEN_EQUAL) || constant) {
-            // Compile the initializer.
-            expression(compiler);
+        do {
+            consume(compiler, TOKEN_IDENTIFIER, "Expect variable name.");
+            variables[varCount] = compiler->parser->previous;
+            varCount++;
+        } while (match(compiler, TOKEN_COMMA));
+
+        consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after list destructure.");
+        consume(compiler, TOKEN_EQUAL, "Expect '=' after list destructure.");
+
+        expression(compiler);
+
+        emitBytes(compiler, OP_UNPACK_LIST, varCount);
+
+        if (compiler->scopeDepth == 0) {
+            for (int i = varCount - 1; i >= 0; --i) {
+                uint8_t identifier = identifierConstant(compiler, &variables[i]);
+                defineVariable(compiler, identifier, constant);
+            }
         } else {
-            // Default to nil.
-            emitByte(compiler, OP_NIL);
+            for (int i = 0; i < varCount; ++i) {
+                declareVariable(compiler, &variables[i]);
+                defineVariable(compiler, 0, constant);
+            }
         }
+    } else {
+        do {
+            uint8_t global = parseVariable(compiler, "Expect variable name.", constant);
 
-        defineVariable(compiler, global, constant);
-    } while (match(compiler, TOKEN_COMMA));
+            if (match(compiler, TOKEN_EQUAL) || constant) {
+                // Compile the initializer.
+                expression(compiler);
+            } else {
+                // Default to nil.
+                emitByte(compiler, OP_NIL);
+            }
+
+            defineVariable(compiler, global, constant);
+        } while (match(compiler, TOKEN_COMMA));
+    }
 
     consume(compiler, TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
 }
@@ -3728,7 +3799,6 @@ VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]) {
     initTable(&vm->globals);
     initTable(&vm->constants);
     initTable(&vm->strings);
-    initTable(&vm->imports);
 
     initTable(&vm->numberMethods);
     initTable(&vm->boolMethods);
@@ -3740,6 +3810,7 @@ VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]) {
     initTable(&vm->fileMethods);
     initTable(&vm->classMethods);
     initTable(&vm->instanceMethods);
+    initTable(&vm->socketMethods);
 
     setupFilenameStack(vm, scriptName);
     if (scriptName == NULL) {
@@ -3782,7 +3853,6 @@ void freeVM(VM *vm) {
     freeTable(vm, &vm->globals);
     freeTable(vm, &vm->constants);
     freeTable(vm, &vm->strings);
-    freeTable(vm, &vm->imports);
     freeTable(vm, &vm->numberMethods);
     freeTable(vm, &vm->boolMethods);
     freeTable(vm, &vm->nilMethods);
@@ -3793,14 +3863,19 @@ void freeVM(VM *vm) {
     freeTable(vm, &vm->fileMethods);
     freeTable(vm, &vm->classMethods);
     freeTable(vm, &vm->instanceMethods);
+    freeTable(vm, &vm->socketMethods);
     FREE_ARRAY(vm, CallFrame, vm->frames, vm->frameCapacity);
-    FREE_ARRAY(vm, const char*, vm->scriptNames, vm->scriptNameCapacity);
+    FREE_ARRAY(vm, const char*, (char**)vm->scriptNames, vm->scriptNameCapacity);
     vm->initString = NULL;
     vm->replVar = NULL;
     freeObjects(vm);
 
 #if defined(DEBUG_TRACE_MEM) || defined(DEBUG_FINAL_MEM)
+#ifdef __MINGW32__
+    printf("Total memory usage: %lu\n", (unsigned long)vm->bytesAllocated);
+#else
     printf("Total memory usage: %zu\n", vm->bytesAllocated);
+#endif
 #endif
 
     free(vm);
@@ -4071,6 +4146,17 @@ static bool invoke(VM *vm, ObjString *name, int argCount) {
                 }
 
                 runtimeError(vm, "File has no method %s().", name->chars);
+                return false;
+            }
+
+            // TODO: Think of a way to handle this for imported classes
+            case OBJ_SOCKET: {
+                Value value;
+                if (tableGet(&vm->socketMethods, name, &value)) {
+                    return callNativeMethod(vm, value, argCount);
+                }
+
+                runtimeError(vm, "Socket has no method %s().", name->chars);
                 return false;
             }
 
@@ -4721,7 +4807,7 @@ static InterpretResult run(VM *vm) {
             if (vm->scriptNameCapacity < vm->scriptNameCount + 2) {
                 int oldCapacity = vm->scriptNameCapacity;
                 vm->scriptNameCapacity = GROW_CAPACITY(oldCapacity);
-                vm->scriptNames = GROW_ARRAY(vm, vm->scriptNames, const char*,
+                vm->scriptNames = GROW_ARRAY(vm, (char**)vm->scriptNames, const char*,
                                            oldCapacity, vm->scriptNameCapacity);
             }
 
@@ -4740,6 +4826,8 @@ static InterpretResult run(VM *vm) {
             push(vm, OBJ_VAL(function));
             ObjClosure *closure = newClosure(vm, function);
             pop(vm);
+
+            push(vm, OBJ_VAL(closure));
 
             frame->ip = ip;
             call(vm, closure, 0);
@@ -4807,6 +4895,36 @@ static InterpretResult run(VM *vm) {
             DISPATCH();
         }
 
+        CASE_CODE(UNPACK_LIST): {
+            int varCount = READ_BYTE();
+
+            if (!IS_LIST(peek(vm, 0))) {
+                frame->ip = ip;
+                runtimeError(vm, "Attempting to unpack a value which is not a list.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            ObjList *list = AS_LIST(pop(vm));
+
+            if (varCount != list->values.count) {
+                frame->ip = ip;
+
+                if (varCount < list->values.count) {
+                    runtimeError(vm, "Too many values to unpack");
+                } else {
+                    runtimeError(vm, "Not enough values to unpack");
+                }
+
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            for (int i = 0; i < list->values.count; ++i) {
+                push(vm, list->values.values[i]);
+            }
+
+            DISPATCH();
+        }
+
         CASE_CODE(NEW_DICT): {
             ObjDict *dict = initDict(vm);
             push(vm, OBJ_VAL(dict));
@@ -4835,8 +4953,8 @@ static InterpretResult run(VM *vm) {
         }
 
         CASE_CODE(SUBSCRIPT): {
-            Value indexValue = pop(vm);
-            Value subscriptValue = pop(vm);
+            Value indexValue = peek(vm, 0);
+            Value subscriptValue = peek(vm, 1);
 
             if (!IS_OBJ(subscriptValue)) {
                 frame->ip = ip;
@@ -4860,6 +4978,8 @@ static InterpretResult run(VM *vm) {
                         index = list->values.count + index;
 
                     if (index >= 0 && index < list->values.count) {
+                        pop(vm);
+                        pop(vm);
                         push(vm, list->values.values[index]);
                         DISPATCH();
                     }
@@ -4878,6 +4998,8 @@ static InterpretResult run(VM *vm) {
                         index = string->length + index;
 
                     if (index >= 0 && index < string->length) {
+                        pop(vm);
+                        pop(vm);
                         push(vm, OBJ_VAL(copyString(vm, &string->chars[index], 1)));
                         DISPATCH();
                     }
@@ -4896,6 +5018,8 @@ static InterpretResult run(VM *vm) {
                     }
 
                     Value v;
+                    pop(vm);
+                    pop(vm);
                     if (dictGet(dict, indexValue, &v)) {
                         push(vm, v);
                     } else {
@@ -4914,11 +5038,9 @@ static InterpretResult run(VM *vm) {
         }
 
         CASE_CODE(SUBSCRIPT_ASSIGN): {
-            // We are free to pop here as this is *not* adding a new entry, but simply replacing
-            // An old value, so a GC should never be triggered.
-            Value assignValue = pop(vm);
-            Value indexValue = pop(vm);
-            Value subscriptValue = pop(vm);
+            Value assignValue = peek(vm, 0);
+            Value indexValue = peek(vm, 1);
+            Value subscriptValue = peek(vm, 2);
 
             if (!IS_OBJ(subscriptValue)) {
                 frame->ip = ip;
@@ -4942,6 +5064,9 @@ static InterpretResult run(VM *vm) {
 
                     if (index >= 0 && index < list->values.count) {
                         list->values.values[index] = assignValue;
+                        pop(vm);
+                        pop(vm);
+                        pop(vm);
                         push(vm, NIL_VAL);
                         DISPATCH();
                     }
@@ -4960,7 +5085,9 @@ static InterpretResult run(VM *vm) {
                     }
 
                     dictSet(vm, dict, indexValue, assignValue);
-
+                    pop(vm);
+                    pop(vm);
+                    pop(vm);
                     push(vm, NIL_VAL);
                     DISPATCH();
                 }
@@ -5446,6 +5573,8 @@ static Value typeNative(VM *vm, int argCount, Value *args) {
                 return OBJ_VAL(copyString(vm, "native", 6));
             case OBJ_FILE:
                 return OBJ_VAL(copyString(vm, "file", 4));
+            case OBJ_SOCKET:
+                return OBJ_VAL(copyString(vm, "socket", 6));
             default:
                 break;
         }
@@ -5737,7 +5866,7 @@ static void blackenObject(VM *vm, Obj *object) {
             break;
         }
 
-
+        case OBJ_SOCKET:
         case OBJ_NATIVE:
         case OBJ_STRING:
         case OBJ_FILE:
@@ -5835,6 +5964,11 @@ void freeObject(VM *vm, Obj *object) {
             FREE(vm, ObjUpvalue, object);
             break;
         }
+
+        case OBJ_SOCKET: {
+            FREE(vm, ObjSocket, object);
+            break;
+        }
     }
 }
 
@@ -5863,8 +5997,6 @@ void collectGarbage(VM *vm) {
     // Mark the global roots.
     grayTable(vm, &vm->modules);
     grayTable(vm, &vm->globals);
-    grayTable(vm, &vm->constants);
-    grayTable(vm, &vm->imports);
     grayTable(vm, &vm->numberMethods);
     grayTable(vm, &vm->boolMethods);
     grayTable(vm, &vm->nilMethods);
@@ -5875,6 +6007,7 @@ void collectGarbage(VM *vm) {
     grayTable(vm, &vm->fileMethods);
     grayTable(vm, &vm->classMethods);
     grayTable(vm, &vm->instanceMethods);
+    grayTable(vm, &vm->socketMethods);
     grayCompilerRoots(vm);
     grayObject(vm, (Obj *) vm->initString);
     grayObject(vm, (Obj *) vm->replVar);
@@ -6369,14 +6502,14 @@ static Value readFullFile(VM *vm, int argCount, Value *args) {
     }
 
     size_t bytesRead = fread(buffer, sizeof(char), fileSize, file->file);
-    if (bytesRead < fileSize) {
+    if (bytesRead < fileSize && !feof(file->file)) {
         free(buffer);
         runtimeError(vm, "Could not read file \"%s\".\n", file->path);
         return EMPTY_VAL;
     }
 
     buffer[bytesRead] = '\0';
-    Value ret = OBJ_VAL(copyString(vm, buffer, fileSize));
+    Value ret = OBJ_VAL(copyString(vm, buffer, bytesRead));
 
     free(buffer);
     return ret;
@@ -6444,6 +6577,12 @@ static Value seekFile(VM *vm, int argCount, Value *args) {
 
     int offset = AS_NUMBER(args[1]);
     ObjFile *file = AS_FILE(args[0]);
+
+    if (offset != 0 && !strstr(file->openType, "b")) {
+        runtimeError(vm, "seek() may not have non-zero offset if file is opened in text mode");
+        return EMPTY_VAL;
+    }
+
     fseek(file->file, offset, seekType);
 
     return NIL_VAL;
@@ -6579,6 +6718,7 @@ void declareInstanceMethods(VM *vm) {
 }
 
     /* 17: lists.c */
+
 
 static Value toStringList(VM *vm, int argCount, Value *args) {
     if (argCount != 0) {
@@ -6868,6 +7008,78 @@ static Value copyListDeep(VM *vm, int argCount, Value *args) {
     return OBJ_VAL(newList);
 }
 
+
+static int partition(ObjList* arr, int start, int end) {
+    int pivot_index = (int)floor(start + end) / 2;
+
+    double pivot =  AS_NUMBER(arr->values.values[pivot_index]);
+
+    int i = start - 1;
+    int j = end + 1;
+
+    for (;;) {
+        do {
+            i = i + 1;
+        } while(AS_NUMBER(arr->values.values[i]) < pivot);
+
+        do {
+            j = j - 1;
+        } while(AS_NUMBER(arr->values.values[j]) > pivot);
+
+        if (i >= j) {
+            return j;
+        }
+
+        // Swap arr[i] with arr[j]
+        Value temp = arr->values.values[i];
+        
+        arr->values.values[i] = arr->values.values[j];
+        arr->values.values[j] = temp;
+    }
+}
+
+// Implementation of Quick Sort using the Hoare
+// Partition scheme.
+// Best Case O(n log n)
+// Worst Case O(n^2) (If the list is already sorted.) 
+static void quickSort(ObjList* arr, int start, int end) {
+    while (start < end) {
+        int part = partition(arr, start, end);
+
+        // Recurse for the smaller halve.
+        if (part - start < end - part) {
+            quickSort(arr, start, part);
+            
+            start = start + 1;
+        } else {
+            quickSort(arr, part + 1, end);
+
+            end = end - 1;
+        }
+    }
+}
+
+static Value sortList(VM *vm, int argCount, Value *args) {
+    if (argCount != 0) {
+        runtimeError(vm, "sort() takes no arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    ObjList* list = AS_LIST(args[0]);
+
+    // Check if all the list elements are indeed numbers.
+    for (int i = 0; i < list->values.count; i++) {
+        if (!IS_NUMBER(list->values.values[i])) {
+            runtimeError(vm, "sort() takes lists with numbers (index %d was not a number)", i);
+            return EMPTY_VAL;
+        }
+    }
+
+    quickSort(list, 0, list->values.count - 1);
+
+    return NIL_VAL;
+}
+
 void declareListMethods(VM *vm) {
     defineNative(vm, &vm->listMethods, "toString", toStringList);
     defineNative(vm, &vm->listMethods, "len", lenList);
@@ -6881,6 +7093,7 @@ void declareListMethods(VM *vm) {
     defineNative(vm, &vm->listMethods, "copy", copyListShallow);
     defineNative(vm, &vm->listMethods, "deepCopy", copyListDeep);
     defineNative(vm, &vm->listMethods, "toBool", boolNative); // Defined in util
+    defineNative(vm, &vm->listMethods, "sort", sortList);
 }
 
     /* 18: nil.c */
@@ -6903,6 +7116,7 @@ void declareNilMethods(VM *vm) {
 
     /* 19: number.c */
 
+
 static Value toStringNumber(VM *vm, int argCount, Value *args) {
     if (argCount != 0) {
         runtimeError(vm, "toString() takes no arguments (%d given)", argCount);
@@ -6911,9 +7125,18 @@ static Value toStringNumber(VM *vm, int argCount, Value *args) {
 
     double number = AS_NUMBER(args[0]);
     int numberStringLength = snprintf(NULL, 0, "%.15g", number) + 1;
-    char numberString[numberStringLength];
+    
+    char *numberString = malloc(numberStringLength);
+    if (numberString == NULL) {
+        runtimeError(vm, "Memory error on toString()!");
+        return EMPTY_VAL;
+    }
+    
     snprintf(numberString, numberStringLength, "%.15g", number);
-    return OBJ_VAL(copyString(vm, numberString, numberStringLength - 1));
+    Value value = OBJ_VAL(copyString(vm, numberString, numberStringLength - 1));
+
+    free(numberString);
+    return value;
 }
 
 void declareNumberMethods(VM *vm) {
@@ -7132,6 +7355,7 @@ static Value splitString(VM *vm, int argCount, Value *args) {
     char *tmp = malloc(string->length + 1);
     char *tmpFree = tmp;
     memcpy(tmp, string->chars, string->length + 1);
+    tmp[string->length] = '\0';
     int delimiterLength = strlen(delimiter);
     char *token;
 
@@ -7370,23 +7594,20 @@ static Value leftStripString(VM *vm, int argCount, Value *args) {
         runtimeError(vm, "leftStrip() takes no arguments (%d given)", argCount);
         return EMPTY_VAL;
     }
+
     ObjString *string = AS_STRING(args[0]);
-
-    bool charSeen = false;
     int i, count = 0;
-
     char *temp = malloc(sizeof(char) * (string->length + 1));
 
     for (i = 0; i < string->length; ++i) {
-        if (!charSeen && isspace(string->chars[i])) {
-            count++;
-            continue;
+        if (!isspace(string->chars[i])) {
+            break;
         }
-        temp[i - count] = string->chars[i];
-        charSeen = true;
+        count++;
     }
-    temp[i - count] = '\0';
-    Value ret = OBJ_VAL(copyString(vm, temp, i - count));
+
+    memcpy(temp, string->chars + count, string->length - count);
+    Value ret = OBJ_VAL(copyString(vm, temp, string->length - count));
     free(temp);
     return ret;
 }
@@ -7420,7 +7641,10 @@ static Value stripString(VM *vm, int argCount, Value *args) {
     }
 
     Value string = leftStripString(vm, 0, args);
-    return rightStripString(vm, 0, &string);
+    push(vm, string);
+    string = rightStripString(vm, 0, &string);
+    pop(vm);
+    return string;
 }
 
 static Value countString(VM *vm, int argCount, Value *args) {
@@ -7474,6 +7698,8 @@ BuiltinModules modules[] = {
         {"JSON", &createJSONClass},
         {"Path", &createPathClass},
         {"Datetime", &createDatetimeClass},
+        {"Socket", &createSocketClass},
+        {"Random", &createRandomClass},
 #ifndef DISABLE_HTTP
         {"HTTP", &createHTTPClass},
 #endif
@@ -7482,6 +7708,13 @@ BuiltinModules modules[] = {
 
 ObjModule *importBuiltinModule(VM *vm, int index) {
     return modules[index].module(vm);
+}
+
+Value getErrno(VM* vm, ObjModule* module) {
+    Value errno_value = 0;
+    ObjString *name = copyString(vm, "errno", 5);
+    tableGet(&module->values, name, &errno_value);
+    return errno_value;
 }
 
 int findBuiltinModule(char *name, int length) {
@@ -7495,6 +7728,10 @@ int findBuiltinModule(char *name, int length) {
 }
 
     /* 23: c.c */
+
+#ifdef _WIN32
+#define strerror_r(ERRNO, BUF, LEN) strerror_s(BUF, LEN, ERRNO)
+#endif
 
 Value strerrorGeneric(VM *vm, int error) {
     if (error <= 0) {
@@ -7535,7 +7772,7 @@ Value strerrorNative(VM *vm, int argCount, Value *args) {
     if (argCount == 1) {
       error = AS_NUMBER(args[0]);
     } else {
-        error = AS_NUMBER(GET_ERRNO(GET_SELF_CLASS));
+        error = AS_NUMBER(getErrno(vm, GET_SELF_CLASS));
     }
 
     return strerrorGeneric(vm, error);
@@ -7670,7 +7907,9 @@ void createCClass(VM *vm) {
     defineNativeProperty(vm, &module->values, "ECOMM", NUMBER_VAL(ECOMM));
 #endif
     defineNativeProperty(vm, &module->values, "EPROTO", NUMBER_VAL(EPROTO));
+#ifdef EMULTIHOP
     defineNativeProperty(vm, &module->values, "EMULTIHOP", NUMBER_VAL(EMULTIHOP));
+#endif
 #ifdef EDOTDOT
     defineNativeProperty(vm, &module->values, "EDOTDOT", NUMBER_VAL(EDOTDOT));
 #endif
@@ -7748,7 +7987,9 @@ void createCClass(VM *vm) {
     defineNativeProperty(vm, &module->values, "EHOSTUNREACH", NUMBER_VAL(EHOSTUNREACH));
     defineNativeProperty(vm, &module->values, "EALREADY", NUMBER_VAL(EALREADY));
     defineNativeProperty(vm, &module->values, "EINPROGRESS", NUMBER_VAL(EINPROGRESS));
+#ifdef ESTALE
     defineNativeProperty(vm, &module->values, "ESTALE", NUMBER_VAL(ESTALE));
+#endif
 #ifdef EUCLEAN
     defineNativeProperty(vm, &module->values, "EUCLEAN", NUMBER_VAL(EUCLEAN));
 #endif
@@ -7764,7 +8005,9 @@ void createCClass(VM *vm) {
 #ifdef EREMOTEIO
     defineNativeProperty(vm, &module->values, "EREMOTEIO", NUMBER_VAL(EREMOTEIO));
 #endif
+#ifdef EDQUOT
     defineNativeProperty(vm, &module->values, "EDQUOT", NUMBER_VAL(EDQUOT));
+#endif
 #ifdef ENOMEDIUM
     defineNativeProperty(vm, &module->values, "ENOMEDIUM", NUMBER_VAL(ENOMEDIUM));
 #endif
@@ -7800,6 +8043,21 @@ void createCClass(VM *vm) {
 
 
     /* 24: env.c */
+
+#ifdef _WIN32
+#define unsetenv(NAME) _putenv_s(NAME, "")
+int setenv(const char *name, const char *value, int overwrite) {
+    if (!overwrite && getenv(name) == NULL) {
+        return 0;
+    }
+
+    if (_putenv_s(name, value)) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
+#endif
 
 static Value env_get(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
@@ -7886,7 +8144,7 @@ static Value strerrorHttpNative(VM *vm, int argCount, Value *args) {
     if (argCount == 1) {
         error = AS_NUMBER(args[0]);
     } else {
-        error = AS_NUMBER(GET_ERRNO(GET_SELF_CLASS));
+        error = AS_NUMBER(getErrno(vm, GET_SELF_CLASS));
     }
 
     char *error_string = (char *) curl_easy_strerror(error);
@@ -8352,7 +8610,7 @@ static int new_value (json_state * state,
                 int values_size = sizeof (*value->u.object.values) * value->u.object.length;
 
                 if (! (value->u.object.values = (json_object_entry *) json_alloc
-                        (state, values_size + ((unsigned long) value->u.object.values), 0)) )
+                        (state, values_size + ((uintptr_t) value->u.object.values), 0)) )
                 {
                     return 0;
                 }
@@ -10240,7 +10498,7 @@ static Value strerrorJsonNative(VM *vm, int argCount, Value *args) {
     if (argCount == 1) {
         error = AS_NUMBER(args[0]);
     } else {
-        error = AS_NUMBER(GET_ERRNO(GET_SELF_CLASS));
+        error = AS_NUMBER(getErrno(vm, GET_SELF_CLASS));
     }
 
     if (error == 0) {
@@ -10717,6 +10975,10 @@ ObjModule *createMathsClass(VM *vm) {
 
     /* 30: path.c */
 
+#if defined(_WIN32) && !defined(S_ISDIR)
+#define S_ISDIR(M) (((M) & _S_IFDIR) == _S_IFDIR)
+#endif
+
 #ifdef HAS_REALPATH
 static Value realpathNative(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
@@ -10773,12 +11035,12 @@ static Value basenameNative(VM *vm, int argCount, Value *args) {
 
     int len = PathString->length;
 
-    if (!len || (len == 1 && *path != DIR_SEPARATOR)) {
+    if (!len || (len == 1 && !IS_DIR_SEPARATOR(*path))) {
         return OBJ_VAL(copyString(vm, "", 0));
     }
 
     char *p = path + len - 1;
-    while (p > path && (*(p - 1) != DIR_SEPARATOR)) --p;
+    while (p > path && !IS_DIR_SEPARATOR(*(p - 1))) --p;
 
     return OBJ_VAL(copyString(vm, p, (len - (p - path))));
 }
@@ -10858,7 +11120,7 @@ static Value dirnameNative(VM *vm, int argCount, Value *args) {
         sep--;
     }
 
-    if (sep == path && *sep != DIR_SEPARATOR) {
+    if (sep == path && !IS_DIR_SEPARATOR(*sep)) {
         return OBJ_VAL(copyString(vm, ".", 1));
     }
 
@@ -10866,6 +11128,90 @@ static Value dirnameNative(VM *vm, int argCount, Value *args) {
 
     return OBJ_VAL(copyString(vm, path, len));
 }
+
+static Value existsNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "exists() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_STRING(args[0])) {
+        runtimeError(vm, "exists() argument must be a string");
+        return EMPTY_VAL;
+    }
+
+    char *path = AS_CSTRING(args[0]);
+
+    struct stat buffer;
+
+    return BOOL_VAL(stat(path, &buffer) == 0);
+}
+
+static Value isdirNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "isdir() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_STRING(args[0])) {
+        runtimeError(vm, "isdir() argument must be a string");
+        return EMPTY_VAL;
+    }
+
+    char *path = AS_CSTRING(args[0]);
+    struct stat path_stat;
+    stat(path, &path_stat);
+
+    if (S_ISDIR(path_stat.st_mode))
+        return TRUE_VAL;
+
+    return FALSE_VAL;
+
+}
+
+#ifndef _WIN32
+static Value listdirNative(VM *vm, int argCount, Value *args) {
+    if (argCount > 1) {
+        runtimeError(vm, "listdir() takes 0 or 1 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    char *path;
+    if (argCount == 0) {
+        path = ".";
+    } else {
+        if (!IS_STRING(args[0])) {
+            runtimeError(vm, "listdir() argument must be a string");
+            return EMPTY_VAL;
+        }
+        path = AS_CSTRING(args[0]);
+    }
+
+    ObjList *dir_contents = initList(vm);
+    push(vm, OBJ_VAL(dir_contents));
+    struct dirent *dir;
+    DIR *d;
+    d = opendir(path);
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
+            char *inode_name = dir->d_name;
+            if (strcmp(inode_name, ".") == 0 || strcmp(inode_name, "..") == 0)
+                continue;
+            Value inode_value = OBJ_VAL(copyString(vm, inode_name, strlen(inode_name)));
+            push(vm, inode_value);
+            writeValueArray(vm, &dir_contents->values, inode_value);
+            pop(vm);
+        }
+    } else {
+        runtimeError(vm, "%s is not a path!", path);
+        return EMPTY_VAL;
+    }
+
+    pop(vm);
+
+    return OBJ_VAL(dir_contents);
+}
+#endif
 
 ObjModule *createPathClass(VM *vm) {
     ObjString *name = copyString(vm, "Path", 4);
@@ -10879,12 +11225,17 @@ ObjModule *createPathClass(VM *vm) {
 #ifdef HAS_REALPATH
     defineNative(vm, &module->values, "realpath", realpathNative);
     defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
-    defineNative(vm, &module->values, "strerror", strerrorNative); // only realpath uset errno
+    defineNative(vm, &module->values, "strerror", strerrorNative); // only realpath uses errno
 #endif
     defineNative(vm, &module->values, "isAbsolute", isAbsoluteNative);
     defineNative(vm, &module->values, "basename", basenameNative);
     defineNative(vm, &module->values, "extname", extnameNative);
     defineNative(vm, &module->values, "dirname", dirnameNative);
+    defineNative(vm, &module->values, "exists", existsNative);
+    defineNative(vm, &module->values, "isdir", isdirNative);
+#ifndef _WIN32
+    defineNative(vm, &module->values, "listdir", listdirNative);
+#endif
 
     defineNativeProperty(vm, &module->values, "delimiter", OBJ_VAL(
         copyString(vm, PATH_DELIMITER_AS_STRING, PATH_DELIMITER_STRLEN)));
@@ -10898,6 +11249,13 @@ ObjModule *createPathClass(VM *vm) {
 
     /* 31: system.c */
 
+#ifdef _WIN32
+#define rmdir(DIRNAME) _rmdir(DIRNAME)
+#define chdir(DIRNAME) _chdir(DIRNAME)
+#define getcwd(BUFFER, MAXLEN) _getcwd(BUFFER, MAXLEN)
+#endif
+
+#ifndef _WIN32
 static Value getgidNative(VM *vm, int argCount, Value *args) {
     UNUSED(args);
 
@@ -10963,6 +11321,7 @@ static Value getpidNative(VM *vm, int argCount, Value *args) {
 
     return NUMBER_VAL(getpid());
 }
+#endif
 
 static Value rmdirNative(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
@@ -11018,6 +11377,39 @@ static Value mkdirNative(VM *vm, int argCount, Value *args) {
 
     return NUMBER_VAL(retval == 0 ? OK : NOTOK);
 }
+
+#ifdef HAS_ACCESS
+static Value accessNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 2) {
+        runtimeError(vm, "access() takes 2 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_STRING(args[0])) {
+        runtimeError(vm, "access() first argument must be a string");
+        return EMPTY_VAL;
+    }
+
+    char *file = AS_CSTRING(args[0]);
+
+    if (!IS_NUMBER(args[1])) {
+        runtimeError(vm, "access() second argument must be a number");
+        return EMPTY_VAL;
+    }
+
+    int mode = AS_NUMBER(args[1]);
+
+    RESET_ERRNO(GET_SELF_CLASS);
+
+    int retval = access(file, mode);
+
+    if (retval == -1) {
+      SET_ERRNO(GET_SELF_CLASS);
+    }
+
+    return NUMBER_VAL((retval == -1 ? NOTOK : OK));
+}
+#endif
 
 static Value removeNative(VM *vm, int argCount, Value *args) {
     if (argCount != 1) {
@@ -11150,9 +11542,7 @@ void initArgv(VM *vm, Table *table, int argc, const char *argv[]) {
 void initPlatform(VM *vm, Table *table) {
 #ifdef _WIN32
     defineNativeProperty(vm, table, "platform", OBJ_VAL(copyString(vm, "windows", 7)));
-    return;
-#endif
-
+#else
     struct utsname u;
     if (-1 == uname(&u)) {
         defineNativeProperty(vm, table, "platform", OBJ_VAL(copyString(vm,
@@ -11163,6 +11553,7 @@ void initPlatform(VM *vm, Table *table) {
     u.sysname[0] = tolower(u.sysname[0]);
     defineNativeProperty(vm, table, "platform", OBJ_VAL(copyString(vm, u.sysname,
         strlen(u.sysname))));
+#endif
 }
 
 void createSystemClass(VM *vm, int argc, const char *argv[]) {
@@ -11175,14 +11566,19 @@ void createSystemClass(VM *vm, int argc, const char *argv[]) {
      * Define System methods
      */
     defineNative(vm, &module->values, "strerror", strerrorNative);
+#ifndef _WIN32
     defineNative(vm, &module->values, "getgid", getgidNative);
     defineNative(vm, &module->values, "getegid", getegidNative);
     defineNative(vm, &module->values, "getuid", getuidNative);
     defineNative(vm, &module->values, "geteuid", geteuidNative);
     defineNative(vm, &module->values, "getppid", getppidNative);
     defineNative(vm, &module->values, "getpid", getpidNative);
+#endif
     defineNative(vm, &module->values, "rmdir", rmdirNative);
     defineNative(vm, &module->values, "mkdir", mkdirNative);
+#ifdef HAS_ACCESS
+    defineNative(vm, &module->values, "access", accessNative);
+#endif
     defineNative(vm, &module->values, "remove", removeNative);
     defineNative(vm, &module->values, "setCWD", setCWDNative);
     defineNative(vm, &module->values, "getCWD", getCWDNative);
@@ -11218,6 +11614,12 @@ void createSystemClass(VM *vm, int argc, const char *argv[]) {
     defineNativeProperty(vm, &module->values, "S_IXOTH", NUMBER_VAL(1));
     defineNativeProperty(vm, &module->values, "S_ISUID", NUMBER_VAL(2048));
     defineNativeProperty(vm, &module->values, "S_ISGID", NUMBER_VAL(1024));
+#ifdef HAS_ACCESS
+    defineNativeProperty(vm, &module->values, "F_OK", NUMBER_VAL(F_OK));
+    defineNativeProperty(vm, &module->values, "X_OK", NUMBER_VAL(X_OK));
+    defineNativeProperty(vm, &module->values, "W_OK", NUMBER_VAL(W_OK));
+    defineNativeProperty(vm, &module->values, "R_OK", NUMBER_VAL(R_OK));
+#endif
 
     tableSet(vm, &vm->globals, name, OBJ_VAL(module));
     pop(vm);
@@ -11225,6 +11627,16 @@ void createSystemClass(VM *vm, int argc, const char *argv[]) {
 }
 
     /* 32: datetime.c */
+
+
+#ifdef _WIN32
+#define localtime_r(TIMER, BUF) localtime_s(BUF, TIMER)
+// Assumes length of BUF is 26
+#define asctime_r(TIME_PTR, BUF) (asctime_s(BUF, 26, TIME_PTR), BUF)
+#define gmtime_r(TIMER, BUF) gmtime_s(BUF, TIMER)
+#else
+#define HAS_STRPTIME
+#endif
 
 static Value nowNative(VM *vm, int argCount, Value *args) {
     UNUSED(args);
@@ -11298,7 +11710,12 @@ static Value strftimeNative(VM *vm, int argCount, Value *args) {
 
     struct tm tictoc;
     int len = (format->length > 128 ? format->length * 4 : 128);
-    char buffer[len], *point = buffer;
+
+    char *point = malloc(len);
+    if (point == NULL) {
+        runtimeError(vm, "Memory error on strftime()!");
+        return EMPTY_VAL;
+    }
 
     gmtime_r(&t, &tictoc);
 
@@ -11325,22 +11742,22 @@ static Value strftimeNative(VM *vm, int argCount, Value *args) {
 
         len *= 2;
 
-        if (buffer == point)
-            point = malloc (len);
-        else
-            point = realloc (point, len);
-
+        point = realloc(point, len);
+        if (point == NULL) {
+            runtimeError(vm, "Memory error on strftime()!");
+            return EMPTY_VAL;
+        }
     }
 
     res = copyString(vm, point, strlen(point));
 
 theend:
-    if (buffer != point)
-        free(point);
+    free(point);
 
     return OBJ_VAL(res);
 }
 
+#ifdef HAS_STRPTIME
 static Value strptimeNative(VM *vm, int argCount, Value *args) {
     if (argCount != 2) {
         runtimeError(vm, "strptime() takes 2 arguments (%d given)", argCount);
@@ -11364,6 +11781,7 @@ static Value strptimeNative(VM *vm, int argCount, Value *args) {
 
     return NUMBER_VAL((double) mktime(&tictoc));
 }
+#endif
 
 ObjModule *createDatetimeClass(VM *vm) {
     ObjString *name = copyString(vm, "Datetime", 8);
@@ -11377,7 +11795,358 @@ ObjModule *createDatetimeClass(VM *vm) {
     defineNative(vm, &module->values, "now", nowNative);
     defineNative(vm, &module->values, "nowUTC", nowUTCNative);
     defineNative(vm, &module->values, "strftime", strftimeNative);
+    #ifdef HAS_STRPTIME
     defineNative(vm, &module->values, "strptime", strptimeNative);
+    #endif
+    pop(vm);
+    pop(vm);
+
+    return module;
+}
+
+    /* 33: socket.c */
+
+
+#ifdef _WIN32
+#define setsockopt(S, LEVEL, OPTNAME, OPTVAL, OPTLEN) setsockopt(S, LEVEL, OPTNAME, (char*)(OPTVAL), OPTLEN)
+
+#ifndef __MINGW32__
+// Fixes deprecation warning
+unsigned long inet_addr_new(const char* cp) {
+    unsigned long S_addr;
+    inet_pton(AF_INET, cp, &S_addr);
+    return S_addr;
+}
+#define inet_addr(cp) inet_addr_new(cp)
+#endif
+
+#define write(fd, buffer, count) _write(fd, buffer, count)
+#define close(fd) closesocket(fd)
+#else
+#endif
+
+static Value createSocket(VM *vm, int argCount, Value *args) {
+    if (argCount != 2) {
+        runtimeError(vm, "create() takes 2 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) {
+        runtimeError(vm, "create() arguments must be a numbers");
+        return EMPTY_VAL;
+    }
+
+    int socketFamily = AS_NUMBER(args[0]);
+    int socketType = AS_NUMBER(args[1]);
+
+    int sock = socket(socketFamily, socketType, 0);
+    if (sock == -1) {
+        SET_ERRNO(GET_SELF_CLASS);
+        return NIL_VAL;
+    }
+
+    ObjSocket *s = newSocket(vm, sock, socketFamily, socketType, 0);
+    return OBJ_VAL(s);
+}
+
+static Value bindSocket(VM *vm, int argCount, Value *args) {
+    if (argCount != 2) {
+        runtimeError(vm, "bind() takes 2 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_STRING(args[1])) {
+        runtimeError(vm, "host passed to bind() must be a string");
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[2])) {
+        runtimeError(vm, "port passed to bind() must be a number");
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    char *host = AS_CSTRING(args[1]);
+    int port = AS_NUMBER(args[2]);
+
+    struct sockaddr_in server;
+
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr(host);
+    server.sin_port = htons(port);
+
+    if (bind(sock->socket, (struct sockaddr *)&server , sizeof(server)) < 0) {
+        Value module = 0;
+        tableGet(&vm->modules, copyString(vm, "Socket", 6), &module);
+        SET_ERRNO(AS_MODULE(module));
+        return NIL_VAL;
+    }
+
+    return TRUE_VAL;
+}
+
+static Value listenSocket(VM *vm, int argCount, Value *args) {
+    if (argCount > 1) {
+        runtimeError(vm, "listen() takes 0 or 1 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    int backlog = SOMAXCONN;
+
+    if (argCount == 1) {
+        if (!IS_NUMBER(args[1])) {
+            runtimeError(vm, "listen() argument must be a number");
+            return EMPTY_VAL;
+        }
+
+        backlog = AS_NUMBER(args[1]);
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    if (listen(sock->socket, backlog) == -1) {
+        Value module = 0;
+        tableGet(&vm->modules, copyString(vm, "Socket", 6), &module);
+        SET_ERRNO(AS_MODULE(module));
+        return NIL_VAL;
+    }
+
+    return TRUE_VAL;
+}
+
+static Value acceptSocket(VM *vm, int argCount, Value *args) {
+    if (argCount != 0) {
+        runtimeError(vm, "accept() takes no arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+
+    struct sockaddr_in client;
+    int c = sizeof(struct sockaddr_in);
+    int newSockId = accept(sock->socket, (struct sockaddr *)&client, (socklen_t*)&c);
+
+    ObjSocket *newSock = newSocket(vm, newSockId, sock->socketFamily, sock->socketProtocol, 0);
+    return OBJ_VAL(newSock);
+}
+
+static Value writeSocket(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "write() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_STRING(args[1])) {
+        runtimeError(vm, "write() argument must be a string");
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    ObjString *message = AS_STRING(args[1]);
+
+    int writeRet = write(sock->socket , message->chars, message->length);
+
+    if (writeRet == -1) {
+        Value module = 0;
+        tableGet(&vm->modules, copyString(vm, "Socket", 6), &module);
+        SET_ERRNO(AS_MODULE(module));
+        return NIL_VAL;
+    }
+
+    return NUMBER_VAL(writeRet);
+}
+
+static Value recvSocket(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "recv() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[1])) {
+        runtimeError(vm, "recv() argument must be a number");
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    int bufferSize = AS_NUMBER(args[1]);
+
+    char *buffer = ALLOCATE(vm, char, bufferSize);
+    int read_size = recv(sock->socket, buffer, bufferSize, 0);
+
+    if (read_size == -1) {
+        Value module = 0;
+        tableGet(&vm->modules, copyString(vm, "Socket", 6), &module);
+        SET_ERRNO(AS_MODULE(module));
+        FREE_ARRAY(vm, char, buffer, bufferSize);
+        return NIL_VAL;
+    }
+
+    ObjString *rString = copyString(vm, buffer, read_size);
+    FREE_ARRAY(vm, char, buffer, bufferSize);
+
+    return OBJ_VAL(rString);
+}
+
+static Value closeSocket(VM *vm, int argCount, Value *args) {
+    UNUSED(vm);
+    if (argCount != 0) {
+        runtimeError(vm, "close() takes no arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    close(sock->socket);
+
+    return NIL_VAL;
+}
+
+static Value setSocketOpt(VM *vm, int argCount, Value *args) {
+    if (argCount != 2) {
+        runtimeError(vm, "setsocketopt() takes 2 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) {
+        runtimeError(vm, "setsocketopt() arguments must be numbers");
+        return EMPTY_VAL;
+    }
+
+    ObjSocket *sock = AS_SOCKET(args[0]);
+    int level = AS_NUMBER(args[1]);
+    int option = AS_NUMBER(args[2]);
+
+    if (setsockopt(sock->socket, level, option, &(int){1}, sizeof(int)) == -1) {
+        Value module = 0;
+        tableGet(&vm->modules, copyString(vm, "Socket", 6), &module);
+        SET_ERRNO(AS_MODULE(module));
+        return NIL_VAL;
+    }
+
+    return TRUE_VAL;
+}
+
+ObjModule *createSocketClass(VM *vm) {
+    ObjString *name = copyString(vm, "Socket", 6);
+    push(vm, OBJ_VAL(name));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
+
+    /**
+     * Define Socket methods
+     */
+    defineNative(vm, &module->values, "strerror", strerrorNative);
+    defineNative(vm, &module->values, "create", createSocket);
+
+    /**
+     * Define Socket properties
+     */
+    defineNativeProperty(vm, &module->values, "errno", NUMBER_VAL(0));
+    defineNativeProperty(vm, &module->values, "AF_INET", NUMBER_VAL(AF_INET));
+    defineNativeProperty(vm, &module->values, "SOCK_STREAM", NUMBER_VAL(SOCK_STREAM));
+    defineNativeProperty(vm, &module->values, "SOL_SOCKET", NUMBER_VAL(SOL_SOCKET));
+    defineNativeProperty(vm, &module->values, "SO_REUSEADDR", NUMBER_VAL(SO_REUSEADDR));
+
+    /**
+     * Setup socket object methods
+     */
+    defineNative(vm, &vm->socketMethods, "bind", bindSocket);
+    defineNative(vm, &vm->socketMethods, "listen", listenSocket);
+    defineNative(vm, &vm->socketMethods, "accept", acceptSocket);
+    defineNative(vm, &vm->socketMethods, "write", writeSocket);
+    defineNative(vm, &vm->socketMethods, "recv", recvSocket);
+    defineNative(vm, &vm->socketMethods, "close", closeSocket);
+    defineNative(vm, &vm->socketMethods, "setsockopt", setSocketOpt);
+
+    pop(vm);
+    pop(vm);
+
+    return module;
+}
+
+    /* 34: random.c */
+
+static Value randomRandom(VM *vm, int argCount, Value *args)
+{
+    UNUSED(args);
+    if (argCount > 0)
+    {
+        runtimeError(vm, "random() takes 0 arguments (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    int high = 1;
+    int low = 0;
+    double random_double = ((double)rand() * (high - low)) / (double)RAND_MAX + low;
+    return NUMBER_VAL(random_double);
+}
+
+static Value randomRange(VM *vm, int argCount, Value *args)
+{
+    if (argCount != 2)
+    {
+        runtimeError(vm, "range() takes 2 arguments (%0d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0]) || !IS_NUMBER(args[1]))
+    {
+        runtimeError(vm, "range() arguments must be numbers");
+        return EMPTY_VAL;
+    }
+
+    int upper = AS_NUMBER(args[1]);
+    int lower = AS_NUMBER(args[0]);
+    int random_val = (rand() % (upper - lower + 1)) + lower;
+    return NUMBER_VAL(random_val);
+}
+
+static Value randomSelect(VM *vm, int argCount, Value *args)
+{
+    if (argCount == 0)
+    {
+        runtimeError(vm, "select() takes one argument (%0d provided)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_LIST(args[0]))
+    {
+        runtimeError(vm, "select() argument must be a list");
+        return EMPTY_VAL;
+    }
+
+    ObjList *list = AS_LIST(args[0]);
+    argCount = list->values.count;
+    args = list->values.values;
+
+    for (int i = 0; i < argCount; ++i)
+    {
+        Value value = args[i];
+        if (!IS_NUMBER(value))
+        {
+            runtimeError(vm, "A non-number value passed to select()");
+            return EMPTY_VAL;
+        }
+    }
+
+    int index = rand() % argCount;
+    return args[index];
+}
+
+ObjModule *createRandomClass(VM *vm)
+{
+    ObjString *name = copyString(vm, "Random", 6);
+    push(vm, OBJ_VAL(name));
+    ObjModule *module = newModule(vm, name);
+    push(vm, OBJ_VAL(module));
+
+    srand(time(NULL));
+
+    /**
+     * Define Random methods
+     */
+    defineNative(vm, &module->values, "random", randomRandom);
+    defineNative(vm, &module->values, "range", randomRange);
+    defineNative(vm, &module->values, "select", randomSelect);
+
     pop(vm);
     pop(vm);
 

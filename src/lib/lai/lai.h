@@ -170,15 +170,15 @@ typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
 #define UNUSED(__x__) (void) __x__
 
 #define GET_SELF_CLASS \
-  AS_MODULE(args[-1])
+  AS_CLASS_NATIVE(args[-1])
 
 #define SET_ERRNO(klass_)                                              \
-  defineNativeProperty(vm, &module_->values, "errno", NUMBER_VAL(errno))
+  defineNativeProperty(vm, &klass_->properties, "errno", NUMBER_VAL(errno))
 
 #define GET_ERRNO(klass_)({                          \
   Value errno_value = 0;                             \
   ObjString *name = copyString(vm, "errno", 5);      \
-  tableGet(&module_->values, name, &errno_value);    \
+  tableGet(&klass_->properties, name, &errno_value); \
   errno_value;                                       \
 })
 
