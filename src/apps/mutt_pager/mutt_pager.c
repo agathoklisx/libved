@@ -430,12 +430,10 @@ int main (int argc, char **argv) {
 
     retval = E.main (THIS_E, buf);
 
-    int state = E.get.state (THIS_E);
-
-    if ((state & ED_EXIT))
+    if (E.test.state_bit (THIS_E, E_EXIT))
       break;
 
-    if ((state & ED_SUSPENDED)) {
+    if (E.test.state_bit (THIS_E, E_SUSPENDED)) {
       if (E.get.num (THIS_E) is 1) {
         this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));
 

@@ -263,14 +263,20 @@
 #define ED_EXIT             (1 << 1)
 #define ED_EXIT_ALL         (1 << 2)
 #define ED_EXIT_ALL_FORCE   (1 << 3)
-#define ED_NEW              (1 << 4)
-#define ED_NEXT             (1 << 5)
-#define ED_PREV             (1 << 6)
-#define ED_PREV_FOCUSED     (1 << 7)
-#define ED_PAUSE            (1 << 8)
-#define ED_DONOT_RESTORE_TERM_STATE (1 << 9)
+#define ED_PAUSE            (1 << 4)
+#define ED_NEW              (1 << 5)
+#define ED_NEXT             (1 << 6)
+#define ED_PREV             (1 << 7)
+#define ED_PREV_FOCUSED     (1 << 8)
+
+#define E_SUSPENDED                (1 << 0)
+#define E_EXIT                     (1 << 1)
+#define E_DONOT_RESTORE_TERM_STATE (1 << 2)
+#define E_DONOT_CHANGE_FOCUS       (1 << 3)
+#define E_PAUSE                    (1 << 4)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
+
 #define LAST_INSTANCE_ERROR_STATE      (1 << 0)
 #define ARG_IDX_IS_CUR_IDX_ERROR_STATE (1 << 1)
 
@@ -407,6 +413,10 @@
 ({char b__[8];snprintf (b__, 8, TERM_SET_COLOR_FMT, (clr));b__;})
 #define SEND_ESC_SEQ(fd, seq) fd_write ((fd), seq, seq ## _LEN)
 #define TERM_SEND_ESC_SEQ(seq) fd_write ($my(out_fd), seq, seq ## _LEN)
+
+#define TERM_DONOT_SAVE_SCREEN    (1 << 0)
+#define TERM_DONOT_CLEAR_SCREEN   (1 << 1)
+#define TERM_DONOT_RESTORE_SCREEN (1 << 2)
 
 #define NO_OFFSET  0
 
@@ -1014,6 +1024,7 @@ NewType (buf_init_opts,
 
 NewType (ed_init_opts,
   int num_win;
+  int term_flags;
   EdAtInit_cb init_cb;
 );
 
@@ -1022,6 +1033,7 @@ NewType (ed_init_opts,
 #define ED_INIT_OPTS  Type (ed_init_opts)
 #define ED_INIT_QUAL(...) (ED_INIT_OPTS) {       \
   .num_win = 1,                                  \
+  .term_flags = 0,                               \
   .init_cb = NULL,                               \
   __VA_ARGS__}
 
@@ -1114,12 +1126,12 @@ NewClass (video,
 
 NewSubSelf (term, screen,
   void
-    (*set_color) (term_t *, int),
     (*bell) (term_t *),
-    (*restore) (term_t *),
     (*save)  (term_t *),
     (*clear) (term_t *),
-    (*clear_eol) (term_t *);
+    (*restore) (term_t *),
+    (*clear_eol) (term_t *),
+    (*set_color) (term_t *, int);
 );
 
 NewClass (screen,
@@ -1128,11 +1140,11 @@ NewClass (screen,
 
 NewSubSelf (term, cursor,
   void
-    (*set_pos) (term_t *, int, int),
     (*hide) (term_t *),
     (*show) (term_t *),
     (*save) (term_t *),
-    (*restore) (term_t *);
+    (*restore) (term_t *),
+    (*set_pos) (term_t *, int, int);
 
   int (*get_pos) (term_t *, int *, int *);
 );
@@ -1168,7 +1180,9 @@ NewSelf (term,
     (*free) (term_t **),
     (*restore) (term_t *),
     (*set_name) (term_t *),
-    (*init_size) (term_t *, int *, int *);
+    (*init_size) (term_t *, int *, int *),
+    (*set_state_bit) (term_t *, int),
+    (*unset_state_bit) (term_t *, int);
 
   int
     (*set) (term_t *),
@@ -2018,25 +2032,36 @@ NewSubSelf (ed, get,
   void *(*callback_fun) (ed_t *, char *);
 );
 
+NewSubSelf (ed, unset,
+  void
+    (*state_bit) (ed_t *, int);
+);
+
+NewSubSelf (ed, test,
+  int
+    (*state_bit) (ed_t *, int);
+);
+
 NewSubSelf (ed, set,
-   void
-     (*state) (ed_t *, int),
-     (*screen_size) (ed_t *),
-     (*exit_quick) (ed_t *, int),
-     (*topline) (ed_t *, buf_t *),
-     (*rline_cb) (ed_t *, Rline_cb),
-     (*lang_map) (ed_t *, int[][26]),
-     (*record_cb) (ed_t *, Record_cb),
-     (*at_exit_cb) (ed_t *, EdAtExit_cb),
-     (*i_record_cb) (ed_t *, IRecord_cb),
-     (*expr_reg_cb) (ed_t *, ExprRegister_cb),
-     (*init_record_cb) (ed_t *, InitRecord_cb),
-     (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
-     (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
-     (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
-     (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
-     (*line_mode_actions) (ed_t *, utf8 *, int, char *, LineMode_cb),
-     (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb);
+  void
+    (*state) (ed_t *, int),
+    (*state_bit) (ed_t *, int),
+    (*screen_size) (ed_t *),
+    (*exit_quick) (ed_t *, int),
+    (*topline) (ed_t *, buf_t *),
+    (*rline_cb) (ed_t *, Rline_cb),
+    (*lang_map) (ed_t *, int[][26]),
+    (*record_cb) (ed_t *, Record_cb),
+    (*at_exit_cb) (ed_t *, EdAtExit_cb),
+    (*i_record_cb) (ed_t *, IRecord_cb),
+    (*expr_reg_cb) (ed_t *, ExprRegister_cb),
+    (*init_record_cb) (ed_t *, InitRecord_cb),
+    (*on_normal_g_cb)  (ed_t *, BufNormalOng_cb),
+    (*word_actions) (ed_t *, utf8 *, int, char *, WordActions_cb),
+    (*cw_mode_actions) (ed_t *, utf8 *, int, char *, VisualCwMode_cb),
+    (*lw_mode_actions) (ed_t *, utf8 *, int, char *, VisualLwMode_cb),
+    (*line_mode_actions) (ed_t *, utf8 *, int, char *, LineMode_cb),
+    (*file_mode_actions) (ed_t *, utf8 *, int, char *, FileActions_cb);
 
   win_t *(*current_win) (ed_t *, int);
   dim_t *(*dim) (ed_t *, dim_t *, int, int, int, int);
@@ -2118,8 +2143,10 @@ NewSelf (ed,
   SubSelf (ed, get) get;
   SubSelf (ed, syn) syn;
   SubSelf (ed, reg) reg;
+  SubSelf (ed, test) test;
   SubSelf (ed, menu) menu;
   SubSelf (ed, draw) draw;
+  SubSelf (ed, unset) unset;
   SubSelf (ed, rline) rline;
   SubSelf (ed, append) append;
   SubSelf (ed, history) history;
@@ -2241,16 +2268,19 @@ NewSubSelf (E, set,
 
 NewSubSelf (E, get,
   ed_t
+    *(*head) (E_T *),
     *(*current) (E_T *),
-    *(*next) (E_T *, ed_t *),
-    *(*head) (E_T *);
+    *(*next) (E_T *, ed_t *);
 
   int
+    (*num) (E_T *),
+    (*idx) (E_T *, ed_t *),
     (*state) (E_T *),
-    (*error_state) (E_T *),
-    (*current_idx) (E_T *),
     (*prev_idx) (E_T *),
-    (*num) (E_T *);
+    (*error_state) (E_T *),
+    (*current_idx) (E_T *);
+
+  term_t *(*term) (E_T *);
 
   string_t *(*env) (E_T *, char *);
 

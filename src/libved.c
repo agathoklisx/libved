@@ -3787,6 +3787,7 @@ private term_t *term_new (void) {
   $my(out_fd) = STDOUT_FILENO;
   $my(in_fd) = STDIN_FILENO;
   $my(mode) = 'o';
+  $my(state) = 0;
   return this;
 }
 
@@ -3875,6 +3876,14 @@ private int *term_get_dim (term_t *this, int *dim) {
   return dim;
 }
 
+private void term_set_state_bit (term_t *this, int bit) {
+  $my(state) |= (bit);
+}
+
+private void term_unset_state_bit (term_t *this, int bit) {
+  $my(state) &= ~(bit);
+}
+
 private int term_set_mode (term_t *this, char mode) {
   switch (mode) {
     case 'o': return term_orig_mode (this);
@@ -3893,8 +3902,13 @@ private int term_set (term_t *this) {
   if (NOTOK is term_set_mode (this, 'r')) return NOTOK;
   term_cursor_get_ptr_pos (this,  &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
   term_init_size (this, &$my(lines), &$my(columns));
-  term_screen_save (this);
-  term_screen_clear (this);
+
+  ifnot ($my(state) & TERM_DONOT_SAVE_SCREEN)
+    term_screen_save (this);
+
+  ifnot ($my(state) & TERM_DONOT_CLEAR_SCREEN)
+    term_screen_clear (this);
+
   this->is_initialized = 1;
   return OK;
 }
@@ -3903,7 +3917,10 @@ private int term_reset (term_t *this) {
   ifnot (this->is_initialized) return OK;
   term_set_mode (this, 's');
   term_cursor_set_ptr_pos (this, $my(orig_curs_row_pos), $my(orig_curs_col_pos));
-  term_screen_restore (this);
+
+  ifnot ($my(state) & TERM_DONOT_RESTORE_SCREEN)
+    term_screen_restore (this);
+
   this->is_initialized = 0;
   return OK;
 }
@@ -4276,13 +4293,15 @@ private video_t *video_paint_rows_with (video_t *this, int row, int f_col, int l
 private term_T __init_term__ (void) {
   return ClassInit (term,
     .self = SelfInit (term,
-      .set_mode = term_set_mode,
       .set = term_set,
-      .reset = term_reset,
       .new = term_new,
       .free  = term_free,
+      .reset = term_reset,
+      .set_mode = term_set_mode,
       .set_name = term_set_name,
       .init_size = term_init_size,
+      .set_state_bit = term_set_state_bit,
+      .unset_state_bit = term_unset_state_bit,
       .get = SubSelfInit (term, get,
         .dim = term_get_dim
       ),
@@ -16396,6 +16415,18 @@ private void ed_free (ed_t *this) {
   free (this);
 }
 
+private int  ed_test_state_bit (ed_t *this, int bit) {
+  return $my(state) & (bit);
+}
+
+private void ed_unset_state_bit (ed_t *this, int bit) {
+  $my(state) &= ~(bit);
+}
+
+private void ed_set_state_bit (ed_t *this, int bit) {
+  $my(state) |= (bit);
+}
+
 private void ed_set_state (ed_t *this, int state) {
   $my(state) = state;
 }
@@ -16984,6 +17015,7 @@ private Class (ed) *editor_new (void) {
         .topline = ed_set_topline,
         .rline_cb = ed_set_rline_cb,
         .lang_map = ed_set_lang_map,
+        .state_bit = ed_set_state_bit,
         .record_cb = ed_set_record_cb,
         .at_exit_cb = ed_set_at_exit_cb,
         .exit_quick = ed_set_exit_quick,
@@ -16998,6 +17030,12 @@ private Class (ed) *editor_new (void) {
         .cw_mode_actions = ed_set_cw_mode_actions,
         .line_mode_actions = ed_set_line_mode_actions,
         .file_mode_actions = ed_set_file_mode_actions
+      ),
+      .unset = SubSelfInit (ed, unset,
+        .state_bit = ed_unset_state_bit
+      ),
+      .test = SubSelfInit (ed, test,
+        .state_bit = ed_test_state_bit
       ),
       .get = SubSelfInit (ed, get,
         .info = SubSelfInit (edget, info,
@@ -17539,6 +17577,9 @@ private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
 }
 
 private ed_t *E_new (Class (E) *this, ED_INIT_OPTS opts) {
+  if (opts.term_flags)
+    term_set_state_bit (self(get.term), opts.term_flags);
+
   ed_t *ed = E_init (this, opts.init_cb);
 
   int num_win = opts.num_win;
@@ -17897,6 +17938,10 @@ private int E_get_state (E_T *this) {
   return $my(state);
 }
 
+private term_t *E_get_term (E_T *this) {
+  return this->__Ed__->prop->term;
+}
+
 private ed_t *E_get_current (Class (E) *this) {
   return $my(current);
 }
@@ -17912,6 +17957,22 @@ private ed_t *E_get_next (Class (E) *this, ed_t *ed) {
 
 private int E_get_num (Class (E) *this) {
   return $my(num_items);
+}
+
+private int E_get_idx (Class (E) *this, ed_t *ed) {
+  int retval = NOTOK;
+  ed_t *it = $my(head);
+  int idx = -1;
+  while (it) {
+    idx++;
+    if (ed is it) {
+      retval = idx;
+      break;
+    }
+    it = it->next;
+  }
+
+  return retval;
 }
 
 private int E_get_current_idx (Class (E) *this) {
@@ -18006,36 +18067,58 @@ private int E_main (E_T *this, buf_t *buf) {
   int retval = 0;
 
 main:
-  $my(state) &= ~(ED_SUSPENDED|ED_EXIT);
+  $my(state) &= ~(E_SUSPENDED|E_EXIT|E_PAUSE);
+  if (ed_test_state_bit (ed, ED_PAUSE))
+    $my(state) |= E_PAUSE;
 
   retval = ed_main (ed, buf);
+
+  if ($my(state) & E_PAUSE)
+    ed_set_state_bit (ed, ED_PAUSE);
+  else
+    if (ed_test_state_bit (ed, ED_PAUSE))
+      $my(state) |= E_PAUSE;
+
   int state = ed_get_state (ed);
 
   if (state & ED_EXIT)
-    $my(state) |= ED_EXIT;
+    $my(state) |= E_EXIT;
 
   if (state & ED_SUSPENDED) {
-    $my(state) |= ED_SUSPENDED;
+    $my(state) |= E_SUSPENDED;
+    ed_unset_state_bit (ed, ED_SUSPENDED);
     ed_suspend (ed);
     return retval;
   }
 
   if (state & ED_NEW) {
+    if ($my(state) & E_DONOT_CHANGE_FOCUS)
+      goto main;
+
     ed = E_new_editor (this, &buf, $from(ed, ed_str)->bytes);
     goto main;
   }
 
   if (state & ED_NEXT) {
+    if ($my(state) & E_DONOT_CHANGE_FOCUS)
+      goto main;
+
     ed = E_next_editor (this, &buf);
     goto main;
   }
 
   if (state & ED_PREV) {
+    if ($my(state) & E_DONOT_CHANGE_FOCUS)
+      goto main;
+
     ed = E_prev_editor (this, &buf);
     goto main;
   }
 
   if (state & ED_PREV_FOCUSED) {
+    if ($my(state) & E_DONOT_CHANGE_FOCUS)
+      goto main;
+
     ed = E_prev_focused_editor (this, &buf);
     goto main;
   }
@@ -18054,12 +18137,12 @@ main:
       goto main;
     }
 
-    $my(state) |= ED_EXIT;
+    $my(state) |= E_EXIT;
     return retval;
   }
 
-  if (($my(state) & ED_EXIT)) {
-    if (state & ED_PAUSE)
+  if (($my(state) & E_EXIT)) {
+    if ($my(state) & E_PAUSE)
       return retval;
 
     if ($my(save_image))
@@ -18075,11 +18158,12 @@ main:
 
     self(delete, $my(cur_idx), FORCE);
 
-    if ($my(num_items)) {
-      ed = self(get.current);
-      buf = win_get_current_buf (ed_get_current_win (ed));
-      goto main;
-    }
+    ifnot ($my(state) & E_DONOT_CHANGE_FOCUS)
+      if ($my(num_items)) {
+        ed = self(get.current);
+        buf = win_get_current_buf (ed_get_current_win (ed));
+        goto main;
+      }
   }
 
   return retval;
@@ -18122,10 +18206,14 @@ private int Ed_init (ed_T *this) {
   $my(term) = Term.new ();
   $my(env)  = venv_new ();
 
+  Term.set_state_bit ($my(term), (TERM_DONOT_CLEAR_SCREEN|TERM_DONOT_SAVE_SCREEN|TERM_DONOT_RESTORE_SCREEN));
+
   if (NOTOK is Term.set ($my(term)))
     return NOTOK;
 
   Term.reset ($my(term));
+
+  Term.unset_state_bit ($my(term), (TERM_DONOT_CLEAR_SCREEN|TERM_DONOT_SAVE_SCREEN|TERM_DONOT_RESTORE_SCREEN));
 
   setvbuf (stdin, 0, _IONBF, 0);
 
@@ -18145,16 +18233,18 @@ public Class (E) *__init_ed__ (char *name) {
       .save_image = E_save_image,
       .create_image = E_create_image,
       .get = SubSelfInit (E, get,
-        .current = E_get_current,
+        .num = E_get_num,
+        .env = E_get_env,
+        .idx = E_get_idx,
         .head = E_get_head,
         .next = E_get_next,
-        .current_idx = E_get_current_idx,
-        .prev_idx = E_get_prev_idx,
-        .num = E_get_num,
-        .error_state = E_get_error_state,
+        .term =  E_get_term,
         .state = E_get_state,
-        .env = E_get_env,
-        .iclass = E_get_i_class
+        .iclass = E_get_i_class,
+        .current = E_get_current,
+        .prev_idx = E_get_prev_idx,
+        .current_idx = E_get_current_idx,
+        .error_state = E_get_error_state
       ),
       .set = SubSelfInit (E, set,
         .state = E_set_state,
@@ -18175,7 +18265,6 @@ public Class (E) *__init_ed__ (char *name) {
       .test = SubSelfInit (E, test,
         .state_bit = E_test_state_bit
       )
-
     ),
     .prop = $myprop,
     .__Ed__ =  editor_new ()
@@ -18238,7 +18327,7 @@ public void __deinit_ed__ (Class (E) **thisp) {
   if ($my(image_file) isnot NULL)
     free ($my(image_file));
 
-  deinit_ed (this->__Ed__, 0 is ($my(state) & ED_DONOT_RESTORE_TERM_STATE));
+  deinit_ed (this->__Ed__, 0 is ($my(state) & E_DONOT_RESTORE_TERM_STATE));
 
   free (this->__Ed__);
 

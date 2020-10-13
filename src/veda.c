@@ -91,10 +91,15 @@ int main (int argc, char **argv) {
   E.set.at_init_cb (THIS_E, __init_ext__);
   E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
-  /* minimal cooperation with libvwn */
+  int term_flags = 0;
+
+   /* minimal cooperation with libvwn */
   char *vwm_env_exists = getenv ("VWM");
-  ifnot (NULL is vwm_env_exists)
-    E.set.state_bit (THIS_E, ED_DONOT_RESTORE_TERM_STATE);
+  ifnot (NULL is vwm_env_exists) {
+    term_t *term = E.get.term (THIS_E);
+    term_flags = (TERM_DONOT_SAVE_SCREEN|TERM_DONOT_CLEAR_SCREEN|TERM_DONOT_RESTORE_SCREEN);
+    Term.set_state_bit (term, term_flags);
+  }
 
   ed_t *this = NULL;
   win_t *w = NULL;
@@ -125,7 +130,8 @@ int main (int argc, char **argv) {
 
   num_win = (num_win < argc ? num_win : argc);
 
-  this = E.new (THIS_E, QUAL(ED_INIT, .num_win = num_win, .init_cb = __init_ext__));
+  this = E.new (THIS_E, QUAL(ED_INIT,
+      .num_win = num_win, .init_cb = __init_ext__, .term_flags = term_flags));
   if (NOTOK is Ed.check_sanity (this)) {
     retval = 1;
     goto theend;
@@ -206,10 +212,10 @@ theloop:;
 
     retval = E.main (THIS_E, buf);
 
-    if (E.test.state_bit (THIS_E, ED_EXIT))
+    if (E.test.state_bit (THIS_E, E_EXIT))
       break;
 
-    if (E.test.state_bit (THIS_E, ED_SUSPENDED)) {
+    if (E.test.state_bit (THIS_E, E_SUSPENDED)) {
       if (E.get.num (THIS_E) is 1) {
         /* as an example, we simply create another independed instance */
         this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));

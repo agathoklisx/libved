@@ -462,6 +462,7 @@ NewProp (term,
     *name;
 
   int
+    state,
     in_fd,
     out_fd,
     orig_curs_row_pos,
