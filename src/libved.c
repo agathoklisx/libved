@@ -6776,9 +6776,9 @@ private void buf_set_autosave (buf_t *this, long minutes) {
     Vsys.get.clock_sec (DEFAULT_CLOCK);
 }
 
-private void buf_set_on_emptyline (buf_t *this, string_t *str) {
-  String.free ($my(ftype)->on_emptyline);
-  $my(ftype)->on_emptyline = str;
+private void buf_set_on_emptyline (buf_t *this, char *str) {
+  if (NULL is str) return;
+  String.replace_with ($my(ftype)->on_emptyline, str);
 }
 
 private void buf_set_backup (buf_t *this, int backup, char *suffix) {
@@ -13381,7 +13381,9 @@ private vstring_t *rline_parse_command (rline_t *rl) {
   vstring_t *it = rl->line->head;
   char com[MAXLEN_COM]; com[0] = '\0';
   int com_idx = 0;
+
   while (it isnot NULL and it->data->bytes[0] is ' ') it = it->next;
+
   if (it isnot NULL and it->data->bytes[0] is '!') {
     com[0] = '!'; com[1] = '\0';
     goto get_command;
@@ -13525,6 +13527,9 @@ redo:;
 
     if (NULL is item) goto theend;
     if (menu->state & MENU_QUIT) break;
+    if (type & RL_TOK_ARG and Cstring.eq_n ("--command=", item, 10))
+       Msg.send (this, COLOR_WARNING, "--command argument should be enclosed in a pair of '{}' parenthesis");
+
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
 
     menu->patlen = bytelen (item);
@@ -14222,6 +14227,66 @@ theend:
   return rl;
 }
 
+private vstring_t *rline_quote_subcommand (vstring_t *it) {
+  if (it is NULL) return NULL;
+
+  vstring_t *it_head = it->prev;
+
+  char c = it->data->bytes[0];
+
+  ifnot (c is '{') goto theend;
+
+  // quote by default
+  if (c isnot '"') it->data->bytes[0] = '"';
+
+  it = it->next;
+
+  char pc = 0, ppc = 0;
+  int num_quotes = 0;
+
+  while (it) {
+    c = it->data->bytes[0];
+
+    if (c is '}') {
+      ifnot (num_quotes % 2) {
+        it->data->bytes[0] = '"';
+        break;
+      }
+
+      // allow to fail from my caller
+      if (it->next is NULL)
+        it->prev->next = NULL;
+      else {
+        it->next->prev = it->prev;
+        it->prev->next = it->next;
+      }
+
+      break;
+    }
+
+    if (pc) ppc = pc;
+    pc = c;
+
+    if (c is '"' and
+       (pc isnot '\\' or (pc is '\\' and ppc isnot '\\'))) {
+       num_quotes++;
+
+      vstring_t *vs = AllocType (vstring);
+      vs->data = string_new_with ("\\");
+
+      vs->next = it;
+      it->prev->next = vs;
+      vs->prev = it->prev;
+      it->prev = vs;
+    }
+
+    it = it->next;
+  }
+
+theend:
+  return it_head;
+}
+
 private rline_t *rline_parse (rline_t *rl, buf_t *this) {
   vstring_t *it = rline_parse_command (rl);
 
@@ -14253,6 +14318,9 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
           goto arg_type;
 
         if (it->data->bytes[0] is '=') {
+          if (cstring_eq (opt->bytes, "command"))
+            it = rline_quote_subcommand (it->next);
+
           if (it->next is NULL) {
             if (this)
               MSG_ERRNO (RL_ARG_AWAITING_STRING_OPTION_ERROR);
@@ -14267,13 +14335,14 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
           if (is_quoted) it = it->next;
 
           while (it) {
-            if (' ' is it->data->bytes[0])
+            if (' ' is it->data->bytes[0]) {
               ifnot (is_quoted) {
                 type |= RL_TOK_ARG_OPTION;
                 goto arg_type;
               }
+            }
 
-            if ('"' is it->data->bytes[0])
+            if ('"' is it->data->bytes[0]) {
               if (is_quoted) {
                 is_quoted = 0;
                 if (arg->argval->bytes[arg->argval->num_bytes - 1] is '\\' and
@@ -14288,6 +14357,7 @@ private rline_t *rline_parse (rline_t *rl, buf_t *this) {
                   goto arg_type;
                 }
               }
+            }
 
             string_append (arg->argval, it->data->bytes);
             it = it->next;

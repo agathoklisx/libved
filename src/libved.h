@@ -1672,7 +1672,7 @@ NewSubSelf (buf, set,
     (*video_first_row) (buf_t *, int),
     (*mode) (buf_t *, char *),
     (*show_statusline) (buf_t *, int),
-    (*on_emptyline) (buf_t *, string_t *),
+    (*on_emptyline) (buf_t *, char *),
     (*ftype) (buf_t *, int);
 );
 
