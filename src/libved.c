@@ -12859,7 +12859,8 @@ private int ed_complete_arg (menu_t *menu) {
     while ($myroots(commands)[com]->args[i]) {
       if (Cstring.eq_n ($myroots(commands)[com]->args[i], menu->pat, menu->patlen))
         if (NULL is strstr (line, $myroots(commands)[com]->args[i]) or
-        	Cstring.eq ($myroots(commands)[com]->args[i], "--fname="))
+        	Cstring.eq ($myroots(commands)[com]->args[i], "--fname=") or
+        	Cstring.eq_n ($myroots(commands)[com]->args[i], "--command=", 10))
           Vstring.add.sort_and_uniq (args, $myroots(commands)[com]->args[i]);
       i++;
     }
@@ -13528,7 +13529,7 @@ redo:;
     if (NULL is item) goto theend;
     if (menu->state & MENU_QUIT) break;
     if (type & RL_TOK_ARG and Cstring.eq_n ("--command=", item, 10))
-       Msg.send (this, COLOR_WARNING, "--command argument should be enclosed in a pair of '{}' parenthesis");
+       Msg.send (this, COLOR_WARNING, "--command argument should be enclosed in a pair of '{}' braces");
 
     if (type & RL_TOK_COMMAND or type & RL_TOK_ARG) break;
 
@@ -14593,6 +14594,22 @@ private string_t *rline_get_anytype_arg (rline_t *rl, char *argname) {
   return NULL;
 }
 
+private Vstring_t *rline_get_anytype_args (rline_t *rl, char *argname) {
+  Vstring_t *args = NULL;
+  arg_t *arg = rl->head;
+  while (arg) {
+    if (arg->type & RL_ARG_ANYTYPE) {
+      if (cstring_eq (arg->argname->bytes, argname)) {
+        if (NULL is args) args = vstring_new ();
+        vstring_current_append_with (args, arg->argval->bytes);
+      }
+    }
+    arg = arg->next;
+  }
+
+  return args;
+}
+
 private int rline_arg_exists (rline_t *rl, char *argname) {
   arg_t *arg = rl->head;
   while (arg) {
@@ -14866,8 +14883,16 @@ private void rline_set_opts (rline_t *rl, int opts) {
   rl->opts = opts;
 }
 
+private void rline_set_opts_bit (rline_t *rl, int bit) {
+  rl->opts |= bit;
+}
+
 private void rline_set_state (rline_t *rl, int state) {
   rl->state = state;
+}
+
+private void rline_set_state_bit (rline_t *rl, int bit) {
+  rl->state |= bit;
 }
 
 private void rline_set_visibility (rline_t *rl, int visible) {
@@ -14894,13 +14919,16 @@ private rline_T __init_rline__ (void) {
         .command = rline_get_command,
         .buf_range = rline_get_buf_range,
         .arg_fnames = rline_get_arg_fnames,
+        .user_object = rline_get_user_object,
         .anytype_arg = rline_get_anytype_arg,
-        .user_object = rline_get_user_object
+        .anytype_args = rline_get_anytype_args
       ),
       .set = SubSelfInit (rline, set,
         .line = rline_set_line,
         .opts = rline_set_opts,
         .state = rline_set_state,
+        .opts_bit = rline_set_opts_bit,
+        .state_bit = rline_set_state_bit,
         .visibility = rline_set_visibility,
         .prompt_char = rline_set_prompt_char,
         .user_object = rline_set_user_object

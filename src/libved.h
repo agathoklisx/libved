@@ -1404,6 +1404,8 @@ NewSubSelf (rline, set,
     (*line) (rline_t *, char *, size_t),
     (*opts) (rline_t *, int),
     (*state) (rline_t *, int),
+    (*opts_bit) (rline_t *, int),
+    (*state_bit) (rline_t *, int),
     (*visibility) (rline_t *, int),
     (*prompt_char) (rline_t *, char),
     (*user_object) (rline_t *, void *);
@@ -1414,6 +1416,8 @@ NewSubSelf (rline, get,
      *(*line) (rline_t *),
      *(*command) (rline_t *),
      *(*anytype_arg) (rline_t *, char *);
+
+  Vstring_t *(*anytype_args) (rline_t *, char *);
 
   arg_t *(*arg) (rline_t *, int);
 
