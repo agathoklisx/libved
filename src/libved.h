@@ -1521,7 +1521,8 @@ NewSelf (file,
     (*is_writable) (const char *),
     (*is_executable) (const char *),
     (*is_reg) (const char *),
-    (*is_elf) (const char *);
+    (*is_elf) (const char *),
+    (*is_sock) (const char *);
 
   ssize_t
     (*write) (char *, char *, ssize_t),

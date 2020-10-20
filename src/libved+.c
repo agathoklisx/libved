@@ -19,6 +19,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include <time.h>
+#include <limits.h>
+#include <math.h>
 #include <errno.h>
 
 #include "libved.h"
@@ -33,6 +35,10 @@ public Class (this) *__This__ = NULL;
 
 #ifdef HAS_LOCAL_EXTENSIONS
   #include "local/local.c"
+#endif
+
+#ifdef HAS_PROGRAMMING_LANGUAGE
+  #include "lib/lai/led.c"
 #endif
 
 /* Argparse:
@@ -381,8 +387,13 @@ private int argparse_parse (argparse_t *self, int argc, const char **argv) {
         case -1:
           return -1;
 
-         case -2:
-           goto unknown;
+        case -2:
+          if (self->flags & ARGPARSE_DONOT_EXIT_ON_UNKNOWN) {
+            self->out[self->cpidx++] = self->argv[0];
+            continue;
+          }
+
+          goto unknown;
       }
 
       while (self->optvalue) {
@@ -391,6 +402,11 @@ private int argparse_parse (argparse_t *self, int argc, const char **argv) {
             return -1;
 
           case -2:
+            if (self->flags & ARGPARSE_DONOT_EXIT_ON_UNKNOWN) {
+             self->out[self->cpidx++] = self->argv[0];
+             continue;
+            }
+
             goto unknown;
         }
       }
@@ -411,6 +427,11 @@ private int argparse_parse (argparse_t *self, int argc, const char **argv) {
         return -1;
 
       case -2:
+        if (self->flags & ARGPARSE_DONOT_EXIT_ON_UNKNOWN) {
+          self->out[self->cpidx++] = self->argv[0];
+          continue;
+        }
+
         goto unknown;
     }
     continue;
@@ -979,6 +1000,664 @@ private int __tcc_compile__ (buf_t **thisp, string_t *src) {
 #endif /* HAS_TCC */
 
 /* Math Expr */
+
+/*
+ * TINYEXPR - Tiny recursive descent parser and evaluation engine in C
+ *
+ * Copyright (c) 2015-2018 Lewis Van Winkle
+ *
+ * http://CodePlea.com
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty. In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ *
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ *
+ * 1. The origin of this software must not be misrepresented; you must not
+ * claim that you wrote the original software. If you use this software
+ * in a product, an acknowledgement in the product documentation would be
+ * appreciated but is not required.
+ * 2. Altered source versions must be plainly marked as such, and must not be
+ * misrepresented as being the original software.
+ * 3. This notice may not be removed or altered from any source distribution.
+ */
+
+/* COMPILE TIME OPTIONS */
+
+/* Exponentiation associativity:
+For a^b^c = (a^b)^c and -a^b = (-a)^b do nothing.
+For a^b^c = a^(b^c) and -a^b = -(a^b) uncomment the next line.*/
+/* #define TE_POW_FROM_RIGHT */
+
+/* Logarithms
+For log = base 10 log do nothing
+For log = natural log uncomment the next line. */
+/* #define TE_NAT_LOG */
+
+#ifndef NAN
+#define NAN (0.0/0.0)
+#endif
+
+#ifndef INFINITY
+#define INFINITY (1.0/0.0)
+#endif
+
+typedef struct te_expr {
+    int type;
+    union {double value; const double *bound; const void *function;};
+    void *parameters[1];
+} te_expr;
+
+enum {
+    TE_VARIABLE = 0,
+
+    TE_FUNCTION0 = 8, TE_FUNCTION1, TE_FUNCTION2, TE_FUNCTION3,
+    TE_FUNCTION4, TE_FUNCTION5, TE_FUNCTION6, TE_FUNCTION7,
+
+    TE_CLOSURE0 = 16, TE_CLOSURE1, TE_CLOSURE2, TE_CLOSURE3,
+    TE_CLOSURE4, TE_CLOSURE5, TE_CLOSURE6, TE_CLOSURE7,
+
+    TE_FLAG_PURE = 32
+};
+
+typedef struct te_variable {
+    const char *name;
+    const void *address;
+    int type;
+    void *context;
+} te_variable;
+
+typedef double (*te_fun2)(double, double);
+
+enum {
+    TOK_NULL = TE_CLOSURE7+1, TOK_ERROR, TOK_END, TOK_SEP,
+    TOK_OPEN, TOK_CLOSE, TOK_NUMBER, TOK_VARIABLE, TOK_INFIX
+};
+
+enum {TE_CONSTANT = 1};
+
+typedef struct te_state {
+    const char *start;
+    const char *next;
+    int type;
+    union {double value; const double *bound; const void *function;};
+    void *context;
+
+    const te_variable *lookup;
+    int lookup_len;
+} te_state;
+
+#define TYPE_MASK(TYPE) ((TYPE)&0x0000001F)
+
+#define IS_PURE(TYPE) (((TYPE) & TE_FLAG_PURE) != 0)
+//#define TE_IS_FUNCTION(TYPE) (((TYPE) & TE_FUNCTION0) != 0)
+#define TE_IS_CLOSURE(TYPE) (((TYPE) & TE_CLOSURE0) != 0)
+#define ARITY(TYPE) ( ((TYPE) & (TE_FUNCTION0 | TE_CLOSURE0)) ? ((TYPE) & 0x00000007) : 0 )
+#define NEW_EXPR(type, ...) new_expr((type), (const te_expr*[]){__VA_ARGS__})
+
+private te_expr *new_expr(const int type, const te_expr *parameters[]) {
+    const int arity = ARITY(type);
+    const int psize = sizeof(void*) * arity;
+    const int size = (sizeof(te_expr) - sizeof(void*)) + psize + (TE_IS_CLOSURE(type) ? sizeof(void*) : 0);
+    te_expr *ret = malloc(size);
+    memset(ret, 0, size);
+    if (arity && parameters) {
+        memcpy(ret->parameters, parameters, psize);
+    }
+    ret->type = type;
+    ret->bound = 0;
+    return ret;
+}
+
+private void te_free(te_expr *);
+private void te_free_parameters(te_expr *n) {
+    if (!n) return;
+    switch (TYPE_MASK(n->type)) {
+        case TE_FUNCTION7: case TE_CLOSURE7: te_free(n->parameters[6]);     /* Falls through. */
+        case TE_FUNCTION6: case TE_CLOSURE6: te_free(n->parameters[5]);     /* Falls through. */
+        case TE_FUNCTION5: case TE_CLOSURE5: te_free(n->parameters[4]);     /* Falls through. */
+        case TE_FUNCTION4: case TE_CLOSURE4: te_free(n->parameters[3]);     /* Falls through. */
+        case TE_FUNCTION3: case TE_CLOSURE3: te_free(n->parameters[2]);     /* Falls through. */
+        case TE_FUNCTION2: case TE_CLOSURE2: te_free(n->parameters[1]);     /* Falls through. */
+        case TE_FUNCTION1: case TE_CLOSURE1: te_free(n->parameters[0]);
+    }
+}
+
+private void te_free(te_expr *n) {
+    if (!n) return;
+    te_free_parameters(n);
+    free(n);
+}
+
+private double te_add(double a, double b) {return a + b;}
+private double te_sub(double a, double b) {return a - b;}
+private double te_mul(double a, double b) {return a * b;}
+private double te_divide(double a, double b) {return a / b;}
+private double negate(double a) {return -a;}
+private double comma(double a, double b) {(void)a; return b;}
+private double pi(void) {return 3.14159265358979323846;}
+private double e(void) {return 2.71828182845904523536;}
+private double fac(double a) {/* simplest version of fac */
+    if (a < 0.0)
+        return NAN;
+    if (a > UINT_MAX)
+        return INFINITY;
+    unsigned int ua = (unsigned int)(a);
+    unsigned long int result = 1, i;
+    for (i = 1; i <= ua; i++) {
+        if (i > ULONG_MAX / result)
+            return INFINITY;
+        result *= i;
+    }
+    return (double)result;
+}
+
+private double ncr(double n, double r) {
+    if (n < 0.0 || r < 0.0 || n < r) return NAN;
+    if (n > UINT_MAX || r > UINT_MAX) return INFINITY;
+    unsigned long int un = (unsigned int)(n), ur = (unsigned int)(r), i;
+    unsigned long int result = 1;
+    if (ur > un / 2) ur = un - ur;
+    for (i = 1; i <= ur; i++) {
+        if (result > ULONG_MAX / (un - ur + i))
+            return INFINITY;
+        result *= un - ur + i;
+        result /= i;
+    }
+    return result;
+}
+private double npr(double n, double r) {return ncr(n, r) * fac(r);}
+
+private const te_variable functions[] = {
+    /* must be in alphabetical order */
+    {"abs", fabs,     TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"acos", acos,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"asin", asin,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"atan", atan,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"atan2", atan2,  TE_FUNCTION2 | TE_FLAG_PURE, 0},
+    {"ceil", ceil,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"cos", cos,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"cosh", cosh,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"e", e,          TE_FUNCTION0 | TE_FLAG_PURE, 0},
+    {"exp", exp,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"fac", fac,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"floor", floor,  TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"ln", log,       TE_FUNCTION1 | TE_FLAG_PURE, 0},
+#ifdef TE_NAT_LOG
+    {"log", log,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+#else
+    {"log", log10,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+#endif
+    {"log10", log10,  TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"ncr", ncr,      TE_FUNCTION2 | TE_FLAG_PURE, 0},
+    {"npr", npr,      TE_FUNCTION2 | TE_FLAG_PURE, 0},
+    {"pi", pi,        TE_FUNCTION0 | TE_FLAG_PURE, 0},
+    {"pow", pow,      TE_FUNCTION2 | TE_FLAG_PURE, 0},
+    {"sin", sin,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"sinh", sinh,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"sqrt", sqrt,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"tan", tan,      TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {"tanh", tanh,    TE_FUNCTION1 | TE_FLAG_PURE, 0},
+    {0, 0, 0, 0}
+};
+
+private const te_variable *find_builtin(const char *name, int len) {
+    int imin = 0;
+    int imax = sizeof(functions) / sizeof(te_variable) - 2;
+
+    /*Binary search.*/
+    while (imax >= imin) {
+        const int i = (imin + ((imax-imin)/2));
+        int c = strncmp(name, functions[i].name, len);
+        if (!c) c = '\0' - functions[i].name[len];
+        if (c == 0) {
+            return functions + i;
+        } else if (c > 0) {
+            imin = i + 1;
+        } else {
+            imax = i - 1;
+        }
+    }
+
+    return 0;
+}
+
+private const te_variable *find_lookup(const te_state *s, const char *name, int len) {
+    int iters;
+    const te_variable *var;
+    if (!s->lookup) return 0;
+
+    for (var = s->lookup, iters = s->lookup_len; iters; ++var, --iters) {
+        if (strncmp(name, var->name, len) == 0 && var->name[len] == '\0') {
+            return var;
+        }
+    }
+    return 0;
+}
+
+private void next_token(te_state *s) {
+    s->type = TOK_NULL;
+
+    do {
+
+        if (!*s->next){
+            s->type = TOK_END;
+            return;
+        }
+
+        /* Try reading a number. */
+        if ((s->next[0] >= '0' && s->next[0] <= '9') || s->next[0] == '.') {
+            s->value = strtod(s->next, (char**)&s->next);
+            s->type = TOK_NUMBER;
+        } else {
+            /* Look for a variable or builtin function call. */
+            if (s->next[0] >= 'a' && s->next[0] <= 'z') {
+                const char *start;
+                start = s->next;
+                while ((s->next[0] >= 'a' && s->next[0] <= 'z') || (s->next[0] >= '0' && s->next[0] <= '9') || (s->next[0] == '_')) s->next++;
+
+                const te_variable *var = find_lookup(s, start, s->next - start);
+                if (!var) var = find_builtin(start, s->next - start);
+
+                if (!var) {
+                    s->type = TOK_ERROR;
+                } else {
+                    switch(TYPE_MASK(var->type))
+                    {
+                        case TE_VARIABLE:
+                            s->type = TOK_VARIABLE;
+                            s->bound = var->address;
+                            break;
+
+                        case TE_CLOSURE0: case TE_CLOSURE1: case TE_CLOSURE2: case TE_CLOSURE3:         /* Falls through. */
+                        case TE_CLOSURE4: case TE_CLOSURE5: case TE_CLOSURE6: case TE_CLOSURE7:         /* Falls through. */
+                            s->context = var->context;                                                  /* Falls through. */
+
+                        case TE_FUNCTION0: case TE_FUNCTION1: case TE_FUNCTION2: case TE_FUNCTION3:     /* Falls through. */
+                        case TE_FUNCTION4: case TE_FUNCTION5: case TE_FUNCTION6: case TE_FUNCTION7:     /* Falls through. */
+                            s->type = var->type;
+                            s->function = var->address;
+                            break;
+                    }
+                }
+
+            } else {
+                /* Look for an operator or special character. */
+                switch (s->next++[0]) {
+                    case '+': s->type = TOK_INFIX; s->function = te_add; break;
+                    case '-': s->type = TOK_INFIX; s->function = te_sub; break;
+                    case '*': s->type = TOK_INFIX; s->function = te_mul; break;
+                    case '/': s->type = TOK_INFIX; s->function = te_divide; break;
+                    case '^': s->type = TOK_INFIX; s->function = pow; break;
+                    case '%': s->type = TOK_INFIX; s->function = fmod; break;
+                    case '(': s->type = TOK_OPEN; break;
+                    case ')': s->type = TOK_CLOSE; break;
+                    case ',': s->type = TOK_SEP; break;
+                    case ' ': case '\t': case '\n': case '\r': break;
+                    default: s->type = TOK_ERROR; break;
+                }
+            }
+        }
+    } while (s->type == TOK_NULL);
+}
+
+
+private te_expr *te_list(te_state *s);
+private te_expr *expr(te_state *s);
+private te_expr *power(te_state *s);
+
+private te_expr *base(te_state *s) {
+    /* <base>      =    <constant> | <variable> | <function-0> {"(" ")"} | <function-1> <power> | <function-X> "(" <expr> {"," <expr>} ")" | "(" <list> ")" */
+    te_expr *ret;
+    int arity;
+
+    switch (TYPE_MASK(s->type)) {
+        case TOK_NUMBER:
+            ret = new_expr(TE_CONSTANT, 0);
+            ret->value = s->value;
+            next_token(s);
+            break;
+
+        case TOK_VARIABLE:
+            ret = new_expr(TE_VARIABLE, 0);
+            ret->bound = s->bound;
+            next_token(s);
+            break;
+
+        case TE_FUNCTION0:
+        case TE_CLOSURE0:
+            ret = new_expr(s->type, 0);
+            ret->function = s->function;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[0] = s->context;
+            next_token(s);
+            if (s->type == TOK_OPEN) {
+                next_token(s);
+                if (s->type != TOK_CLOSE) {
+                    s->type = TOK_ERROR;
+                } else {
+                    next_token(s);
+                }
+            }
+            break;
+
+        case TE_FUNCTION1:
+        case TE_CLOSURE1:
+            ret = new_expr(s->type, 0);
+            ret->function = s->function;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[1] = s->context;
+            next_token(s);
+            ret->parameters[0] = power(s);
+            break;
+
+        case TE_FUNCTION2: case TE_FUNCTION3: case TE_FUNCTION4:
+        case TE_FUNCTION5: case TE_FUNCTION6: case TE_FUNCTION7:
+        case TE_CLOSURE2: case TE_CLOSURE3: case TE_CLOSURE4:
+        case TE_CLOSURE5: case TE_CLOSURE6: case TE_CLOSURE7:
+            arity = ARITY(s->type);
+
+            ret = new_expr(s->type, 0);
+            ret->function = s->function;
+            if (TE_IS_CLOSURE(s->type)) ret->parameters[arity] = s->context;
+            next_token(s);
+
+            if (s->type != TOK_OPEN) {
+                s->type = TOK_ERROR;
+            } else {
+                int i;
+                for(i = 0; i < arity; i++) {
+                    next_token(s);
+                    ret->parameters[i] = expr(s);
+                    if(s->type != TOK_SEP) {
+                        break;
+                    }
+                }
+                if(s->type != TOK_CLOSE || i != arity - 1) {
+                    s->type = TOK_ERROR;
+                } else {
+                    next_token(s);
+                }
+            }
+
+            break;
+
+        case TOK_OPEN:
+            next_token(s);
+            ret = te_list(s);
+            if (s->type != TOK_CLOSE) {
+                s->type = TOK_ERROR;
+            } else {
+                next_token(s);
+            }
+            break;
+
+        default:
+            ret = new_expr(0, 0);
+            s->type = TOK_ERROR;
+            ret->value = NAN;
+            break;
+    }
+
+    return ret;
+}
+
+
+private te_expr *power(te_state *s) {
+    /* <power>     =    {("-" | "+")} <base> */
+    int sign = 1;
+    while (s->type == TOK_INFIX && (s->function == te_add || s->function == te_sub)) {
+        if (s->function == te_sub) sign = -sign;
+        next_token(s);
+    }
+
+    te_expr *ret;
+
+    if (sign == 1) {
+        ret = base(s);
+    } else {
+        ret = NEW_EXPR(TE_FUNCTION1 | TE_FLAG_PURE, base(s));
+        ret->function = negate;
+    }
+
+    return ret;
+}
+
+#ifdef TE_POW_FROM_RIGHT
+private te_expr *factor(te_state *s) {
+    /* <factor>    =    <power> {"^" <power>} */
+    te_expr *ret = power(s);
+
+    int neg = 0;
+    te_expr *insertion = 0;
+
+    if (ret->type == (TE_FUNCTION1 | TE_FLAG_PURE) && ret->function == negate) {
+        te_expr *se = ret->parameters[0];
+        free(ret);
+        ret = se;
+        neg = 1;
+    }
+
+    while (s->type == TOK_INFIX && (s->function == pow)) {
+        te_fun2 t = s->function;
+        next_token(s);
+
+        if (insertion) {
+            /* Make exponentiation go right-to-left. */
+            te_expr *insert = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, insertion->parameters[1], power(s));
+            insert->function = t;
+            insertion->parameters[1] = insert;
+            insertion = insert;
+        } else {
+            ret = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, ret, power(s));
+            ret->function = t;
+            insertion = ret;
+        }
+    }
+
+    if (neg) {
+        ret = NEW_EXPR(TE_FUNCTION1 | TE_FLAG_PURE, ret);
+        ret->function = negate;
+    }
+
+    return ret;
+}
+#else
+private te_expr *factor(te_state *s) {
+    /* <factor>    =    <power> {"^" <power>} */
+    te_expr *ret = power(s);
+
+    while (s->type == TOK_INFIX && (s->function == pow)) {
+        te_fun2 t = s->function;
+        next_token(s);
+        ret = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, ret, power(s));
+        ret->function = t;
+    }
+
+    return ret;
+}
+#endif
+
+private te_expr *term(te_state *s) {
+    /* <term>      =    <factor> {("*" | "/" | "%") <factor>} */
+    te_expr *ret = factor(s);
+
+    while (s->type == TOK_INFIX && (s->function == te_mul || s->function == te_divide || s->function == fmod)) {
+        te_fun2 t = s->function;
+        next_token(s);
+        ret = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, ret, factor(s));
+        ret->function = t;
+    }
+
+    return ret;
+}
+
+
+private te_expr *expr(te_state *s) {
+    /* <expr>      =    <term> {("+" | "-") <term>} */
+    te_expr *ret = term(s);
+
+    while (s->type == TOK_INFIX && (s->function == te_add || s->function == te_sub)) {
+        te_fun2 t = s->function;
+        next_token(s);
+        ret = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, ret, term(s));
+        ret->function = t;
+    }
+
+    return ret;
+}
+
+private te_expr *te_list(te_state *s) {
+    /* <list>      =    <expr> {"," <expr>} */
+    te_expr *ret = expr(s);
+
+    while (s->type == TOK_SEP) {
+        next_token(s);
+        ret = NEW_EXPR(TE_FUNCTION2 | TE_FLAG_PURE, ret, expr(s));
+        ret->function = comma;
+    }
+
+    return ret;
+}
+
+
+#define TE_FUN(...) ((double(*)(__VA_ARGS__))n->function)
+#define M(e) te_eval(n->parameters[e])
+
+private double te_eval(const te_expr *n) {
+    if (!n) return NAN;
+
+    switch(TYPE_MASK(n->type)) {
+        case TE_CONSTANT: return n->value;
+        case TE_VARIABLE: return *n->bound;
+
+        case TE_FUNCTION0: case TE_FUNCTION1: case TE_FUNCTION2: case TE_FUNCTION3:
+        case TE_FUNCTION4: case TE_FUNCTION5: case TE_FUNCTION6: case TE_FUNCTION7:
+            switch(ARITY(n->type)) {
+                case 0: return TE_FUN(void)();
+                case 1: return TE_FUN(double)(M(0));
+                case 2: return TE_FUN(double, double)(M(0), M(1));
+                case 3: return TE_FUN(double, double, double)(M(0), M(1), M(2));
+                case 4: return TE_FUN(double, double, double, double)(M(0), M(1), M(2), M(3));
+                case 5: return TE_FUN(double, double, double, double, double)(M(0), M(1), M(2), M(3), M(4));
+                case 6: return TE_FUN(double, double, double, double, double, double)(M(0), M(1), M(2), M(3), M(4), M(5));
+                case 7: return TE_FUN(double, double, double, double, double, double, double)(M(0), M(1), M(2), M(3), M(4), M(5), M(6));
+                default: return NAN;
+            }
+
+        case TE_CLOSURE0: case TE_CLOSURE1: case TE_CLOSURE2: case TE_CLOSURE3:
+        case TE_CLOSURE4: case TE_CLOSURE5: case TE_CLOSURE6: case TE_CLOSURE7:
+            switch(ARITY(n->type)) {
+                case 0: return TE_FUN(void*)(n->parameters[0]);
+                case 1: return TE_FUN(void*, double)(n->parameters[1], M(0));
+                case 2: return TE_FUN(void*, double, double)(n->parameters[2], M(0), M(1));
+                case 3: return TE_FUN(void*, double, double, double)(n->parameters[3], M(0), M(1), M(2));
+                case 4: return TE_FUN(void*, double, double, double, double)(n->parameters[4], M(0), M(1), M(2), M(3));
+                case 5: return TE_FUN(void*, double, double, double, double, double)(n->parameters[5], M(0), M(1), M(2), M(3), M(4));
+                case 6: return TE_FUN(void*, double, double, double, double, double, double)(n->parameters[6], M(0), M(1), M(2), M(3), M(4), M(5));
+                case 7: return TE_FUN(void*, double, double, double, double, double, double, double)(n->parameters[7], M(0), M(1), M(2), M(3), M(4), M(5), M(6));
+                default: return NAN;
+            }
+
+        default: return NAN;
+    }
+
+}
+
+#undef TE_FUN
+#undef M
+
+private void optimize(te_expr *n) {
+    /* Evaluates as much as possible. */
+    if (n->type == TE_CONSTANT) return;
+    if (n->type == TE_VARIABLE) return;
+
+    /* Only optimize out functions flagged as pure. */
+    if (IS_PURE(n->type)) {
+        const int arity = ARITY(n->type);
+        int known = 1;
+        int i;
+        for (i = 0; i < arity; ++i) {
+            optimize(n->parameters[i]);
+            if (((te_expr*)(n->parameters[i]))->type != TE_CONSTANT) {
+                known = 0;
+            }
+        }
+        if (known) {
+            const double value = te_eval(n);
+            te_free_parameters(n);
+            n->type = TE_CONSTANT;
+            n->value = value;
+        }
+    }
+}
+
+
+private te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error) {
+    te_state s;
+    s.start = s.next = expression;
+    s.lookup = variables;
+    s.lookup_len = var_count;
+
+    next_token(&s);
+    te_expr *expr = te_list(&s);
+
+    if (s.type != TOK_END) {
+        te_free(expr);
+        if (error) {
+            *error = (s.next - s.start);
+            if (*error == 0) *error = 1;
+        }
+        return 0;
+    } else {
+        optimize(expr);
+        if (error) *error = 0;
+        return expr;
+    }
+}
+
+private double te_interp(const char *expression, int *error) {
+    te_expr *n = te_compile(expression, 0, 0, error);
+    double ret;
+    if (n) {
+        ret = te_eval(n);
+        te_free(n);
+    } else {
+        ret = NAN;
+    }
+    return ret;
+}
+
+private void pn (const te_expr *n, int depth) {
+    int i, arity;
+    printf("%*s", depth, "");
+
+    switch(TYPE_MASK(n->type)) {
+    case TE_CONSTANT: printf("%f\n", n->value); break;
+    case TE_VARIABLE: printf("bound %p\n", n->bound); break;
+
+    case TE_FUNCTION0: case TE_FUNCTION1: case TE_FUNCTION2: case TE_FUNCTION3:
+    case TE_FUNCTION4: case TE_FUNCTION5: case TE_FUNCTION6: case TE_FUNCTION7:
+    case TE_CLOSURE0: case TE_CLOSURE1: case TE_CLOSURE2: case TE_CLOSURE3:
+    case TE_CLOSURE4: case TE_CLOSURE5: case TE_CLOSURE6: case TE_CLOSURE7:
+         arity = ARITY(n->type);
+         printf("f%d", arity);
+         for(i = 0; i < arity; i++) {
+             printf(" %p", n->parameters[i]);
+         }
+         printf("\n");
+         for(i = 0; i < arity; i++) {
+             pn(n->parameters[i], depth + 1);
+         }
+         break;
+    }
+}
+
+private void te_print(const te_expr *n) {
+    pn(n, 0);
+}
+
 #define MATH_OK            OK
 #define MATH_NOTOK         NOTOK
 #define MATH_BASE_ERROR    2000
@@ -2350,6 +3029,216 @@ private void __ex_add_rline_commands__ (ed_t *this) {
   Ed.set.rline_cb (this, __ex_rline_cb__);
 }
 
+char __ex_balanced_pairs[] = "()[]{}";
+char *__ex_NULL_ARRAY[] = {NULL};
+
+char *make_filenames[] = {"Makefile", NULL};
+char *make_extensions[] = {".Makefile", NULL};
+char *make_keywords[] = {
+  "ifeq I", "ifneq I", "endif I", "else I", "ifdef I", NULL};
+
+char *sh_extensions[] = {".sh", ".bash", NULL};
+char *sh_shebangs[] = {"#!/bin/sh", "#!/bin/bash", NULL};
+char  sh_operators[] = "+:-%*><=|&()[]{}!$/`?";
+char *sh_keywords[] = {
+  "if I", "else I", "elif I", "then I", "fi I", "while I", "for I", "break I",
+  "done I", "do I", "case I", "esac I", "in I", "EOF I", NULL};
+char sh_singleline_comment[] = "#";
+
+char *zig_extensions[] = {".zig", NULL};
+char zig_operators[] = "+:-*^><=|&~.()[]{}/";
+char zig_singleline_comment[] = "//";
+char *zig_keywords[] = {
+  "const V", "@import V", "pub I", "fn I", "void T", "try I",
+  "else I", "if I", "while I", "true V", "false V", "Self V", "@This V",
+  "return I", "u8 T", "struct T", "enum T", "var V", "comptime T",
+  "switch I", "continue I", "for I", "type T", "void T", "defer I",
+  "orelse I", "errdefer I", "undefined T", "threadlocal T", NULL};
+
+char *lua_extensions[] = {".lua", NULL};
+char *lua_shebangs[] = {"#!/bin/env lua", "#!/usr/bin/lua", NULL};
+char  lua_operators[] = "+:-*^><=|&~.()[]{}!@/";
+char *lua_keywords[] = {
+  "do I", "if I", "while I", "else I", "elseif I", "nil I",
+  "local I",  "self V", "require V", "return V", "and V",
+  "then I", "end I", "function V", "or I", "in V",
+  "repeat I", "for I",  "goto I", "not I", "break I",
+  "setmetatable F", "getmetatable F", "until I",
+  "true I", "false I", NULL
+};
+
+char lua_singleline_comment[] = "--";
+char lua_multiline_comment_start[] = "--[[";
+char lua_multiline_comment_end[] = "]]";
+
+char *lai_extensions[] = {".lai", ".du", ".yala", NULL};
+char *lai_shebangs[] = {"#!/bin/env lai", "#!/usr/bin/lai", "#!/usr/bin/yala", "#!/usr/bin/dictu", NULL};
+char  lai_operators[] = "+:-*^><=|&~.()[]{}!@/";
+char *lai_keywords[] = {
+  "beg I", "end I", "if I", "while I", "else I", "for I", "do I", "orelse I",
+  "is I", "isnot I", "nil E", "not I", "var V", "const V", "return V", "and I",
+  "or I", "self F", "this V", "then I", "def F",  "continue I", "break I", "init I", "class T",
+  "trait T", "true V", "false E", "import T", "as T", "hasAttribute F", "getAttribute F",
+  "setAttribute F", "super V", "type T", "set F", "assert E", "with F", "forever I",
+  "use T", "elseif I", "static T",
+   NULL};
+
+char lai_singleline_comment[] = "//";
+char lai_multiline_comment_start[] = "/*";
+char lai_multiline_comment_end[] = "*/";
+
+char *md_extensions[] = {".md", NULL};
+
+char *diff_extensions[] = {".diff", ".patch", NULL};
+
+private char *__ex_diff_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
+  (void) idx; (void) row;
+
+  ifnot (len) return line;
+
+  int color = HL_NORMAL;
+
+  if (Cstring.eq_n (line, "--- ", 4)) {
+    color = HL_IDENTIFIER;
+    goto theend;
+  }
+
+  if (Cstring.eq_n (line, "+++ ", 4)) {
+    color = HL_NUMBER;
+    goto theend;
+  }
+
+  if (line[0] is  '-') {
+    color = HL_VISUAL;
+    goto theend;
+  }
+
+  if (line[0] is  '+') {
+    color = HL_STRING_DELIM;
+    goto theend;
+  }
+
+  if (Cstring.eq_n (line, "diff ", 5) or Cstring.eq_n (line, "index ", 6)
+      or Cstring.eq_n (line, "@@ ", 3)) {
+    color = HL_COMMENT;
+    goto theend;
+  }
+
+theend:;
+  string_t *shared = Buf.get.shared_str (this);
+  String.replace_with_fmt (shared, "%s%s%s", TERM_MAKE_COLOR(color), line, TERM_COLOR_RESET);
+  Cstring.cp (line, MAXLEN_LINE, shared->bytes, shared->num_bytes);
+  return line;
+}
+
+private ftype_t *__ex_diff_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "diff"),
+    QUAL(FTYPE, .tabwidth = 0, .tab_indents = 0));
+  return ft;
+}
+
+private char *__ex_syn_parser (buf_t *this, char *line, int len, int idx, row_t *row) {
+  return Buf.syn.parser (this, line, len, idx, row);
+}
+
+private string_t *__ex_ftype_autoindent (buf_t *this, row_t *row) {
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_default");
+  return autoindent_fun (this, row);
+}
+
+private string_t *__ex_c_ftype_autoindent (buf_t *this, row_t *row) {
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_c");
+  return autoindent_fun (this, row);
+}
+
+private string_t *__i_ftype_autoindent (buf_t *this, row_t *row) {
+  FtypeAutoIndent_cb autoindent_fun = Ed.get.callback_fun (E.get.current (THIS_E), "autoindent_c");
+  return autoindent_fun (this, row);
+}
+
+private ftype_t *__ex_lai_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lai"),
+    QUAL(FTYPE, .autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+  return ft;
+}
+
+private ftype_t *__ex_lua_syn_init (buf_t *this) {
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lua"),
+    QUAL(FTYPE, .autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+  return ft;
+}
+
+private ftype_t *__ex_make_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "make"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
+  return ft;
+}
+
+private ftype_t *__ex_sh_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "sh"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
+  return ft;
+}
+
+private ftype_t *__ex_zig_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "zig"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent));
+  return ft;
+}
+
+private ftype_t *__ex_md_syn_init (buf_t *this) {
+  ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "md"),
+    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent, .clear_blanklines = 0));
+  return ft;
+}
+
+/* really minimal and incomplete support */
+syn_t ex_syn[] = {
+  {
+    "make", make_filenames, make_extensions, __ex_NULL_ARRAY,
+    make_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, NULL,
+    HL_STRINGS, HL_NUMBERS,
+    __ex_syn_parser, __ex_make_syn_init, 0, 0, NULL, NULL, NULL,
+  },
+  {
+    "sh", __ex_NULL_ARRAY, sh_extensions, sh_shebangs,
+    sh_keywords, sh_operators,
+    sh_singleline_comment, NULL, NULL, NULL,
+    HL_STRINGS, HL_NUMBERS,
+    __ex_syn_parser, __ex_sh_syn_init, 0, 0, NULL, NULL, __ex_balanced_pairs,
+  },
+  {
+    "zig", __ex_NULL_ARRAY, zig_extensions, __ex_NULL_ARRAY, zig_keywords, zig_operators,
+    zig_singleline_comment, NULL, NULL, NULL, HL_STRINGS, HL_NUMBERS,
+    __ex_syn_parser, __ex_zig_syn_init, 0, 0, NULL, NULL, __ex_balanced_pairs
+  },
+  {
+    "lua", __ex_NULL_ARRAY, lua_extensions, lua_shebangs, lua_keywords, lua_operators,
+    lua_singleline_comment, lua_multiline_comment_start, lua_multiline_comment_end,
+    NULL, HL_STRINGS, HL_NUMBERS,
+    __ex_syn_parser, __ex_lua_syn_init, 0, 0, NULL, NULL, __ex_balanced_pairs,
+  },
+  {
+    "lai", __ex_NULL_ARRAY, lai_extensions, lai_shebangs, lai_keywords, lai_operators,
+    lai_singleline_comment, lai_multiline_comment_start, lai_multiline_comment_end,
+    NULL, HL_STRINGS, HL_NUMBERS,
+    __ex_syn_parser, __ex_lai_syn_init, 0, 0, NULL, NULL, __ex_balanced_pairs,
+  },
+  {
+    "diff", __ex_NULL_ARRAY, diff_extensions, __ex_NULL_ARRAY,
+    __ex_NULL_ARRAY, NULL, NULL, NULL, NULL,
+    NULL, HL_STRINGS_NO, HL_NUMBERS_NO,
+    __ex_diff_syn_parser, __ex_diff_syn_init, 0, 0, NULL, NULL, NULL
+  },
+  {
+    "md", __ex_NULL_ARRAY, md_extensions, __ex_NULL_ARRAY,
+    __ex_NULL_ARRAY, NULL, NULL, NULL, NULL,
+    NULL, HL_STRINGS_NO, HL_NUMBERS_NO,
+    __ex_syn_parser, __ex_md_syn_init, 0, 0, NULL, NULL, NULL
+  }
+};
+
 public void __init_ext__ (Type (ed) *this) {
   __ex_add_rline_commands__ (this);
   __ex_add_cw_mode_actions__ (this);
@@ -2369,6 +3258,9 @@ public void __init_ext__ (Type (ed) *this) {
 
   Ed.history.read (this);
   Ed.set.at_exit_cb (this, Ed.history.write);
+
+  for (size_t i = 0; i < ARRLEN(ex_syn); i++)
+    Ed.syn.append (this, ex_syn[i]);
 }
 
 public void __deinit_ext__ (void) {

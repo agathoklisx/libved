@@ -2944,6 +2944,12 @@ private int file_is_reg (const char *fname) {
   return S_ISREG (st.st_mode);
 }
 
+private int file_is_sock (const char *fname) {
+  struct stat st;
+  if (NOTOK is stat (fname, &st)) return 0;
+  return S_ISSOCK (st.st_mode);
+}
+
 private int file_exists (const char *fname) {
   return (0 is access (fname, F_OK));
 }
@@ -3125,6 +3131,7 @@ private file_T __init_file__ (void) {
       .is_executable = file_is_executable,
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
+      .is_sock = file_is_sock,
       .readlines = file_readlines,
       .write = file_write,
       .append = file_append,
@@ -3900,7 +3907,7 @@ private void term_set_name (term_t *this) {
 
 private int term_set (term_t *this) {
   if (NOTOK is term_set_mode (this, 'r')) return NOTOK;
-  term_cursor_get_ptr_pos (this,  &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
+  term_cursor_get_ptr_pos (this, &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
   term_init_size (this, &$my(lines), &$my(columns));
 
   ifnot ($my(state) & TERM_DONOT_SAVE_SCREEN)

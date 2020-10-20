@@ -73,8 +73,9 @@ typedef int argparse_callback (argparse_t *, const argparse_option_t *);
 public int argparse_help_cb (argparse_t *, const argparse_option_t *);
 
 enum argparse_flag {
-  ARGPARSE_STOP_AT_NON_OPTION = 1,
-  SHORT_OPT_HAS_NO_DASH,
+  ARGPARSE_STOP_AT_NON_OPTION = (1 << 0),
+  SHORT_OPT_HAS_NO_DASH = (1 << 1),
+  ARGPARSE_DONOT_EXIT_ON_UNKNOWN = (1 << 2)
 };
 
 enum argparse_option_type {
@@ -230,37 +231,6 @@ NewClass (proc,
 );
 
 /* Math Expr */
-
-typedef struct te_expr {
-    int type;
-    union {double value; const double *bound; const void *function;};
-    void *parameters[1];
-} te_expr;
-
-enum {
-    TE_VARIABLE = 0,
-
-    TE_FUNCTION0 = 8, TE_FUNCTION1, TE_FUNCTION2, TE_FUNCTION3,
-    TE_FUNCTION4, TE_FUNCTION5, TE_FUNCTION6, TE_FUNCTION7,
-
-    TE_CLOSURE0 = 16, TE_CLOSURE1, TE_CLOSURE2, TE_CLOSURE3,
-    TE_CLOSURE4, TE_CLOSURE5, TE_CLOSURE6, TE_CLOSURE7,
-
-    TE_FLAG_PURE = 32
-};
-
-typedef struct te_variable {
-    const char *name;
-    const void *address;
-    int type;
-    void *context;
-} te_variable;
-
-double te_interp(const char *expression, int *error);
-public te_expr *te_compile(const char *expression, const te_variable *variables, int var_count, int *error);
-public double te_eval(const te_expr *n);
-void te_print(const te_expr *n);
-public void te_free(te_expr *n);
 
 DeclareType (math);
 DeclareSelf (math);

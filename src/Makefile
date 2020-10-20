@@ -33,6 +33,26 @@ SYSINCDIR  = $(SYSDIR)/include
 SYSDATADIR = $(SYSDIR)/data
 SYSTMPDIR  = $(SYSDIR)/tmp
 
+EXTNAME             = $(THIS_LIBNAME)+
+LIB_EXTNAME         = lib$(EXTNAME)
+LIB_EXT             = $(LIB_EXTNAME)-$(THIS_LIBVERS)
+SYS_LIBEXT          = $(SYSLIBDIR)/$(LIB_EXT).so
+SYS_LIBEXT_STATIC   = $(SYSLIBDIR)/$(LIB_EXTNAME).a
+LIBEXT_FLAGS       := -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
+LIBEXT_SHARED_OBJS :=
+LIBEXT_STATIC_OBJS :=
+
+HEADERS = $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+
+PROGRAMMING_LANGUAGE_NAME = lai
+PROGRAMMING_LANGUAGE_EXT_NAME = led
+PROGRAMMING_LANGUAGE_DIR  = lib/$(PROGRAMMING_LANGUAGE_NAME)
+
+THIS_PROGRAMMING_LANGUAGE_HEADER = $(PROGRAMMING_LANGUAGE_DIR)/$(PROGRAMMING_LANGUAGE_NAME).h
+PROGRAMMING_LANGUAGE_EXT_HEADER = $(PROGRAMMING_LANGUAGE_DIR)/$(PROGRAMMING_LANGUAGE_EXT_NAME).h
+SYS_PROGRAMMING_LANGUAGE_HEADER  = $(SYSINCDIR)/$(PROGRAMMING_LANGUAGE_NAME).h
+SYS_PROGRAMMING_LANGUAGE_EXT_HEADER = $(SYSINCDIR)/$(PROGRAMMING_LANGUAGE_EXT_NAME).h
+
 #----------------------------------------------------------#
 THIS_SHAREDLIB := $(SYSLIBDIR)/$(THIS_LIB).so
 THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
@@ -137,39 +157,24 @@ $(THIS_STATICLIB):
 	@$(AR) $(THIS_STATICLIB) $(THIS_LIB).o
 	@$(RM) $(THIS_LIB).o
 
-#  Intented for development (ignore this target)
-LIB_EXTNAME   = lib$(THIS_LIBNAME)+
-LIB_EXT       = $(LIB_EXTNAME)-$(THIS_LIBVERS)
-SYS_LIBEXT    = $(SYSLIBDIR)/$(LIB_EXT).so
-LIBEXT_FLAGS := -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
-LIBEXT_OBJS  := lib/tinyexpr/tinyexpr.c
-
-shared-libext: $(SYS_LIBEXT) $(SYSINCDIR)/$(THIS_HEADER_EXT)
-$(SYS_LIBEXT):
-	@$(TEST) ! `whoami` != "aga" || exit 1
-	$(CC) -x c $(LIB_EXTNAME).c $(LIBEXT_OBJS) $(LIBFLAGS) $(LIBEXT_FLAGS) $(SHARED_CFLAGS) -o $(SYS_LIBEXT)
-	@$(LN_S) -vf $(SYS_LIBEXT) $(SYSLIBDIR)/$(LIB_EXTNAME).so
-
-clean-libext:
-	@$(TEST) ! -f $(SYS_LIBEXT) || $(RM) $(SYS_LIBEXT)
-	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
-
-#################################################
-
-HEADERS = $(SYSINCDIR)/$(THIS_HEADER) $(SYSINCDIR)/$(THIS_HEADER_EXT)
-
-PROGRAMMING_LANGUAGE_NAME = lai
-PROGRAMMING_LANGUAGE_EXT_NAME = led
-PROGRAMMING_LANGUAGE_DIR  = lib/$(PROGRAMMING_LANGUAGE_NAME)
-
-THIS_PROGRAMMING_LANGUAGE_HEADER = $(PROGRAMMING_LANGUAGE_DIR)/$(PROGRAMMING_LANGUAGE_NAME).h
-PROGRAMMING_LANGUAGE_EXT_HEADER = $(PROGRAMMING_LANGUAGE_DIR)/$(PROGRAMMING_LANGUAGE_EXT_NAME).h
-SYS_PROGRAMMING_LANGUAGE_HEADER  = $(SYSINCDIR)/$(PROGRAMMING_LANGUAGE_NAME).h
-SYS_PROGRAMMING_LANGUAGE_EXT_HEADER = $(SYSINCDIR)/$(PROGRAMMING_LANGUAGE_EXT_NAME).h
-
 ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
   HEADERS += $(SYS_PROGRAMMING_LANGUAGE_HEADER) $(SYS_PROGRAMMING_LANGUAGE_EXT_HEADER)
+  LIBEXT_SHARED_OBJS += $(PROGRAMMING_LANGUAGE_NAME)-shared
+  LIBEXT_STATIC_OBJS += $(PROGRAMMING_LANGUAGE_NAME)-static
 endif
+
+shared-libext: shared $(LIBEXT_SHARED_OBJS) $(SYS_LIBEXT) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+$(SYS_LIBEXT):
+	$(CC) -x c $(LIB_EXTNAME).c $(LIBFLAGS) $(LIBEXT_FLAGS) $(SHARED_CFLAGS) -o $(SYS_LIBEXT)
+	@$(LN_S) -vf $(SYS_LIBEXT) $(SYSLIBDIR)/$(LIB_EXTNAME).so
+
+static-libext: static $(LIBEXT_STATIC_OBJS) $(SYS_LIBEXT_STATIC) $(SYSINCDIR)/$(THIS_HEADER_EXT)
+$(SYS_LIBEXT_STATIC):
+	$(CC) -x c $(LIB_EXTNAME).c $(LIBFLAGS) $(LIBEXT_FLAGS) $(STATIC_CFLAGS) -c -o $(LIB_EXTNAME).o
+	@$(AR) $(SYS_LIBEXT_STATIC) $(LIB_EXTNAME).o
+	@$(RM) $(LIB_EXTNAME).o
+
+#################################################
 
 header: $(HEADERS)
 
@@ -185,16 +190,28 @@ $(SYS_PROGRAMMING_LANGUAGE_EXT_HEADER):
 preproc:
 	$(CC) -x c $(THIS_LIBSRC) $(LIBFLAGS) $(SHARED_CFLAGS) -E
 
-clean: clean_shared clean_static clean_header clean_veda
+clean: clean_shared clean_static clean_header clean_veda clean_libext_shared clean_libext_static
+
 clean_shared: clean_header
 	@$(TEST) ! -f $(THIS_SHAREDLIB) || $(RM) $(THIS_SHAREDLIB)
+
 clean_static: clean_header
-	@$(TEST) ! -f $(THIS_STATICLIB) || $(RM) $(THIS_STATICLIB)
+	@$(TEST) ! -f $(THIS_STATICLIB) || $(RM)  $(THIS_STATICLIB)
+
 clean_header:
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER)     || $(RM) $(SYSINCDIR)/$(THIS_HEADER)
 	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 	@$(TEST) ! -f $(SYS_PROGRAMMING_LANGUAGE_HEADER) || $(RM) $(SYSINCDIR)/$(SYS_PROGRAMMING_LANGUAGE_HEADER)
 	@$(TEST) ! -f $(SYS_PROGRAMMING_LANGUAGE_EXT_HEADER) || $(RM) $(SYS_PROGRAMMING_LANGUAGE_EXT_HEADER)
+
+clean_libext_shared: clean_libext_header
+	@$(TEST) ! -f $(SYS_LIBEXT) || $(RM) $(SYS_LIBEXT)
+
+clean_libext_static: clean_libext_header
+	@$(TEST) ! -f $(SYS_LIBEXT_STATIC) || $(RM) $(SYS_LIBEXT_STATIC)
+
+clean_libext_header:
+	@$(TEST) ! -f $(SYSINCDIR)/$(THIS_HEADER_EXT) || $(RM) $(SYSINCDIR)/$(THIS_HEADER_EXT)
 
 #----------------------------------------------------------#
 
@@ -216,22 +233,14 @@ HAS_JSON := 0
 
 APPFLAGS  :=
 
-REQOBJS    =  libved+.c lib/tinyexpr/tinyexpr.c
-
-ifneq ($(HAS_JSON), 0)
-  REQOBJS += lib/json/json.c
-  LIBEXT_OBJS += lib/json/json.c
-endif
+REQOBJS   :=
 
 PROGRAMMING_LANGUAGE_SHARED_FLAGS :=
 PROGRAMMING_LANGUAGE_STATIC_FLAGS := "ENABLE_HTTP=0"
 
 ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
   APPFLAGS += -DHAS_PROGRAMMING_LANGUAGE
-  LIBEXT_OBJS  += $(PROGRAMMING_LANGUAGE_DIR)/led.c
   LIBEXT_FLAGS += -DHAS_PROGRAMMING_LANGUAGE
-
-  REQOBJS  += $(PROGRAMMING_LANGUAGE_DIR)/led.c
 
   REQ_SHARED_LIBS = $(PROGRAMMING_LANGUAGE_NAME)-shared
   REQ_STATIC_LIBS = $(PROGRAMMING_LANGUAGE_NAME)-static
@@ -245,7 +254,7 @@ ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
 endif
 
 APPFLAGS += $(REQOBJS)
-APPFLAGS += -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(THIS_LIBNAME)
+APPFLAGS += -I$(SYSINCDIR) -L$(SYSLIBDIR) -l$(EXTNAME) -l$(THIS_LIBNAME)
 
 # This is to set specific order, needed by the linker in the static target
 # as it has to be after the required objects but before -lm (if present)
@@ -255,6 +264,7 @@ ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
 endif
 
 APPFLAGS += -lm
+LIBEXT_FLAGS += -lm
 
 ifeq ($(SYSKERNEL), "Darwin")
   APPFLAGS += -lutil
@@ -331,7 +341,7 @@ spell-dictionary:
 	@$(CP) $(DATADIR)/spell/spell.txt $(SYSDATADIR)/spell
 	@$(CP) $(DATADIR)/spell/Readme    $(SYSDATADIR)/spell
 
-veda-shared: shared $(REQ_SHARED_LIBS) $(SYSEDSHARED) spell-dictionary
+veda-shared: shared shared-libext $(REQ_SHARED_LIBS) $(SYSEDSHARED) spell-dictionary
 
 $(SYSEDSHARED):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(SHARED_APP_FLAGS) -o $(EDSHARED)
@@ -341,7 +351,7 @@ $(SYSEDSHARED):
 	@$(PRINTF) "LD_LIBRARY_PATH=$(SYSLIBDIR) $(SYSEDSHARED) \"\$$@\"\n" >> $(SYSEDSHAREDSH)
 	@$(CHMOD_X) $(SYSEDSHAREDSH)
 
-veda-static: static $(REQ_STATIC_LIBS) $(SYSEDSTATIC) spell-dictionary
+veda-static: static static-libext $(REQ_STATIC_LIBS) $(SYSEDSTATIC) spell-dictionary
 $(SYSEDSTATIC):
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) $(STATIC_CFLAGS) -o $(EDSTATIC)
 	@$(INSTALL) -v $(EDSTATIC) $(SYSBINDIR)

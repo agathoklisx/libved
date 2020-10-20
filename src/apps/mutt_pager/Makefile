@@ -76,7 +76,7 @@ SYSAPPSHARED := $(SYSBINDIR)/$(APPSHARED)
 SYSAPPSTATIC := $(SYSBINDIR)/$(APPSTATIC)
 
 #----------------------------------------------------------#
-REQOBJS   =   $(LIBVED_SRCDIR)/libved+.c $(LIBVED_SRCDIR)/lib/tinyexpr/tinyexpr.c
+REQOBJS   =
 
 APPFLAGS :=
 
@@ -89,15 +89,10 @@ PROGRAMMING_LANGUAGE_DIR  = $(LIBVED_SRCDIR)/lib/$(PROGRAMMING_LANGUAGE_NAME)
 
 ifneq ($(HAS_PROGRAMMING_LANGUAGE), 0)
   APPFLAGS += -DHAS_PROGRAMMING_LANGUAGE
-  REQOBJS  += $(PROGRAMMING_LANGUAGE_DIR)/$(PROGRAMMING_LANGUAGE_EXT_NAME).c
-endif
-
-ifneq ($(HAS_JSON), 0)
-  REQOBJS += $(LIBVED_SRCDIR)/lib/json/json.c
 endif
 
 APPFLAGS  +=   $(REQOBJS)
-APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved -lm
+APPFLAGS  +=  -I$(SYSINCDIR) -L$(SYSLIBDIR) -lved+ -lved -lm
 
 # This is to set specific order, needed by the linker in the static target
 # as it has to be after the required objects but before -lm (if present)
