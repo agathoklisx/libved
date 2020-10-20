@@ -1373,203 +1373,28 @@ Search:
   The underlying code uses an object oriented style, though it is just for practical
   reasons as permits mostly code organization, simplicity, abstraction, compactness,
   relationship, and especially quite a lot of freedom to develop new or overridde the
-  existing functionality.
-    A generic comment:
-      But the main advantage of this approach is that there is no global state;
-      the functions act on an instance of a type, or if not, simple their scope
-      is narrow to a specific job that can not change state to the environment.
+  existing functionality. The main advantage of this approach is that 
+  there is no global state; the functions act on an instance of a type, or if not,
+  simple their scope is narrow to a specific job that can not change state to
+  the environment.
+  In this whole library, there is neither one out of function scope variable.
 
-      In this whole library, there is neither one out of function scope variable.
-      In the sample application is one (as it is required by the signal handlers).
+  In the extended library there is one, because there are two signal handlers
+  are installed there, and there has to a way to access the environment.
 
-      In short, a compact, unified and controlled environment, under a root structure,
-      with functions that act on an own and known type or|and expected and sanitized
-      arguments, within a well defined (with limits) scope.
+  Coding Style:
+  Easy.
+    - every little everything is separated with a space, except in some cases on
+      array indexing
 
-      The heavy duty seems to be at the entry points or|and to the communication ports,
-      that check and sanitize external data, or|and interfere with the outer environment.
-      But afterwards, it looks that is just a matter of time, to catch the conditions
-      that can be met and those logically have an end.
-      A comment about C.
-        This is a great advantage for the C language, because the code is not going
-        to ever change to adapt a new version; unless is a code mistake, that a new
-        compiler uncovered, but correct code is going to work forever.
+    - two spaces for indentation
 
-      This could also speed up execution time (by avoiding un-needed checks of a data
-      that is known for certain that is valid, because, either it is produced (usually)
-      by the self/own, or has already been checked, by previous users in the toolchain
-      stack.
-      But the main benefit, is that it brings clarity to the code and concentration
-      to the actual details. However that it could also be considered as a functional
-      environment (with the no-side-effect meaning) or as an algorithm environment.
+    - the opening brace is on the same line with the (usually) conditional expression
 
-      It could be a wise future path for C, if it will concentrate just to implement
-      algorithms or standard interfaces.
+    - the closed brace is on the same byte index of the first letter of the block
 
-  Structure Details:
-  A buffer instance is a child of a window instance and is responsible to manipulate
-  a double linked list that hold the contents. The structure has references to the
-  next and previous buffer (if any), to the window instance where belongs (parent)
-  and to the editor instance where it's parent belongs (an editor instance).
-
-  A window instance is a child of an editor instance and is responsible to manipulate
-  a double linked list that holds the buffers. That means holds the number of buffer
-  instances and the current buffer, and has methods to create/delete/change/position
-  those buffers. It has also references to the next and previous window (if any) and
-  to it's parent (the editor instance where belongs).
-
-  An editor instance is a child of the root instance and is responsible to manipulate
-  a double linked list that hold the windows. That means holds the number of window
-  instances and has methods to create/delete/change those windows.
-
-  A root instance of the root class "Ed" provides two public functions to initialize
-  and deinitialize the library. It has methods that manipulates editor instances with
-  a similar way that others do. It has one reference that holds an instance  of the
-  class "ed", that is being used as a prototype that all the other editor instances
-  inherit methods or|and some of it's properties (like the term property, which should
-  be one).
-  This "ed" instance initialize all the required structures (like String, Cstring,
-  Ustring, Term, Video, File, Path, Re, ...), but also the basic three classes.
-
-  Since those three basic ones have references to it's other, that means everyone
-  can use the others and all the domain specific sub-structures.
-
-  The macro Class.method (...) works uniform, as long there is a pointer which
-  is declared as: [buf_t|win_t|ed_t] *this.
-
-  Only one "this", can exist in a function, either when is declared in the body of
-  the function or usually as the first function argument.
-
-  The "this" pointer can also provide easy access to it's type properties, by using
-  the $my([property]) macro.
-
-  Also the self([method]) macro can call any other method of it's class as:
-  self(method, [...]).
-
-  But also with "this", anyone can have direct access to any of it's parent or the
-  parent of it's parent, by using the $myparents([property]) or $myroots([property])
-  macros (where this has a meaning).
-
-  However the above is mostly true only for the buf_t type since is this type that
-  usually is doing the actual underlying job throughout the library. The other two
-  they are actually present for the interface and do not get involved to it's other
-  buisness. The actual editor code would be much less, if it wasn't for the interface
-  which should be practical anyway.
-
-  Note that an editor instance can have multiply buffers of the same filename, but
-  only one (the first opened) is writable.
-
-  The actual manipulation, even if they are for rows, or for buffers or for windows
-  or for editor instances, is done through a double linked list (with a head, a tail
-  and a current pointer).
-
-  This might be not the best method as it concerns optimization in cases, but is by
-  itself enough to simplify the code a lot, but basically allows quick and accurate
-  development and probably better parsing when reading the code (as it is based on
-  the intentions) and makes the code looks the same wherever is being used.
-
-  But and many other of the algorithms are based on those list type macros or similar
-  macros which act on structures that do not have a tail or a current pointer (like
-  stack operations like push/pop).
-
-  Speaking for the current pointer, this can act (at the minimum) as an iterator;
-  but (for instance) can speed a lot of the buffer operations, even in huge files
-  where jumping around lines is simple arithmetic and so might bring some balance
-  since a linked list might not be the best type for it's job. But insertion and
-  deletion is superior to most of other containers.
-
-  C:
-  This compiles to C11 for two reasons:
-    - the fvisibility flags that turns out the defaults, a global scope object
-      needs en explicit declaration
-    - the statement expressions that allow, local scope code with access to the
-      function scope, to return a value; also very useful in macro definitions
-
-  The following macros are being used.
-
-  #define ifnot(__expr__) if (0 == (__expr__))
-  clearly for clarity; also same semantics with SLang's ifnot
-
-  #define loop(__num__) for (int $i = 0; $i < (__num__); $i++)
-  likewise for both reasons; here also the $i variable can be used inside the
-  block, though it will violate the semantics (if the variable change state),
-  which is: "loop for `nth' times" and this how is being used in the codebase.
-  Anyway this loop macro is being used in a lot of repositories.
-
-  Also purely for linguistic and expressional reasons the followings:
-
-  #define is    ==
-  #define isnot !=
-  #define and   &&
-  #define or    ||
-  again, those they being used by others too, see for instance the Cello project
-  at github/orangeduck/Cello.
-
-  And for plain purism, the following.
-  #define bytelen strlen
-  SLang also implements strbytelen(), while strlen() returns character length
-  I guess the most precise is bytelen() and charlen() in the utf8 era.
-
-  Defined but not being used, though i could happily use it if it was enforced
-  by a standard.
-  #define forever for (;;)
-
-  C idiom:
-  The inner code it uses a couple of macros to ease the development, like:
-
-   self(method, [arg,...])
-
-  This awaits an accessible "this" declared variable and it passes the specific
-  type as the first argument to the calling function.
-
-  In this context "this" is an abstracted variable and works with objects with
-  specific fields. Types like these, have a "prop" field that holds object's
-  variables and as well a "self" dedicated field for methods (function pointers
-  that their function signature contains "this" type as their first argument).
-
-  The properties of such types are accessible with the following way:
-
-  $my(prop)
-
-  Calling a Class method:
-
-  Class.method ([...])
-
-  Note that in this case "Class" doesn't pass any argument[s] to the calling method,
-  so any argument[s] should be given explicitly.
-
-  Generally speaking, those macros, are just syntactic sugar, no code optimization,
-  or the opposite, neither a single bit of penalty. It allows mainly expressionism
-  and focus to the intentions.
-
-  In that spirit, also available are macros, that their sole role is to abstract
-  the details over type creation/declaration/allocation, that assists to quick
-  development.
-  The significant ones: AllocType, NewType, DeclareType. The first argument on those
-  macros is the type name but without the _t extension, which is the actual type.
-
-  Finally, a couple of macros that access the root editor type or the parent's
-  (win structure) type. Either of these three main structures have access (with one
-  way or the other) to all the fields of the root structure, so all the above macros
-  works everywhere the same, if there is a proper declared "this" with proper fields.
-
-  The underlying properties of the types are accesible through [gs]etters as none of
-  the types exposes their data.
-
-  Memory Interface:
-  The library uses the reallocarray() from OpenBSD (a calloc wrapper that catches
-  integer overflows), and it exposes a public mutable handler function that is
-  invoked on such overflows or when there is not enough memory available errors.
-
-  This function is meant to be set by the user of the library, on the application
-  side and scope. The provided one exits the program with a detailed message.
-  I do not know the results however, if this function could wait for an answer
-  before exits, as (theoretically) the user could free resources, and return for
-  a retry. The function signature should change to account for that.
-
-  The code defines two those memory wrappers.
-    Alloc (size) and Realloc (object, size).
-  Both like their counterparts, they return void *.
+    - the code (and if the compiler permits) do not use braces on conditional branches
+      when there is single statement on the block
 
   LICENSE:
   I wish we could do without LICENSES. In my world it is natural to give credits
@@ -1588,94 +1413,7 @@ Search:
   we (humans) full of the gained conscience, can guard it and keep it safe, as it
   is also (besides ideology) the road to paradise.
 
-  Anyway.
-  Since it seems there is no other way, other than to specify a license to avoid
-  stupid, stupid troubles, is licensed under GPL2, but my mind still refuces and
-  with a huge right, to accept this word (at least in this domain and at this time
-  of time (2019)). There is no virginity here and actually (almost) never was, so
-  the code even if it is ours, has a lot of influences of others, as we are just
-  another link in the chain, and this is wonderfull. Also we!!! are oweing to the
-  environment - our mother, our grandpa, our friends and enemies, our heroes, our
-  neighbors, the people we met and we never really met them, the butterflies, the
-  frogs, a nice song or a terrible sound, an admirable work, or a chain of words,
-  and especially the randomness - so who actually owe the copyrights?
-
-  So it is GPL2.
-
-  Now.
-  The work that someone put in a project, should be respected and should be mentioned
-  without any second thought and with pleasure, as it is the marrow of the world,
-  and it is so nice to be part of a continuation, both as receiver or as a producer.
-
-  Coding Style:
-  Easy.
-    - every little everything is separated with a space, except in some cases on
-      array indexing
-
-    - two spaces for indentation
-
-    - the opening brace is on the same line with the (usually) conditional expression
-
-    - the closed brace is on the same byte index of the first letter of the block
-
-    - the code (and if the compiler permits) do not use braces on conditional branches
-      when there is single statement on the block
-
-  NOTE:
-  This code it contains quite a lot of idiomatic C and (probably) in many cases it
-  might do the wrong thing. It is written by a non programmer, that taughts himself
-  C at his fifty two, and it is focused on the code intentionality (if such a word).
-
-  TO DO:
-  Seriously! Please do not use this on sensitive documents. There are many conditions
-  that i know and for certain quite many that i don't know, that they might need to
-  be handled.
-  The bad thing here is that there is a workflow and in that workflow range i fix
-  things or develop things. But for sure there are conditions or combinations of them
-  out of this workflow.
-
-  But Really. The real interest is to use this code as the underline machine to
-  create another machine. Of course can have some value as a reference, if there is
-  something with a value to deserve that reference.
-
-  But it would also be nice (besides to fix bugs) if i could reserve sometime to fix
-  the tabwidth stuff, which is something i do not have the slightest will to do,
-  because i hate tabs in code (nothing is perfect in this life)- a tab in my humble
-  opinion it should be used in the cases where is significant, as a delimiter, or
-  in the Makefile's; the way it is being used by the coders is an abuse (imho).
-  So, i'd rather give my time (with low priority though) to split those two different
-  concepts (though I should fix this thing!!!
-
-    [update: and should be fixed, as from
-    the first (hard physical and mentally) days of September of 2019).
-
-    [update at Mon 20 Jul 2020] do not trust much the above statement (some glitches
-    exist under certain conditions with tabs in the current line).
-
-  My wish before some time is to work in the tiny abstraction level that will offer
-  the basic functionality of an editor:
-
-    - inserting/deleting lines (this should meet or extend ed specifications)
-    - line operations where line as:
-      An array of characters that provide information or methods about the actual num
-      bytes used to consist each character, the utf8 representation and the width of
-      that character.
-      Line operations: inserting/deleting/replacing..., based on that type.
-    - /undo/redo
-
-  Basically the ed interface, which at the beginning coexisted with the visual one
-  (at some point too much code were written at once, and the abstraction level wans't
-   enough capable to handle both interfaces, so i had to move on).
-  But it is a much much much simpler editor to implement, since there is absolutely
-  no need to handle the output or|and to set the pointer to the exact right line at
-  the current column, pointing to the right byte index of the edited byte[s] (it is
-  very natural such an interface to over complicate the code and such code to have
-  then bugs).
-
-  From my humble experience and IMHO, the worst bug that can happen in an editor is
-  to give the false interpretation of the pointer position, so the user actually edit
-  something else than what he thinks he edit.
-
+  Anyway. It is GPL2.
 
   Acknowledgments, references and inspiration (besides the already mentioned):
 
@@ -1706,87 +1444,6 @@ Search:
   - numerous stackoverflow posts
   - numerous codebases from the open source enormous pool
 
-  My opinion on this editor:
-  It is assumed of course, that this product is not meant for wide production use;
-  but even if it was, it is far far faaaar away to the completion, but is an editor
-  which implements at least the basic operation set that can be considered enough
-  to be productive, which runs really low in memory resources and with rather few
-  lines of code. Theoretically (assuming the code is good enough) it could be used
-  in situations (such primitive environments), since is independent and that is a
-  very interesting point.
-
-  And this (probably) is the reason for the persistence to self sufficiency.
-  The other (probably again and by digging around the mind) is about some beliefs
-  about the language and its ecosystem.
-
-  But first, there isn't such a thing as self sufficiency!
-
-  Today our dependency, our libc environment, is more like a collection of individual
-  functions, which their (usually tiny) body is mainly just algorithms (and so and
-  machine code as this is a property of C), with few (or usually without) conditional
-  branches.
-
-  However those functions and for a reason, are unaware for anything out of their
-  own domain. They have no relationship between their (lets group), as they do not
-  even have a sense that belong to a group, such: "I am a string type function!
-  (and what is a string anyway?)".
-
-  But first, libc'es are not thin at all. It would be great if you could just cherry pick
-  (specific functionality) from this pool but without to carry all the weight of the
-  pool. So it could be easy to build an own independent pool of functions with a way
-  (something like the Linux kernel or gnu-lib projects do).
-
-  It could be great if the programmer could extract the specific code and hook it to
-  his program, so it could optimize it for the specific environment.
-  As an example:
-  At the beginning this program implemented the strdup() function with the standard
-  signature, having as "const char *src" as the only argument. Since this function
-  it returns an allocated string, it should iterate over the "src" string to find its
-  length. At some point i realized that in the 9/10 of the cases, the size was already
-  known, so the extra call to strlen() it was overhead for no reason. So i changed the
-  signature and added a "size_t len" argument. In this application the str_dup() is
-  one of the most called functions. So this extra argument was a huge and for free
-  and with total safety optimization. And from understanding, C is about:
-
-    - freedom
-    - flexibility and
-    - ... optimization
-
-  But how about a little more complex task, like an input functionality.
-  It goes like this:
-  save terminal state - raw mode - get key - return the key - reset term
-
-  All well except the get key () function. What it will return? An ascii code in
-  UTF-8 era is usually useless. You want a signed int (if i'm not wrong).
-  So there is no other way, when the first byte indicates a byte sequence, than
-  to deal with it, into the getkey() scope. So you probably need an UTF-8 library.
-  But in reality is 10/20 lines of code, for example see:
-  term_get_input (term_t *this)
-  (which is going to be published as a separate project, if time permits).
-
-  It should return reliably the code for all the keyboard keys for all the known
-  terminals.
-  But this is easy, because is one time job and boring testing, or simply usage from
-  different users on different terminals.
-  The above mentioned function, it looks that it deals well with xterm/linux/urxvt
-  and st from suckless terminals, in 110 lines of code reserved for this.
-
-  This specific example is an example of a function that is written once and works
-  forever, without a single change. But it is a function with a broader meaning (the
-  functionality), but nevertheless a function. And surely can belong to a standard
-  libc, with the logic sense as it makes sense, even if it is rather an interface
-  (because it is not a standalone function).
-  So point two: libc'es can broad a bit their scope, if C wants to have an evolution
-  and a endless future as it deserves.
-  It's like forkpty() which wraps perfect the details of three different functions.
-  I guess what i'm really talking about is a bit more synthetic than forkpty().
-
-  And it would be even greater if you could easily request a collection, that use
-  each other properties, to build a task, like an editor. As standard algrorithm!
-  I could [fore]see used a lot. This particular is a prototype and not yet ready,
-  but this is the idea and is a general one and it seems that it could be useful
-  for all; they just have to connect to C and use these algorithms.
-
 αγαθοκλής
 
   Grant Finale:
@@ -1796,34 +1453,10 @@ Search:
 
   Well, i might die! And this is a proof of logic.
 
-  Seriously,
-
-  This aims at some point in time to be used as an educational tool to
-  describe the procedure to write an editor in a UNIX like environment,
-  to anser some "why's". To this matter this code qualifies and explains
-  quite a lots of "why's". To do this best, the code should adjust to a
-  more humanish way. And one day, if all go well, i will flood this code
-  with human expressions. And guess this is for free in C.
-
-  As this is for humans that have the desire, but they do need sources.
-  As this is for humans that live in strictly environments without tools,
-  though they have the desire. As this is for humans that understand that
-  the desire is by itself enough to walk the path of learning and creating.
-  And with a little bit help of our friends.
-
-  CONCENTRATION:
-  Clearly this was designed from C for C with C to C (or close to C anyway,
-  though not As Is C: maybe even an even more spartan C (in obvious places:
-  where discipline should be practiced with obvious expectations, from both
-  sides (programmer - compiler)), but with a concentration to expressionism
-  (i could put it even fairlier and|or even a bit voicly (if it was allowed)
-  a "tremendous concentration" to expressionism (as an uncontrollable desire
-  ))). I mean that was the thought.
-
-  THE FAR AWAY FUTURE:
-    - Self Sufficiency, so to be the easiest thing ever to integrate
-
-    - Underlying Machine, so enough capabilities and easy to use them
+  NOTE:
+  This code it contains quite a lot of idiomatic C and (probably) in many cases it
+  might do the wrong thing. It is written by a non programmer, that taughts himself
+  C at his fifty two, and it is focused on the code intentionality (if such a word).
 
   ERRORS - WARNINGS - BUGS:
     Compilation:
@@ -1842,202 +1475,21 @@ Search:
 
   [update: Last days of December 2019: The above is not quite correct. The static
   targets can produce (like in one case with getaddrinfo()) segfaults.
-  So probably (they are not trustable). Plus they are not flexible (though there
-  is a noticeable difference in memory usage that is reported by htop(1) and an
-  unoticable (almost) better performance). So i lost a bit the desire to put the
-  mind to think much of this case when developing.
-
-  This is where things could be improved a bit.
-
-  I do not how but C has to be settle and offer a couple of warrantee's for common
-  requests like a string reprecentation of a double.
-  I do not use double and such code i will never write probably, but for this i've
-  read "today" in zsh mailing list a thread, with people (that are experts in that
-  domain) and they found that there is no an established standard way.
-  I guess is not totally C faults here, ar they are different approaches and languages
-  are free to do whatever they like.
-
-  C++17 added a to_chars() function to handle that case for good.
-
-  So those are small but quite important cases that the mind should think about.
-
-  But the flow is quite important for the programming mind when expressing (probably
-  much of the buggish code was written in some of those times that the syncronization
-  with the mind and with the actual code is lost).
-
-  So yes, coders do not have to be penaltized about conditions that do not have real
-  relation with the actual code, but has to do with details such (for C): is size_t
-  enough suitable? Some argue for ptrdiff_t instead, as it helps the compiler to
-  detect overflows as size_t is unsigned and ssize_t could be not as big as size_t,
-  plus ssize_t (not sure though) is not standard.
-
-  Probably some things should be really settled for good now at the next revision.
-
-  I realize that the knowledge of how the machine works, it is a property of C and
-  where C shines (like the golden peak of the Macha-Puchare mountain in a glorious
-  morning in a bathe of light).
-
-  But in anycase there quite many of cases that, still today (in 2019?), fail in
-  the quite big bucket of undefined behaviors, which is what make people to say
-  that C is unsafe, but and other common in 2019 expectations.
-
-  So as a resume, i think that shared targets release a burden when developing or
-  the code should handle with #ifdef the case for static targets and exclude code,
-  thus loosing functionality. This is both ugly and it can still have unpredictable
-  results if there is no care or prior experience. If you don't do that, then you
-  still need the same shared libraries that been used during compilation. But then
-  you loose the basic advantage of static targets, which is portability, as it is
-  supposed indepentable. Unless i'm missing something obvious or the message from
-  the linker is misleading.
 
   But the main disadvantage is (at least when developing) that you can't use quite
   important tools for C, like valgrind, which do not work with static executables.
-  If C was created now, valgrind's functionality should definitely considered to
-  be (somehow) a built in the language, or at least to the compiler as a special
-  mode.
 
-    C strings:
+  C strings:
   All the generated strings in the library for the library, are and should be '\0'
   terminated, else is an error.
 
   Cast'ing from size_t -> int (needs handling)
 
-    API:
-    Functions:
-  Many of the exposed functions are not safe, especially those for C strings. They
-  most made for internal usage, that the data is controlled by the itself code, but
-  were made also exposable. But normally, if it wasn't for the extra verbosity, they
-  should be post-fixed with an "_un" to denote this unsafety.
+  The mark code has a bug that is revealed in a combination with undo.
+  I can not reproduce it though.
 
-  Also it has to be realized, that the intentions to use internal functions that have
-  similar functionality with standard libc functions, are not obviously the speed (
-  which can not be compared with the optimized functions from libc (here we have to
-  deal with mostly small strings, that the difference in execution time, perhaps is
-  negligible though)), but:
-
-    - flexibility, as we can tune, by avoiding un-needed checks (since we are making
-      these strings, and if we don't make them well, then it is our fault, in any case
-      wrong composed strings will fail even in libc functions), and even change the
-      signature of the function. Because of this flexibility, then actually we can
-      even have a gain in speed, because the conditional checks might be the biggest
-      bottleneck actually in the language (perhaps)).
-
-    - self-sufficiency and minimizing of dependencies. I hate to say that, but libces
-      are huge beasts for primitive environments. And I even hate to say that, because
-      i do not believe in self-sufficiency or anyway self-sufficiency is an utopic
-      dream (very nice to believe) and even much more nice to exercise and hunt for
-      it like super crazy, but this seems that the route should be the exact opposite.
-      Collaboration. But really i do! Many small projects, that trying to assist with
-      a smart, generous, practical, simple, easy, suckless, sane/logical way, are already
-      have been incorporated in this project, and many others will follow, if we'll
-      be blessed with time and motivation (both hard, as we are walking by default
-      in a huge unbeliavable high bridge (like the ones made with rope, over the huge
-      rivers, on the holy Macha-Puchare mountain on the glorius Annapurna), so we're
-      in a so fragile situation, that in a glance of an eye, the time will out, and
-      secondly, and i'm positive, that the universe plays very strange games with us).
-
-          As a duty to next humans to come.
-          Really there is not so much to tell them, than probably something like this:
-
-          "Look around". "It is You and the Outside of You". "You own a planet.
-          Noone else lives in that planet but you."
-
-          "See around. This is the world. What you see is Uniq. No one else can see
-          the world from this angle. The only thing that is impossible to ever see,
-          is only You. The best thing you can do about this is to see yourself through
-          a mirror. So it is You and Your Mirror and the world."
-
-          "You are just the Human Being in that world. A link in this chain, equally
-          important like all the others.
-          Your planet is important. You really want the best for this planet as You
-          are the keeper for this planet. You really want to have total control over
-          the environment of your planet, you really want your planet healthy.
-
-          We want the same.
-
-          And it is wise and really smart for You, to feel the same for Us. As the
-          outside of You is equally important with You. Though the You - and this
-          by default - will always prioritize the self, usually without even the
-          self realize it..., it is this magnificent undescribable structure
-          that is the real treasure (and this is for you and this is for me
-          and this is for all); so this is also (total) equally important with
-          You.
-
-          And it is unthinkable important. As this might? is a way to an eternal -
-            (where eternal here might translated accurately as "aenaos - αέναος",
-             something that has no start as no end in time, it is just this) -
-          evolve, so the way to self evolution with no real END defined - even if
-          there was a scratch in time, which probably was and probably is wise to
-          research this scratch as it might be reproducible. But how this works?
-          Probably by just building bridges (like the spiders build their webs).
-          Probably just because there is this capability, perhaps it is the only
-          required capability. So probably there is a right when we say that the
-          Will builds the required chains, by just using the mechanism, which is
-          probably free (as free beer here mostly, ... probably).
-
-          So is this web of bridges to each other planets that matters for our ash.
-          Because we are alone. As even the paradise is a hell when you are alone."
-
-          "It is Your Time to participate. You got this ticket. Do not wait any other
-          ticket like this one. This is THE ticket. You breath for real. You are in
-          the game. This is your chance you was hoping for. We are trying again and
-          again, hoping that this time we will understand and we will complete the
-          mission for the final gift."
-
-          "So you are just a human being, an exceptional miracle.
-          Noone will live for you and it is stupid to let others to live for you.
-          And probably you do not want to live through others too. Breath Now!"
-
-          Dedicated to the human beings around the Mimbren river, where the self
-          sufficiency was a build in their kernel. Especially to their PaPa, to
-          Mangas Coloradas.
-
-    - educational, documentation and understanding, as this is a serious personal
-      motivation for programming in general, but especially programming in C.
-
-  THANKS:
-  We all have to thank each other for their work to open/free source way of thinking
-  and life.
-
-  Specifically, we all first owe to our stubborn hero Richard (time will give us all
-  the place we actually deserve and rms will have a glory place).
-
-  At the end, we owe all to each other for this perfect __ professionalism __.
-
-  To huge projects like our (G)reat Libc that we owe so much (we just want it a bit
-  more flexible and adjust to current environments (current great times that we live
-  and comming - difficult times, damn interesting but strange, damn strange. To be
-  fair, really really damn strange)).
-
-  But also to all these tiny projects. All those simple humble commands that helped
-  us when we need it, as someone generously offered his time, and offered his code
-  as he opened her heart or he opened her mind, doesn't really matter here, and he
-  contributed it to the community. All these uncountable tiny projects!
-
-  Or geniously code like Lua or crazy one like this by Fabrice of tcc, or beautiful
-  code like Ruby. Or complicated that carry also the heaviest responsibility, like
-  our Kernel, or blessed tools like our Compiler. Or even a better C like zig.
-  Or tools that wrote all that code, like our editor.
-  You know the one that has modes! Okey the one of the two editors!
-
-  But and also to those who offered portions of code, that helped the community to
-  create excellent products, that even the richest people on earth with all the money
-  of the earth can not do.
-
-  And we all know the reasons why.
-
-  Of course first is this fachinating and proud way to evolution that attract us.
-  But at the end is that, we really like to do what we do; assisting to our mailing
-  lists or writing documentation or managing the infrastructure or writing code.
-
-  Yea i believe this is love and a very very veeeery (really very) smart way to live
-  and breath in peace and to feel free, even if you know that you live in a fjail,
-      (what you can wait from a world, where our best method to move, our best move
-       with our body, where our body it is in its best, it is the only one that we
-       can not do it in public - it is absolutely crazy if you think about it),
-  that is almost mission impossible to escape. But people did it, so there is a way.
-  And if there is a way, we have to found it and describe it.
-  So have a good research, as we go back (or forth anyway) to our only duty, which
-  it is the way to our Re-Evolution.
+  The usual workflow is editing C sources files though, and in this
+  workflow, i do not have in mind other bug than this, but there cases
+  (like when editing lines with tabs, or when writing multibyte characters at the end of the line).
   */
 ```
