@@ -3,7 +3,7 @@ THIS_LIBNAME := ved
 EDNAME       := veda
 
 API := 0
-REV := 2
+REV := 3
 
 # macOS doesn't have realpath by default (available through coreutils)
 # THISDIR := $(shell realpath .)
