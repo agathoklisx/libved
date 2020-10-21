@@ -12391,16 +12391,18 @@ private int buf_write (buf_t *this, int force) {
           "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
       switch (c) {case 'n': case 'N': return NOTHING_TODO;};
     } else {
-#if defined(__MACH__)
-      if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec) {
-#else
-      if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec) {
-#endif
-        utf8 chars[] = {'y', 'Y', 'n', 'N'};
-        utf8 c = buf_quest (this, STR_FMT (
-            "[Warning]%s: has been modified since last operation\n"
-            "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
-        switch (c) {case 'n': case 'N': return NOTHING_TODO;};
+      if (2 isnot force) {
+  #if defined(__MACH__)
+        if ($my(st).st_mtimespec.tv_sec isnot st.st_mtimespec.tv_sec) {
+  #else
+        if ($my(st).st_mtim.tv_sec isnot st.st_mtim.tv_sec) {
+  #endif
+          utf8 chars[] = {'y', 'Y', 'n', 'N'};
+          utf8 c = buf_quest (this, STR_FMT (
+              "[Warning]%s: has been modified since last operation\n"
+              "continue writing? [yY|nN]", $my(fname)), chars, ARRLEN (chars));
+          switch (c) {case 'n': case 'N': return NOTHING_TODO;};
+        }
       }
     }
   }
@@ -13786,6 +13788,8 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_WIN_CHANGE_PREV_ALIAS] = "wp",
     [VED_COM_WRITE_FORCE] = "write!",
     [VED_COM_WRITE_FORCE_ALIAS] = "w!",
+    [VED_COM_WRITE_FORCE_FORCE] = "write!!",
+    [VED_COM_WRITE_FORCE_FORCE_ALIAS] = "w!!",
     [VED_COM_WRITE] = "write",
     [VED_COM_WRITE_ALIAS] = "w",
     [VED_COM_WRITE_QUIT_FORCE] = "wq!",
@@ -15037,12 +15041,22 @@ exec:
     if (retval isnot RLINE_NO_COMMAND) goto theend;
   }
 
+redo:
   switch (rl->com) {
     case VED_COM_WRITE_FORCE_ALIAS:
-      rl->com = VED_COM_WRITE_FORCE; //__fallthrough__;
+      rl->com = VED_COM_WRITE_FORCE;
+      goto redo;
+
+    case VED_COM_WRITE_FORCE_FORCE_ALIAS:
+      rl->com = VED_COM_WRITE_FORCE_FORCE;
+      goto redo;
+
+    case VED_COM_WRITE_ALIAS:
+      rl->com = VED_COM_WRITE;
+
+    case VED_COM_WRITE_FORCE_FORCE:
     case VED_COM_WRITE_FORCE:
     case VED_COM_WRITE:
-    case VED_COM_WRITE_ALIAS:
       if ($my(enable_writing)) {
         arg_t *fname = Rline.get.arg (rl, RL_ARG_FILENAME);
         arg_t *range = Rline.get.arg (rl, RL_ARG_RANGE);
@@ -15050,7 +15064,9 @@ exec:
         if (NULL is fname) {
           if (is_special_win) goto theend;
           if (NULL isnot range or NULL isnot append) goto theend;
-          retval = self(write, VED_COM_WRITE_FORCE is rl->com);
+          retval = self(write,
+              (rl->com is VED_COM_WRITE ? 0 :
+                (rl->com is VED_COM_WRITE_FORCE ? 1 : 2)));
         } else {
           if (NULL is range) {
             rl->range[0] = 0;

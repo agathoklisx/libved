@@ -63,16 +63,16 @@ interpr: shared-library
 interpr-static: static-library
 	$(CC) $(INTERP_FILES) -l$(NAME) $(INTERP_FLAGS) $(STATIC_FLAGS) -o $(BINDIR)/$(NAME)-static
 
-clean: clean-header clean-shared clean-static
+clean: clean_header clean_shared clean_static
 
-clean-header:
+clean_header:
 	@$(TEST) ! -f $(INCDIR)/$(HEADER)     || $(RM) $(INCDIR)/$(HEADER)
 
-clean-shared:
+clean_shared:
 	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).so || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).so
 	@$(TEST) ! -L $(LIBDIR)/lib$(NAME).so || $(RM) $(LIBDIR)/lib$(NAME).so
 
-clean-static:
+clean_static:
 	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).a || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).a
 	@$(TEST) ! -L $(LIBDIR)/lib$(NAME).a || $(RM) $(LIBDIR)/lib$(NAME).a
 

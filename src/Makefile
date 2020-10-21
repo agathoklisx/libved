@@ -361,18 +361,24 @@ $(SYSEDSTATIC):
 veda-shared-preproc:
 	$(CC) -x c $(THIS_APPSRC) $(APPFLAGS) -E
 
-pl-shared-library: pl-clean $(PROGRAMMING_LANGUAGE_NAME)-shared
+pl-shared-library: clean_pl_shared $(PROGRAMMING_LANGUAGE_NAME)-shared
 
 $(PROGRAMMING_LANGUAGE_NAME)-shared:
 	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) $(PROGRAMMING_LANGUAGE_SHARED_FLAGS) shared-library
 
-pl-static-library: pl-clean $(PROGRAMMING_LANGUAGE_NAME)-static
+pl-static-library: clean_pl_static $(PROGRAMMING_LANGUAGE_NAME)-static
 
 $(PROGRAMMING_LANGUAGE_NAME)-static:
 	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) $(PROGRAMMING_LANGUAGE_STATIC_FLAGS) static-library
 
-pl-clean:
+clean_pl:
 	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) clean
+
+clean_pl_shared:
+	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) clean_shared
+
+clean_pl_static:
+	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) clean_static
 
 pl-interpr:
 	@cd $(PROGRAMMING_LANGUAGE_DIR) && make SYSDIR=$(SYSDIR) ENABLE_REPL=1 interpr

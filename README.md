@@ -701,7 +701,8 @@ Search:
   ! as the last character indicates force, unless is a shell command.
 
   :s[ubstitute] [--range=] --pat=`pat' --sub=`sub' [-i,--interactive] [--global]
-  :w[rite][!] [filename  [--range] [--append]]
+  :w[rite][!] [filename  [--range] [--append]] (when the buffer is modified externally this aborts or raises a question if `force')
+  :w[rite]!!  [filename  [--range] [--append]] (likewise, but write unconditionally)
   :wq[!]                 (write and quit (if force, do not check for modified buffers))
   :e[!] [filename]       (when e!, reread from current buffer filename)
   :enew [filename]       (new buffer on a new window)
@@ -743,17 +744,17 @@ Search:
                           --persistent-layout=[1|0] [en|dis]able persistent editor layout
   :@balanced_check [--range=] (check for unbalanced pair of objects, without `range'
                           whole file is assumed)
-  :@bufbackup             backup file as (dirname(fname)/.basename(fname)`suffix',
+  :@bufbackup             (backup file as (dirname(fname)/.basename(fname)`suffix',
                           but it has to be set first (with :set or with --backupfile),
                           if backupfile exists, it raises a question, same if this is
-                          true at the initialization
-  :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences
+                          true at the initialization)
+  :@validate_utf8 filename (check filename for invalid UTF-8 byte sequences)
   :@save_image [--as=file] (save current layout, that can be used at a next invocation
                             with --load-file=file.i, to restore it,
                             default filename: $SYSDATADIR/images/currentbufname.i)
-  :@edit_image           edit the current process image script (if exists)
-  :q[!] [--global]       quit (if force[!], do not check for modified buffers),
-                              (if --global exit from all running editor instances)
+  :@edit_image            (edit the current process image script (if exists))
+  :q[!] [--global]        (quit (if force[!], do not check for modified buffers),
+                              (if --global exit from all running editor instances))
 
   Application:
   The test application (which simply called veda for: visual editor application),
