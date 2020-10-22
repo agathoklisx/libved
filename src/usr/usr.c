@@ -144,7 +144,7 @@ private void __u_add_file_mode_actions__ (ed_t *this) {
 }
 
 private int __u_lw_mode_cb__ (buf_t **thisp, int fidx, int lidx, Vstring_t *vstr, utf8 c, char *action) {
-  (void) vstr; (void) fidx; (void) lidx; (void) action;
+  (void) thisp; (void) vstr; (void) fidx; (void) lidx; (void) action;
 
   int retval = NO_CALLBACK_FUNCTION;
 

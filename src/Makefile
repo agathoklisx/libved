@@ -105,6 +105,11 @@ ifneq ($(DEBUG), 0)
 endif
 
 #----------------------------------------------------------#
+HAS_PROGRAMMING_LANGUAGE := 0
+HAS_TCC  := 0
+HAS_CURL := 0
+HAS_JSON := 0
+
 LIBOPTS :=
 
 TABWIDTH := 8
@@ -226,11 +231,6 @@ SYSEDSHAREDSH := $(SYSBINDIR)/$(EDNAME)s
 SYSEDSTATICLNK := $(SYSBINDIR)/$(EDNAME)
 
 #----------------------------------------------------------#
-HAS_PROGRAMMING_LANGUAGE := 0
-HAS_TCC  := 0
-HAS_CURL := 0
-HAS_JSON := 0
-
 APPFLAGS  :=
 
 REQOBJS   :=
