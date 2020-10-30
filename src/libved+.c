@@ -787,6 +787,67 @@ theend:
   return retval;
 }
 
+private int sysproc_walk_dir (dirwalk_t *this, char *dir, struct stat *st) {
+  (void) st;
+  char *sp = Path.basename (dir);
+  char *pidpath = sp;
+
+  while (*sp) {
+    if ('0' > *sp or *sp > '9')
+      return 0;
+   sp++;
+  }
+
+  char cmdline_path[PATH_MAX];
+  snprintf (cmdline_path, PATH_MAX, "%s/task/%s/cmdline",
+    dir, pidpath);
+
+  FILE *fp = fopen (cmdline_path, "r");
+  if (NULL is fp) return 0;
+
+  char buf[1024];
+  fgets (buf, 1023, fp);
+  fclose (fp);
+  sysproc_t *proc = (sysproc_t *) this->object;
+
+  if (Cstring.bytes_in_str (buf, proc->pat->bytes)) {
+    proc->retval = 1;
+    proc->pid = atoi (pidpath);
+    return -1;
+  }
+
+  return 0;
+}
+
+private int sysproc_walk_file (dirwalk_t *this, char *file, struct stat *st) {
+  (void) st; (void) file; (void) this;
+  return 0;
+}
+
+private int sys_proc_exists (char *pat, pid_t *pid) {
+  ifnot (Cstring.eq_n ("Linux", Sys.get.env (__SYS__, "sysname")->bytes, 5))
+    return NOTOK;
+
+  size_t len;
+  if (NULL is pat or 0 is (len = bytelen (pat)))
+    return NOTOK;
+
+  sysproc_t *proc = AllocType (sysproc);
+  proc->pat = String.new_with_len (pat, len);
+  proc->pid = -1;
+  proc->retval = -1;
+
+  dirwalk_t *dwalk = Dir.walk.new (sysproc_walk_dir, sysproc_walk_file);
+  dwalk->object = proc;
+  Dir.walk.run (dwalk, "/proc");
+  Dir.walk.free (&dwalk);
+  String.free (proc->pat);
+  int retval = proc->retval;
+  *pid = proc->pid;
+  free (proc);
+  return (retval is -1 ? 0 : 1);
+}
+
 private Class (sys) *__init_sys__ (void) {
   Class (sys) *this = AllocClass (sys);
   $my(env) = AllocType (sysenv);
@@ -812,10 +873,13 @@ private Class (sys) *__init_sys__ (void) {
     .get = SubSelfInit (sys, get,
       .env = sys_get_env
     ),
-    .mkdir = sys_mkdir,
     .man = sys_man,
+    .stat = sys_stat,
+    .mkdir = sys_mkdir,
     .battery_info = sys_battery_info,
-    .stat = sys_stat
+    .proc = SubSelfInit (sys, proc,
+      .exists = sys_proc_exists
+    )
   );
 
    return this;
@@ -1770,16 +1834,40 @@ private void proc_free_argv (proc_t *this) {
   for (int i = 0; i <= $my(argc); i++)
     free ($my(argv)[i]);
   free ($my(argv));
+
+  $my(argv) = NULL;
+  $my(argc) = 0;
 }
 
-private void proc_free (proc_t *this) {
-  ifnot (this) return;
-  proc_free_argv (this);
-  if (NULL isnot $my(stdin_buf))
+private void proc_unset_stdin (proc_t *this) {
+  $my(dup_stdin) = 0;
+
+  ifnot (NULL is $my(stdin_buf))
     free ($my(stdin_buf));
+  $my(stdin_buf) = NULL;
+}
+
+
+private void proc_free (proc_t *this) {
+  if (NULL is this) return;
+
+  proc_free_argv (this);
+  proc_unset_stdin (this);
 
   free (this->prop);
   free (this);
+}
+
+private void proc_set_stdin (proc_t *this, char *buf, size_t size) {
+  if (NULL is this or buf is NULL) return;
+
+  proc_unset_stdin (this);
+
+  $my(dup_stdin) = 1;
+
+  $my(stdin_buf) = Alloc (size + 1);
+  $my(stdin_buf_size) = size;
+  Cstring.cp ($my(stdin_buf), size + 1, buf, size);
 }
 
 private int proc_output_to_stream (buf_t *this, FILE *stream, fp_t *fp) {
@@ -1793,6 +1881,10 @@ private int proc_output_to_stream (buf_t *this, FILE *stream, fp_t *fp) {
   return 0;
 }
 
+private void proc_set_signals_default_cb (proc_t *this) {
+  (void) this;
+}
+
 private proc_t *proc_new (void) {
   proc_t *this= AllocType (proc);
   $myprop = AllocProp (proc);
@@ -1801,20 +1893,24 @@ private proc_t *proc_new (void) {
   $my(dup_stdin) = 0;
   $my(read_stdout) = 0;
   $my(read_stderr) = 0;
-  $my(read) = proc_output_to_stream;
   $my(argc) = 0;
   $my(argv) = NULL;
+  $my(is_bg) = 0;
   $my(reset_term) = 0;
   $my(prompt_atend) = 1;
-  $my(is_bg) = 0;
+  $my(is_session_leader) = 1;
+  $my(read) = proc_output_to_stream;
+  $my(set_signals_cb) = proc_set_signals_default_cb;
   return this;
 }
 
 private int proc_wait (proc_t *this) {
   if (-1 is $my(pid)) return NOTOK;
+
   $my(status) = 0;
   waitpid ($my(pid), &$my(status), 0);
  // waitpid ($my(pid), &$my(status), WNOHANG|WUNTRACED);
+
   if (WIFEXITED ($my(status)))
     $my(retval) = WEXITSTATUS ($my(status));
   else
@@ -1846,6 +1942,8 @@ private int proc_read (proc_t *this) {
 }
 
 private char **proc_parse (proc_t *this, char *com) {
+  proc_free_argv (this);
+
   char *sp = com;
 
   char *tokbeg;
@@ -1956,8 +2054,13 @@ private int proc_open (proc_t *this) {
    */
 
   ifnot ($my(pid)) {
-    setpgid (0, 0);
-    setsid ();
+    if ($my(is_session_leader)) {
+      setpgid (0, 0);
+      setsid ();
+    }
+
+    $my(set_signals_cb) (this);
+
     if ($my(read_stderr)) {
       dup2 ($my(stderr_fds)[PIPE_WRITE_END], fileno (stderr));
       close ($my(stderr_fds)[PIPE_READ_END]);
@@ -1990,15 +2093,9 @@ private int proc_open (proc_t *this) {
   return $my(pid);
 }
 
-private void proc_set_stdin (proc_t *this, char *buf, size_t size) {
-  if (NULL is buf) return;
-  $my(dup_stdin) = 1;
-  $my(stdin_buf) = Alloc (size + 1);
-  $my(stdin_buf_size) = size;
-  Cstring.cp ($my(stdin_buf), size + 1, buf, size);
-}
-
 private int proc_exec (proc_t *this, char *com) {
+  if (NULL is this or NULL is com) return NOTOK;
+
   int retval = 0;
 
   if ($my(reset_term))
@@ -2030,10 +2127,12 @@ private proc_T __init_proc__ (void) {
       .new = proc_new,
       .free = proc_free,
       .wait = proc_wait,
-      .parse = proc_parse,
       .read = proc_read,
       .exec = proc_exec,
-      .set_stdin = proc_set_stdin
+      .open = proc_open,
+      .parse = proc_parse,
+      .set_stdin = proc_set_stdin,
+      .unset_stdin = proc_unset_stdin
     )
   );
 }

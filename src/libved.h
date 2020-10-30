@@ -877,6 +877,8 @@ NewType (dirwalk,
     depth,
     status;
 
+  void *object;
+
   DirProcessDir_cb process_dir;
   DirProcessFile_cb process_file;
   DirStatFile_cb stat_file;
@@ -1516,13 +1518,14 @@ NewSelf (file,
   SubSelf (file, tmpfname) tmpfname;
 
   int
-    (*exists) (const char *),
-    (*is_readable) (const char *),
-    (*is_writable) (const char *),
-    (*is_executable) (const char *),
     (*is_reg) (const char *),
     (*is_elf) (const char *),
-    (*is_sock) (const char *);
+    (*is_rwx) (const char *),
+    (*exists) (const char *),
+    (*is_sock) (const char *),
+    (*is_readable) (const char *),
+    (*is_writable) (const char *),
+    (*is_executable) (const char *);
 
   ssize_t
     (*write) (char *, char *, ssize_t),

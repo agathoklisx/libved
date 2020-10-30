@@ -1170,15 +1170,6 @@ static const utf8 offsetsFromUTF8[6] = {
   }                                                       \
 })
 
-/* defined in libved.h
-#define STR_FMT(fmt, ...)                                 \
-({                                                        \
-  char buf_[MAXLEN_LINE];                                 \
-  snprintf (buf_, MAXLEN_LINE, fmt, __VA_ARGS__);         \
-  buf_;                                                   \
-})
-*/
-
 #define utf8_code(s_)                                     \
 ({                                                        \
   int code = 0; int i_ = 0; int sz = 0;                   \

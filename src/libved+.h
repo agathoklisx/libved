@@ -174,6 +174,10 @@ NewClass (spell,
   int num_entries;
 );
 
+DeclareType (proc);
+
+typedef void (*ProcSetSignals_cb) (proc_t *);
+
 NewProp (proc,
   pid_t  pid;
 
@@ -183,25 +187,28 @@ NewProp (proc,
 
    int
      argc,
-     sys_errno,
      is_bg,
+     status,
+     retval,
+     sys_errno,
+     dup_stdin,
      read_stdout,
      read_stderr,
-     dup_stdin,
+     stdin_fds[2],
      stdout_fds[2],
      stderr_fds[2],
-     stdin_fds[2],
-     status,
      reset_term,
      prompt_atend,
-     retval;
+     is_session_leader;
 
    size_t stdin_buf_size;
 
    term_t *term;
    buf_t *buf;
    ed_t *ed;
+
    PopenRead_cb read;
+   ProcSetSignals_cb set_signals_cb;
 
    void *object;
 );
@@ -216,10 +223,12 @@ NewSelf (proc,
   void
     (*free) (proc_t *),
     (*free_argv) (proc_t *),
-    (*set_stdin) (proc_t *, char *, size_t);
+    (*set_stdin) (proc_t *, char *, size_t),
+    (*unset_stdin) (proc_t *);
 
   char **(*parse) (proc_t *, char *);
   int
+    (*open) (proc_t *),
     (*exec) (proc_t *, char *),
     (*read) (proc_t *);
 
@@ -350,6 +359,12 @@ NewClass (argparse,
 
 DeclareClass (sys);
 
+NewType (sysproc,
+  string_t *pat;
+  int retval;
+  pid_t pid;
+);
+
 NewType (sysenv,
   string_t
     *sysname,
@@ -362,12 +377,18 @@ NewProp (sys,
   sysenv_t *env;
 );
 
+NewSubSelf (sys, proc,
+  int (*exists) (char *, pid_t *);
+);
+
 NewSubSelf (sys, get,
   string_t *(*env) (Class (sys) *, char *);
 );
 
 NewSelf (sys,
   SubSelf (sys, get) get;
+  SubSelf (sys, proc) proc;
+
   int
     (*mkdir) (char *, mode_t, int, int),
     (*man) (buf_t **, char *, int),

@@ -2966,6 +2966,10 @@ private int file_is_writable (const char *fname) {
   return (0 is access (fname, R_OK));
 }
 
+private int file_is_rwx (const char *fname) {
+  return (0 is access (fname, R_OK|W_OK|X_OK));
+}
+
 private int file_is_elf (const char *file) {
   int fd = open (file, O_RDONLY);
   if (-1 is fd) return 0;
@@ -3129,6 +3133,7 @@ private file_T __init_file__ (void) {
       .is_readable = file_is_readable,
       .is_writable = file_is_writable,
       .is_executable = file_is_executable,
+      .is_rwx = file_is_rwx,
       .is_elf = file_is_elf,
       .is_reg = file_is_reg,
       .is_sock = file_is_sock,
@@ -3242,6 +3247,8 @@ private dirwalk_t *dir_walk_new (DirProcessDir_cb process_dir, DirProcessFile_cb
   this->process_dir = (NULL is process_dir ? dir_walk_process_dir_def : process_dir);
   this->process_file = (NULL is process_file ? dir_walk_process_file_def : process_file);
   this->stat_file = stat;
+  this->object = NULL;
+
   return this;
 }
 
@@ -5312,7 +5319,7 @@ char *c_keywords[] = {
     "case I", "free F", "$my V", "My V", "$mycur V", "uint T", "int T", "size_t T",
     "utf8 T", "char T", "uchar T", "sizeof T", "void T", "$from V", "thisp V",
     "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
-    "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I",
+    "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I", "#elif I",
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
     "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V",
     "$OurRoot V", "$OurRoots V", "public I", "mutable I", "loop I", "forever I",
