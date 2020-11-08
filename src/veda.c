@@ -130,8 +130,11 @@ int main (int argc, char **argv) {
 
   num_win = (num_win < argc ? num_win : argc);
 
-  this = E.new (THIS_E, QUAL(ED_INIT,
-      .num_win = num_win, .init_cb = __init_ext__, .term_flags = term_flags));
+  this = E.new (THIS_E, EdOpts(
+      .num_win = num_win,
+      .init_cb = __init_ext__,
+      .term_flags = term_flags));
+
   if (NOTOK is Ed.check_sanity (this)) {
     retval = 1;
     goto theend;
@@ -144,10 +147,11 @@ int main (int argc, char **argv) {
   if (0 is argc or ifd isnot -1) {
     /* just create a new empty buffer and append it to its
      * parent win_t to the frame zero */
-    buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
-      .ftype = filetype,
-      .autosave = autosave,
-      .flags = (ispager ? BUF_IS_PAGER : 0)));
+    buf_t *buf = Win.buf.new (w, BufOpts (
+        .ftype = filetype,
+        .autosave = autosave,
+        .flags = (ispager ? BUF_IS_PAGER : 0)));
+
     Win.append_buf (w, buf);
 
     /* check if input comes from stdin */
@@ -165,16 +169,16 @@ int main (int argc, char **argv) {
 
     /* else create a new buffer for every file in the argvlist */
     for (int i = 0; i < argc; i++) {
-      buf_t *buf = Win.buf.new (w, QUAL(BUF_INIT,
-        .fname = argv[i],
-        .ftype = filetype,
-        .at_frame = FIRST_FRAME,
-        .at_linenr = linenr,
-        .at_column = column,
-        .backupfile = backupfile,
-        .backup_suffix = backup_suffix,
-        .autosave = autosave,
-        .flags = (ispager ? BUF_IS_PAGER : 0)));
+      buf_t *buf = Win.buf.new (w, BufOpts(
+          .fname = argv[i],
+          .ftype = filetype,
+          .at_frame = FIRST_FRAME,
+          .at_linenr = linenr,
+          .at_column = column,
+          .backupfile = backupfile,
+          .backup_suffix = backup_suffix,
+          .autosave = autosave,
+          .flags = (ispager ? BUF_IS_PAGER : 0)));
 
       Win.append_buf (w, buf);
 
@@ -218,10 +222,10 @@ theloop:;
     if (E.test.state_bit (THIS_E, E_SUSPENDED)) {
       if (E.get.num (THIS_E) is 1) {
         /* as an example, we simply create another independed instance */
-        this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));
+        this = E.new (THIS_E, EdOpts(.init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
-        buf = Win.buf.new (w, BUF_INIT_QUAL());
+        buf = Win.buf.new (w, BufOpts());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {

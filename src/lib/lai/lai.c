@@ -26,7 +26,7 @@
 
 
 #define TABLE_MAX_LOAD 0.75
-#define TABLE_MIN_LOAD 0.35
+#define TABLE_MIN_LOAD 0.25
 
 void initValueArray(ValueArray *array) {
     array->values = NULL;
@@ -234,7 +234,7 @@ bool dictDelete(VM *vm, ObjDict *dict, Value key) {
 
     if (dict->count - 1 < dict->capacityMask * TABLE_MIN_LOAD) {
         // Figure out the new table size.
-        capacityMask = SHRINK_CAPACITY(dict->capacityMask);
+        capacityMask = SHRINK_CAPACITY(dict->capacityMask + 1) - 1;
         adjustDictCapacity(vm, dict, capacityMask);
     }
 
@@ -336,7 +336,7 @@ bool setDelete(VM *vm, ObjSet *set, Value value) {
 
     if (set->count - 1 < set->capacityMask * TABLE_MIN_LOAD) {
         // Figure out the new table size.
-        int capacityMask = SHRINK_CAPACITY(set->capacityMask);
+        int capacityMask = SHRINK_CAPACITY(set->capacityMask + 1) - 1;
         adjustSetCapacity(vm, set, capacityMask);
     }
 
@@ -653,6 +653,7 @@ bool tableSet(VM *vm, Table *table, ObjString *key, Value value) {
 }
 
 bool tableDelete(VM *vm, Table *table, ObjString *key) {
+    UNUSED(vm);
     if (table->count == 0) return false;
 
     int capacityMask = table->capacityMask;
@@ -697,13 +698,6 @@ bool tableDelete(VM *vm, Table *table, ObjString *key) {
         nextEntry->psl--;
         *entry = *nextEntry;
         entry = nextEntry;
-    }
-
-    // TODO: Add constant for table load factor
-    if (table->count - 1 < table->capacityMask * 0.35) {
-        // Figure out the new table size.
-        capacityMask = SHRINK_CAPACITY(table->capacityMask);
-        adjustCapacity(vm, table, capacityMask);
     }
 
     return true;
@@ -1391,6 +1385,10 @@ static bool isDigit(char c) {
     return c >= '0' && c <= '9';
 }
 
+static bool isHexDigit(char c) {
+    return ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') || (c == '_'));
+}
+
 static bool isAtEnd() {
     return *scanner.current == '\0';
 }
@@ -1572,6 +1570,8 @@ static TokenType identifierType() {
                 switch (scanner.start[1]) {
                     case 'a':
                         return checkKeyword(2, 3, "lse", TOKEN_FALSE);
+                    case 'r':
+                        return checkKeyword(2, 2, "om", TOKEN_FROM);
                     case 'o':
                         if (scanner.current - scanner.start == 3)
                             return checkKeyword(2, 1, "r", TOKEN_FOR);
@@ -1705,18 +1705,43 @@ static Token identifier() {
     return makeToken(identifierType());
 }
 
+static Token exponent() {
+    // Consume the "e"
+    scan_advance();
+    while (scan_peek() == '_') scan_advance();
+    if (scan_peek() == '+' || scan_peek() == '-') {
+        // Consume the "+ or -"
+        scan_advance();
+    }
+    if (!isDigit(scan_peek()) && scan_peek() != '_') return errorToken("Invalid exopnent literal");
+    while (isDigit(scan_peek()) || scan_peek() == '_') scan_advance();
+    return makeToken(TOKEN_NUMBER);
+}
+
 static Token number() {
     while (isDigit(scan_peek()) || scan_peek() == '_') scan_advance();
-
+    if (scan_peek() == 'e' || scan_peek() == 'E')
+        return exponent();
     // Look for a fractional part.
-    if (scan_peek() == '.' && isDigit(scan_peekNext())) {
+    if (scan_peek() == '.' && (isDigit(scan_peekNext()))) {
         // Consume the "."
         scan_advance();
-
         while (isDigit(scan_peek()) || scan_peek() == '_') scan_advance();
+        if (scan_peek() == 'e' || scan_peek() == 'E')
+            return exponent();
     }
-
     return makeToken(TOKEN_NUMBER);
+}
+
+static Token hexNumber() {
+    while (scan_peek() == '_') scan_advance();
+    if (scan_peek() == '0')scan_advance();
+    if ((scan_peek() == 'x') || (scan_peek() == 'X')) {
+        scan_advance();
+        if (!isHexDigit(scan_peek())) return errorToken("Invalid hex literal");
+        while (isHexDigit(scan_peek())) scan_advance();
+        return makeToken(TOKEN_NUMBER);
+    } else return number();
 }
 
 
@@ -1725,11 +1750,10 @@ static Token string(char stringToken) {
         if (scan_peek() == '\n') {
             scanner.line++;
         } else if (scan_peek() == '\\' && !scanner.rawString) {
-             scanner.current++;
+            scanner.current++;
         }
         scan_advance();
     }
-
     if (isAtEnd()) return errorToken("Unterminated string.");
 
     // The closing " or '.
@@ -1752,7 +1776,7 @@ Token scanToken() {
     char c = scan_advance();
 
     if (isAlpha(c)) return identifier();
-    if (isDigit(c)) return number();
+    if (isDigit(c)) return hexNumber();
 
     switch (c) {
         case '(':
@@ -2507,7 +2531,7 @@ static void comp_number(Compiler *compiler, bool canAssign) {
 
     // We allocate the whole range for the worst case.
     // Also account for the null-byte.
-    char* buffer = (char *)malloc((compiler->parser->previous.length + 1) * sizeof(char));
+    char* buffer = ALLOCATE(compiler->parser->vm, char, compiler->parser->previous.length + 1);
     char* current = buffer;
 
     // Strip it of any underscores.
@@ -2527,7 +2551,7 @@ static void comp_number(Compiler *compiler, bool canAssign) {
     emitConstant(compiler, NUMBER_VAL(value));
 
     // Free the malloc'd buffer.
-    free(buffer);
+    FREE_ARRAY(compiler->parser->vm, char, buffer, compiler->parser->previous.length + 1);
 }
 
 static void or_(Compiler *compiler, bool canAssign) {
@@ -2616,13 +2640,14 @@ static void comp_string(Compiler *compiler, bool canAssign) {
 
     Parser *parser = compiler->parser;
 
-    char *string = malloc(sizeof(char) * parser->previous.length - 1);
+    char *string = ALLOCATE(parser->vm, char, parser->previous.length - 1);
+
     memcpy(string, parser->previous.start + 1, parser->previous.length - 2);
     int length = parseString(string, parser->previous.length - 2);
     string[length] = '\0';
 
-    emitConstant(compiler, OBJ_VAL(copyString(parser->vm, string, length)));
-    free(string);
+    emitConstant(compiler, OBJ_VAL(takeString(parser->vm, string, length)));
+    parser->vm->bytesAllocated -= parser->previous.length - 2 - length;
 }
 
 static void list(Compiler *compiler, bool canAssign) {
@@ -3024,6 +3049,7 @@ ParseRule rules[] = {
         {NULL,     NULL,      PREC_NONE},               // TOKEN_WITH
         {NULL,     NULL,      PREC_NONE},               // TOKEN_EOF
         {NULL,     NULL,      PREC_NONE},               // TOKEN_IMPORT
+        {NULL,     NULL,      PREC_NONE},               // TOKEN_FROM
         {NULL,     NULL,      PREC_NONE},               // TOKEN_ERROR
 };
 
@@ -3511,6 +3537,7 @@ static void importStatement(Compiler *compiler) {
                 compiler->parser->previous.length - 2)));
 
         emitBytes(compiler, OP_IMPORT, importConstant);
+        emitByte(compiler, OP_POP);
 
         if (match(compiler, TOKEN_AS)) {
             uint8_t importName = parseVariable(compiler, "Expect import alias.", false);
@@ -3518,7 +3545,9 @@ static void importStatement(Compiler *compiler) {
             defineVariable(compiler, importName, false);
         }
     } else {
-        uint8_t importName = parseVariable(compiler, "Expect import identifier.", false);
+        consume(compiler, TOKEN_IDENTIFIER, "Expect import identifier.");
+        uint8_t importName = identifierConstant(compiler, &compiler->parser->previous);
+        declareVariable(compiler, &compiler->parser->previous);
 
         int index = findBuiltinModule(
             (char *)compiler->parser->previous.start,
@@ -3537,6 +3566,104 @@ static void importStatement(Compiler *compiler) {
 
     consume(compiler, TOKEN_SEMICOLON, "Expect ';' after import.");
     emitByte(compiler, OP_IMPORT_END);
+}
+
+static void fromImportStatement(Compiler *compiler) {
+    if (match(compiler, TOKEN_STRING)) {
+        int importConstant = makeConstant(compiler, OBJ_VAL(copyString(
+                compiler->parser->vm,
+                compiler->parser->previous.start + 1,
+                compiler->parser->previous.length - 2)));
+
+        consume(compiler, TOKEN_IMPORT, "Expect 'import' after import path.");
+        emitBytes(compiler, OP_IMPORT, importConstant);
+        emitByte(compiler, OP_POP);
+
+        uint8_t variables[255];
+        Token tokens[255];
+        int varCount = 0;
+
+        do {
+            consume(compiler, TOKEN_IDENTIFIER, "Expect variable name.");
+            tokens[varCount] = compiler->parser->previous;
+            variables[varCount] = identifierConstant(compiler, &compiler->parser->previous);
+            varCount++;
+
+            if (varCount > 255) {
+                error(compiler->parser, "Cannot have more than 255 variables.");
+            }
+        } while (match(compiler, TOKEN_COMMA));
+
+        emitBytes(compiler, OP_IMPORT_FROM, varCount);
+
+        for (int i = 0; i < varCount; ++i) {
+            emitByte(compiler, variables[i]);
+        }
+
+        // This needs to be two separate loops as we need
+        // all the variables popped before defining.
+        if (compiler->scopeDepth == 0) {
+            for (int i = varCount - 1; i >= 0; --i) {
+                defineVariable(compiler, variables[i], false);
+            }
+        } else {
+            for (int i = 0; i < varCount; ++i) {
+                declareVariable(compiler, &tokens[i]);
+                defineVariable(compiler, 0, false);
+            }
+        }
+
+        emitByte(compiler, OP_IMPORT_END);
+    } else {
+        consume(compiler, TOKEN_IDENTIFIER, "Expect import identifier.");
+        uint8_t importName = identifierConstant(compiler, &compiler->parser->previous);
+
+        int index = findBuiltinModule(
+                (char *)compiler->parser->previous.start,
+                compiler->parser->previous.length
+        );
+
+        consume(compiler, TOKEN_IMPORT, "Expect 'import' after identifier");
+
+        if (index == -1) {
+            error(compiler->parser, "Unknown module");
+        }
+
+        uint8_t variables[255];
+        Token tokens[255];
+        int varCount = 0;
+
+        do {
+            consume(compiler, TOKEN_IDENTIFIER, "Expect variable name.");
+            tokens[varCount] = compiler->parser->previous;
+            variables[varCount] = identifierConstant(compiler, &compiler->parser->previous);
+            varCount++;
+
+            if (varCount > 255) {
+                error(compiler->parser, "Cannot have more than 255 variables.");
+            }
+        } while (match(compiler, TOKEN_COMMA));
+
+        emitBytes(compiler, OP_IMPORT_BUILTIN_VARIABLE, index);
+        emitBytes(compiler, importName, varCount);
+
+        for (int i = 0; i < varCount; ++i) {
+            emitByte(compiler, variables[i]);
+        }
+
+        if (compiler->scopeDepth == 0) {
+            for (int i = varCount - 1; i >= 0; --i) {
+                defineVariable(compiler, variables[i], false);
+            }
+        } else {
+            for (int i = 0; i < varCount; ++i) {
+                declareVariable(compiler, &tokens[i]);
+                defineVariable(compiler, 0, false);
+            }
+        }
+    }
+
+    consume(compiler, TOKEN_SEMICOLON, "Expect ';' after import.");
 }
 
 static void whileStatement(Compiler *compiler) {
@@ -3629,6 +3756,8 @@ static void statement(Compiler *compiler) {
         withStatement(compiler);
     } else if (match(compiler, TOKEN_IMPORT)) {
         importStatement(compiler);
+    } else if (match(compiler, TOKEN_FROM)) {
+        fromImportStatement(compiler);
     } else if (match(compiler, TOKEN_BREAK)) {
         breakStatement(compiler);
     } else if (match(compiler, TOKEN_WHILE)) {
@@ -3840,10 +3969,10 @@ VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]) {
 
     /**
      * Native classes which are not required to be
-     * imported. For imported natives see optionals.c
+     * imported. For imported modules see optionals.c
      */
-    createSystemClass(vm, argc, argv);
-    createCClass(vm);
+    createSystemModule(vm, argc, argv);
+    createCModule(vm);
 
     return vm;
 }
@@ -4799,10 +4928,17 @@ static InterpretResult run(VM *vm) {
             if (tableGet(&vm->modules, fileName, &moduleVal)) {
                 ++vm->scriptNameCount;
                 vm->lastModule = AS_MODULE(moduleVal);
+                push(vm, NIL_VAL);
                 DISPATCH();
             }
 
-            char *s = readFile(fileName->chars);
+            char *source = readFile(vm, fileName->chars);
+
+            if (source == NULL) {
+                frame->ip = ip;
+                runtimeError(vm, "Could not open file \"%s\".", fileName->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
 
             if (vm->scriptNameCapacity < vm->scriptNameCount + 2) {
                 int oldCapacity = vm->scriptNameCapacity;
@@ -4818,15 +4954,15 @@ static InterpretResult run(VM *vm) {
             vm->lastModule = module;
 
             push(vm, OBJ_VAL(module));
-            ObjFunction *function = compile(vm, module, s);
+            ObjFunction *function = compile(vm, module, source);
             pop(vm);
-            free(s);
+
+            FREE_ARRAY(vm, char, source, strlen(source) + 1);
 
             if (function == NULL) return INTERPRET_COMPILE_ERROR;
             push(vm, OBJ_VAL(function));
             ObjClosure *closure = newClosure(vm, function);
             pop(vm);
-
             push(vm, OBJ_VAL(closure));
 
             frame->ip = ip;
@@ -4856,8 +4992,58 @@ static InterpretResult run(VM *vm) {
             DISPATCH();
         }
 
+        CASE_CODE(IMPORT_BUILTIN_VARIABLE): {
+            int index = READ_BYTE();
+            ObjString *fileName = READ_STRING();
+            int varCount = READ_BYTE();
+
+            Value moduleVal;
+            ObjModule *module;
+
+            if (tableGet(&vm->modules, fileName, &moduleVal)) {
+                module = AS_MODULE(moduleVal);
+            } else {
+                module = importBuiltinModule(vm, index);
+            }
+
+            for (int i = 0; i < varCount; i++) {
+                Value moduleVariable;
+                ObjString *variable = READ_STRING();
+
+                if (!tableGet(&module->values, variable, &moduleVariable)) {
+                    frame->ip = ip;
+                    runtimeError(vm, "%s can't be found in module %s", variable->chars, module->name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                push(vm, moduleVariable);
+            }
+
+            DISPATCH();
+        }
+
         CASE_CODE(IMPORT_VARIABLE): {
             push(vm, OBJ_VAL(vm->lastModule));
+            DISPATCH();
+        }
+
+        CASE_CODE(IMPORT_FROM): {
+            int varCount = READ_BYTE();
+
+            for (int i = 0; i < varCount; i++) {
+                Value moduleVariable;
+                ObjString *variable = READ_STRING();
+
+                if (!tableGet(&vm->lastModule->values, variable, &moduleVariable)) {
+                    vm->scriptNameCount--;
+                    frame->ip = ip;
+                    runtimeError(vm, "%s can't be found in module %s", variable->chars, vm->lastModule->name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                push(vm, moduleVariable);
+            }
+
             DISPATCH();
         }
 
@@ -5612,7 +5798,7 @@ static Value inputNative(VM *vm, int argCount, Value *args) {
     }
 
     uint64_t currentSize = 128;
-    char *line = malloc(currentSize);
+    char *line = ALLOCATE(vm, char, currentSize);
 
     if (line == NULL) {
         runtimeError(vm, "Memory error on input()!");
@@ -5620,13 +5806,14 @@ static Value inputNative(VM *vm, int argCount, Value *args) {
     }
 
     int c = EOF;
-    uint64_t i = 0;
+    uint64_t length = 0;
     while ((c = getchar()) != '\n' && c != EOF) {
-        line[i++] = (char) c;
+        line[length++] = (char) c;
 
-        if (i + 1 == currentSize) {
+        if (length + 1 == currentSize) {
+            int oldSize = currentSize;
             currentSize = GROW_CAPACITY(currentSize);
-            line = realloc(line, currentSize);
+            line = GROW_ARRAY(vm, line, char, oldSize, currentSize);
 
             if (line == NULL) {
                 printf("Unable to allocate memory\n");
@@ -5635,10 +5822,10 @@ static Value inputNative(VM *vm, int argCount, Value *args) {
         }
     }
 
-    line[i] = '\0';
+    line[length] = '\0';
 
-    Value l = OBJ_VAL(copyString(vm, line, strlen(line)));
-    free(line);
+    Value l = OBJ_VAL(takeString(vm, line, length));
+    vm->bytesAllocated -= currentSize - length - 1;
     return l;
 }
 
@@ -6063,18 +6250,17 @@ void freeObjects(VM *vm) {
     /* 10: util.c */
 
 
-char *readFile(const char *path) {
+char *readFile(VM *vm, const char *path) {
     FILE *file = fopen(path, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Could not open file \"%s\".\n", path);
-        exit(74);
+        return NULL;
     }
 
     fseek(file, 0L, SEEK_END);
     size_t fileSize = ftell(file);
     rewind(file);
 
-    char *buffer = (char *) malloc(fileSize + 1);
+    char *buffer = ALLOCATE(vm, char, fileSize + 1);
     if (buffer == NULL) {
         fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
         exit(74);
@@ -6495,7 +6681,7 @@ static Value readFullFile(VM *vm, int argCount, Value *args) {
         fseek(file->file, currentPosition, SEEK_SET);
     }
 
-    char *buffer = (char *) malloc(fileSize + 1);
+    char *buffer = ALLOCATE(vm, char, fileSize + 1);
     if (buffer == NULL) {
         runtimeError(vm, "Not enough memory to read \"%s\".\n", file->path);
         return EMPTY_VAL;
@@ -6503,16 +6689,13 @@ static Value readFullFile(VM *vm, int argCount, Value *args) {
 
     size_t bytesRead = fread(buffer, sizeof(char), fileSize, file->file);
     if (bytesRead < fileSize && !feof(file->file)) {
-        free(buffer);
+        FREE_ARRAY(vm, char, buffer, fileSize + 1);
         runtimeError(vm, "Could not read file \"%s\".\n", file->path);
         return EMPTY_VAL;
     }
 
     buffer[bytesRead] = '\0';
-    Value ret = OBJ_VAL(copyString(vm, buffer, bytesRead));
-
-    free(buffer);
-    return ret;
+    return OBJ_VAL(takeString(vm, buffer, bytesRead));
 }
 
 static Value readLineFile(VM *vm, int argCount, Value *args) {
@@ -6684,6 +6867,33 @@ static Value setAttribute(VM *vm, int argCount, Value *args) {
     return NIL_VAL;
 }
 
+static Value isInstance(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "isInstance() takes 1 argument (%d given)", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_CLASS(args[1])) {
+        runtimeError(vm, "Argument passed to isInstance() must be a class");
+        return EMPTY_VAL;
+    }
+
+    ObjInstance *object = AS_INSTANCE(args[0]);
+
+    ObjClass *klass = AS_CLASS(args[1]);
+    ObjClass *klassToFind = object->klass;
+
+    while (klassToFind != NULL) {
+        if (klass == klassToFind) {
+            return BOOL_VAL(true);
+        }
+
+        klassToFind = klassToFind->superclass;
+    }
+
+    return BOOL_VAL(false);
+}
+
 static Value copyShallow(VM *vm, int argCount, Value *args) {
     if (argCount != 0) {
         runtimeError(vm, "copy() takes no arguments (%d given)", argCount);
@@ -6713,6 +6923,7 @@ void declareInstanceMethods(VM *vm) {
     defineNative(vm, &vm->instanceMethods, "hasAttribute", hasAttribute);
     defineNative(vm, &vm->instanceMethods, "getAttribute", getAttribute);
     defineNative(vm, &vm->instanceMethods, "setAttribute", setAttribute);
+    defineNative(vm, &vm->instanceMethods, "isInstance", isInstance);
     defineNative(vm, &vm->instanceMethods, "copy", copyShallow);
     defineNative(vm, &vm->instanceMethods, "deepCopy", copyDeep);
 }
@@ -6941,7 +7152,7 @@ static Value joinListItem(VM *vm, int argCount, Value *args) {
 
     char *output;
     char *fullString = NULL;
-    int index = 0;
+    int length = 0;
     int delimiterLength = strlen(delimiter);
 
     for (int j = 0; j < list->values.count - 1; ++j) {
@@ -6951,15 +7162,16 @@ static Value joinListItem(VM *vm, int argCount, Value *args) {
             output = valueToString(list->values.values[j]);
         }
         int elementLength = strlen(output);
-        fullString = realloc(fullString, index + elementLength + delimiterLength + 1);
 
-        memcpy(fullString + index, output, elementLength);
+        fullString = GROW_ARRAY(vm, fullString, char, length, length + elementLength + delimiterLength);
+
+        memcpy(fullString + length, output, elementLength);
         if (!IS_STRING(list->values.values[j])) {
             free(output);
         }
-        index += elementLength;
-        memcpy(fullString + index, delimiter, delimiterLength);
-        index += delimiterLength;
+        length += elementLength;
+        memcpy(fullString + length, delimiter, delimiterLength);
+        length += delimiterLength;
     }
 
     // Outside the loop as we do not want the append the delimiter on the last element
@@ -6970,19 +7182,17 @@ static Value joinListItem(VM *vm, int argCount, Value *args) {
     }
 
     int elementLength = strlen(output);
-    fullString = realloc(fullString, index + elementLength + 1);
-    memcpy(fullString + index, output, elementLength);
-    index += elementLength;
+    fullString = GROW_ARRAY(vm, fullString, char, length, length + elementLength + 1);
+    memcpy(fullString + length, output, elementLength);
+    length += elementLength;
 
-    fullString[index] = '\0';
+    fullString[length] = '\0';
 
     if (!IS_STRING(list->values.values[list->values.count - 1])) {
         free(output);
     }
 
-    Value ret = OBJ_VAL(copyString(vm, fullString, index));
-    free(fullString);
-    return ret;
+    return OBJ_VAL(takeString(vm, fullString, length));
 }
 
 static Value copyListShallow(VM *vm, int argCount, Value *args) {
@@ -7116,7 +7326,6 @@ void declareNilMethods(VM *vm) {
 
     /* 19: number.c */
 
-
 static Value toStringNumber(VM *vm, int argCount, Value *args) {
     if (argCount != 0) {
         runtimeError(vm, "toString() takes no arguments (%d given)", argCount);
@@ -7126,17 +7335,15 @@ static Value toStringNumber(VM *vm, int argCount, Value *args) {
     double number = AS_NUMBER(args[0]);
     int numberStringLength = snprintf(NULL, 0, "%.15g", number) + 1;
     
-    char *numberString = malloc(numberStringLength);
+    char *numberString = ALLOCATE(vm, char, numberStringLength);
+
     if (numberString == NULL) {
         runtimeError(vm, "Memory error on toString()!");
         return EMPTY_VAL;
     }
     
     snprintf(numberString, numberStringLength, "%.15g", number);
-    Value value = OBJ_VAL(copyString(vm, numberString, numberStringLength - 1));
-
-    free(numberString);
-    return value;
+    return OBJ_VAL(takeString(vm, numberString, numberStringLength - 1));
 }
 
 void declareNumberMethods(VM *vm) {
@@ -7266,7 +7473,7 @@ static Value formatString(VM *vm, int argCount, Value *args) {
     }
 
     int length = 0;
-    char **replaceStrings = malloc(argCount * sizeof(char*));
+    char **replaceStrings = ALLOCATE(vm, char*, argCount);
 
     for (int j = 1; j < argCount + 1; j++) {
         Value value = args[j];
@@ -7285,13 +7492,12 @@ static Value formatString(VM *vm, int argCount, Value *args) {
     ObjString *string = AS_STRING(args[0]);
 
     int stringLen = string->length + 1;
-    char *tmp = malloc(stringLen);
+    char *tmp = ALLOCATE(vm, char, stringLen);
     char *tmpFree = tmp;
     memcpy(tmp, string->chars, stringLen);
 
     int count = 0;
-    while((tmp = strstr(tmp, "{}")))
-    {
+    while ((tmp = strstr(tmp, "{}"))) {
         count++;
         tmp++;
     }
@@ -7305,14 +7511,14 @@ static Value formatString(VM *vm, int argCount, Value *args) {
             free(replaceStrings[i]);
         }
 
-        free(tmp);
-        free(replaceStrings);
+        FREE_ARRAY(vm, char, tmp , stringLen);
+        FREE_ARRAY(vm, char*, replaceStrings, argCount);
         return EMPTY_VAL;
     }
 
     int fullLength = string->length - count * 2 + length + 1;
     char *pos;
-    char *newStr = malloc(sizeof(char) * fullLength);
+    char *newStr = ALLOCATE(vm, char, fullLength);
     int stringLength = 0;
 
     for (int i = 0; i < argCount; ++i) {
@@ -7329,12 +7535,11 @@ static Value formatString(VM *vm, int argCount, Value *args) {
         free(replaceStrings[i]);
     }
 
-    free(replaceStrings);
+    FREE_ARRAY(vm, char*, replaceStrings, argCount);
     memcpy(newStr + stringLength, tmp, strlen(tmp));
-    ObjString *newString = copyString(vm, newStr, fullLength - 1);
+    ObjString *newString = takeString(vm, newStr, fullLength - 1);
 
-    free(newStr);
-    free(tmpFree);
+    FREE_ARRAY(vm, char, tmpFree, stringLen);
     return OBJ_VAL(newString);
 }
 
@@ -7352,33 +7557,44 @@ static Value splitString(VM *vm, int argCount, Value *args) {
     ObjString *string = AS_STRING(args[0]);
     char *delimiter = AS_CSTRING(args[1]);
 
-    char *tmp = malloc(string->length + 1);
+    char *tmp = ALLOCATE(vm, char, string->length + 1);
     char *tmpFree = tmp;
-    memcpy(tmp, string->chars, string->length + 1);
+    memcpy(tmp, string->chars, string->length);
     tmp[string->length] = '\0';
     int delimiterLength = strlen(delimiter);
     char *token;
 
     ObjList *list = initList(vm);
     push(vm, OBJ_VAL(list));
+    if (delimiterLength == 0) {
+        for (int tokenCount = 0; tokenCount < string->length; tokenCount++) {
+            *(tmp) = string->chars[tokenCount];
+            *(tmp + 1) = '\0';
+            Value str = OBJ_VAL(copyString(vm, tmp, 1));
+            // Push to stack to avoid GC
+            push(vm, str);
+            writeValueArray(vm, &list->values, str);
+            pop(vm);
+        }
+    } else {
+        do {
+            token = strstr(tmp, delimiter);
+            if (token)
+                *token = '\0';
 
-    do {
-        token = strstr(tmp, delimiter);
-        if (token)
-            *token = '\0';
+            Value str = OBJ_VAL(copyString(vm, tmp, strlen(tmp)));
 
-        Value str = OBJ_VAL(copyString(vm, tmp, strlen(tmp)));
+            // Push to stack to avoid GC
+            push(vm, str);
+            writeValueArray(vm, &list->values, str);
+            pop(vm);
 
-        // Push to stack to avoid GC
-        push(vm, str);
-        writeValueArray(vm, &list->values, str);
-        pop(vm);
-
-        tmp = token + delimiterLength;
-    } while (token != NULL);
+            tmp = token + delimiterLength;
+        } while (token != NULL);
+    }
     pop(vm);
 
-    free(tmpFree);
+    FREE_ARRAY(vm, char, tmpFree, string->length + 1);
     return OBJ_VAL(list);
 }
 
@@ -7467,13 +7683,14 @@ static Value replaceString(VM *vm, int argCount, Value *args) {
     int stringLen = strlen(string) + 1;
 
     // Make a copy of the string so we do not modify the original
-    char *tmp = malloc(stringLen);
+    char *tmp = ALLOCATE(vm, char, stringLen + 1);
     char *tmpFree = tmp;
     memcpy(tmp, string, stringLen);
+    tmp[stringLen] = '\0';
 
     // Count the occurrences of the needle so we can determine the size
     // of the string we need to allocate
-    while((tmp = strstr(tmp, to_replace->chars)) != NULL) {
+    while ((tmp = strstr(tmp, to_replace->chars)) != NULL) {
         count++;
         tmp += len;
     }
@@ -7482,13 +7699,13 @@ static Value replaceString(VM *vm, int argCount, Value *args) {
     tmp = tmpFree;
 
     if (count == 0) {
-        free(tmpFree);
+        FREE_ARRAY(vm, char, tmpFree, stringLen + 1);
         return stringValue;
     }
 
     int length = strlen(tmp) - count * (len - replaceLen) + 1;
     char *pos;
-    char *newStr = malloc(sizeof(char) * length);
+    char *newStr = ALLOCATE(vm, char, length);
     int stringLength = 0;
 
     for (int i = 0; i < count; ++i) {
@@ -7504,10 +7721,9 @@ static Value replaceString(VM *vm, int argCount, Value *args) {
     }
 
     memcpy(newStr + stringLength, tmp, strlen(tmp));
-    ObjString *newString = copyString(vm, newStr, length - 1);
+    ObjString *newString = takeString(vm, newStr, length - 1);
 
-    free(newStr);
-    free(tmpFree);
+    FREE_ARRAY(vm, char, tmpFree, stringLen + 1);
     return OBJ_VAL(newString);
 }
 
@@ -7518,37 +7734,31 @@ static Value lowerString(VM *vm, int argCount, Value *args) {
     }
 
     ObjString *string = AS_STRING(args[0]);
+    char *temp = ALLOCATE(vm, char, string->length + 1);
 
-    char *temp = malloc(sizeof(char) * (string->length + 1));
-
-    for(int i = 0; string->chars[i]; i++){
+    for (int i = 0; string->chars[i]; i++) {
         temp[i] = tolower(string->chars[i]);
     }
     temp[string->length] = '\0';
 
-    Value ret = OBJ_VAL(copyString(vm, temp, string->length));
-    free(temp);
-    return ret;
+    return OBJ_VAL(takeString(vm, temp, string->length));
 }
 
 static Value upperString(VM *vm, int argCount, Value *args) {
     if (argCount != 0) {
         runtimeError(vm, "upper() takes no arguments (%d given)", argCount);
-        return EMPTY_VAL ;
+        return EMPTY_VAL;
     }
 
     ObjString *string = AS_STRING(args[0]);
+    char *temp = ALLOCATE(vm, char, string->length + 1);
 
-    char *temp = malloc(sizeof(char) * (string->length + 1));
-
-    for(int i = 0; string->chars[i]; i++){
+    for (int i = 0; string->chars[i]; i++) {
         temp[i] = toupper(string->chars[i]);
     }
     temp[string->length] = '\0';
 
-    Value ret = OBJ_VAL(copyString(vm, temp, string->length));
-    free(temp);
-    return ret;
+    return OBJ_VAL(takeString(vm, temp, string->length));
 }
 
 static Value startsWithString(VM *vm, int argCount, Value *args) {
@@ -7597,7 +7807,7 @@ static Value leftStripString(VM *vm, int argCount, Value *args) {
 
     ObjString *string = AS_STRING(args[0]);
     int i, count = 0;
-    char *temp = malloc(sizeof(char) * (string->length + 1));
+    char *temp = ALLOCATE(vm, char, string->length + 1);
 
     for (i = 0; i < string->length; ++i) {
         if (!isspace(string->chars[i])) {
@@ -7606,10 +7816,11 @@ static Value leftStripString(VM *vm, int argCount, Value *args) {
         count++;
     }
 
+    // We need to remove the stripped chars from the count
+    // Will be free'd at the call of takeString
+    vm->bytesAllocated -= count;
     memcpy(temp, string->chars + count, string->length - count);
-    Value ret = OBJ_VAL(copyString(vm, temp, string->length - count));
-    free(temp);
-    return ret;
+    return OBJ_VAL(takeString(vm, temp, string->length - count));
 }
 
 static Value rightStripString(VM *vm, int argCount, Value *args) {
@@ -7620,7 +7831,7 @@ static Value rightStripString(VM *vm, int argCount, Value *args) {
 
     ObjString *string = AS_STRING(args[0]);
     int length;
-    char *temp = malloc(sizeof(char) * (string->length + 1));
+    char *temp = ALLOCATE(vm, char, string->length + 1);
 
     for (length = string->length - 1; length > 0; --length) {
         if (!isspace(string->chars[length])) {
@@ -7628,10 +7839,12 @@ static Value rightStripString(VM *vm, int argCount, Value *args) {
         }
     }
 
+    // We need to remove the stripped chars from the count
+    // Will be free'd at the call of takeString
+    vm->bytesAllocated -= string->length - length - 1;
     memcpy(temp, string->chars, length + 1);
-    Value ret = OBJ_VAL(copyString(vm, temp, length + 1));
-    free(temp);
-    return ret;
+    temp[length + 1] = '\0';
+    return OBJ_VAL(takeString(vm, temp, length + 1));
 }
 
 static Value stripString(VM *vm, int argCount, Value *args) {
@@ -7662,8 +7875,7 @@ static Value countString(VM *vm, int argCount, Value *args) {
     char *needle = AS_CSTRING(args[1]);
 
     int count = 0;
-    while((haystack = strstr(haystack, needle)))
-    {
+    while ((haystack = strstr(haystack, needle))) {
         count++;
         haystack++;
     }
@@ -7693,15 +7905,15 @@ void declareStringMethods(VM *vm) {
     /* 22: optionals.c */
 
 BuiltinModules modules[] = {
-        {"Math", &createMathsClass},
-        {"Env", &createEnvClass},
-        {"JSON", &createJSONClass},
-        {"Path", &createPathClass},
-        {"Datetime", &createDatetimeClass},
-        {"Socket", &createSocketClass},
-        {"Random", &createRandomClass},
+        {"Math", &createMathsModule},
+        {"Env", &createEnvModule},
+        {"JSON", &createJSONModule},
+        {"Path", &createPathModule},
+        {"Datetime", &createDatetimeModule},
+        {"Socket", &createSocketModule},
+        {"Random", &createRandomModule},
 #ifndef DISABLE_HTTP
-        {"HTTP", &createHTTPClass},
+        {"HTTP", &createHTTPModule},
 #endif
         {NULL, NULL}
 };
@@ -7778,7 +7990,7 @@ Value strerrorNative(VM *vm, int argCount, Value *args) {
     return strerrorGeneric(vm, error);
 }
 
-void createCClass(VM *vm) {
+void createCModule(VM *vm) {
     ObjString *name = copyString(vm, "C", 1);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -8112,7 +8324,7 @@ static Value set(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(retval == 0 ? OK : NOTOK);
 }
 
-ObjModule *createEnvClass(VM *vm) {
+ObjModule *createEnvModule(VM *vm) {
     ObjString *name = copyString(vm, "Env", 3);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -8161,8 +8373,7 @@ static void createResponse(VM *vm, Response *response) {
     response->res = NULL;
 }
 
-static size_t writeResponse(char *ptr, size_t size, size_t nmemb, void *data)
-{
+static size_t writeResponse(char *ptr, size_t size, size_t nmemb, void *data) {
     Response *response = (Response *) data;
     size_t new_len = response->len + size * nmemb;
     response->res = GROW_ARRAY(response->vm, response->res, char, response->len, new_len + 1);
@@ -8177,8 +8388,7 @@ static size_t writeResponse(char *ptr, size_t size, size_t nmemb, void *data)
     return size * nmemb;
 }
 
-static size_t writeHeaders(char *ptr, size_t size, size_t nitems, void *data)
-{
+static size_t writeHeaders(char *ptr, size_t size, size_t nitems, void *data) {
     Response *response = (Response *) data;
     // if nitems equals 2 its an empty header
     if (nitems != 2) {
@@ -8251,17 +8461,13 @@ static char *dictToPostArgs(ObjDict *dict) {
     return ret;
 }
 
-static ObjDict* endRequest(VM *vm, CURL *curl, Response response) {
+static ObjDict *endRequest(VM *vm, CURL *curl, Response response) {
     // Get status code
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response.statusCode);
     ObjString *content = takeString(vm, response.res, response.len);
 
     // Push to stack to avoid GC
     push(vm, OBJ_VAL(content));
-
-    /* always cleanup */
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
 
     ObjDict *responseVal = initDict(vm);
     // Push to stack to avoid GC
@@ -8286,6 +8492,10 @@ static ObjDict* endRequest(VM *vm, CURL *curl, Response response) {
     pop(vm);
     pop(vm);
     pop(vm);
+
+    /* always cleanup */
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
 
     return responseVal;
 }
@@ -8335,6 +8545,11 @@ static Value get(VM *vm, int argCount, Value *args) {
 
         /* Check for errors */
         if (curlResponse != CURLE_OK) {
+            /* always cleanup */
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+            pop(vm);
+
             errno = curlResponse;
             SET_ERRNO(GET_SELF_CLASS);
             return NIL_VAL;
@@ -8342,6 +8557,11 @@ static Value get(VM *vm, int argCount, Value *args) {
 
         return OBJ_VAL(endRequest(vm, curl, response));
     }
+
+    /* always cleanup */
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    pop(vm);
 
     errno = CURLE_FAILED_INIT;
     SET_ERRNO(GET_SELF_CLASS);
@@ -8368,7 +8588,7 @@ static Value post(VM *vm, int argCount, Value *args) {
             return EMPTY_VAL;
         }
 
-        timeout = (long)AS_NUMBER(args[2]);
+        timeout = (long) AS_NUMBER(args[2]);
         dict = AS_DICT(args[1]);
     } else if (argCount == 2) {
         if (!IS_DICT(args[1])) {
@@ -8416,6 +8636,11 @@ static Value post(VM *vm, int argCount, Value *args) {
         }
 
         if (curlResponse != CURLE_OK) {
+            /* always cleanup */
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+            pop(vm);
+
             errno = curlResponse;
             SET_ERRNO(GET_SELF_CLASS);
             return NIL_VAL;
@@ -8424,12 +8649,17 @@ static Value post(VM *vm, int argCount, Value *args) {
         return OBJ_VAL(endRequest(vm, curl, response));
     }
 
+    /* always cleanup */
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    pop(vm);
+
     errno = CURLE_FAILED_INIT;
     SET_ERRNO(GET_SELF_CLASS);
     return NIL_VAL;
 }
 
-ObjModule *createHTTPClass(VM *vm) {
+ObjModule *createHTTPModule(VM *vm) {
     ObjString *name = copyString(vm, "HTTP", 4);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -10620,7 +10850,7 @@ static Value parse(VM *vm, int argCount, Value *args) {
     return val;
 }
 
-json_value* stringifyJson(Value value) {
+json_value* stringifyJson(VM *vm, Value value) {
     if (IS_NIL(value)) {
         return json_null_new();
     } else if (IS_BOOL(value)) {
@@ -10644,7 +10874,7 @@ json_value* stringifyJson(Value value) {
                 json_value *json = json_array_new(list->values.count);
 
                 for (int i = 0; i < list->values.count; i++) {
-                    json_array_push(json, stringifyJson(list->values.values[i]));
+                    json_array_push(json, stringifyJson(vm, list->values.values[i]));
                 }
 
                 return json;
@@ -10676,7 +10906,7 @@ json_value* stringifyJson(Value value) {
                     json_object_push(
                             json,
                             key,
-                            stringifyJson(entry->value)
+                            stringifyJson(vm, entry->value)
                     );
 
                     if (!IS_STRING(entry->key)) {
@@ -10714,7 +10944,7 @@ static Value stringify(VM *vm, int argCount, Value *args) {
         indent = AS_NUMBER(args[1]);
     }
 
-    json_value *json = stringifyJson(args[0]);
+    json_value *json = stringifyJson(vm, args[0]);
 
     if (json == NULL) {
         errno = JSON_ENOSERIAL;
@@ -10729,15 +10959,22 @@ static Value stringify(VM *vm, int argCount, Value *args) {
         indent
     };
 
-    char *buf = malloc(json_measure_ex(json, default_opts));
+
+    int length = json_measure_ex(json, default_opts);
+    char *buf = ALLOCATE(vm, char, length);
     json_serialize_ex(buf, json, default_opts);
-    ObjString *string = copyString(vm, buf, strlen(buf));
-    free(buf);
+    int actualLength = strlen(buf);
+    ObjString *string = takeString(vm, buf, actualLength);
+
+    // json_measure_ex can produce a length larger than the actual string returned
+    // so we need to cater for this case
+    vm->bytesAllocated -= length - actualLength - 1;
+
     json_builder_free(json);
     return OBJ_VAL(string);
 }
 
-ObjModule *createJSONClass(VM *vm) {
+ObjModule *createJSONModule(VM *vm) {
     ObjString *name = copyString(vm, "JSON", 4);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -10943,7 +11180,49 @@ static Value sqrtNative(VM *vm, int argCount, Value *args) {
     return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
 }
 
-ObjModule *createMathsClass(VM *vm) {
+static Value sinNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "sin() takes 1 argument (%d given).", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0])) {
+        runtimeError(vm, "A non-number value passed to sin()");
+        return EMPTY_VAL;
+    }
+
+    return NUMBER_VAL(sin(AS_NUMBER(args[0])));
+}
+
+static Value cosNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "cos() takes 1 argument (%d given).", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0])) {
+        runtimeError(vm, "A non-number value passed to cos()");
+        return EMPTY_VAL;
+    }
+
+    return NUMBER_VAL(cos(AS_NUMBER(args[0])));
+}
+
+static Value tanNative(VM *vm, int argCount, Value *args) {
+    if (argCount != 1) {
+        runtimeError(vm, "tan() takes 1 argument (%d given).", argCount);
+        return EMPTY_VAL;
+    }
+
+    if (!IS_NUMBER(args[0])) {
+        runtimeError(vm, "A non-number value passed to tan()");
+        return EMPTY_VAL;
+    }
+
+    return NUMBER_VAL(tan(AS_NUMBER(args[0])));
+}
+
+ObjModule *createMathsModule(VM *vm) {
     ObjString *name = copyString(vm, "Math", 4);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -10961,6 +11240,9 @@ ObjModule *createMathsClass(VM *vm) {
     defineNative(vm, &module->values, "min", minNative);
     defineNative(vm, &module->values, "sum", sumNative);
     defineNative(vm, &module->values, "sqrt", sqrtNative);
+    defineNative(vm, &module->values, "sin", sinNative);
+    defineNative(vm, &module->values, "cos", cosNative);
+    defineNative(vm, &module->values, "tan", tanNative);
 
     /**
      * Define Math properties
@@ -11169,7 +11451,6 @@ static Value isdirNative(VM *vm, int argCount, Value *args) {
 
 }
 
-#ifndef _WIN32
 static Value listdirNative(VM *vm, int argCount, Value *args) {
     if (argCount > 1) {
         runtimeError(vm, "listdir() takes 0 or 1 arguments (%d given)", argCount);
@@ -11189,6 +11470,39 @@ static Value listdirNative(VM *vm, int argCount, Value *args) {
 
     ObjList *dir_contents = initList(vm);
     push(vm, OBJ_VAL(dir_contents));
+
+    #ifdef _WIN32
+    int length = strlen(path) + 4;
+    char *searchPath = ALLOCATE(vm, char, length);
+    if (searchPath == NULL) {
+        runtimeError(vm, "Memory error on listdir()!");
+        return EMPTY_VAL;
+    }
+    strcpy(searchPath, path);
+    strcat(searchPath, "\\*");
+
+    WIN32_FIND_DATAA file;
+    HANDLE dir = FindFirstFile(searchPath, &file);
+    if (dir == INVALID_HANDLE_VALUE) {
+        runtimeError(vm, "%s is not a path!", path);
+        free(searchPath);
+        return EMPTY_VAL;
+    }
+
+    do {
+        if (strcmp(file.cFileName, ".") == 0 || strcmp(file.cFileName, "..") == 0) {
+            continue;
+        }
+
+        Value fileName = OBJ_VAL(copyString(vm, file.cFileName, strlen(file.cFileName)));
+        push(vm, fileName);
+        writeValueArray(vm, &dir_contents->values, fileName);
+        pop(vm);
+    } while (FindNextFile(dir, &file) != 0);
+
+    FindClose(dir);
+    FREE_ARRAY(vm, char, searchPath, length);
+    #else
     struct dirent *dir;
     DIR *d;
     d = opendir(path);
@@ -11207,13 +11521,15 @@ static Value listdirNative(VM *vm, int argCount, Value *args) {
         return EMPTY_VAL;
     }
 
+    closedir(d);
+    #endif
+
     pop(vm);
 
     return OBJ_VAL(dir_contents);
 }
-#endif
 
-ObjModule *createPathClass(VM *vm) {
+ObjModule *createPathModule(VM *vm) {
     ObjString *name = copyString(vm, "Path", 4);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -11233,9 +11549,7 @@ ObjModule *createPathClass(VM *vm) {
     defineNative(vm, &module->values, "dirname", dirnameNative);
     defineNative(vm, &module->values, "exists", existsNative);
     defineNative(vm, &module->values, "isdir", isdirNative);
-#ifndef _WIN32
     defineNative(vm, &module->values, "listdir", listdirNative);
-#endif
 
     defineNativeProperty(vm, &module->values, "delimiter", OBJ_VAL(
         copyString(vm, PATH_DELIMITER_AS_STRING, PATH_DELIMITER_STRLEN)));
@@ -11556,7 +11870,7 @@ void initPlatform(VM *vm, Table *table) {
 #endif
 }
 
-void createSystemClass(VM *vm, int argc, const char *argv[]) {
+void createSystemModule(VM *vm, int argc, const char *argv[]) {
     ObjString *name = copyString(vm, "System", 6);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -11711,7 +12025,7 @@ static Value strftimeNative(VM *vm, int argCount, Value *args) {
     struct tm tictoc;
     int len = (format->length > 128 ? format->length * 4 : 128);
 
-    char *point = malloc(len);
+    char *point = ALLOCATE(vm, char, len);
     if (point == NULL) {
         runtimeError(vm, "Memory error on strftime()!");
         return EMPTY_VAL;
@@ -11725,36 +12039,33 @@ static Value strftimeNative(VM *vm, int argCount, Value *args) {
      * there is a big enough buffer.
      */
 
-    /** however is not guaranteed that 0 indicates a failure (`man strftime' says so).
+     /** however is not guaranteed that 0 indicates a failure (`man strftime' says so).
      * So we might want to catch up the eternal loop, by using a maximum iterator.
      */
-
-    ObjString *res;
-
     int max_iterations = 8;  // maximum 65536 bytes with the default 128 len,
                              // more if the given string is > 128
     int iterator = 0;
     while (strftime(point, sizeof(char) * len, fmt, &tictoc) == 0) {
         if (++iterator > max_iterations) {
-            res = copyString(vm, "", 0);
-            goto theend;
+            FREE_ARRAY(vm, char, point, len);
+            return OBJ_VAL(copyString(vm, "", 0));
         }
 
         len *= 2;
 
-        point = realloc(point, len);
+        point = GROW_ARRAY(vm, point, char, len / 2, len);
         if (point == NULL) {
             runtimeError(vm, "Memory error on strftime()!");
             return EMPTY_VAL;
         }
     }
 
-    res = copyString(vm, point, strlen(point));
+    int length = strlen(point);
 
-theend:
-    free(point);
+    // Account for the buffer created at the start
+    vm->bytesAllocated -= len - length - 1;
 
-    return OBJ_VAL(res);
+    return OBJ_VAL(takeString(vm, point, length));
 }
 
 #ifdef HAS_STRPTIME
@@ -11783,7 +12094,7 @@ static Value strptimeNative(VM *vm, int argCount, Value *args) {
 }
 #endif
 
-ObjModule *createDatetimeClass(VM *vm) {
+ObjModule *createDatetimeModule(VM *vm) {
     ObjString *name = copyString(vm, "Datetime", 8);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -12024,7 +12335,7 @@ static Value setSocketOpt(VM *vm, int argCount, Value *args) {
     return TRUE_VAL;
 }
 
-ObjModule *createSocketClass(VM *vm) {
+ObjModule *createSocketModule(VM *vm) {
     ObjString *name = copyString(vm, "Socket", 6);
     push(vm, OBJ_VAL(name));
     ObjModule *module = newModule(vm, name);
@@ -12131,7 +12442,7 @@ static Value randomSelect(VM *vm, int argCount, Value *args)
     return args[index];
 }
 
-ObjModule *createRandomClass(VM *vm)
+ObjModule *createRandomModule(VM *vm)
 {
     ObjString *name = copyString(vm, "Random", 6);
     push(vm, OBJ_VAL(name));

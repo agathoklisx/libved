@@ -1778,6 +1778,8 @@ private void __deinit_string__ (string_T *this) {
 /* array semantics type */
 
 private void vstring_clear (Vstring_t *this) {
+  if (NULL is this) return;
+
   vstring_t *it = this->head;
   while (it) {
     vstring_t *tmp = it->next;
@@ -1791,7 +1793,7 @@ private void vstring_clear (Vstring_t *this) {
 }
 
 private void vstring_free (Vstring_t *this) {
-  if (this is NULL) return;
+  if (NULL is this) return;
   vstring_clear (this);
   free (this);
 }
@@ -5323,7 +5325,7 @@ char *c_keywords[] = {
     "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
     "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V",
     "$OurRoot V", "$OurRoots V", "public I", "mutable I", "loop I", "forever I",
-    "static I", "enum T", "bool T","long T", "double T", "float T", "unsigned T",
+    "static I", "enum T", "bool T", "long T", "ulong T", "double T", "float T", "unsigned T",
     "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
     NULL
 };
@@ -5733,7 +5735,7 @@ private int buf_interpret (buf_t **thisp, char *malloced) {
 
   i_t *in = I.get.current ($my(__I__));
   ifnot (in)
-    in = I.init_instance ($my(__I__));
+    in = I.init_instance ($my(__I__), IOpts());
 
   Term.reset ($my(term_ptr));
 
@@ -5867,7 +5869,7 @@ private ftype_t *buf_ftype_init (buf_t *this, int ftype, FtypeAutoIndent_cb inde
   if (ftype >= $myroots(num_syntaxes) or ftype < 0) ftype = 0;
   $my(syn) = &$myroots(syntaxes)[ftype];
   return __ftype_set__ (__ftype_new__ ($my(syn)),
-    QUAL (FTYPE, .autoindent = indent_cb));
+    FtypeOpts (.autoindent = indent_cb));
 }
 
 private ftype_t *buf_ftype_set (buf_t *this, int ftype, ftype_t q) {
@@ -6007,7 +6009,7 @@ private char *ftype_on_open_fname_under_cursor_c (char *fname,
 
 private ftype_t *buf_syn_init_c (buf_t *this) {
   int idx = Ed.syn.get_ftype_idx ($my(root), "c");
-  return self(ftype.set, idx, QUAL(FTYPE,
+  return self(ftype.set, idx, FtypeOpts (
     .autoindent = buf_autoindent_c,
     .shiftwidth = C_DEFAULT_SHIFTWIDTH,
     .tab_indents = C_TAB_ON_INSERT_MODE_INDENTS,
@@ -6018,11 +6020,11 @@ private ftype_t *buf_syn_init_c (buf_t *this) {
 
 private ftype_t *buf_syn_init_i (buf_t *this) {
   int idx = Ed.syn.get_ftype_idx ($my(root), "i");
-  return self(ftype.set, idx, QUAL(FTYPE,
-    .autoindent = buf_autoindent_c,
-    .tabwidth = 2,
-    .tab_indents = 1,
-    .balanced = buf_balanced_obj
+  return self(ftype.set, idx, FtypeOpts (
+      .autoindent = buf_autoindent_c,
+      .tabwidth = 2,
+      .tab_indents = 1,
+      .balanced = buf_balanced_obj
   ));
 }
 
@@ -6521,6 +6523,7 @@ private void venv_free (venv_t **env) {
 
 private void history_free (hist_t **hist) {
   if (NULL is hist) return;
+
   h_search_t *hs = (*hist)->search;
   if (NULL isnot hs) {
     histitem_t *hitem = hs->head;
@@ -7446,7 +7449,7 @@ private buf_t *win_buf_init (win_t *w, int at_frame, int flags) {
   return this;
 }
 
-private buf_t *win_buf_new (win_t *win, BUF_INIT_OPTS opts) {
+private buf_t *win_buf_new (win_t *win, buf_opts opts) {
   buf_t *this = win_buf_init (win, opts.at_frame, opts.flags);
 
   self(init_fname, opts.fname);
@@ -7823,9 +7826,11 @@ private buf_t *ed_special_buf (ed_t *this, char *wname, char *bname,
 
   buf_t *buf = Win.get.buf_by_name (w, bname, &idx);
   if (NULL is buf) {
-      buf = Win.buf.new (w, QUAL(BUF_INIT,
-        .fname = bname, .at_frame = at_frame,
-        .flags = BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
+      buf = Win.buf.new (w, BufOpts (
+          .fname = bname,
+          .at_frame = at_frame,
+          .flags = BUF_IS_PAGER|BUF_IS_RDONLY|BUF_IS_SPECIAL));
+
     Win.append_buf (w, buf);
   }
 
@@ -12074,8 +12079,10 @@ private int win_edit_fname (win_t *win, buf_t **thisp, char *fname, int frame,
 
     if ($my(at_frame) is frame) $my(flags) &= ~BUF_IS_VISIBLE;
 
-    buf_t *that = Win.buf.new (win, QUAL(BUF_INIT,
-      .fname = fname, .at_frame = frame));
+    buf_t *that = Win.buf.new (win, BufOpts (
+        .fname = fname,
+        .at_frame = frame));
+
     current_list_set (that, 0);
 
     int cur_idx = win->cur_idx;
@@ -15931,15 +15938,77 @@ private int ed_append_win (ed_t *this, win_t *w) {
   return this->cur_idx;
 }
 
-private void ed_history_add (ed_t *this, Vstring_t *hist, int what) {
+private string_t *ed_history_get_search_file (ed_t *this) {
+  return $my(hs_file);
+}
+
+private string_t *ed_history_get_rline_file (ed_t *this) {
+  return $my(hrl_file);
+}
+
+private string_t *ed_history_set_search_file (ed_t *this, char *file) {
+  string_t *hs_file = $my(hs_file);
+  ifnot (NULL is file) {
+    if (NULL is hs_file)
+      hs_file = String.new_with (file);
+    else
+      hs_file = String.replace_with (hs_file, file);
+  } else {
+    if (NULL is hs_file)
+      hs_file = String.new_with (
+          Root.get.env ($OurRoot, "data_dir")->bytes);
+    else
+      hs_file = String.replace_with (hs_file,
+          Root.get.env ($OurRoot, "data_dir")->bytes);
+
+    String.append_fmt (hs_file, "/.%s_libved_hist_search",
+        Root.get.env ($OurRoot, "user_name")->bytes);
+  }
+
+  $my(hs_file) = hs_file;
+
+  return $my(hs_file);
+}
+
+private string_t *ed_history_set_rline_file (ed_t *this, char *file) {
+  string_t *hrl_file = $my(hrl_file);
+  ifnot (NULL is file) {
+    if (NULL is hrl_file)
+      hrl_file = String.new_with (file);
+    else
+      hrl_file = String.replace_with (hrl_file, file);
+  } else {
+    if (NULL is hrl_file)
+      hrl_file = String.new_with (
+          Root.get.env ($OurRoot, "data_dir")->bytes);
+    else
+      hrl_file = String.replace_with (hrl_file,
+          Root.get.env ($OurRoot, "data_dir")->bytes);
+
+    String.append_fmt (hrl_file, "/.%s_libved_hist_rline",
+        Root.get.env ($OurRoot, "user_name")->bytes);
+  }
+
+  $my(hrl_file) = hrl_file;
+
+  return $my(hrl_file);
+}
+
+private void ed_history_add (ed_t *this, char *bytes, size_t num_bytes) {
+  rline_t *rl = self(rline.new);
+  BYTES_TO_RLINE (rl, bytes, (int) num_bytes);
+  Rline.history.push (rl);
+}
+
+private void ed_history_add_lines (ed_t *this, Vstring_t *hist, int what) {
+  if (NULL is hist) return;
+
   if (what is RLINE_HISTORY) {
     vstring_t *it = hist->head;
     while (it) {
-      rline_t *rl = self(rline.new);
       char *sp = Cstring.trim.end (it->data->bytes, '\n');
       sp = Cstring.trim.end (sp, ' ');
-      BYTES_TO_RLINE (rl, it->data->bytes, (int) bytelen (sp));
-      Rline.history.push (rl);
+      self(history.add, it->data->bytes, bytelen (sp));
       it = it->next;
     }
     return;
@@ -15955,54 +16024,53 @@ private void ed_history_add (ed_t *this, Vstring_t *hist, int what) {
   }
 }
 
-private void ed_history_write (ed_t *this) {
-   if (0 is $my(env)->uid or -1 is access ($my(env)->data_dir->bytes, F_OK|R_OK))
-     return;
-   ifnot (Dir.is_directory ($my(env)->data_dir->bytes)) return;
-   size_t dirlen = $my(env)->data_dir->num_bytes;
-   char fname[dirlen + 32];
-   snprintf (fname, dirlen + 32, "%s/.libved_h_search", $my(env)->data_dir->bytes);
-   FILE *fp = fopen (fname, "w");
-   if (NULL is fp) return;
-   histitem_t *it = $my(history)->search->tail;
-   while (it) {
-     fprintf (fp, "%s\n", it->data->bytes);
-     it = it->prev;
-   }
-   fclose (fp);
+private void ed_history_read (ed_t *this) {
+  if (0 is $my(env)->uid) return;
 
-   snprintf (fname, dirlen + 32, "%s/.libved_h_rline", $my(env)->data_dir->bytes);
-   fp = fopen (fname, "w");
-   if (NULL is fp) return;
+  Vstring_t *lines = NULL;
 
-   h_rlineitem_t *hrl = $my(history)->rline->tail;
-   while (hrl) {
-     string_t *line = Vstring.join (hrl->data->line, "");
-     fprintf (fp, "%s\n", line->bytes);
-     String.free (line);
-     hrl = hrl->prev;
-   }
-   fclose (fp);
+  if (File.exists ($my(hs_file)->bytes)) {
+    lines = File.readlines ($my(hs_file)->bytes, NULL, NULL, NULL);
+    self(history.add_lines, lines, SEARCH_HISTORY);
+  }
+
+  Vstring.clear (lines);
+
+  if (File.exists ($my(hrl_file)->bytes)) {
+    File.readlines ($my(hrl_file)->bytes, lines, NULL, NULL);
+    self(history.add_lines, lines, RLINE_HISTORY);
+  }
+
+  Vstring.free (lines);
 }
 
-private void ed_history_read (ed_t *this) {
-   if (0 is $my(env)->uid or -1 is access ($my(env)->data_dir->bytes, F_OK|R_OK))
-     return;
+private void ed_history_write (ed_t *this) {
+  if (0 is $my(env)->uid) return;
 
-   ifnot (Dir.is_directory ($my(env)->data_dir->bytes)) return;
+  FILE *fp = fopen ($my(hs_file)->bytes, "w");
+  if (NULL is fp) goto hrl_file;
 
-   size_t dirlen = $my(env)->data_dir->num_bytes;
-   char fname[dirlen + 16];
-   snprintf (fname, dirlen + 16, "%s/.libved_h_search",$my(env)->data_dir->bytes);
-   Vstring_t *lines = File.readlines (fname, NULL, NULL, NULL);
-   self(history.add, lines, SEARCH_HISTORY);
-   Vstring.clear (lines);
+  histitem_t *it = $my(history)->search->tail;
+  while (it) {
+    fprintf (fp, "%s\n", it->data->bytes);
+    it = it->prev;
+  }
 
-   snprintf (fname, dirlen + 16, "%s/.libved_h_rline", $my(env)->data_dir->bytes);
-   File.readlines (fname, lines, NULL, NULL);
-   self(history.add, lines, RLINE_HISTORY);
+  fclose (fp);
 
-   Vstring.free (lines);
+hrl_file:
+  fp = fopen ($my(hrl_file)->bytes, "w");
+  if (NULL is fp) return;
+
+  h_rlineitem_t *hrl = $my(history)->rline->tail;
+  while (hrl) {
+    string_t *line = Vstring.join (hrl->data->line, "");
+    fprintf (fp, "%s\n", line->bytes);
+    String.free (line);
+    hrl = hrl->prev;
+  }
+
+  fclose (fp);
 }
 
 private int buf_word_actions_cb (buf_t **thisp, int fidx, int lidx,
@@ -16489,6 +16557,8 @@ private void ed_free (ed_t *this) {
     String.free ($my(msgline));
     String.free ($my(last_insert));
     String.free ($my(ed_str));
+    String.free ($my(hs_file));
+    String.free ($my(hrl_file));
     Ustring.free ($my(uline));
     Vstring.free ($my(rl_last_component));
     Video.free ($my(video));
@@ -16521,11 +16591,11 @@ private void ed_free (ed_t *this) {
     ed_free_cw_mode_cbs (this);
     /* if there is a wonder about the tendency to alling lines
      * into the same group of functionality, is because in cases
-     * like this, that introduced the line mode, this and another
-     * tendency to group the function(s|ality), close its other scope,
+     * like this (that introduced the line mode); this and one another
+     * tendency to group the function(s|ality) close to its other scope,
      * allow me to follow and copy all the functions from the "old"
      * file mode function(s|lity), to develop a bright new functionality in a matter
-     * of minutes and without thing a bit, by just copying the file mode
+     * of minutes and without think a bit, by just copying the file mode
      * function and substitute in visual mode "file/line", and
      * using for the rest (proper function calling) C-E in normal mode
      * (all that alling the line mode additions, previous to file mode) 
@@ -16580,7 +16650,7 @@ private int ed_i_record_default (ed_t *this, Vstring_t *rec) {
 
   i_t *in = I.get.current ($my(__I__));
   ifnot (in)
-    in = I.init_instance ($my(__I__));
+    in = I.init_instance ($my(__I__), IOpts());
 
   int retval = I.eval_string (in, str, 1, 1);
 
@@ -17233,7 +17303,16 @@ private Class (ed) *editor_new (void) {
       .history = SubSelfInit (ed, history,
         .add = ed_history_add,
         .read = ed_history_read,
-        .write = ed_history_write
+        .write = ed_history_write,
+        .add_lines = ed_history_add_lines,
+        .set = SubSelfInit (edhistory, set,
+          .rline_file = ed_history_set_rline_file,
+          .search_file = ed_history_set_search_file
+        ),
+        .get = SubSelfInit (edhistory, get,
+          .rline_file = ed_history_get_rline_file,
+          .search_file = ed_history_get_search_file
+        )
       ),
       .draw = SubSelfInit (ed, draw,
         .current_win = ed_draw_current_win
@@ -17574,7 +17653,7 @@ private int ed_main (ed_t *this, buf_t *buf) {
   return ed_loop (this, buf);
 }
 
-private ed_t *ed_init (E_T *E) {
+private ed_t *ed_init (E_T *E, ed_opts opts) {
   ed_t *this = AllocType (ed);
   $myprop = AllocProp (ed);
 
@@ -17618,7 +17697,7 @@ private ed_t *ed_init (E_T *E) {
 
   $my(topline) = String.new ($from($my(term), columns));
   $my(msgline) = String.new ($from($my(term), columns));
-  $my(ed_str) =  String.new  ($from($my(term), columns));
+  $my(ed_str)  = String.new ($from($my(term), columns));
   $my(last_insert) = String.new ($from($my(term), columns));
   $my(rl_last_component) = Vstring.new ();
   $my(uline) = Ustring.new ();
@@ -17635,6 +17714,11 @@ private ed_t *ed_init (E_T *E) {
   $my(history)->rline->history_idx = 0;
   $my(max_num_hist_entries) = RLINE_HISTORY_NUM_ENTRIES;
   $my(max_num_undo_entries) = UNDO_NUM_ENTRIES;
+  $my(hs_file) = self(history.set.search_file, opts.hs_file);
+  $my(hrl_file) = self(history.set.rline_file, opts.hrl_file);
+
+  if (opts.flags & ED_INIT_OPT_LOAD_HISTORY)
+    self(history.read);
 
   $my(repeat_mode) = 0;
   $my(record) = 0;
@@ -17673,8 +17757,8 @@ private ed_t *ed_init (E_T *E) {
   return this;
 }
 
-private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
-  ed_t *ed = ed_init (this);
+private ed_t *E_init (E_T *this, ed_opts opts) {
+  ed_t *ed = ed_init (this, opts);
 
   int cur_idx = $my(cur_idx);
 
@@ -17685,14 +17769,14 @@ private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
   else
     $my(prev_idx) = cur_idx;
 
-  if (init_cb isnot NULL) {
-    init_cb (ed);
+  if (opts.init_cb isnot NULL) {
+    opts.init_cb (ed, opts);
 
     if (NULL is $my(at_init_cb))
-      $my(at_init_cb) = init_cb;
+      $my(at_init_cb) = opts.init_cb;
   } else {
     ifnot (NULL is $my(at_init_cb))
-      $my(at_init_cb) (ed);
+      $my(at_init_cb) (ed, opts);
   }
 
   $from(ed, root) = this;
@@ -17704,11 +17788,11 @@ private ed_t *E_init (E_T *this, EdAtInit_cb init_cb) {
   return ed;
 }
 
-private ed_t *E_new (Class (E) *this, ED_INIT_OPTS opts) {
+private ed_t *E_new (Class (E) *this, ed_opts opts) {
   if (opts.term_flags)
     term_set_state_bit (self(get.term), opts.term_flags);
 
-  ed_t *ed = E_init (this, opts.init_cb);
+  ed_t *ed = E_init (this, opts);
 
   int num_win = opts.num_win;
   if (num_win <= 0) num_win = 1;
@@ -18158,10 +18242,10 @@ private ed_t *E_prev_focused_editor (E_T *this, buf_t **thisp) {
 }
 
 private ed_t *E_new_editor (E_T *this, buf_t **thisp, char *fname) {
-  ed_t *ed = self(new, QUAL(ED_INIT));
+  ed_t *ed = self(new, EdOpts());
   win_t *w = ed_get_current_win (ed);
 
-  *thisp = win_buf_new (w, QUAL(BUF_INIT, .fname = fname));
+  *thisp = win_buf_new (w, BufOpts (.fname = fname));
 
   current_list_set (*thisp, 0);
 
@@ -19629,8 +19713,9 @@ private void i_free_instance (i_t **thisp) {
   i_free (thisp);
 }
 
-private i_t *i_new (void) {
+private i_t *i_new (Class (i) *__i__) {
   Type (i) *this = AllocType (i);
+  this->prop = __i__->prop;
   return this;
 }
 
@@ -19783,7 +19868,7 @@ ival_t i_e_get_ed_current (i_t *this) {
 }
 
 ival_t i_ed_new (i_t *this, int num_win) {
-  return (ival_t) Root.new ($OurRoot, QUAL(ED_INIT, .num_win = num_win));
+  return (ival_t) Root.new ($OurRoot, EdOpts(.num_win = num_win));
 }
 
 ival_t i_ed_get_num_win (i_t *this, ed_t *ed) {
@@ -19888,6 +19973,12 @@ ival_t i_buf_search (i_t *this, buf_t *buf, char com, char *str, int c) {
   return retval;
 }
 
+ival_t i_print_env (i_t *i, ed_t *this, char *str) {
+  string_t *env = E_get_env ($OurRoot, str);
+  free (str);
+  i->print_bytes (i->out_fp, env->bytes);
+  return I_OK;
+}
 
 ival_t i_print_str (i_t *this, ival_t str) {
   char *sp = (char *) str;
@@ -19906,13 +19997,6 @@ ival_t i_free_str (i_t *this, ival_t str) {
   (void) this;
   char *sp = (char *) str;
   free (sp);
-  return I_OK;
-}
-
-ival_t i_print_env (i_t *i, ed_t *this, char *str) {
-  string_t *env = E_get_env ($OurRoot, str);
-  free (str);
-  i->print_bytes (i->out_fp, env->bytes);
   return I_OK;
 }
 
@@ -19955,21 +20039,65 @@ struct ifun_t {
   { "win_set_current_buf",   (ival_t) i_win_set_current_buf, 3},
   { "win_get_current_buf",   (ival_t) i_win_get_current_buf, 1},
   { "print_env",             (ival_t) i_print_env, 2},
+  { NULL, 0, 0}
+};
+
+struct i_def_fun_t {
+  const char *name;
+  ival_t val;
+  int nargs;
+} i_def_funs[] = {
   { "print_str",             (ival_t) i_print_str, 1},
   { "println_str",           (ival_t) i_println_str, 1},
   { "free_str",              (ival_t) i_free_str, 1},
   { NULL, 0, 0}
 };
 
+private int i_define_funs_default_cb (i_t *this) {
+  int err;
+  for (int i = 0; ifuns[i].name; i++) {
+    if (I_OK isnot (err = i_define (this, ifuns[i].name, CFUNC (ifuns[i].nargs), ifuns[i].val)))
+      return err;
+  }
 
-private int i_init (Class (i) *interp, i_t *this, I_INIT opts) {
+  return I_OK;
+}
+
+private i_opts i_default_options (i_t *this, i_opts opts) {
+  if (0 >= opts.mem_size)
+    opts.mem_size = $my(default_size);
+
+  if (NULL is opts.print_bytes)
+    opts.print_bytes = i_print_bytes;
+
+  if (NULL is opts.print_byte)
+    opts.print_byte = i_print_byte;
+
+  if (NULL is opts.print_fmt_bytes)
+    opts.print_fmt_bytes = i_print_fmt_bytes;
+
+  if (NULL is opts.syntax_error)
+    opts.syntax_error = i_syntax_error_to_ed;
+
+  if (NULL is opts.err_fp)
+    opts.err_fp = stderr;
+
+  if (NULL is opts.define_funs_cb)
+    opts.define_funs_cb = i_define_funs_default_cb;
+
+  return opts;
+}
+
+private int i_init (Class (i) *interp, i_t *this, i_opts opts) {
   int i;
   int err = 0;
 
   if (NULL is opts.name)
-    i_name_gen (this->name, &interp->prop->name_gen, "i:", 2);
+    i_name_gen (this->name, &$my(name_gen), "i:", 2);
   else
     cstring_cp (this->name, 32, opts.name, 31);
+
+  opts = i_default_options (this, opts);
 
   this->arena = (char *) Alloc (opts.mem_size);
   this->mem_size = opts.mem_size;
@@ -19980,12 +20108,11 @@ private int i_init (Class (i) *interp, i_t *this, I_INIT opts) {
   this->err_fp = opts.err_fp;
   this->out_fp = opts.out_fp;
   this->max_script_size = opts.max_script_size;
+  this->object = opts.object;
   this->state = 0;
 
   this->symptr = (Sym *) this->arena;
   this->valptr = (ival_t *) (this->arena + this->mem_size);
-
-  this->__E__ = $from(interp, __E__);
 
   for (i = 0; idefs[i].name; i++) {
     err = i_define (this, idefs[i].name, idefs[i].toktype, idefs[i].val);
@@ -19996,38 +20123,35 @@ private int i_init (Class (i) *interp, i_t *this, I_INIT opts) {
     }
   }
 
-  for (i = 0; ifuns[i].name; i++) {
-    err = i_define (this, ifuns[i].name, CFUNC (ifuns[i].nargs), ifuns[i].val);
+  for (i = 0; i_def_funs[i].name; i++) {
+    err = i_define (this, i_def_funs[i].name, CFUNC (i_def_funs[i].nargs), i_def_funs[i].val);
+
     if (err isnot I_OK) {
       i_free (&this);
       return err;
     }
   }
 
+  if (I_OK isnot opts.define_funs_cb (this)) {
+    i_free (&this);
+    return err;
+  }
+
   i_append_instance (interp, this);
+
   return I_OK;
 }
 
-private i_t *i_init_instance (Class (i) *__i__) {
-  i_t *this = i_new ();
-  this->prop = __i__->prop;
+private i_t *i_init_instance (Class (i) *__i__, i_opts opts) {
+  i_t *this = i_new (__i__);
 
-  FILE *err_fp = stderr;
-
-  i_init (__i__, this, QUAL(I_INIT,
-    .mem_size = 8192,
-    .print_bytes = i_print_bytes,
-    .print_byte  = i_print_byte,
-    .print_fmt_bytes = i_print_fmt_bytes,
-    .syntax_error = i_syntax_error_to_ed,
-    .err_fp = err_fp
-  ));
+  i_init (__i__, this, opts);
 
   return this;
 }
 
 private int i_load_file (Class (i) *__i__, char *fn) {
-  i_t *this = i_init_instance (__i__);
+  i_t *this = i_init_instance (__i__, IOpts());
 
   ifnot (Path.is_absolute (fn)) {
     if (File.exists (fn))
@@ -20092,6 +20216,8 @@ private Class (i) *__init_i__ (Class (E) *e) {
   );
 
   $my(name_gen) = ('z' - 'a') + 1;
+  $my(default_size) = 1 << 12;
+
   $my(head) = NULL;
   $my(num_instances) = 0;
   $my(current_idx) = -1;

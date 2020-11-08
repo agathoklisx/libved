@@ -379,6 +379,8 @@ enum {
   I_ERR_OK_ELSE = 1, // special internal condition
 };
 
+#define I_NOTOK NOTOK
+
 #define MAX_BUILTIN_PARAMS 9
 
 NewType (Istring,
@@ -406,6 +408,8 @@ NewProp (i,
   Class (win) *__Win__;
 
   int name_gen;
+  size_t default_size;
+
   Type (i) *head;
   int num_instances;
   int current_idx;
@@ -450,7 +454,8 @@ NewType (i,
   IPrintFmtBytes_cb print_fmt_bytes;
   ISyntaxError_cb syntax_error;
 
-  Class (E) *__E__;
+  void *object;
+
   Type (i) *next;
 );
 
@@ -977,6 +982,8 @@ NewProp (ed,
     msg_tabwidth;
 
   string_t
+    *hs_file,
+    *hrl_file,
     *last_insert,
     *msgline,
     *topline,
@@ -987,7 +994,6 @@ NewProp (ed,
   hist_t *history;
   Reg_t regs[NUM_REGISTERS];
   rlcom_t **commands;
-
 
   Ustring_t *uline;
 

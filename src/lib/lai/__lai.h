@@ -4,6 +4,8 @@
 #define dictu_common_h
 
 
+#define UNUSED(__x__) (void) __x__
+
 #define NAN_TAGGING
 #define DEBUG_PRINT_CODE
 #define DEBUG_TRACE_EXECUTION
@@ -525,7 +527,7 @@ typedef enum {
     TOKEN_VAR, TOKEN_CONST, TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL,
     TOKEN_FOR, TOKEN_WHILE, TOKEN_BREAK,
     TOKEN_RETURN, TOKEN_CONTINUE,
-    TOKEN_WITH, TOKEN_EOF, TOKEN_IMPORT,
+    TOKEN_WITH, TOKEN_EOF, TOKEN_IMPORT, TOKEN_FROM,
     TOKEN_ERROR
 
 } TokenType;
@@ -717,8 +719,6 @@ typedef enum {
 #define OK     0
 #define NOTOK -1
 
-#define UNUSED(__x__) (void) __x__
-
 VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]);
 
 void freeVM(VM *vm);
@@ -761,7 +761,7 @@ void defineAllNatives(VM *vm);
     ((capacity) < 8 ? 8 : (capacity) * 2)
 
 #define SHRINK_CAPACITY(capacity) \
-    ((capacity) < 16 ? 7 : (capacity) / 2)
+    ((capacity) < 16 ? 8 : (capacity) / 2)
 
 #define GROW_ARRAY(vm, previous, type, oldCount, count) \
     (type*)reallocate(vm, previous, sizeof(type) * (oldCount), \
@@ -789,7 +789,7 @@ void freeObject(VM *vm, Obj *object);
 #define dictu_util_h
 
 
-char *readFile(const char *path);
+char *readFile(VM *vm, const char *path);
 
 void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
 
@@ -974,7 +974,7 @@ int findBuiltinModule(char *name, int length);
 #endif
 
 
-void createCClass(VM *vm);
+void createCModule(VM *vm);
 
 #define MAX_ERROR_LEN 256
 Value strerrorGeneric(VM *, int);
@@ -988,7 +988,7 @@ Value strerrorNative(VM *, int, Value *);
 
 
 
-ObjModule *createEnvClass(VM *vm);
+ObjModule *createEnvModule(VM *vm);
 
 #endif //dictu_env_h
 #ifndef DISABLE_HTTP
@@ -1004,14 +1004,13 @@ ObjModule *createEnvClass(VM *vm);
 
 typedef struct response {
     VM *vm;
-    char *res;
     ObjList *headers;
+    char *res;
     size_t len;
-    size_t headerLen;
     long statusCode;
 } Response;
 
-ObjModule *createHTTPClass(VM *vm);
+ObjModule *createHTTPModule(VM *vm);
 
 #endif //dictu_http_h
 #endif /* DISABLE_HTTP */
@@ -1457,7 +1456,7 @@ void json_builder_free (json_value *);
 #define dictu_json_h
 
 
-ObjModule *createJSONClass(VM *vm);
+ObjModule *createJSONModule(VM *vm);
 
 #endif //dictu_json_h
 
@@ -1467,7 +1466,7 @@ ObjModule *createJSONClass(VM *vm);
 
 
 
-ObjModule *createMathsClass(VM *vm);
+ObjModule *createMathsModule(VM *vm);
 
 #endif //dictu_math_h
 
@@ -1481,6 +1480,7 @@ ObjModule *createMathsClass(VM *vm);
 #endif
 
 #ifdef _WIN32
+
 #define DIR_SEPARATOR '\\'
 #define DIR_ALT_SEPARATOR '/'
 #define DIR_SEPARATOR_AS_STRING "\\"
@@ -1506,7 +1506,7 @@ ObjModule *createMathsClass(VM *vm);
 #endif
 
 
-ObjModule *createPathClass(VM *vm);
+ObjModule *createPathModule(VM *vm);
 
 #endif //dictu_path_h
 
@@ -1525,7 +1525,7 @@ ObjModule *createPathClass(VM *vm);
 #endif
 
 
-void createSystemClass(VM *vm, int argc, const char *argv[]);
+void createSystemModule(VM *vm, int argc, const char *argv[]);
 
 #endif //dictu_system_h
 
@@ -1533,10 +1533,16 @@ void createSystemClass(VM *vm, int argc, const char *argv[]);
 #ifndef dictu_datetime_h
 #define dictu_datetime_h
 
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+#ifndef __USE_XOPEN
+#define __USE_XOPEN
+#endif
 
 
 
-ObjModule *createDatetimeClass(VM *vm);
+ObjModule *createDatetimeModule(VM *vm);
 
 #endif //dictu_datetime_h
 
@@ -1548,7 +1554,7 @@ ObjModule *createDatetimeClass(VM *vm);
 #ifdef __FreeBSD__
 #endif
 
-ObjModule *createSocketClass(VM *vm);
+ObjModule *createSocketModule(VM *vm);
 
 #endif //dictu_socket_h
 
@@ -1558,6 +1564,6 @@ ObjModule *createSocketClass(VM *vm);
 
 
 
-ObjModule *createRandomClass(VM *vm);
+ObjModule *createRandomModule(VM *vm);
 
 #endif //dictu_random_h

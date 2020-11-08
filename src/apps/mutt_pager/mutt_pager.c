@@ -124,14 +124,14 @@ private char *__mail_syn_parser (buf_t *this, char *line, int len, int idx, row_
 private ftype_t *__mail_hdrs_syn_init (buf_t *this) {
   ed_t *ed = E.get.current (THIS_E);
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail_hdrs"),
-    QUAL(FTYPE, .tabwidth = 1, .on_emptyline = String.new (1)));
+    FtypeOpts(.tabwidth = 1, .on_emptyline = String.new (1)));
   return ft;
 }
 
 private ftype_t *__mail_syn_init (buf_t *this) {
   ed_t *ed = E.get.current (THIS_E);
-  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail"), QUAL(FTYPE,
-    .tabwidth = 4, .on_emptyline = String.new (1)));
+  ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (ed, "mail"),
+      FtypeOpts(.tabwidth = 4, .on_emptyline = String.new (1)));
   return ft;
 }
 
@@ -417,7 +417,7 @@ int main (int argc, char **argv) {
 
   E.set.at_exit_cb (THIS_E, __deinit_ext__);
 
-  ed_t *this = E.init (THIS_E, __init_ext__);
+  ed_t *this = E.init (THIS_E, EdOpts(.init_cb = __init_ext__ ));
 
   int retval = 1;
 
@@ -435,10 +435,10 @@ int main (int argc, char **argv) {
 
     if (E.test.state_bit (THIS_E, E_SUSPENDED)) {
       if (E.get.num (THIS_E) is 1) {
-        this = E.new (THIS_E, QUAL(ED_INIT, .init_cb = __init_ext__));
+        this = E.new (THIS_E, EdOpts(.init_cb = __init_ext__));
 
         w = Ed.get.current_win (this);
-        buf = Win.buf.new (w, BUF_INIT_QUAL());
+        buf = Win.buf.new (w, BufOpts());
         Win.append_buf (w, buf);
         Win.set.current_buf (w, 0, DRAW);
       } else {

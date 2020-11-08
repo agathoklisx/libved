@@ -3232,7 +3232,7 @@ theend:;
 
 private ftype_t *__ex_diff_syn_init (buf_t *this) {
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "diff"),
-    QUAL(FTYPE, .tabwidth = 0, .tab_indents = 0));
+    FtypeOpts(.tabwidth = 0, .tab_indents = 0));
   return ft;
 }
 
@@ -3257,37 +3257,37 @@ private string_t *__i_ftype_autoindent (buf_t *this, row_t *row) {
 
 private ftype_t *__ex_lai_syn_init (buf_t *this) {
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lai"),
-    QUAL(FTYPE, .autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+    FtypeOpts(.autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
 private ftype_t *__ex_lua_syn_init (buf_t *this) {
   ftype_t *ft= Buf.ftype.set (this, Ed.syn.get_ftype_idx (E.get.current (THIS_E), "lua"),
-    QUAL(FTYPE, .autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
+    FtypeOpts(.autoindent = __ex_c_ftype_autoindent, .tabwidth = 2, .tab_indents = 1));
   return ft;
 }
 
 private ftype_t *__ex_make_syn_init (buf_t *this) {
   ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "make"),
-    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
+    FtypeOpts(.tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__ex_sh_syn_init (buf_t *this) {
   ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "sh"),
-    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
+    FtypeOpts(.tabwidth = 4, .tab_indents = 0, .autoindent = __ex_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__ex_zig_syn_init (buf_t *this) {
   ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "zig"),
-    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent));
+    FtypeOpts(.tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent));
   return ft;
 }
 
 private ftype_t *__ex_md_syn_init (buf_t *this) {
   ftype_t *ft = Buf.ftype.set (this,  Ed.syn.get_ftype_idx (E.get.current (THIS_E), "md"),
-    QUAL(FTYPE, .tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent, .clear_blanklines = 0));
+    FtypeOpts(.tabwidth = 4, .tab_indents = 0, .autoindent = __ex_c_ftype_autoindent, .clear_blanklines = 0));
   return ft;
 }
 
@@ -3338,7 +3338,7 @@ syn_t ex_syn[] = {
   }
 };
 
-public void __init_ext__ (Type (ed) *this) {
+public void __init_ext__ (Type (ed) *this, ed_opts opts) {
   __ex_add_rline_commands__ (this);
   __ex_add_cw_mode_actions__ (this);
   __ex_add_lw_mode_actions__ (this);
@@ -3355,7 +3355,9 @@ public void __init_ext__ (Type (ed) *this) {
   __init_local__ (this);
 #endif
 
-  Ed.history.read (this);
+  ifnot (opts.flags & ED_INIT_OPT_LOAD_HISTORY)
+    Ed.history.read (this);
+
   Ed.set.at_exit_cb (this, Ed.history.write);
 
   for (size_t i = 0; i < ARRLEN(ex_syn); i++)

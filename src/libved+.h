@@ -441,7 +441,7 @@ NewProp (this,
   private void __deinit_local__ (void);
 #endif
 
-public void __init_ext__ (ed_t *);
+public void __init_ext__ (ed_t *, ed_opts);
 public void __deinit_ext__ (void);
 
 public Class (this) *__init_this__ (void);

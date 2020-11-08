@@ -1,6 +1,10 @@
 NAME    := lai
 VERSION := 0.1
-SYSDIR  :=
+
+ENABLE_REPL := 0
+ENABLE_HTTP := 1
+
+SYSDIR  := sys
 BINDIR   = $(SYSDIR)/bin
 INCDIR   = $(SYSDIR)/include
 LIBDIR   = $(SYSDIR)/lib
@@ -22,7 +26,7 @@ INTERP_FILES = main.c
 
 INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
 
-ENABLE_REPL := 0
+#ENABLE_REPL := 0
 ifneq ($(ENABLE_REPL), 0)
   INTERP_FILES += linenoise.c
   INTERP_FLAGS += -DENABLE_REPL
@@ -31,37 +35,35 @@ endif
 SHARED_FLAGS :=
 STATIC_FLAGS = -DDISABLE_HTTP -static
 
-ENABLE_HTTP := 1
+#ENABLE_HTTP := 1
 ifneq ($(ENABLE_HTTP), 0)
   SHARED_FLAGS += -lcurl
 else
   SHARED_FLAGS =-DDISABLE_HTTP
 endif
 
-INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
-
-shared-library: $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
+shared-library: Env $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)
 
 $(INCDIR)/$(HEADER):
 	@$(CP) $(HEADER) $(INCDIR)
 
 $(LIBDIR)/lib$(NAME)-$(VERSION).so:
 	$(CC) -o $(LIBDIR)/lib$(NAME)-$(VERSION).so -shared -fPIC $(FLAGS) $(SHARED_FLAGS) $(LIB_FILES)
-	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).so $(LIBDIR)/lib$(NAME).so
+	@cd $(LIBDIR) && $(LN_S) -vf lib$(NAME)-$(VERSION).so lib$(NAME).so
 
-static-library: $(LIBDIR)/lib$(NAME)-$(VERSION).a
+static-library: Env $(LIBDIR)/lib$(NAME)-$(VERSION).a
 
 $(LIBDIR)/lib$(NAME)-$(VERSION).a:
 	$(CC) $(FLAGS) $(LIB_FILES) $(STATIC_FLAGS) -c -o lib$(NAME).o
 	@$(AR) $(LIBDIR)/lib$(NAME)-$(VERSION).a lib$(NAME).o
-	@$(LN_S) -vf $(LIBDIR)/lib$(NAME)-$(VERSION).a $(LIBDIR)/lib$(NAME).a
+	@cd $(LIBDIR) && $(LN_S) -vf lib$(NAME)-$(VERSION).a lib$(NAME).a
 	@$(RM) lib$(NAME).o
 
 interpr: shared-library
-	$(CC) -o $(BINDIR)/$(NAME) -l$(NAME) $(INTERP_FLAGS) $(SHARED_FLAGS) $(INTERP_FILES)
+	$(CC) -o $(BINDIR)/$(NAME) $(INTERP_FLAGS) -l$(NAME) $(SHARED_FLAGS) $(INTERP_FILES)
 
 interpr-static: static-library
-	$(CC) $(INTERP_FILES) -l$(NAME) $(INTERP_FLAGS) $(STATIC_FLAGS) -o $(BINDIR)/$(NAME)-static
+	$(CC) $(INTERP_FILES) $(INTERP_FLAGS) -l$(NAME) -lm $(STATIC_FLAGS) -o $(BINDIR)/$(NAME)-static
 
 clean: clean_header clean_shared clean_static
 
@@ -76,9 +78,24 @@ clean_static:
 	@$(TEST) ! -f $(LIBDIR)/lib$(NAME)-$(VERSION).a || $(RM) $(LIBDIR)/lib$(NAME)-$(VERSION).a
 	@$(TEST) ! -L $(LIBDIR)/lib$(NAME).a || $(RM) $(LIBDIR)/lib$(NAME).a
 
+Env: makeenv checkenv
+makeenv:
+	@$(TEST) -d $(SYSDIR)  || $(MKDIR_P) $(SYSDIR)
+	@$(TEST) -d $(LIBDIR)  || $(MKDIR)   $(LIBDIR)
+	@$(TEST) -d $(INCDIR)  || $(MKDIR)   $(INCDIR)
+	@$(TEST) -d $(BINDIR)  || $(MKDIR)   $(BINDIR)
+
+checkenv:
+	@$(TEST) -w $(SYSDIR)  || exit 1
+	@$(TEST) -w $(LIBDIR)  || exit 1
+	@$(TEST) -w $(INCDIR)  || exit 1
+	@$(TEST) -w $(BINDIR)  || exit 1
+
 AR   = ar rs
 RM   = rm
 CP   = cp
 TEST = test
 LN   = ln
 LN_S =  $(LN) -s
+MKDIR = mkdir
+MKDIR_P = $(MKDIR) -p

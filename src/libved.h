@@ -269,6 +269,8 @@
 #define ED_PREV             (1 << 7)
 #define ED_PREV_FOCUSED     (1 << 8)
 
+#define ED_INIT_OPT_LOAD_HISTORY (1 << 0)
+
 #define E_SUSPENDED                (1 << 0)
 #define E_EXIT                     (1 << 1)
 #define E_DONOT_RESTORE_TERM_STATE (1 << 2)
@@ -502,6 +504,8 @@ enum {
 typedef signed int utf8;
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef unsigned long ulong;
+
 typedef size_t uidx_t;
 
 #include <stddef.h>
@@ -705,6 +709,8 @@ DeclareProp (E);
 DeclareSelf (E);
 DeclareClass (E);
 
+typedef struct ed_opts ed_opts;
+
 /* this might make things harder for the reader, because hides details, but if
  * something is gonna change in future, if it's not just a signle change it is
  * certainly (easier) searchable */
@@ -737,7 +743,7 @@ typedef int (*Balanced_cb) (buf_t **, int, int);
 typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
-typedef void (*EdAtInit_cb) (ed_t *);
+typedef void (*EdAtInit_cb) (ed_t *, ed_opts);
 
 /* in between */
 typedef void (*Record_cb) (ed_t *, char *);
@@ -749,6 +755,7 @@ typedef void (*IPrintByte_cb) (FILE *, int);
 typedef void (*IPrintBytes_cb) (FILE *, const char *);
 typedef void (*IPrintFmtBytes_cb) (FILE *, const char *, ...);
 typedef int  (*ISyntaxError_cb) (i_t *, const char *);
+typedef int  (*IDefineFuns_cb) (i_t *);
 
 typedef intptr_t ival_t;
 typedef ival_t (*Cfunc) (i_t *, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t, ival_t);
@@ -1005,8 +1012,8 @@ NewType (edinfo,
     num_items;
 );
 
-/* QUALIFIERS (quite ala S_Lang (in C they have to be declared though)) */
-NewType (buf_init_opts,
+
+typedef struct buf_opts {
    win_t *win;
 
    char
@@ -1022,33 +1029,43 @@ NewType (buf_init_opts,
      backupfile;
 
    long autosave;
-);
+} buf_opts;
 
-NewType (ed_init_opts,
-  int num_win;
-  int term_flags;
+#define BufOpts(...) (buf_opts) { \
+  .at_frame = 0,                  \
+  .at_linenr = 1,                 \
+  .at_column = 1,                 \
+  .ftype = FTYPE_DEFAULT,         \
+  .autosave = 0,                  \
+  .backupfile = 0,                \
+  .backup_suffix = BACKUP_SUFFIX, \
+  .flags = 0,                     \
+  .fname = UNNAMED,               \
+   __VA_ARGS__}
+
+struct ed_opts {
+  int
+    flags,
+    num_win,
+    term_flags;
+
+  char
+    *hs_file,
+    *hrl_file;
+
   EdAtInit_cb init_cb;
-);
+};
 
-#define QUAL(__qual, ...) __qual##_QUAL (__VA_ARGS__)
-
-#define ED_INIT_OPTS  Type (ed_init_opts)
-#define ED_INIT_QUAL(...) (ED_INIT_OPTS) {       \
-  .num_win = 1,                                  \
-  .term_flags = 0,                               \
-  .init_cb = NULL,                               \
+#define EdOpts(...) (ed_opts) { \
+  .flags = 0,                   \
+  .num_win = 1,                 \
+  .term_flags = 0,              \
+  .init_cb = NULL,              \
+  .hs_file = NULL,              \
+  .hrl_file = NULL,             \
   __VA_ARGS__}
 
-#define BUF_INIT_OPTS Type (buf_init_opts)
-#define BUF_INIT_QUAL(...) (BUF_INIT_OPTS) {     \
-  .at_frame = 0, .at_linenr = 1, .at_column = 1, \
-  .ftype = FTYPE_DEFAULT,                        \
-  .autosave = 0,                                 \
-  .backupfile = 0,                               \
-  .backup_suffix = BACKUP_SUFFIX,                \
-  .flags = 0, .fname = UNNAMED, __VA_ARGS__}
-
-#define FTYPE_QUAL(...) (ftype_t) {              \
+#define FtypeOpts(...) (ftype_t) {               \
   .name = "",                                    \
   .on_emptyline = NULL,                          \
   .shiftwidth = DEFAULT_SHIFTWIDTH,              \
@@ -1056,6 +1073,10 @@ NewType (ed_init_opts,
   .autochdir = AUTOCHDIR,                        \
   .tab_indents = TAB_ON_INSERT_MODE_INDENTS,     \
   .clear_blanklines = CLEAR_BLANKLINES,          \
+  .read_from_shell = 1,                          \
+  .autoindent = NULL,                            \
+  .on_open_fname_under_cursor = NULL,            \
+  .balanced = NULL,                              \
   .cr_on_normal_is_like_insert_mode = CARRIAGE_RETURN_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .backspace_on_normal_is_like_insert_mode = BACKSPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .backspace_on_normal_goes_up = BACKSPACE_ON_NORMAL_GOES_UP, \
@@ -1063,38 +1084,38 @@ NewType (ed_init_opts,
   .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
   .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
-  .read_from_shell = 1,                          \
-  .autoindent = NULL,                            \
-  .on_open_fname_under_cursor = NULL,            \
-  .balanced = NULL,                              \
   __VA_ARGS__ }
 
-/* interpeter */
-NewType (i_options,
+typedef struct i_opts {
   char  *name;
   int    name_gen;
   size_t mem_size;
   size_t max_script_size;
   FILE  *err_fp;
   FILE  *out_fp;
+
   IPrintByte_cb print_byte;
   IPrintBytes_cb print_bytes;
   IPrintFmtBytes_cb print_fmt_bytes;
   ISyntaxError_cb syntax_error;
-);
+  IDefineFuns_cb define_funs_cb;
 
-#define I_INIT Type (i_options)
-#define I_INIT_QUAL(...) (I_INIT) {      \
-  .mem_size = 4096,                      \
-  .print_byte = NULL,                    \
-  .print_bytes = NULL,                   \
-  .print_fmt_bytes = NULL,               \
-  .syntax_error = i_syntax_error_to_ed,  \
-  .err_fp = stderr,                      \
-  .out_fp = stdout,                      \
-  .name = NULL,                          \
-  .name_gen = 97,                        \
-  .max_script_size = 1 << 16,            \
+  void *object;
+} i_opts;
+
+#define IOpts(...) (i_opts) { \
+  .mem_size = 0,              \
+  .print_byte = NULL,         \
+  .print_bytes = NULL,        \
+  .print_fmt_bytes = NULL,    \
+  .syntax_error = NULL,       \
+  .define_funs_cb = NULL,     \
+  .err_fp = stderr,           \
+  .out_fp = stdout,           \
+  .name = NULL,               \
+  .name_gen = 97,             \
+  .max_script_size = 1 << 16, \
+  .object = NULL,             \
   __VA_ARGS__}
 
 NewSubSelf (video, set,
@@ -1964,7 +1985,7 @@ NewSubSelf (win, pop,
 NewSubSelf (win, buf,
   buf_t
     *(*init) (win_t *, int, int),
-    *(*new) (win_t *, BUF_INIT_OPTS);
+    *(*new) (win_t *, buf_opts);
 );
 
 NewSubSelf (win, frame,
@@ -2132,11 +2153,27 @@ NewSubSelf (ed, sh,
   int (*popen) (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
 );
 
+NewSubSelf (edhistory, set,
+  string_t
+    *(*rline_file) (ed_t *, char *),
+    *(*search_file) (ed_t *, char *);
+);
+
+NewSubSelf (edhistory, get,
+  string_t
+    *(*rline_file) (ed_t *),
+    *(*search_file) (ed_t *);
+);
+
 NewSubSelf (ed, history,
+  SubSelf (edhistory, set) set;
+  SubSelf (edhistory, get) get;
+
   void
-    (*add) (ed_t *, Vstring_t *, int),
     (*read) (ed_t *),
-    (*write) (ed_t *);
+    (*write) (ed_t *),
+    (*add) (ed_t *, char *, size_t),
+    (*add_lines) (ed_t *, Vstring_t *, int);
 );
 
 NewSubSelf (ed, draw,
@@ -2201,13 +2238,13 @@ NewSelf (i,
     (*remove_instance) (Class (i) *, Type (i) *);
 
   i_t
-    *(*new) (void),
-    *(*init_instance) (Class (i) *),
+    *(*new) (Class (i) *),
+    *(*init_instance) (Class (i) *, i_opts),
     *(*append_instance) (Class (i) *, Type (i) *);
 
   int
     (*def) (i_t *, const char *, int, ival_t),
-    (*init) (Class (i) *, i_t *, I_INIT),
+    (*init) (Class (i) *, i_t *, i_opts),
     (*eval_file) (i_t *, const char *),
     (*load_file) (Class (i) *, char *),
     (*eval_string) (i_t *, const char *, int, int);
@@ -2302,8 +2339,8 @@ NewSelf (E,
   SubSelf (E, unset) unset;
 
   ed_t
-    *(*init) (E_T *, EdAtInit_cb),
-    *(*new) (E_T *, ED_INIT_OPTS);
+    *(*init) (E_T *, ed_opts),
+    *(*new) (E_T *, ed_opts);
 
   int
     (*save_image) (E_T *, char *),
