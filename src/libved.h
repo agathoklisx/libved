@@ -1045,6 +1045,10 @@ typedef struct buf_opts {
 
 struct ed_opts {
   int
+    first_row,
+    first_col,
+    num_rows,
+    num_cols,
     flags,
     num_win,
     term_flags;
@@ -1057,6 +1061,10 @@ struct ed_opts {
 };
 
 #define EdOpts(...) (ed_opts) { \
+  .first_row = 1,               \
+  .first_col = 1,               \
+  .num_rows = 0,                \
+  .num_cols = 0,                \
   .flags = 0,                   \
   .num_win = 1,                 \
   .term_flags = 0,              \
@@ -1084,6 +1092,23 @@ struct ed_opts {
   .backspace_on_first_idx_remove_trailing_spaces = BACKSPACE_ON_FIRST_IDX_REMOVE_TRAILING_SPACES,  \
   .space_on_normal_is_like_insert_mode = SPACE_ON_NORMAL_IS_LIKE_INSERT_MODE,  \
   .small_e_on_normal_goes_insert_mode = SMALL_E_ON_NORMAL_GOES_INSERT_MODE,  \
+  __VA_ARGS__ }
+
+typedef struct screen_dim_opts {
+  int
+    first_row,
+    first_col,
+    num_rows,
+    num_cols,
+    init_term;
+} screen_dim_opts;
+
+#define ScreenDimOpts(...) (screen_dim_opts) { \
+  .first_row = 1,                              \
+  .first_col = 1,                              \
+  .num_rows = 0,                               \
+  .num_cols = 0,                               \
+  .init_term = 1,                              \
   __VA_ARGS__ }
 
 typedef struct i_opts {
@@ -2075,8 +2100,8 @@ NewSubSelf (ed, set,
   void
     (*state) (ed_t *, int),
     (*state_bit) (ed_t *, int),
-    (*screen_size) (ed_t *),
     (*exit_quick) (ed_t *, int),
+    (*screen_size) (ed_t *, screen_dim_opts),
     (*topline) (ed_t *, buf_t *),
     (*rline_cb) (ed_t *, Rline_cb),
     (*lang_map) (ed_t *, int[][26]),

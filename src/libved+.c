@@ -3456,9 +3456,10 @@ public void sigwinch_handler (int sig) {
   ed_t *ed = E.get.head (THIS_E);
 
   while (ed) {
-    Ed.set.screen_size (ed);
+    Ed.set.screen_size (ed, ScreenDimOpts());
     ifnot (OK is Ed.check_sanity (ed)) {
       __deinit_this__ (&__This__);
+      fprintf (stderr, "available lines are less than the required\n");
       exit (1);
     }
 

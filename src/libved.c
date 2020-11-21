@@ -3042,6 +3042,10 @@ private void file_tmpfname_free (tmpfname_t *this) {
     string_free (this->fname);
     this->fname = NULL;
   }
+
+  if (-1 isnot this->fd)
+    close (this->fd);
+
   free (this);
 }
 
@@ -3798,8 +3802,8 @@ private void term_free (term_t **thisp) {
 private term_t *term_new (void) {
   term_t *this = AllocType (term);
   $myprop = AllocProp (term);
-  $my(lines) = 24;
-  $my(columns) = 78;
+  $my(num_rows) = 24;
+  $my(num_cols) = 78;
   $my(out_fd) = STDOUT_FILENO;
   $my(in_fd) = STDIN_FILENO;
   $my(mode) = 'o';
@@ -3812,8 +3816,8 @@ private void term_init_size (term_t *this, int *rows, int *cols) {
 
   do {
     if (OK is ioctl ($my(out_fd), TIOCGWINSZ, &wsiz)) {
-      $my(lines) = (int) wsiz.ws_row;
-      $my(columns) = (int) wsiz.ws_col;
+      $my(num_rows) = (int) wsiz.ws_row;
+      $my(num_cols) = (int) wsiz.ws_col;
       return;
     }
   } while (errno is EINTR);
@@ -3824,6 +3828,9 @@ private void term_init_size (term_t *this, int *rows, int *cols) {
   TERM_SEND_ESC_SEQ (TERM_LAST_RIGHT_CORNER);
   term_cursor_get_ptr_pos (this, rows, cols);
   term_cursor_set_ptr_pos (this, orig_row, orig_col);
+
+  $my(num_rows) = *rows;
+  $my(num_cols) = *cols;
 }
 
 /* three modes: 's' for sane, 'r' for raw and 'o' for original */
@@ -3887,8 +3894,8 @@ private int term_orig_mode (term_t *this) {
 }
 
 private int *term_get_dim (term_t *this, int *dim) {
-  dim[0] = $my(lines);
-  dim[1] = $my(columns);
+  dim[0] = $my(num_rows);
+  dim[1] = $my(num_cols);
   return dim;
 }
 
@@ -3917,7 +3924,7 @@ private void term_set_name (term_t *this) {
 private int term_set (term_t *this) {
   if (NOTOK is term_set_mode (this, 'r')) return NOTOK;
   term_cursor_get_ptr_pos (this, &$my(orig_curs_row_pos), &$my(orig_curs_col_pos));
-  term_init_size (this, &$my(lines), &$my(columns));
+  term_init_size (this, &$my(num_rows), &$my(num_cols));
 
   ifnot ($my(state) & TERM_DONOT_SAVE_SCREEN)
     term_screen_save (this);
@@ -5882,7 +5889,7 @@ private ftype_t *buf_ftype_set (buf_t *this, int ftype, ftype_t q) {
 }
 
 /* this retval pointer provides information, since the callee resets retval at the
- * beginning of its function. The early returns here is actuall a goto theend there */
+ * beginning of its function. The early return here is actually a goto theend there */
 private int buf_com_substitute (buf_t *this, rline_t *rl, int *retval) {
   arg_t *pat = rline_get_arg (rl, RL_ARG_PATTERN);
   arg_t *sub = rline_get_arg (rl, RL_ARG_SUB);
@@ -8121,19 +8128,19 @@ private void ed_set_topline (ed_t *ed, buf_t *this) {
   time_t tim = time (NULL);
   struct tm *tm = localtime (&tim);
 
-  String.replace_with_fmt ($myroots(topline), "[%s] [pid %d]",
+  String.replace_with_fmt ($myroots(topline), TERM_SET_COLOR_FMT,
+      $myroots(env)->uid ? COLOR_TOPLINE : COLOR_SU);
+  String.append_fmt ($myroots(topline), "[%s] [pid %d]",
     $my(mode), $from(ed, env)->pid);
 
   char tmnow[32];
-  strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
-  int pad = $my(dim->num_cols) - $myroots(topline)->num_bytes - bytelen (tmnow);
+  size_t len = strftime (tmnow, sizeof (tmnow), "[%a %d %H:%M:%S]", tm);
+  int pad = $my(dim->num_cols) - ($myroots(topline)->num_bytes - 5) - len;
   if (pad > 0)
-    loop (pad) String.append ($myroots(topline), " ");
+    loop (pad) String.append_byte ($myroots(topline), ' ');
   String.append ($myroots(topline), tmnow);
-  String.clear_at ($myroots(topline), $my(dim)->num_cols);
+  String.clear_at ($myroots(topline), $my(dim)->num_cols + 5);
   String.append_fmt ($myroots(topline), TERM_COLOR_RESET);
-  String.prepend_fmt ($myroots(topline), TERM_SET_COLOR_FMT,
-      $myroots(env)->uid ? COLOR_TOPLINE : COLOR_SU);
   Video.set.row_with ($my(video), 0, $myroots(topline)->bytes);
 }
 
@@ -9168,7 +9175,7 @@ private void buf_flush (buf_t *this) {
 private void buf_draw (buf_t *this) {
   String.clear ($my(video)->render);
   Ed.set.topline ($my(root), this);
-  video_render_set_from_to ($my(video), 1, 1);
+  video_render_set_from_to ($my(video), $myroots(topline_row), $myroots(topline_row));
   self(to.video);
   self(flush);
 }
@@ -9226,7 +9233,6 @@ thediff:;
         retval = OK;
       } else
         Msg.send_fmt ($my(root), COLOR_MSG, "No differences have been found");
-
     }
   }
 
@@ -15905,22 +15911,34 @@ private int ed_check_sanity (ed_t *this) {
   return OK;
 }
 
-private void ed_set_screen_size (ed_t *this) {
-  Term.reset ($my(term));
-  Term.init_size ($my(term), $from(&$my(term), lines), $from(&$my(term), columns));
-  Term.set ($my(term));
+private void ed_set_screen_size (ed_t *this, screen_dim_opts opts) {
+  int num_rows = opts.num_rows;
+  int num_cols = opts.num_cols;
+  int frow = opts.first_row;
+  int fcol = opts.first_col;
+
+  if (opts.init_term or num_rows is 0 or num_cols is 0) {
+    Term.reset ($my(term));
+    Term.set ($my(term));
+  } else {
+    $from($my(term), num_rows) = num_rows;
+    $from($my(term), num_cols) = num_cols;
+  }
+
   ifnot (NULL is $my(dim)) {
     free ($my(dim));
     $my(dim) = NULL;
   }
 
-  $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
-  $my(msg_row) = $from($my(term), lines);
-  $my(prompt_row) = $my(msg_row) - 1;
+  $my(dim) = ed_dim_new (this, frow, $from($my(term), num_rows),
+      fcol, $from($my(term), num_cols));
+
+  $my(msg_row)     = $my(dim)->num_rows;
+  $my(topline_row) = $my(dim)->first_row;
+  $my(prompt_row)  = $my(msg_row) - 1;
 
   Video.free ($my(video));
-  $my(video) = Video.new (OUTPUT_FD, $from($my(term), lines),
-      $from($my(term), columns), 1, 1);
+  $my(video) = Video.new (OUTPUT_FD, $my(dim)->num_rows, $my(dim)->num_cols, $my(dim)->first_row, $my(dim)->first_col);
 }
 
 private void ed_set_exit_quick (ed_t *this, int val) {
@@ -17662,10 +17680,6 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
   $my(term) = $from($my(Me), term);
   $my(env)  = $from($my(Me), env);
 
-  $my(dim) = ed_dim_new (this, 1, $from($my(term), lines), 1, $from($my(term), columns));
-
-  $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
-
   $my(__Win__)     = &E->__Ed__->__Win__;
   $my(__Buf__)     = &E->__Ed__->__Buf__;
   $my(__I__)       = &E->__Ed__->__I__;
@@ -17690,21 +17704,33 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
   $my(__Vstring__) = &E->__Ed__->__Vstring__;
   $my(__Ustring__) = &E->__Ed__->__Ustring__;
 
-  $my(video) = Video.new (OUTPUT_FD, $from($my(term), lines),
-      $from($my(term), columns), 1, 1);
+  $my(has_topline) = $my(has_msgline) = $my(has_promptline) = 1;
 
   Term.set ($my(term));
 
-  $my(topline) = String.new ($from($my(term), columns));
-  $my(msgline) = String.new ($from($my(term), columns));
-  $my(ed_str)  = String.new ($from($my(term), columns));
-  $my(last_insert) = String.new ($from($my(term), columns));
+  int frow = opts.first_row;
+  int fcol = opts.first_col;
+  int num_rows = opts.num_rows;
+  int num_cols = opts.num_cols;
+
+  ifnot (num_rows) num_rows = $from($my(term), num_rows);
+  ifnot (num_cols) num_cols = $from($my(term), num_cols);
+
+  $my(dim) = ed_dim_new (this, frow, num_rows, fcol, num_cols);
+
+  $my(video) = Video.new (OUTPUT_FD, $my(dim)->num_rows, $my(dim)->num_cols, $my(dim)->first_row, $my(dim)->first_col);
+
+  $my(ed_str)  = String.new ($my(dim)->num_cols);
+  $my(topline) = String.new ($my(dim)->num_cols);
+  $my(msgline) = String.new ($my(dim)->num_cols);
+  $my(last_insert) = String.new ($my(dim)->num_cols);
   $my(rl_last_component) = Vstring.new ();
   $my(uline) = Ustring.new ();
 
   $my(state) = UNSET;
   $my(msg_tabwidth) = 2;
-  $my(msg_row) = $from($my(term), lines);
+  $my(topline_row) = $my(dim)->first_row;
+  $my(msg_row) = $my(dim)->num_rows;
   $my(prompt_row) = $my(msg_row) - 1;
   $my(saved_cwd) = Dir.current ();
 

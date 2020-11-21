@@ -5,7 +5,7 @@
 THIS_LIBNAME := ved
 
 API := 0
-REV := 2
+REV := 3
 
 THISDIR := $(shell (cd ../.. && pwd))
 LIBVED_SRCDIR =  $(THISDIR)

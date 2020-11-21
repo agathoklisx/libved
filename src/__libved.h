@@ -474,8 +474,8 @@ NewProp (term,
     out_fd,
     orig_curs_row_pos,
     orig_curs_col_pos,
-    lines,
-    columns;
+    num_rows,
+    num_cols;
 );
 
 NewType (term,
@@ -975,6 +975,7 @@ NewProp (ed,
     max_num_undo_entries,
     num_commands,
     num_special_win,
+    topline_row,
     prompt_row,
     msg_row,
     msg_send,
