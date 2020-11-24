@@ -4,7 +4,7 @@
 #define MYNAME "veda"
 #define ED_INSTANCES 252
 
-#define MIN_LINES 8
+#define MIN_ROWS 8
 #define MIN_COLS  2
 
 #define MAX_FRAMES 3
@@ -1098,6 +1098,7 @@ typedef struct screen_dim_opts {
   int
     first_row,
     first_col,
+    last_row,
     num_rows,
     num_cols,
     init_term;
@@ -1106,6 +1107,7 @@ typedef struct screen_dim_opts {
 #define ScreenDimOpts(...) (screen_dim_opts) { \
   .first_row = 1,                              \
   .first_col = 1,                              \
+  .last_row = 0,                               \
   .num_rows = 0,                               \
   .num_cols = 0,                               \
   .init_term = 1,                              \
@@ -2064,11 +2066,12 @@ NewSubSelf (ed, get,
     *(*scratch_buf) (ed_t *);
 
   int
-    (*num_rline_commands) (ed_t *),
+    (*state) (ed_t *),
     (*num_win) (ed_t *, int),
+    (*min_rows) (ed_t *),
     (*current_win_idx) (ed_t *),
     (*num_special_win) (ed_t *),
-    (*state) (ed_t *);
+    (*num_rline_commands) (ed_t *);
 
   win_t
     *(*current_win) (ed_t *),

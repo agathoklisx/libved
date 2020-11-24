@@ -15054,7 +15054,7 @@ exec:
   if (rl->line->head is NULL or rl->line->head->data->bytes[0] is ' ')
     goto theend;
 
-  rline_parse  (rl, this);
+  rline_parse (rl, this);
 
   for (int i = 0; i < $myroots(num_rline_cbs); i++) {
     retval = $myroots(rline_cbs)[i] (thisp, rl, rl->com);
@@ -15877,6 +15877,11 @@ private int ed_get_num_win (ed_t *this, int count_special) {
   return num;
 }
 
+private int ed_get_min_rows (ed_t *this) {
+  (void) this;
+  return MIN_ROWS;
+}
+
 private int ed_get_num_special_win (ed_t *this) {
   return $my(num_special_win);
 }
@@ -15906,7 +15911,7 @@ private win_t *ed_set_current_win (ed_t *this, int idx) {
 }
 
 private int ed_check_sanity (ed_t *this) {
-  if ($my(dim)->num_rows < MIN_LINES) return NOTOK;
+  if ($my(dim)->num_rows < MIN_ROWS) return NOTOK;
   if ($my(dim)->num_cols < MIN_COLS) return NOTOK;
   return OK;
 }
@@ -15916,6 +15921,7 @@ private void ed_set_screen_size (ed_t *this, screen_dim_opts opts) {
   int num_cols = opts.num_cols;
   int frow = opts.first_row;
   int fcol = opts.first_col;
+  int last_row = opts.last_row;
 
   if (opts.init_term or num_rows is 0 or num_cols is 0) {
     Term.reset ($my(term));
@@ -15925,13 +15931,15 @@ private void ed_set_screen_size (ed_t *this, screen_dim_opts opts) {
     $from($my(term), num_cols) = num_cols;
   }
 
+  if (last_row < 1)
+    last_row = frow + $from($my(term), num_rows);
+
   ifnot (NULL is $my(dim)) {
     free ($my(dim));
     $my(dim) = NULL;
   }
 
-  $my(dim) = ed_dim_new (this, frow, $from($my(term), num_rows),
-      fcol, $from($my(term), num_cols));
+  $my(dim) = ed_dim_new (this, frow, last_row, fcol, $from($my(term), num_cols));
 
   $my(msg_row)     = $my(dim)->num_rows;
   $my(topline_row) = $my(dim)->first_row;
@@ -17263,6 +17271,7 @@ private Class (ed) *editor_new (void) {
         .topline = ed_get_topline,
         .num_win = ed_get_num_win,
         .bufname = ed_get_bufname,
+        .min_rows = ed_get_min_rows,
         .win_head = ed_get_win_head,
         .win_next = ed_get_win_next,
         .win_by_idx = ed_get_win_by_idx,
@@ -17720,6 +17729,10 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
 
   $my(video) = Video.new (OUTPUT_FD, $my(dim)->num_rows, $my(dim)->num_cols, $my(dim)->first_row, $my(dim)->first_col);
 
+  $my(msg_row)     = $my(dim)->num_rows;
+  $my(prompt_row)  = $my(msg_row) - 1;
+  $my(topline_row) = $my(dim)->first_row;
+
   $my(ed_str)  = String.new ($my(dim)->num_cols);
   $my(topline) = String.new ($my(dim)->num_cols);
   $my(msgline) = String.new ($my(dim)->num_cols);
@@ -17729,9 +17742,6 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
 
   $my(state) = UNSET;
   $my(msg_tabwidth) = 2;
-  $my(topline_row) = $my(dim)->first_row;
-  $my(msg_row) = $my(dim)->num_rows;
-  $my(prompt_row) = $my(msg_row) - 1;
   $my(saved_cwd) = Dir.current ();
 
   $my(history) = AllocType (hist);
