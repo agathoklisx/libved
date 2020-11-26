@@ -700,6 +700,19 @@ DeclareClass (video);
 DeclareClass (string);
 
 /* interpeter */
+#define I_CFUNC(x) (((x) << 8) + 'B')
+
+enum {
+  I_ERR_TOOMANYARGS = -6,
+  I_ERR_BADARGS = -5,
+  I_ERR_UNKNOWN_SYM = -4,
+  I_ERR_SYNTAX = -3,
+  I_ERR_NOMEM = -2,
+  I_NOTOK = -1,
+  I_OK = 0,
+  I_ERR_OK_ELSE = 1
+};
+
 DeclareType (i);
 DeclareSelf (i);
 DeclareProp (i);
@@ -1722,14 +1735,15 @@ NewSubSelf (buf, set,
   int (*fname) (buf_t *, char *);
 
   void
-    (*backup) (buf_t *, int, char *),
-    (*autosave) (buf_t *, long),
-    (*modified) (buf_t *),
-    (*video_first_row) (buf_t *, int),
     (*mode) (buf_t *, char *),
-    (*show_statusline) (buf_t *, int),
+    (*ftype) (buf_t *, int),
+    (*backup) (buf_t *, int, char *),
+    (*modified) (buf_t *),
+    (*autosave) (buf_t *, long),
+    (*autochdir) (buf_t *, int),
     (*on_emptyline) (buf_t *, char *),
-    (*ftype) (buf_t *, int);
+    (*video_first_row) (buf_t *, int),
+    (*show_statusline) (buf_t *, int);
 );
 
 NewSubSelf (buf, syn,
@@ -2251,10 +2265,12 @@ NewSelf (ed,
 NewSubSelf (i, get,
   i_t *(*current) (Class (i) *);
   int (*current_idx) (Class (i) *);
+  void *(*object) (i_t *);
 );
 
 NewSubSelf (i, set,
   i_t *(*current) (Class (i) *, int);
+  void (*object) (i_t *, void *);
 );
 
 NewSelf (i,
@@ -2274,7 +2290,7 @@ NewSelf (i,
     (*def) (i_t *, const char *, int, ival_t),
     (*init) (Class (i) *, i_t *, i_opts),
     (*eval_file) (i_t *, const char *),
-    (*load_file) (Class (i) *, char *),
+    (*load_file) (Class (i) *, i_t *, char *),
     (*eval_string) (i_t *, const char *, int, int);
 );
 
@@ -2332,6 +2348,8 @@ NewSubSelf (E, set,
     (*at_exit_cb) (E_T *, EAtExit_cb),
     (*at_init_cb) (E_T *, EdAtInit_cb),
     (*persistent_layout) (E_T *, int);
+
+  int (*i_dir) (E_T *, char *);
 
   ed_t
     *(*next) (E_T *),

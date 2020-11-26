@@ -6805,6 +6805,10 @@ private void buf_set_on_emptyline (buf_t *this, char *str) {
   String.replace_with ($my(ftype)->on_emptyline, str);
 }
 
+private void buf_set_autochdir (buf_t *this, int val) {
+  $my(ftype)->autochdir = (val isnot 0);
+}
+
 private void buf_set_backup (buf_t *this, int backup, char *suffix) {
   if (backup <= 0
       or NULL isnot $my(backupfile)
@@ -6858,7 +6862,7 @@ private void *mem_should_realloc (void *obj, size_t allocated, size_t len) {
 
 private void buf_set_as_non_existant (buf_t *this) {
   $my(basename) = $my(fname); $my(extname) = NULL;
-  $my(cwd) = dir_current ();
+  $my(cwd) = Dir.current ();
   $my(flags) &= ~FILE_EXISTS;
 }
 
@@ -17436,6 +17440,7 @@ private Class (ed) *editor_new (void) {
           .backup = buf_set_backup,
           .modified = buf_set_modified,
           .autosave = buf_set_autosave,
+          .autochdir = buf_set_autochdir,
           .on_emptyline = buf_set_on_emptyline,
           .video_first_row = buf_set_video_first_row,
           .show_statusline = buf_set_show_statusline,
@@ -17876,6 +17881,15 @@ private int E_delete (E_T *this, int idx, int force_current) {
     if ($my(num_items))
       $my(prev_idx) = 0;
 
+  return OK;
+}
+
+private int E_set_i_dir (Class (E) *__e__, char *dir) {
+  Class (ed) *this = __e__->__Ed__;
+  if (NOTOK is __env_check_directory__ (dir, "interpreter directory", 0, 0, 0))
+    return NOTOK;
+
+  string_replace_with ($my(env)->i_dir, dir);
   return OK;
 }
 
@@ -18495,6 +18509,7 @@ public Class (E) *__init_ed__ (char *name) {
         .error_state = E_get_error_state
       ),
       .set = SubSelfInit (E, set,
+        .i_dir = E_set_i_dir,
         .state = E_set_state,
         .state_bit = E_set_state_bit,
         .image_name = E_set_image_name,
@@ -19731,7 +19746,7 @@ private int i_eval_file (i_t *this, const char *filename) {
   if (r isnot I_OK) {
     char *err_msg[] = {"NO MEMORY", "SYNTAX ERROR", "UNKNOWN SYMBOL",
         "BAD ARGUMENTS", "TOO MANY ARGUMENTS"};
-    this->print_fmt_bytes (this->err_fp, "%s\n", err_msg[-r - 1]);
+    this->print_fmt_bytes (this->err_fp, "%s\n", err_msg[-r - 2]);
   }
 
   return r;
@@ -19826,6 +19841,14 @@ private Type (i) *i_set_current (Class (i) *this, int idx) {
   while (i++ < idx) it = it->next;
 
   return it;
+}
+
+private void i_set_object (i_t *this, void *obj) {
+  this->object = obj;
+}
+
+private void *i_get_object (i_t *this) {
+  return this->object;
 }
 
 private Type (i) *i_get_current (Class (i) *this) {
@@ -20186,11 +20209,12 @@ private i_t *i_init_instance (Class (i) *__i__, i_opts opts) {
   return this;
 }
 
-private int i_load_file (Class (i) *__i__, char *fn) {
-  i_t *this = i_init_instance (__i__, IOpts());
+private int i_load_file (Class (i) *__i__, i_t *this, char *fn) {
+  if (this is NULL)
+    this = i_init_instance (__i__, IOpts());
 
   ifnot (Path.is_absolute (fn)) {
-    if (File.exists (fn))
+    if (File.exists (fn) and File.is_reg (fn))
       return self(eval_file, fn);
 
     size_t fnlen = bytelen (fn);
@@ -20211,7 +20235,7 @@ private int i_load_file (Class (i) *__i__, char *fn) {
     size_t len = ddir->num_bytes + bytelen (fname) + 2 + 7;
     char tmp[len + 3];
     Cstring.cp_fmt (tmp, len + 1, "%s/scripts/%s", ddir->bytes, fname);
-    ifnot (File.exists (tmp)) {
+    if (0 is File.exists (tmp) or 0 is File.is_reg (tmp)) {
       tmp[len] = '.'; tmp[len+1] = 'i'; tmp[len+2] = '\0';
     }
 
@@ -20241,10 +20265,12 @@ private Class (i) *__init_i__ (Class (E) *e) {
       .eval_string =  i_eval_string,
       .eval_file = i_eval_file,
       .get = SubSelfInit (i, get,
+        .object = i_get_object,
         .current = i_get_current,
         .current_idx = i_get_current_idx
       ),
       .set = SubSelfInit (i, set,
+        .object = i_set_object,
         .current = i_set_current
       )
     ),

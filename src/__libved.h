@@ -369,18 +369,6 @@ struct regex_info {
 #define I_TOK_RETURN     'r'
 #define I_TOK_CHAR       'C'
 
-enum {
-  I_OK = 0,
-  I_ERR_NOMEM = -1,
-  I_ERR_SYNTAX = -2,
-  I_ERR_UNKNOWN_SYM = -3,
-  I_ERR_BADARGS = -4,
-  I_ERR_TOOMANYARGS = -5,
-  I_ERR_OK_ELSE = 1, // special internal condition
-};
-
-#define I_NOTOK NOTOK
-
 #define MAX_BUILTIN_PARAMS 9
 
 NewType (Istring,
