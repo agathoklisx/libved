@@ -12845,11 +12845,15 @@ private int ed_complete_arg (menu_t *menu) {
   int com = $my(shared_int);
   char *line = $my(shared_str)->bytes;
 
-  if ($myroots(commands)[com]->args is NULL and
-     (com < VED_COM_BUF_DELETE_FORCE or com > VED_COM_BUF_CHANGE_ALIAS)) {
-    menu->state |= MENU_QUIT;
-    return NOTHING_TODO;
+  if ($myroots(commands)[com]->args is NULL) {
+    if (0 is $myroots(has_ed_rline_commands) or
+        (com < VED_COM_BUF_DELETE_FORCE or
+         com > VED_COM_BUF_CHANGE_ALIAS)) {
+      menu->state |= MENU_QUIT;
+      return NOTHING_TODO;
+    }
   }
+
   if (menu->state & MENU_INIT) {
     menu->state &= ~MENU_INIT;
   } else
@@ -12857,30 +12861,32 @@ private int ed_complete_arg (menu_t *menu) {
 
   Vstring_t *args = Vstring.new ();
 
-  int patisopt = (menu->patlen ? Cstring.eq (menu->pat, "--bufname=") : 0);
+  if ($myroots(has_ed_rline_commands)) {
+    int patisopt = (menu->patlen ? Cstring.eq (menu->pat, "--bufname=") : 0);
 
-  if ((com >= VED_COM_BUF_DELETE_FORCE and com <= VED_COM_BUF_CHANGE_ALIAS) or
-       patisopt) {
-    char *cur_fname = $my(fname);
+    if ((com >= VED_COM_BUF_DELETE_FORCE and
+         com <= VED_COM_BUF_CHANGE_ALIAS) or patisopt) {
+      char *cur_fname = $my(fname);
 
-    buf_t *it = $my(parent)->head;
-    while (it) {
-      ifnot (Cstring.eq (cur_fname, $from(it, fname))) {
-        if ((0 is menu->patlen or 1 is patisopt) or
-             Cstring.eq_n ($from(it, fname), menu->pat, menu->patlen)) {
-          ifnot (patisopt) {
-            size_t len = bytelen ($from(it, fname)) + 10 + 2;
-            char bufn[len + 1];
-            snprintf (bufn, len + 1, "--bufname=\"%s\"", $from(it, fname));
-            Vstring.add.sort_and_uniq (args, bufn);
-          } else
-            Vstring.add.sort_and_uniq (args, $from(it, fname));
+      buf_t *it = $my(parent)->head;
+      while (it) {
+        ifnot (Cstring.eq (cur_fname, $from(it, fname))) {
+          if ((0 is menu->patlen or 1 is patisopt) or
+               Cstring.eq_n ($from(it, fname), menu->pat, menu->patlen)) {
+            ifnot (patisopt) {
+              size_t len = bytelen ($from(it, fname)) + 10 + 2;
+              char bufn[len + 1];
+              snprintf (bufn, len + 1, "--bufname=\"%s\"", $from(it, fname));
+              Vstring.add.sort_and_uniq (args, bufn);
+            } else
+              Vstring.add.sort_and_uniq (args, $from(it, fname));
+          }
         }
+        it = it->next;
       }
-      it = it->next;
-    }
 
-    goto check_list;
+      goto check_list;
+    }
   }
 
   int i = 0;
@@ -13537,6 +13543,7 @@ redo:;
   ifnot (type) return retval;
 
   int (*process_list) (menu_t *) = NULL;
+
   if (type & RL_TOK_ARG_FILENAME)
     process_list = ed_complete_filename;
   else if (type & RL_TOK_COMMAND)
@@ -13646,8 +13653,10 @@ private void ed_deinit_commands (ed_t *this) {
     i++;
   }
 
-  free ($my(commands)); $my(commands) = NULL;
+  free ($my(commands));
+  $my(commands) = NULL;
   $my(num_commands) = 0;
+  $my(has_ed_rline_commands) = 0;
 }
 
 private void ed_realloc_command_arg (rlcom_t *rlcom, int num) {
@@ -13754,6 +13763,8 @@ private int ed_get_num_rline_commands (ed_t *this) {
 
 private void ed_init_commands (ed_t *this) {
   ifnot (NULL is $my(commands)) return;
+
+  $my(has_ed_rline_commands) = 1;
 
   char *ed_commands[VED_COM_END + 1] = {
     [VED_COM_BUF_BACKUP] = "@bufbackup",
@@ -17761,6 +17772,8 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
   if (opts.flags & ED_INIT_OPT_LOAD_HISTORY)
     self(history.read);
 
+  $my(has_ed_rline_commands) = 0;
+  $my(exit_quick) = 0;
   $my(repeat_mode) = 0;
   $my(record) = 0;
   $my(record_idx) = -1;
