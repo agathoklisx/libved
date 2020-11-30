@@ -114,6 +114,7 @@ int main (int argc, char **argv) {
     if (exit) goto theend;
 
     signal (SIGWINCH, sigwinch_handler);
+    signal (SIGHUP, sighup_handler);
 
     this = E.get.current (THIS_E);
     ifnot (OK is Ed.check_sanity (this)) {
@@ -193,6 +194,7 @@ int main (int argc, char **argv) {
   Win.set.current_buf (w, 0, DRAW);
 
   signal (SIGWINCH, sigwinch_handler);
+  signal (SIGHUP, sighup_handler);
 
   if (exec_com isnot NULL) {
     string_t *com = This.parse_command (__This__, exec_com);

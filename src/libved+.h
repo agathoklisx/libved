@@ -64,7 +64,8 @@ typedef lang_t l_T;
 
 mutable public void __alloc_error_handler__ (int, size_t, char *,
                                                  const char *, int);
-public void sigwinch_handler (int sig);
+public void sigwinch_handler (int);
+public void sighup_handler (int);
 
 DeclareType (argparse);
 DeclareType (argparse_option);

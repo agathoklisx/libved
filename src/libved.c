@@ -5352,7 +5352,7 @@ char *i_keywords[] = {
   "isnot I", "print F", "println F", "true V", "false V", "OK V", "NOTOK V", NULL
 };
 
-char i_singleline_comment[] = "//";
+char i_singleline_comment[] = "#";
 
 char *NULL_ARRAY[] = {NULL};
 
@@ -13529,10 +13529,13 @@ redo:;
         ifnot (NULL is Cstring.byte.in_str (tok, '='))
           type |= RL_TOK_ARG_OPTION;
       } else {
-        if (rl->com >= VED_COM_BUF_DELETE_FORCE and
-            rl->com <= VED_COM_BUF_CHANGE_ALIAS)
-          type |= RL_TOK_ARG;
-        else
+        if ($my(has_ed_rline_commands)) {
+          if (rl->com >= VED_COM_BUF_DELETE_FORCE and
+              rl->com <= VED_COM_BUF_CHANGE_ALIAS)
+            type |= RL_TOK_ARG;
+          else
+            type |= RL_TOK_ARG_FILENAME;
+        } else
           type |= RL_TOK_ARG_FILENAME;
       }
     }
@@ -17959,7 +17962,6 @@ private ed_t *E_set_prev (E_T *this) {
   return E_set_current (this, idx);
 }
 
-
 private string_t *E_create_image (Class (E) *this) {
   if (NULL is $my(image_name) or NULL is $my(image_file))
     return NULL;
@@ -18340,6 +18342,16 @@ private int E_main (E_T *this, buf_t *buf) {
   ed_t *ed = $from(buf, root);
 
   int retval = 0;
+  int state = 0;
+
+  if ($my(state) & (E_EXIT_ALL|E_EXIT_ALL_FORCE)) {
+    if ($my(state) & (E_EXIT_ALL))
+      state |= ED_EXIT_ALL;
+    else
+      state |= ED_EXIT_ALL_FORCE;
+
+    goto exit_all;
+  }
 
 main:
   $my(state) &= ~(E_SUSPENDED|E_EXIT|E_PAUSE);
@@ -18354,7 +18366,7 @@ main:
     if (ed_test_state_bit (ed, ED_PAUSE))
       $my(state) |= E_PAUSE;
 
-  int state = ed_get_state (ed);
+  state = ed_get_state (ed);
 
   if (state & ED_EXIT)
     $my(state) |= E_EXIT;
@@ -18398,6 +18410,7 @@ main:
     goto main;
   }
 
+exit_all:
   if ((state & ED_EXIT_ALL) or (state & ED_EXIT_ALL_FORCE)) {
     if ($my(save_image)) {
       if (NULL is $my(image_file))

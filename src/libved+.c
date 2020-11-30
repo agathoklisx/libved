@@ -3504,6 +3504,18 @@ mutable public void __alloc_error_handler__ (int err, size_t size,
   exit (1);
 }
 
+public void sighup_handler (int sig) {
+  (void) sig;
+  ed_t *ed = E.get.current (__This__->__E__);
+  buf_t *buf = Ed.get.current_buf (ed);
+
+  E.set.state_bit (__This__->__E__, E_EXIT_ALL_FORCE);
+  E.main (__This__->__E__, buf);
+
+  __deinit_this__ (&__This__);
+  exit (0);
+}
+
 private int __initialize__ (void) {
   /* I do not know the way to read from stdin and at the same time to
    * initialize and use the terminal state, when we are the end of the pipe */

@@ -273,9 +273,11 @@
 
 #define E_SUSPENDED                (1 << 0)
 #define E_EXIT                     (1 << 1)
-#define E_DONOT_RESTORE_TERM_STATE (1 << 2)
-#define E_DONOT_CHANGE_FOCUS       (1 << 3)
+#define E_EXIT_ALL                 (1 << 2)
+#define E_EXIT_ALL_FORCE           (1 << 3)
 #define E_PAUSE                    (1 << 4)
+#define E_DONOT_RESTORE_TERM_STATE (1 << 5)
+#define E_DONOT_CHANGE_FOCUS       (1 << 6)
 
 #define IDX_OUT_OF_BOUNDS_ERROR_STATE  (1 << 0)
 
