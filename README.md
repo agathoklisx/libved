@@ -205,12 +205,13 @@
 
    CC=clang sh ./convenience.sh
 
-   # Note that because there isn't a separate make install target, if you install
+   # Note that because there isn't a separate make install target, if you build
    # the distribution with SU rights, some of the touched files/directories quite
    # possible, might bring some troubles at later time, if you try again to build
    # with user rights. But the worst that can happen, is that during runtine, the
    # application might need to write in, or to read from, one of those installed
-   # directories, like a temp directory (see below how to avoid this).
+   # directories, like the temp directory (see below how to avoid this).
+   # So system wide installation is not really supported, but it might work.
 
    # Produced hierarhy (after installation) (output at Mon 13 Jul 2020):
    $(SYSDIR)/bin/vedas
@@ -1415,6 +1416,9 @@ Search:
   is also (besides ideology) the road to paradise.
 
   Anyway. It is GPL2.
+
+  In any case, there is a possibility that there is something wrong with mixing liberal
+  licenses.
 
   Acknowledgments, references and inspiration (besides the already mentioned):
 

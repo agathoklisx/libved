@@ -360,6 +360,7 @@
 #define HL_QUOTE          COLOR_YELLOW
 #define HL_QUOTE_1        COLOR_BLUE
 #define HL_QUOTE_2        COLOR_CYAN
+#define HL_TXT            COLOR_WHITE
 
 #define COLOR_CHARS  "IKCONSDFVTMEQ><"
 // I: identifier, K: keyword, C: comment, O: operator, N: number, S: string

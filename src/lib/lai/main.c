@@ -7,6 +7,10 @@
 #include <math.h>
 
 #include <lai.h>
+#if (defined(__unix__) || defined(unix)) && !defined(USG)
+#include <sys/param.h>
+#endif
+
 #ifdef ENABLE_REPL
 #define VERSION "Dictu Version: 0.8.0\n"
 
@@ -61,7 +65,7 @@ static bool replCountQuotes(char *line) {
     return singleQuotes % 2 == 0 && doubleQuotes % 2 == 0;
 }
 
-static void repl(VM *vm, int argc, const char *argv[]) {
+static void repl(DictuVM *vm, int argc, const char *argv[]) {
     UNUSED(argc);
     UNUSED(argv);
     printf(VERSION);
@@ -98,7 +102,7 @@ static void repl(VM *vm, int argc, const char *argv[]) {
             linenoiseHistorySave("history.txt");
         }
 
-        interpret(vm, fullLine);
+        dictuInterpret(vm,  "repl", fullLine);
 
         free(line);
         free(fullLine);
@@ -107,10 +111,44 @@ static void repl(VM *vm, int argc, const char *argv[]) {
 
 #endif /* ENABLE_REPL */
 
-static void runFile(VM *vm, int argc, const char *argv[]) {
+static char *readfile(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        return NULL;
+    }
+
+    fseek(file, 0L, SEEK_END);
+    size_t fileSize = ftell(file);
+    rewind(file);
+
+    char *buffer = malloc(sizeof(char) * (fileSize + 1));
+    if (buffer == NULL) {
+        fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
+        exit(74);
+    }
+
+    size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+    if (bytesRead < fileSize) {
+        fprintf(stderr, "Could not read file \"%s\".\n", path);
+        exit(74);
+    }
+
+    buffer[bytesRead] = '\0';
+
+    fclose(file);
+    return buffer;
+}
+
+static void runFile(DictuVM *vm, int argc, const char *argv[]) {
     UNUSED(argc);
-    char *source = readFile(argv[1]);
-    InterpretResult result = interpret(vm, source);
+    char *source = readfile(argv[1]);
+
+    if (source == NULL) {
+        fprintf(stderr, "Could not open file \"%s\".\n", argv[1]);
+        exit(74);
+    }
+
+    DictuInterpretResult result = dictuInterpret(vm, (char *) argv[1], source);
     free(source); // [owner]
 
     if (result == INTERPRET_COMPILE_ERROR) exit(65);
@@ -118,7 +156,7 @@ static void runFile(VM *vm, int argc, const char *argv[]) {
 }
 
 int main(int argc, const char *argv[]) {
-    VM *vm = initVM(argc == 1, argc >= 2 ? argv[1] : "repl", argc, argv);
+    DictuVM *vm = dictuInitVM(argc == 1, argc, (char **) argv);
 
     if (argc == 1) {
 #ifdef ENABLE_REPL
@@ -133,6 +171,6 @@ int main(int argc, const char *argv[]) {
         exit(1);
     }
 
-    freeVM(vm);
+    dictuFreeVM(vm);
     return 0;
 }

@@ -806,7 +806,7 @@ private int sysproc_walk_dir (dirwalk_t *this, char *dir, struct stat *st) {
   if (NULL is fp) return 0;
 
   char buf[1024];
-  fgets (buf, 1023, fp);
+  (void) fgets (buf, 1023, fp);
   fclose (fp);
   sysproc_t *proc = (sysproc_t *) this->object;
 
@@ -3195,7 +3195,11 @@ private char *__ex_diff_syn_parser (buf_t *this, char *line, int len, int idx, r
 
   ifnot (len) return line;
 
-  int color = HL_NORMAL;
+  string_t *shared = Buf.get.shared_str (this);
+
+  String.replace_with_len (shared, TERM_COLOR_RESET, TERM_COLOR_RESET_LEN);
+
+  int color = HL_TXT;
 
   if (Cstring.eq_n (line, "--- ", 4)) {
     color = HL_IDENTIFIER;
@@ -3224,8 +3228,7 @@ private char *__ex_diff_syn_parser (buf_t *this, char *line, int len, int idx, r
   }
 
 theend:;
-  string_t *shared = Buf.get.shared_str (this);
-  String.replace_with_fmt (shared, "%s%s%s", TERM_MAKE_COLOR(color), line, TERM_COLOR_RESET);
+  String.append_fmt (shared, "%s%s%s", TERM_MAKE_COLOR(color), line, TERM_COLOR_RESET);
   Cstring.cp (line, MAXLEN_LINE, shared->bytes, shared->num_bytes);
   return line;
 }
@@ -3380,14 +3383,15 @@ public void __deinit_ext__ (void) {
 #ifdef HAS_PROGRAMMING_LANGUAGE
 
 private Lstate *__init_lstate__ (const char *src, int argc, const char **argv) {
-  Lstate *this = initVM (0, src, argc, argv);
+  (void) src;
+  Lstate *this = dictuInitVM (1, argc, (char **) argv);
   __init_led__ (this);
   return this;
 }
 
 private void __deinit_lstate__ (Lstate **thisp) {
   if (NULL is *thisp) return;
-  freeVM (*thisp);
+  dictuFreeVM (*thisp);
   *thisp = NULL;
 }
 
@@ -3397,7 +3401,7 @@ private Class (l) *__init_l__ (int num_states) {
   Self (l) l = SelfInit (l,
     .init = __init_lstate__,
     .deinit = __deinit_lstate__,
-    .compile = interpret,
+    .compile = dictuInterpret,
     .newString = copyString,
     .defineFun = defineNative,
     .defineProp = defineNativeProperty,

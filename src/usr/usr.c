@@ -55,7 +55,7 @@ private int __interpret__ (buf_t **thisp, char *bytes) {
   ed_t *ed = E.get.current (THIS_E);
   term_t *term = Ed.get.term (ed);
   Term.reset (term);
-  InterpretResult retval = L.compile (L_CUR_STATE, bytes);
+  DictuInterpretResult retval = L.compile (L_CUR_STATE, "libved", bytes);
   (void) retval;
   fprintf (stdout, "\nHit any key to continue\n");
   Term.set_mode (term, 'r');
@@ -267,7 +267,7 @@ private int __u_expr_register_cb__ (ed_t *this, buf_t *buf, int regidx) {
   ifnot (line->bytes[line->num_bytes - 1] is ';')
     String.append_byte (line, ';');
 
-  InterpretResult retval = L.compile (L_CUR_STATE, line->bytes);
+  DictuInterpretResult retval = L.compile (L_CUR_STATE, "libved", line->bytes);
   String.free (line);
 
   if (retval isnot INTERPRET_OK)

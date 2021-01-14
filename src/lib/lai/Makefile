@@ -1,8 +1,9 @@
 NAME    := lai
-VERSION := 0.1
+VERSION := 0.3
 
-ENABLE_REPL := 0
+ENABLE_REPL := 1
 ENABLE_HTTP := 1
+ENABLE_SQLITE := 1
 
 SYSDIR  := sys
 BINDIR   = $(SYSDIR)/bin
@@ -21,25 +22,33 @@ FLAGS       := $(BASE_FLAGS) $(DEBUG_FLAGS) -lm
 
 HEADER       = $(NAME).h
 
-LIB_FILES    = $(NAME).c
-INTERP_FILES = main.c
-
-INTERP_FLAGS = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
+INTERP_FILES  = main.c
+INTERP_FLAGS  = -L$(LIBDIR) -I$(INCDIR) $(FLAGS)
+SHARED_FLAGS :=
+STATIC_FLAGS  = -DDISABLE_HTTP -DDISABLE_SQLITE -static
+LIB_FILES    :=
 
 #ENABLE_REPL := 0
 ifneq ($(ENABLE_REPL), 0)
   INTERP_FILES += linenoise.c
+  INTERP_FILES += argparse.c
+  INTERP_FILES += encodings/utf8.c
   INTERP_FLAGS += -DENABLE_REPL
 endif
 
-SHARED_FLAGS :=
-STATIC_FLAGS = -DDISABLE_HTTP -static
+ifneq ($(ENABLE_SQLITE), 0)
+  FLAGS += -lsqlite3
+else
+  SHARED_FLAGS += -DDISABLE_SQLITE
+endif
+
+LIB_FILES += $(NAME).c
 
 #ENABLE_HTTP := 1
 ifneq ($(ENABLE_HTTP), 0)
   SHARED_FLAGS += -lcurl
 else
-  SHARED_FLAGS =-DDISABLE_HTTP
+  SHARED_FLAGS +=-DDISABLE_HTTP
 endif
 
 shared-library: Env $(LIBDIR)/lib$(NAME)-$(VERSION).so $(INCDIR)/$(HEADER)

@@ -2358,10 +2358,8 @@ private void re_reset_captures (regexp_t *re) {
   re->match_ptr = NULL;
 
   ifnot (re->flags & RE_PATTERN_IS_STRING_LITERAL) {
-    if (re->match isnot NULL) {
-      string_free (re->match);
-      re->match = NULL;
-    }
+    string_free (re->match);
+    re->match = NULL;
   }
 
   if (re->cap is NULL) return;
@@ -2391,6 +2389,7 @@ private void re_free_pat (regexp_t *re) {
 }
 
 private void re_free (regexp_t *re) {
+  if (re is NULL) return;
   re_free_pat (re);
   re_free_captures (re);
   free (re);
@@ -2636,10 +2635,12 @@ private int re_bar (const char *re, int re_len, const char *s, int s_len,
 
       DBG(("CAPTURED [%.*s] [%.*s]:%d\n", step, re + i, s_len - j, s + j, n));
       FAIL_IF(n < 0, n);
+
       if (info->caps != NULL && n > 0) {
         info->caps[bi - 1].ptr = s + j;
         info->caps[bi - 1].len = n;
-        info->total_caps++;
+//        info->total_caps++;
+        info->total_caps = bi;
       }
       j += n;
     } else if (re[i] == '^') {
@@ -2891,6 +2892,7 @@ private string_t *re_parse_substitute (regexp_t *re, char *sub, char *replace_bu
                 sub_p++;
               }
               idx--;
+
               if (0 > idx or idx + 1 > re->total_caps) goto theerror;
 
               char buf[re->cap[idx]->len + 1];
@@ -2979,7 +2981,7 @@ private int file_is_elf (const char *file) {
   char buf[8];
   ssize_t bts = fd_read (fd, buf, 7);
   buf[bts] = '\0';
-  retval = cstring_eq_n (buf + 1, "ELF", 3);
+  retval = buf[0] is 0x7f and cstring_eq_n (buf + 1, "ELF", 3);
   ifnot (retval) // static .a files magic number !<arch> (for archive)
     retval = cstring_eq_n (buf, "!<arch>", 7);
 
@@ -5322,18 +5324,24 @@ char *default_extensions[] = {".txt", NULL};
 char *c_extensions[] = {".c", ".h", ".cpp", ".hpp", ".cc", NULL};
 char *c_keywords[] = {
     "is I", "isnot I", "or I", "and I", "if I", "for I", "return I", "else I",
-    "ifnot I", "ifnull I", "private I", "self I", "selfp I", "this V", "NULL K",
-    "OK K", "NOTOK K",
+    "ifnot I", "self I", "this V", "NULL K",
+    "OK K", "NOTOK K", "static I", "char T",
+    "#include M", "struct T", "typedef I",
     "switch I", "while I", "break I", "continue I", "do I", "default I", "goto I",
-    "case I", "free F", "$my V", "My V", "$mycur V", "uint T", "int T", "size_t T",
-    "utf8 T", "char T", "uchar T", "sizeof T", "void T", "$from V", "thisp V",
-    "$myprop V", "theend I", "theerror E", "UNSET N", "ZERO N", "#define M",
+    "case I", "free F", "$my V",  "uint T", "int T", "size_t T",
+    "idx_t T",
+    "utf8 T", "uchar T", "sizeof T", "void T", "thisp V",
+    "union T", "const T",
+    "$myprop V", "theend I", "theerror E", "UNSET N", "#define M",
     "#endif M", "#error M", "#ifdef M", "#ifndef M", "#undef M", "#if M", "#else I", "#elif I",
-    "#include M", "struct T", "union T", "typedef I", "Alloc T", "Realloc T", "AllocType T",
+    "STDIN_FILENO K", "STDOUT_FILENO K", "STDERR_FILENO K",
+    "inline I",
+    "Alloc T", "Realloc T", "AllocType T", "$from V", "forever I",
     "AllocClass T", "AllocProp T", "AllocSelf T", "$myroots V", "$myparents V",
-    "$OurRoot V", "$OurRoots V", "public I", "mutable I", "loop I", "forever I",
-    "static I", "enum T", "bool T", "long T", "ulong T", "double T", "float T", "unsigned T",
-    "extern I", "signed T", "volatile T", "register T", "union T", "const T", "auto T",
+    "$OurRoot V", "$OurRoots V", "public I", "mutable I", "loop I",
+     "enum T", "bool T", "long T", "ulong T", "double T", "float T", "unsigned T",
+    "ifnull I", "private I", "selfp I","My V", "$mycur V",
+    "extern I", "signed T", "volatile T", "register T",  "auto T",
     NULL
 };
 
@@ -8743,16 +8751,17 @@ searchandsub:;
     if (0 > Re.exec (re, it->data->bytes + bidx,
         it->data->num_bytes - bidx)) goto thenext;
 
-    ifnot (NULL is substr) String.free (substr);
+    String.free (substr);
+
     if (NULL is (substr = Re.parse_substitute (re, sub, re->match->bytes))) {
       MSG_ERROR("Error: %s", re->errmsg);
       goto theend;
     }
 
     if (interactive) {
-      size_t stacklen = bidx + re->match_idx + 1;
-      char prefix[stacklen];
-      Cstring.cp (prefix, stacklen, it->data->bytes, stacklen - 1);
+      size_t matchlen = bidx + re->match_idx;
+      char prefix[matchlen + 1];
+      Cstring.cp (prefix, matchlen + 1, it->data->bytes, matchlen);
 
       utf8 chars[] = {'y', 'Y', 'n', 'N', 'q', 'Q', 'a', 'A', 'c', 'C'};
       char qu[MAXLEN_LINE]; /* using STR_FMT (a statement expression) causes  */
@@ -8811,7 +8820,7 @@ theend:
     self(Action.free, Action);
 
   Re.free (re);
-  ifnot (NULL is substr) String.free (substr);
+  String.free (substr);
 
   return retval;
 }

@@ -59,7 +59,7 @@ THIS_STATICLIB := $(SYSLIBDIR)/lib$(THIS_LIBNAME).a
 
 BASE_FLAGS  := -g -O2 -march=native -fvisibility=hidden -fdollars-in-identifiers
 
-DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-function -Wunused-macros -Wno-override-init
+DEBUG_FLAGS := -Wextra -Wshadow -Wall -Wunused-result -Wunused-function -Wunused-macros -Wno-override-init
 
 # -Wno-override-init: is for designated initializers and both compilers complain.
 # it is included in extra in gcc, but clang needs this unconditionally
@@ -109,6 +109,8 @@ HAS_PROGRAMMING_LANGUAGE := 0
 HAS_TCC  := 0
 HAS_CURL := 0
 HAS_JSON := 0
+HAS_LOCAL_EXTENSIONS := 0
+LOCAL_EXTENSIONS_FLAGS :=
 
 LIBOPTS :=
 
@@ -269,9 +271,6 @@ LIBEXT_FLAGS += -lm
 ifeq ($(SYSKERNEL), "Darwin")
   APPFLAGS += -lutil
 endif
-
-HAS_LOCAL_EXTENSIONS := 0
-LOCAL_EXTENSIONS_FLAGS :=
 
 ifneq ($(HAS_LOCAL_EXTENSIONS), 0)
   ifdef LOCAL_EXTENSIONS_FLAGS

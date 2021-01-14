@@ -1,7 +1,20 @@
 #ifndef LAPI_h
 #define LAPI_h
 
-typedef struct _vm VM;
+typedef struct _vm DictuVM;
+
+typedef enum {
+    INTERPRET_OK,
+    INTERPRET_COMPILE_ERROR,
+    INTERPRET_RUNTIME_ERROR
+} DictuInterpretResult;
+
+DictuVM *dictuInitVM(bool repl, int argc, char *argv[]);
+
+void dictuFreeVM(DictuVM *vm);
+
+DictuInterpretResult dictuInterpret(DictuVM *vm, char *moduleName, char *source);
+
 typedef uint64_t Value;
 
 typedef struct sObj Obj;
@@ -10,6 +23,7 @@ typedef struct sObjList ObjList;
 typedef struct sObjDict ObjDict;
 typedef struct sObjSet  ObjSet;
 typedef struct sObjFile ObjFile;
+typedef struct sObjAbstract ObjAbstract;
 
 typedef enum {
     OBJ_MODULE,
@@ -24,6 +38,7 @@ typedef enum {
     OBJ_DICT,
     OBJ_SET,
     OBJ_FILE,
+    OBJ_ABSTRACT,
     OBJ_UPVALUE
 } ObjType;
 
@@ -62,15 +77,24 @@ typedef struct sObjClassNative {
 typedef struct {
     Obj obj;
     ObjString* name;
+    ObjString* path;
     Table values;
 } ObjModule;
 
-typedef ObjModule *(*BuiltinModule)(VM *vm);
+typedef ObjModule *(*BuiltinModule)(DictuVM *vm);
 typedef struct {
     char *name;
     BuiltinModule module;
 } BuiltinModules;
 
+typedef void (*AbstractFreeFn)(DictuVM *vm, ObjAbstract *abstract);
+
+struct sObjAbstract {
+    Obj obj;
+    Table values;
+    void *data;
+    AbstractFreeFn func;
+};
 
 #define SIGN_BIT ((uint64_t)1 << 63)
 #define QNAN ((uint64_t)0x7ffc000000000000)
@@ -127,6 +151,7 @@ typedef struct {
 #define AS_BOOL(v)              ((v) == TRUE_VAL)
 #define AS_NUMBER(v)            valueToNum(v)
 #define AS_OBJ(v)               ((Obj*)(uintptr_t)((v) & ~(SIGN_BIT | QNAN)))
+#define AS_ABSTRACT(value)      ((ObjAbstract*)AS_OBJ(value))
 
 #define OBJ_VAL(obj) \
     (Value)(SIGN_BIT | QNAN | (uint64_t)(uintptr_t)(obj))
@@ -157,13 +182,13 @@ static inline ObjType getObjType(Value value) {
     return AS_OBJ(value)->type;
 }
 
-typedef enum {
-    INTERPRET_OK,
-    INTERPRET_COMPILE_ERROR,
-    INTERPRET_RUNTIME_ERROR
-} InterpretResult;
+typedef Value (*NativeFn)(DictuVM *vm, int argCount, Value *args);
 
-typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
+#define FREE(vm, type, pointer) \
+    reallocate(vm, pointer, sizeof(type), 0)
+
+#define ALLOCATE(vm, type, count) \
+    (type*)reallocate(vm, NULL, 0, sizeof(type) * (count))
 
 #define OK     0
 #define NOTOK -1
@@ -182,23 +207,19 @@ typedef Value (*NativeFn)(VM *vm, int argCount, Value *args);
   errno_value;                                       \
 })
 
-VM *initVM(bool repl, const char *scriptName, int argc, const char *argv[]);
+DictuInterpretResult dictuInterpret(DictuVM *vm, char *module, char *source);
 
-void freeVM(VM *vm);
+void push(DictuVM *vm, Value value);
 
-InterpretResult interpret(VM *vm, const char *source);
+Value peek(DictuVM *vm, int distance);
 
-void push(VM *vm, Value value);
+void runtimeError(DictuVM *vm, const char *format, ...);
 
-Value peek(VM *vm, int distance);
-
-void runtimeError(VM *vm, const char *format, ...);
-
-Value pop(VM *vm);
+Value pop(DictuVM *vm);
 
 bool isFalsey(Value value);
 
-typedef VM Lstate;
+typedef DictuVM Lstate;
 
 typedef struct l_table_get_t {
   Value *(*value) (Lstate *, Table *, ObjString *, Value *);
@@ -230,7 +251,7 @@ typedef struct l_t {
 
   size_t (*vmsize) (void);
 
-  InterpretResult (*compile) (Lstate *, const char *);
+  DictuInterpretResult (*compile) (Lstate *, char *, char *);
   ObjString *(*newString) (Lstate *, const char *, int);
 
 } l_t;
@@ -242,27 +263,28 @@ typedef struct lang_t {
   int cur_state;
 } lang_t;
 
-char *readFile(const char *path);
-ObjString *copyString(VM *vm, const char *chars, int length);
+char *readFile(DictuVM *vm, const char *path);
+ObjString *copyString(DictuVM *vm, const char *chars, int length);
 bool tableGet(Table *table, ObjString *key, Value *value);
-Value strerrorGeneric(VM *vm, int error);
-ObjDict *initDict(VM *vm);
-bool dictSet(VM *vm, ObjDict *dict, Value key, Value value);
-ObjClassNative *newClassNative(VM *vm, ObjString *name);
-void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
-bool tableSet(VM *vm, Table *table, ObjString *key, Value value);
-void defineNativeProperty(VM *vm, Table *table, const char *name, Value value);
-void defineNative(VM *vm, Table *table, const char *name, NativeFn function);
-
-ObjModule *newModule(VM *vm, ObjString *name);
+Value strerrorGeneric(DictuVM *vm, int error);
+ObjDict *initDict(DictuVM *vm);
+bool dictSet(DictuVM *vm, ObjDict *dict, Value key, Value value);
+ObjClassNative *newClassNative(DictuVM *vm, ObjString *name);
+void defineNative(DictuVM *vm, Table *table, const char *name, NativeFn function);
+bool tableSet(DictuVM *vm, Table *table, ObjString *key, Value value);
+void defineNativeProperty(DictuVM *vm, Table *table, const char *name, Value value);
+void defineNative(DictuVM *vm, Table *table, const char *name, NativeFn function);
+void *reallocate(DictuVM *vm, void *previous, size_t oldSize, size_t newSize);
+ObjAbstract *initAbstract(DictuVM *vm, AbstractFreeFn func);
+ObjModule *newModule(DictuVM *vm, ObjString *name);
 int findBuiltinModule(char *name, int length);
-ObjModule *importBuiltinModule(VM *vm, int index);
+ObjModule *importBuiltinModule(DictuVM *vm, int index);
 
 /* extensions */
-Table *vm_get_globals(VM *vm);
-ObjModule *vm_module_get(VM *vm, char *name, int len);
-Table *vm_get_module_table(VM *vm, char *name, int len);
-Value *vm_table_get_value(VM *vm, Table *table, ObjString *obj, Value *value);
-Value strerrorNative(VM *vm, int argCount, Value *args);
+Table *vm_get_globals(DictuVM *vm);
+ObjModule *vm_module_get(DictuVM *vm, char *name, int len);
+Table *vm_get_module_table(DictuVM *vm, char *name, int len);
+Value *vm_table_get_value(DictuVM *vm, Table *table, ObjString *obj, Value *value);
+Value strerrorNative(DictuVM *vm, int argCount, Value *args);
 size_t vm_sizeof (void);
 #endif /* LAPI */
