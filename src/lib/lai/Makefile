@@ -3,7 +3,7 @@ VERSION := 0.3
 
 ENABLE_REPL := 1
 ENABLE_HTTP := 1
-ENABLE_SQLITE := 1
+DISABLE_SQLITE := $(shell ldconfig -v 2>/dev/null | grep sqlite3 >/dev/null; echo $$?)
 
 SYSDIR  := sys
 BINDIR   = $(SYSDIR)/bin
@@ -36,8 +36,8 @@ ifneq ($(ENABLE_REPL), 0)
   INTERP_FLAGS += -DENABLE_REPL
 endif
 
-ifneq ($(ENABLE_SQLITE), 0)
-  FLAGS += -lsqlite3
+ifeq ($(DISABLE_SQLITE), 0)
+  SHARED_FLAGS += -lsqlite3
 else
   SHARED_FLAGS += -DDISABLE_SQLITE
 endif
