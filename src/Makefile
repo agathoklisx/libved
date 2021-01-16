@@ -109,7 +109,7 @@ HAS_PROGRAMMING_LANGUAGE := 0
 HAS_TCC  := 0
 HAS_CURL := 0
 HAS_JSON := 0
-HASNOT_SQLITE := $(shell ldconfig -v 2>/dev/null | grep sqlite3 >/dev/null; echo $$?)\n");
+HASNOT_SQLITE := $(shell ldconfig -v 2>/dev/null | grep sqlite3 >/dev/null; echo $$?)
 HAS_LOCAL_EXTENSIONS := 0
 LOCAL_EXTENSIONS_FLAGS :=
 

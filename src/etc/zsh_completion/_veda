@@ -1,18 +1,16 @@
 #compdef veda vedas
 
-_arguments \
+_arguments -s -S \
   '--line-nr=[start at the given line number]' \
-  '--ftype=[set filetype]' \
-  '--load-file=[load file]' \
+  '--ftype=[set filetype]:set the filetype:(c diff sh lua i)' \
+  '--load-file=[load file]:load file:_files -/' \
   '--column=[set pointer at column]' \
   '--num-win=[create new num windows]' \
-  '--ftype=[set the file type]' \
   '--autosave=[interval time in minutes to autosave buffer]' \
   '--backup-suffix=[backup suffix (default: ~)]' \
   '--exec-com=[execute command]' \
-  '--load-file=[eval file]' \
   '--backupfile[backup file at the initial reading]' \
   '--pager[behave as a pager]' \
   '--exit[exit]' \
-  '--exit-quick[exit when quiting the current buffer]' \
+  '--exit-quick[exit when quiting current buffer]' \
   '*:files:_files'
