@@ -4728,6 +4728,8 @@ insert_char:
 
         if (menu->state & MENU_QUIT) goto theend;
 
+        cur_idx = 0;  // reset, as cur_idx can be out of bounds
+
         if (menu->list->num_items is 1)
           if (menu->return_if_one_item) {
             menu->c = '\r';
