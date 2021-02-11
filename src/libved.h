@@ -116,8 +116,8 @@
 
 #define Notword ".,?/+*-=~%<>[](){}\\'\";"
 #define Notword_len 22
-#define Notfname "|][\""
-#define Notfname_len 4
+#define Notfname "|][{}\":;*?><,()"
+#define Notfname_len 15
 
 #define IS_UTF8(c)      (((c) & 0xC0) == 0x80)
 #define PATH_SEP        ':'

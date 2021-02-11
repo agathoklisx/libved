@@ -1736,6 +1736,7 @@ private string_t *string_trim_end (string_t *this, char c) {
     if (*sp isnot c) break;
     string_clear_at (this, -1);
     if (sp is this->bytes) break;
+    sp--;
   }
 
   return this;
@@ -7146,6 +7147,10 @@ private void win_adjust_buf_dim (win_t *w) {
   }
 }
 
+private int win_isit_special_type (win_t *this) {
+  return ($my(type) is VED_WIN_SPECIAL_TYPE);
+}
+
 private void win_set_has_dividers (win_t *this, int val) {
   $my(has_dividers) = val;
 }
@@ -9263,7 +9268,7 @@ private int ed_quit (ed_t *ed, int force, int global) {
   win_t *w = ed->head;
 
  while (w) {
-    if ($from(w, type) is VED_WIN_SPECIAL_TYPE) goto winnext;
+    if (win_isit_special_type (w)) goto winnext;
 
     buf_t *this = w->head;
     while (this isnot NULL) {
@@ -12306,10 +12311,10 @@ private int ed_win_change (ed_t *this, buf_t **bufp, int com, char *name,
       int tmp_idx = cidx;
       for (;;) {
         win_t *w = self(get.win_by_idx, idx);
-        if (idx is tmp_idx)
+        if (idx is tmp_idx or w is NULL)
           return NOTHING_TODO;
 
-        if ($from(w, type) is VED_WIN_SPECIAL_TYPE) {
+        if (win_isit_special_type (w)) {
           if (com is VED_COM_WIN_CHANGE_PREV) {
             if (idx is 0) idx = this->num_items - 1;
             else idx--;
@@ -15069,7 +15074,7 @@ private int buf_rline (buf_t **thisp, rline_t *rl) {
 
   int retval = NOTHING_TODO;
 
-  int is_special_win = $myparents(type) is VED_WIN_SPECIAL_TYPE;
+  int is_special_win = win_isit_special_type ($my(parent));
 
   if (rl->state & RL_EXEC) goto exec;
 
@@ -15900,7 +15905,7 @@ private int ed_get_num_win (ed_t *this, int count_special) {
   int num = 0;
   win_t *it = this->head;
   while (it) {
-    ifnot ($from(it, type) is VED_WIN_SPECIAL_TYPE) num++;
+    ifnot (win_isit_special_type (it)) num++;
     it = it->next;
   }
   return num;
@@ -15913,10 +15918,6 @@ private int ed_get_min_rows (ed_t *this) {
 
 private int ed_get_num_special_win (ed_t *this) {
   return $my(num_special_win);
-}
-
-private int win_isit_special_type (win_t *this) {
-  return ($my(type) is VED_WIN_SPECIAL_TYPE);
 }
 
 private buf_t *ed_get_bufname (ed_t *this, char *fname) {
