@@ -2965,9 +2965,11 @@ private string_t *__ex_buf_serial_info__ (bufinfo_t *info) {
     "num bytes   : %zd\n"
     "num lines   : %zd\n"
     "cur idx     : %d\n"
-    "is writable : %d\n",
+    "is writable : %d\n"
+    "autosave    : %ld\n",
     info->fname, info->cwd, info->parents_name, info->at_frame,
-    info->num_bytes, info->num_lines, info->cur_idx, info->is_writable);
+    info->num_bytes, info->num_lines, info->cur_idx, info->is_writable,
+    info->autosave);
 
   return sinfo;
 }

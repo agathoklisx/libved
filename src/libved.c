@@ -6808,7 +6808,7 @@ private void buf_set_autosave (buf_t *this, long minutes) {
   if (minutes > (60 * 24)) minutes = (60 * 24);
   $my(autosave) = minutes * 60;
   ifnot ($my(saved_sec))
-    Vsys.get.clock_sec (DEFAULT_CLOCK);
+    $my(saved_sec) = Vsys.get.clock_sec (DEFAULT_CLOCK);
 }
 
 private void buf_set_on_emptyline (buf_t *this, char *str) {
@@ -7311,6 +7311,7 @@ private bufinfo_t *buf_get_info_as_type (buf_t *this) {
   info->is_writable = (($my(flags) & FILE_IS_WRITABLE) ? 1 : 0);
   info->num_bytes = self(get.size);
   info->num_lines = self(get.num_lines);
+  info->autosave = $my(autosave);
   return info;
 }
 
@@ -18035,7 +18036,8 @@ private string_t *E_create_image (Class (E) *this) {
         char *bufname = $from(buf, fname);
         char *ftype_name = $from(buf, ftype)->name;
         int cur_row_idx = buf->cur_idx;
-
+        long autosave = $from(buf, autosave);
+        if (autosave > 0) autosave /= 60;
         string_append (img, "\n");
 
         ifnot (g_num_buf) {
@@ -18047,10 +18049,12 @@ private string_t *E_create_image (Class (E) *this) {
               "buf = win_buf_init (cwin, frame_zero, flags)\n"
               "buf_init_fname (buf, \"%s\")\n"
               "buf_set_ftype (buf, \"%s\")\n"
+              "buf_set_autosave (buf, %ld)\n"
               "buf_set_row_idx (buf, %d)\n"
               "win_append_buf (cwin, buf)\n",
             bufname,
             ftype_name,
+            autosave,
             cur_row_idx);
 
 next_buf:
@@ -19996,6 +20000,12 @@ ival_t i_buf_set_ftype (i_t *this, buf_t *buf, char *ftype) {
   return OK;
 }
 
+ival_t i_buf_set_autosave (i_t *this, buf_t *buf, long minutes) {
+  (void) this;
+  buf_set_autosave (buf, minutes);
+  return OK;
+}
+
 ival_t i_buf_set_row_idx (i_t *this, buf_t *buf, int row) {
   Buf.set.row.idx (buf, row, NO_OFFSET, 1);
   return OK;
@@ -20119,6 +20129,7 @@ struct ifun_t {
   { "ed_get_current_win",    (ival_t) i_ed_get_current_win, 1},
   { "ed_set_current_win",    (ival_t) i_ed_set_current_win, 2},
   { "buf_set_ftype",         (ival_t) i_buf_set_ftype, 2},
+  { "buf_set_autosave",      (ival_t) i_buf_set_autosave, 2},
   { "buf_set_row_idx",       (ival_t) i_buf_set_row_idx, 2},
   { "buf_normal_page_up",    (ival_t) i_buf_normal_page_up, 3},
   { "buf_normal_page_down",  (ival_t) i_buf_normal_page_down, 3},

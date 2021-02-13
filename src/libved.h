@@ -993,6 +993,8 @@ NewType (bufinfo,
     cur_idx,
     is_writable;
 
+  long autosave;
+
   size_t
     num_bytes,
     num_lines;
