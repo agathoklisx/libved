@@ -5988,6 +5988,10 @@ private int buf_com_set (buf_t *this, rline_t *rl) {
   ifnot (NULL is arg)
     Root.set.persistent_layout ($OurRoot, atoi (arg->bytes));
 
+  arg = rline_get_anytype_arg (rl, "lang-mode");
+  ifnot (NULL is arg)
+    Ed.set.lang_mode ($my(root), arg->bytes);
+
   if (rline_arg_exists (rl, "backupfile")) {
     arg = rline_get_anytype_arg (rl, "backup-suffix");
     self(set.backup, 1, (NULL is arg ? BACKUP_SUFFIX : arg->bytes));
@@ -13919,6 +13923,7 @@ private void ed_init_commands (ed_t *this) {
   ed_append_command_arg (this, "set", "--image-file=", 13);
   ed_append_command_arg (this, "set", "--image-name=", 13);
   ed_append_command_arg (this, "set", "--backupfile", 12);
+  ed_append_command_arg (this, "set", "--lang-mode=", 12);
   ed_append_command_arg (this, "set", "--tabwidth=", 11);
   ed_append_command_arg (this, "set", "--autosave=", 11);
   ed_append_command_arg (this, "set", "--ftype=", 8);
@@ -15028,6 +15033,26 @@ private void ed_free_rline_cbs (ed_t *this) {
   free ($my(rline_cbs));
 }
 
+/* This is for normal mode. Better not to mix those two. This is for convenience
+ * when the keyboard layout has been changed through the system */
+private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
+  for (int i = 0; i < 2; i++)
+    for (int j = 0; j < ('z' - 'a') + 1; j++)
+      $my(lmap)[i][j] = lmap[i][j];
+}
+
+/* As this intented for insert mode, though it might be used elsewhere. */
+private void ed_set_lang_getkey (ed_t *this, LangGetKey_cb cb) {
+  $my(lang_getkey) = cb;
+}
+
+private void ed_set_lang_mode (ed_t *this, char *lang_mode) {
+  size_t len = bytelen (lang_mode);
+  if (len > 7) return;
+
+  Cstring.cp ($my(lang_mode), 8, lang_mode, len);
+}
+
 private void ed_set_normal_on_g_cb (ed_t *this, BufNormalOng_cb cb) {
   $my(num_on_normal_g_cbs)++;
   ifnot ($my(num_on_normal_g_cbs) - 1)
@@ -15554,6 +15579,13 @@ private int buf_insert_reg (buf_t **thisp, string_t *cur_insert) {
   return DONE;
 }
 
+private utf8 ed_lang_getkey (ed_t *this) {
+  if (NULL is $my(lang_getkey) or Cstring.eq ($my(lang_mode), "en"))
+    return Input.get ($my(term));
+
+  return $my(lang_getkey) (this, $my(lang_mode));
+}
+
 private int buf_insert_mode (buf_t **thisp, utf8 com, char *bytes) {
   buf_t *this = *thisp;
   utf8 c = 0;
@@ -15623,7 +15655,8 @@ theloop:
 
 get_char:
     ed_check_msg_status ($my(root));
-    c = Input.get ($my(term_ptr));
+
+    c = ed_lang_getkey ($my(root));
 
 handle_char:
     if (c > 0x7f)
@@ -16686,12 +16719,6 @@ private void ed_set_state (ed_t *this, int state) {
   $my(state) = state;
 }
 
-private void ed_set_lang_map (ed_t *this, int lmap[][26]) {
-  for (int i = 0; i < 2; i++)
-    for (int j = 0; j < ('z' - 'a') + 1; j++)
-      $my(lmap)[i][j] = lmap[i][j];
-}
-
 private void ed_init_special_win (ed_t *this) {
   ed_get_scratch_buf (this);
   ed_msg_buf (this);
@@ -17270,10 +17297,12 @@ private Class (ed) *editor_new (void) {
         .topline = ed_set_topline,
         .rline_cb = ed_set_rline_cb,
         .lang_map = ed_set_lang_map,
+        .lang_mode = ed_set_lang_mode,
         .state_bit = ed_set_state_bit,
         .record_cb = ed_set_record_cb,
         .at_exit_cb = ed_set_at_exit_cb,
         .exit_quick = ed_set_exit_quick,
+        .lang_getkey = ed_set_lang_getkey,
         .screen_size = ed_set_screen_size,
         .current_win = ed_set_current_win,
         .expr_reg_cb = ed_set_expr_reg_cb,
@@ -17810,6 +17839,9 @@ private ed_t *ed_init (E_T *E, ed_opts opts) {
   ed_init_commands (this);
 
   ed_init_special_win (this);
+
+  $my(lang_getkey) = NULL;
+  Cstring.cp ($my(lang_mode), 8, DEFAULT_LANG_MODE, 2);
 
   $my(num_rline_cbs) = $my(num_on_normal_g_cbs) =
   $my(num_lw_mode_cbs) = $my(num_cw_mode_cbs) =

@@ -3343,6 +3343,99 @@ syn_t ex_syn[] = {
   }
 };
 
+private utf8 ex_lang_getkey (ed_t *ed, char *mode) {
+  (void) ed;
+
+  term_t *term = Ed.get.term (ed);
+
+  ifnot (Cstring.eq (mode, "el"))
+    return Input.get (term);
+
+#define ACCENT_CHAR     ';'
+#define DIACRITIC_CHAR  ':'
+#define ACCENT_MODIFIER            1
+#define DIACRITICS_MODIFIER        2
+#define ACCENT_DIACRITICS_MODIFIER 3
+
+  int lmap[2][26] = {{
+    913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
+    925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
+    945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
+    957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
+  }};
+
+  utf8 c = -1;
+  int modifier = 0;
+
+  forever {
+    c = Input.get (term);
+
+    if (modifier is ACCENT_MODIFIER) {
+      switch (c) {
+        case ACCENT_CHAR: return 180;
+
+        case 'A': return 902;
+        case 'E': return 904;
+        case 'I': return 906;
+        case '0': return 908;
+        case 'Y': return 910;
+        case 'V': return 911;
+
+        case 'a': return 940;
+        case 'e': return 941;
+        case 'h': return 942;
+        case 'i': return 943;
+        case 'o': return 972;
+        case 'y': return 973;
+        case 'v': return 974;
+        default:  return -1;
+       }
+     }
+
+     if (modifier is DIACRITICS_MODIFIER) {
+       switch (c) {
+         case 'i': return 970;
+         case 'y': return 971;
+         case DIACRITIC_CHAR : return 168;
+
+         case ACCENT_CHAR:
+           modifier = ACCENT_DIACRITICS_MODIFIER;
+           continue;
+
+         default: return -1;
+       }
+     }
+
+     if (modifier is ACCENT_DIACRITICS_MODIFIER) {
+       switch (c) {
+         case 'y': return 944;
+         default: return -1;
+       }
+     }
+
+    if ('A' <= c and c <= 'Z') {
+      return lmap[0][c - 'A'];
+    }
+
+    if ('a' <= c and c <= 'z') {
+      return lmap[1][c - 'a'];
+    }
+
+    if (ACCENT_CHAR is c) {
+      modifier = ACCENT_MODIFIER;
+      continue;
+    }
+
+    if (DIACRITIC_CHAR is c) {
+      modifier = DIACRITICS_MODIFIER;
+      continue;
+    }
+
+    return c;
+  }
+
+  return c;
+}
 public void __init_ext__ (Type (ed) *this, ed_opts opts) {
   __ex_add_rline_commands__ (this);
   __ex_add_cw_mode_actions__ (this);
@@ -3367,6 +3460,8 @@ public void __init_ext__ (Type (ed) *this, ed_opts opts) {
 
   for (size_t i = 0; i < ARRLEN(ex_syn); i++)
     Ed.syn.append (this, ex_syn[i]);
+
+  Ed.set.lang_getkey (this, ex_lang_getkey);
 }
 
 public void __deinit_ext__ (void) {

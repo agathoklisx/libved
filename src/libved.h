@@ -9,6 +9,8 @@
 
 #define MAX_FRAMES 3
 
+#define DEFAULT_LANG_MODE  "en"
+
 #define DEFAULT_SHIFTWIDTH 0
 #define DEFAULT_PROMPT_CHAR ':'
 #define DEFAULT_ON_EMPTY_LINE_STRING "~"
@@ -757,6 +759,7 @@ typedef dim_t **(*WinDimCalc_cb) (win_t *, int, int, int, int);
 typedef string_t *(*FtypeAutoIndent_cb) (buf_t *, row_t *);
 typedef int (*Balanced_cb) (buf_t **, int, int);
 typedef int (*ExprRegister_cb) (ed_t *, buf_t *, int);
+typedef utf8 (*LangGetKey_cb) (ed_t *, char *);
 typedef void (*EAtExit_cb) (void);
 typedef void (*EdAtExit_cb) (ed_t *);
 typedef void (*EdAtInit_cb) (ed_t *, ed_opts);
@@ -2127,8 +2130,10 @@ NewSubSelf (ed, set,
     (*topline) (ed_t *, buf_t *),
     (*rline_cb) (ed_t *, Rline_cb),
     (*lang_map) (ed_t *, int[][26]),
+    (*lang_mode) (ed_t *, char *),
     (*record_cb) (ed_t *, Record_cb),
     (*at_exit_cb) (ed_t *, EdAtExit_cb),
+    (*lang_getkey) (ed_t *, LangGetKey_cb),
     (*i_record_cb) (ed_t *, IRecord_cb),
     (*expr_reg_cb) (ed_t *, ExprRegister_cb),
     (*init_record_cb) (ed_t *, InitRecord_cb),

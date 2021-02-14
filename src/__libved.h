@@ -989,6 +989,9 @@ NewProp (ed,
 
   int lmap[2][26];
 
+  char lang_mode[8];
+  LangGetKey_cb lang_getkey;
+
   int
     lw_mode_chars_len,
     cw_mode_chars_len,
@@ -1111,6 +1114,7 @@ private int  buf_insert_complete_filename (buf_t **);
 private int  buf_grep_on_normal (buf_t **, utf8, int, int);
 private int  buf_open_fname_under_cursor (buf_t **, int, int, int, int);
 
+private void ed_set_lang_mode (ed_t *, char *);
 private void ed_resume (ed_t *);
 private void ed_suspend (ed_t *);
 private void ed_record (ed_t *, char *, ...);
