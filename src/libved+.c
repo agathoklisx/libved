@@ -682,6 +682,8 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   buf_t *this = Ed.get.scratch_buf (ed);
   Buf.clear (this);
 
+ int flags = (ED_PROC_READ_STDOUT|ED_PROC_READ_STDERR|ED_PROC_WAIT_AT_END);
+
   if (File.exists (word)) {
     if (Path.is_absolute (word))
       com = String.new_with_fmt ("%s %s", man_exec->bytes, word);
@@ -691,7 +693,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
       free (cwdir);
     }
 
-    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
+    retval = Ed.sh.popen (ed, this, com->bytes, flags, NULL);
     goto theend;
   }
 
@@ -706,7 +708,7 @@ private int sys_man (buf_t **bufp, char *word, int section) {
   for (int i = 1; i < 9; i++) {
     sections[section] = 1;
     total_sections++;
-    retval = Ed.sh.popen (ed, this, com->bytes, 1, 1, NULL);
+    retval = Ed.sh.popen (ed, this, com->bytes, flags, NULL);
     ifnot (retval) break;
 
     while (sections[section] and total_sections < 8) {
@@ -2138,24 +2140,25 @@ private proc_T __init_proc__ (void) {
 }
 
 private int ex_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
-
+                           int flags, PopenRead_cb read_cb) {
   int retval = NOTOK;
   proc_t *this = proc_new ();
-  $my(read_stderr) =  redir_stderr;
-  $my(read_stdout) = redir_stdout;
+
+  $my(read_stderr) =  flags & ED_PROC_READ_STDERR;
+  $my(read_stdout) =  flags & ED_PROC_READ_STDOUT;
+
   $my(dup_stdin) = 0;
   $my(buf) = buf;
   ifnot (NULL is read_cb)
     $my(read) = read_cb;
   else
-    if (redir_stdout or redir_stderr)
+    if ((flags & ED_PROC_READ_STDOUT) or (flags & ED_PROC_READ_STDERR))
       $my(read) = Buf.read.from_fp;
 
   proc_parse (this, com);
   term_t *term = Ed.get.term (ed);
 
-  ifnot (redir_stdout)
+  ifnot (flags & ED_PROC_READ_STDOUT)
     Term.reset (term);
 
   if (NOTOK is proc_open (this)) goto theend;
@@ -2163,9 +2166,11 @@ private int ex_ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
   retval = proc_wait (this);
 
 theend:
-  ifnot (redir_stdout) {
-    Term.set_mode (term, 'r');
-    Input.get (term);
+  ifnot (flags & ED_PROC_READ_STDOUT) {
+    if (flags & ED_PROC_WAIT_AT_END) {
+      Term.set_mode (term, 'r');
+      Input.get (term);
+    }
     Term.set (term);
   }
 

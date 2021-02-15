@@ -1,7 +1,8 @@
 **Note** that development happens now at [system-zero](https://github.com/system-zero/system-zero) project,
 where this machine has been integrated. Much of the code that has been produced during the development
-process of this project, has been splitted in small reusable units. This separation of
-concerns allows faster development, though is not certain than development can be backported.
+process of this project, has been splitted into small reusable units. This separation of
+concerns allows faster development, though is not certain that development can be backported,
+especially new features.
 Anyway, the mission is complete.
 
 ```C
@@ -572,10 +573,11 @@ Visual mode:
  | e                 | edit as filename [charwise]    |
  | b                 | check for unbalanced pair of objects [linewise]|
  | v                 | check line[s] for invalid UTF-8 byte sequences [linewise]
- |             note: this requires HAS_USER_EXTENSIONS|
+ |             note: these require HAS_USER_EXTENSIONS|
+ | !                 | execute selected as a system command [(char|line)wise]
  | S                 | Spell line[s] [(char|line)wise]
  | M                 | evaluate selected as a math expression [(char|line)wise]
- |             note: this requires HAS_USER_EXTENSIONS|HAS_EXPR           |
+ |             note: there require HAS_USER_EXTENSIONS|HAS_EXPR           |
  | @                 | interpret selected by the builtin interpreter [linewise]|
  | I                 | interpret selected by Dictu PL [linewise]
  |             note: this requires HAS_USER_EXTENSIONS|HAS_PROGRAMMING_LANGUAGE |

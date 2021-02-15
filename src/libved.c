@@ -7841,6 +7841,20 @@ private buf_t *ed_buf_get (ed_t *this, char *wname, char *bname) {
   return Win.get.buf_by_name (w, bname, &idx);
 }
 
+private void ed_tty_screen (ed_t *this) {
+  term_t *term = $my(term);
+
+  Term.reset (term);
+  Term.set_mode (term, 'r');
+  Input.get (term);
+  Term.set (term);
+
+  win_t *w = self(get.current_win);
+  int idx = Win.get.current_buf_idx (w);
+  Win.set.current_buf (w, idx, DONOT_DRAW);
+  Win.draw (w);
+}
+
 private int ed_buf_change (ed_t *this, buf_t **thisp, char *wname, char *bname) {
   self(win.change, thisp, NO_COMMAND, wname, NO_OPTION, NO_FORCE);
   return buf_change_bufname (thisp, bname);
@@ -9246,12 +9260,12 @@ thediff:;
   buf_write_to_fname (this, tmpn->fname->bytes, DONOT_APPEND, 0, this->num_items - 1, FORCE, VERBOSE_OFF);
 
   if (to_stdout)
-    retval = Ed.sh.popen ($my(root), this, com, 0, 0, NULL);
+    retval = Ed.sh.popen ($my(root), this, com, ED_PROC_WAIT_AT_END, NULL);
   else {
     this = Ed.buf.get ($my(root), VED_DIFF_WIN, VED_DIFF_BUF);
     if (this) {
       self(clear);
-      retval = Ed.sh.popen ($my(root), this, com, 1, 0, NULL);
+      retval = Ed.sh.popen ($my(root), this, com, ED_PROC_READ_STDOUT, NULL);
       retval = (retval == 1 ? OK : (retval == 0 ? 1 : retval));
       if (OK is retval) {     // diff returns 1 when files differ
         Ed.buf.change ($my(root), thisp, VED_DIFF_WIN, VED_DIFF_BUF);
@@ -11628,6 +11642,84 @@ handle_char:
           goto theend;
         }
 
+      case '!':
+        ifnot ($my(ftype)->read_from_shell) goto theend;
+
+        if ($my(vis)[0].fidx <= $my(vis)[0].lidx) {
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+        } else {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+          self(current.set, $my(vis)[0].fidx);
+          this->cur_idx = $my(vis)[0].fidx;
+        }
+
+        {
+          row_t *row = this->current;
+          string_t *str = String.new (128);
+
+          int num_executed = 0;
+          int flags = 0;
+          int prev_line_continues = 0;
+
+          for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++) {
+            int line_continues = row->data->bytes[row->data->num_bytes - 1] is '\\';
+            int is_last_line = (ii is $my(vis)[0].lidx);
+
+            char *command = row->data->bytes;
+
+            ifnot (prev_line_continues) {
+              if (*command is '!') command++;
+              while (*command is ' ') command++;
+              if (*command is '!') command++;
+            } else
+              while (*command is ' ') command++;
+
+            if (*command is '\0') {
+              if (prev_line_continues) {
+                if (line_continues)
+                  goto next_shell_row;
+                else
+                  goto exec_command;
+               }
+              goto next_shell_row;
+            }
+
+            if (prev_line_continues)
+              String.append_fmt (str, " %s", command);
+            else
+              String.replace_with (str, command);
+
+            String.trim_end (str, '\\');
+            String.trim_end (str, ' ');
+
+            exec_command:
+            ifnot (line_continues) {
+              ifnot (str->num_bytes)
+                goto next_shell_row;
+
+              if (is_last_line)
+                flags |= ED_PROC_WAIT_AT_END;
+
+              Ed.sh.popen ($my(root), this, str->bytes, flags, NULL);
+              num_executed++;
+              String.clear (str);
+            } else {
+              if (is_last_line) {
+                if (num_executed)
+                  ed_tty_screen ($my(root));
+                break;
+              }
+            }
+
+            next_shell_row:
+            prev_line_continues = line_continues;
+            row = row->next;
+          }
+
+          String.free (str);
+          goto theend;
+        }
+
       case REG_SHARED_CHR:
         if ($my(vis)[0].fidx <= $my(vis)[0].lidx) {
           VISUAL_RESTORE_STATE ($my(vis)[0], mark);
@@ -11852,6 +11944,26 @@ handle_char:
             String.append_byte (str, $mycur(data)->bytes[ii]);
           ed_selection_to_X ($my(root), str->bytes, str->num_bytes,
               ('*' is c ? X_PRIMARY : X_CLIPBOARD));
+          String.free (str);
+          goto theend;
+        }
+
+      case '!':
+        ifnot ($my(ftype)->read_from_shell) goto theend;
+
+        if ($my(vis)[0].lidx < $my(vis)[0].fidx) {
+          VISUAL_ADJUST_IDXS($my(vis)[0]);
+        } else {   /* MACRO BLOCKS ARE EVIL */
+          VISUAL_RESTORE_STATE ($my(vis)[0], mark);
+        }
+
+        {
+          string_t *str = String.new (($my(vis)[0].lidx - $my(vis)[0].fidx) + 2);
+          for (int ii = $my(vis)[0].fidx; ii <= $my(vis)[0].lidx; ii++)
+            String.append_byte (str, $mycur(data)->bytes[ii]);
+          if (str->num_bytes)
+            Ed.sh.popen ($my(root), this, str->bytes, ED_PROC_WAIT_AT_END, NULL);
+
           String.free (str);
           goto theend;
         }
@@ -12553,16 +12665,22 @@ private string_t *vsys_which (char *ex, char *path) {
   return ex_path;
 }
 
-private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,
-  int redir_stdout, int redir_stderr, PopenRead_cb read_cb) {
-  (void) ed; (void) buf; (void) com; (void) redir_stdout; (void) redir_stderr;
-  (void) read_cb;
+private int ed_sh_popen (ed_t *ed, buf_t *buf, char *com,  int flags, PopenRead_cb read_cb) {
+  (void) ed; (void) buf; (void) com; (void) flags; (void) read_cb;
   return NOTHING_TODO;
 }
 
-private int buf_read_from_shell (buf_t *this, char *com, int rlcom) {
+private int buf_read_from_shell (buf_t *this, char *com, int rlcom, int wait_at_end) {
   ifnot ($my(ftype)->read_from_shell) return NOTHING_TODO;
-  return Ed.sh.popen ($my(root), this, com, rlcom is VED_COM_READ_SHELL, 0, NULL);
+
+  int flags = 0;
+
+  if (wait_at_end) flags |= ED_PROC_WAIT_AT_END;
+
+  if (rlcom is VED_COM_READ_SHELL)
+    flags |= (ED_PROC_READ_STDOUT);
+
+  return Ed.sh.popen ($my(root), this, com, flags, NULL);
 }
 
 private int buf_change_bufname (buf_t **thisp, char *bufname) {
@@ -13838,6 +13956,7 @@ private void ed_init_commands (ed_t *this) {
     [VED_COM_SUBSTITUTE_ALIAS] = "s",
     [VED_COM_SAVE_IMAGE] = "@save_image",
     [VED_COM_TEST_KEY] = "testkey",
+    [VED_COM_TTY_SCREEN] = "tty_screen",
     [VED_COM_VALIDATE_UTF8] = "@validate_utf8",
     [VED_COM_WIN_CHANGE_NEXT] = "winnext",
     [VED_COM_WIN_CHANGE_NEXT_ALIAS] = "wn",
@@ -15237,6 +15356,11 @@ redo:
         }
         goto theend;
 
+    case VED_COM_TTY_SCREEN:
+      ed_tty_screen ($my(root));
+      retval = DONE;
+      goto theend;
+
     case VED_COM_REDRAW:
        Win.draw ($my(root)->current);
        retval = DONE;
@@ -15348,7 +15472,7 @@ redo:
       {
         string_t *com = Vstring.join (rl->line, "");
         String.delete_numbytes_at (com, (rl->com is VED_COM_SHELL ? 1 : 3), 0);
-        retval = buf_read_from_shell (this, com->bytes, rl->com);
+        retval = buf_read_from_shell (this, com->bytes, rl->com, ED_PROC_WAIT_AT_END);
         if (retval > OK) {
           Ed.append.message_fmt ($my(root), "%s exit_status %d\n", com->bytes, retval);
           retval = OK; // in case command exit_status is > 0
@@ -16288,14 +16412,15 @@ private void ed_free_cw_mode_cbs (ed_t *this) {
 }
 
 private void ed_set_cw_mode_actions_default (ed_t *this) {
-  utf8 chars[] = {'e', 'd', 'y', 'Y', '+', '*', 033};
+  utf8 chars[] = {'e', 'd', 'y', 'Y', '+', '*', '!', 033};
   char actions[] =
     "edit selected area as filename\n"
     "delete selected area\n"
     "yank selected area\n"
     "Yank selected and also send selected area to XA_PRIMARY\n"
     "+send selected area to XA_CLIPBOARD\n"
-    "*send selected area to XA_PRIMARY";
+    "*send selected area to XA_PRIMARY\n"
+    "!execute selected area as a system command";
 
   self(set.cw_mode_actions, chars, ARRLEN(chars), actions, NULL);
 }
@@ -16342,7 +16467,7 @@ private void ed_free_lw_mode_cbs (ed_t *this) {
 }
 
 private void ed_set_lw_mode_actions_default (ed_t *this) {
-  utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', '`', 033};
+  utf8 chars[] = {'s', 'w', 'd', 'y', '>', '<', '+', '*', '`', '!', 033};
   char actions[] =
     "substitute command for the selected lines\n"
     "write selected lines to file\n"
@@ -16353,7 +16478,8 @@ private void ed_set_lw_mode_actions_default (ed_t *this) {
     "<indent out\n"
     "+send selected lines to XA_CLIPBOARD\n"
     "*send selected lines to XA_PRIMARY\n"
-    "`send selected lines to the shared register";
+    "`send selected lines to the shared register\n"
+    "!execute selected lines as a system command";
 
   self(set.lw_mode_actions, chars, ARRLEN(chars), actions, NULL);
 

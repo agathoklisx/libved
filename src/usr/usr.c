@@ -83,7 +83,9 @@ private int __u_open_link_on_browser__ (buf_t *this, char *link) {
   string_t *com = String.new_with_fmt ("%s -remote \"openURL(%s, new-tab)\"",
       Uenv->elinks_exec->bytes, link);
 
-  int retval = Ed.sh.popen (E.get.current (THIS_E), this, com->bytes, 1, 0, __u_proc_popen_open_link_cb);
+  int flags = ED_PROC_READ_STDOUT;
+
+  int retval = Ed.sh.popen (E.get.current (THIS_E), this, com->bytes, flags, __u_proc_popen_open_link_cb);
   String.free (com);
   return retval;
 }

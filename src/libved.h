@@ -238,6 +238,11 @@
 #define NOT       (0 << 0)
 #define UNSET     NOT
 
+#define ED_PROC_DONOT_WAIT_AT_END 0
+#define ED_PROC_WAIT_AT_END (1 << 0)
+#define ED_PROC_READ_STDOUT (1 << 1)
+#define ED_PROC_READ_STDERR (1 << 2)
+
 #define MSG_SET_RESET       (1 << 0)
 #define MSG_SET_APPEND      (1 << 1)
 #define MSG_SET_OPEN        (1 << 2)
@@ -2202,7 +2207,7 @@ NewSubSelf (ed, menu,
 );
 
 NewSubSelf (ed, sh,
-  int (*popen) (ed_t *, buf_t *, char *, int, int, PopenRead_cb);
+  int (*popen) (ed_t *, buf_t *, char *, int, PopenRead_cb);
 );
 
 NewSubSelf (edhistory, set,
