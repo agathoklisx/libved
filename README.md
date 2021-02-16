@@ -512,7 +512,7 @@ Anyway, the mission is complete.
  |             to the jump list, (this differs from vim, |
  |             as this is like scrolling to the history) |
  |                                                       |
- | W                 | word operations mode (via a selection menu)|                            |
+ | W                 | Word operations mode (via a selection menu)|                            |
  | (implemented in the library)                          |
  |   - send `word' on XCLIPBOARD                         |
  |   - send `word' on XPRIMARY                           |
@@ -537,6 +537,20 @@ Anyway, the mission is complete.
  |   - '             | like :edprev   (prev editor)      |      -||-
  |   - l             | like :edprevfocused (prev focused ed)|   -||-
 
+ On Normal mode, it is possible to map native language to normal mode commands.
+ Here is a sample:
+
+ int lmap[2][26] = {{
+   913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
+   925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
+   945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
+   957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
+ }};
+
+ Ed.set.lang_map (this, lmap);
+
+ These correspond to 'A'-'Z' and 'a'-'z' respectively.
+
 Insert mode:
  |
  |   key[s]          |  Semantics                     | count
@@ -555,6 +569,15 @@ Insert mode:
  | HOME              | goes to the beginning of line  |
  | END               | goes to the end of line        |
  | escape            | aborts                         |
+
+ On Insert Mode it is possible to register a callback function, to translate
+ keys in native languages. See the libved+.c unit for an example for the greek
+ language. Below is the call to set such a function.
+
+ Ed.set.lang_getkey (this, ex_lang_getkey);
+
+ This feature is activated through the :set --lang-mode=el command. To change
+ back use :set --lang-mode=en.
 
 Visual mode:
  |   key[s]          |  Semantics                     | count
@@ -643,24 +666,20 @@ Search:
   As an extension and if elinks browser is installed, it can open this file
   in a running elinks instance.
 
+  Word operations mode:
+  This is triggered with 'W' in normal mode on the current word.
+    - send `word' on XCLIPBOARD
+    - send `word' on XPRIMARY
+    - swap case
+    - to lower
+    - to upper
+    - spell
+    - man page
+
   Command line mode:
   (note) Commands do not get a range as in vi[like], but from the command line
   switch --range=. Generally speaking the experience in the command line should
   feel more like a shell and specifically the zsh completion way.
-
-  On Normal mode, it is possible to map native language to normal mode commands.
-  Here is a sample:
-
-  int lmap[2][26] = {{
-    913, 914, 936, 916, 917, 934, 915, 919, 921, 926, 922, 923, 924,
-    925, 927, 928, ':', 929, 931, 932, 920, 937, 931, 935, 933, 918},{
-    945, 946, 968, 948, 949, 966, 947, 951, 953, 958, 954, 955, 956,
-    957, 959, 960, ';', 961, 963, 964, 952, 969, 962, 967, 965, 950
-  }};
-
-  Ed.set.lang_map (this, lmap);
-
-  These correspond to 'A'-'Z' and 'a'-'z' respectively.
 
   Auto completions (triggered with tab):
     - commands
@@ -737,6 +756,7 @@ Search:
   :searches              (change focus to the `search' window/buffer)
   :messages              (change focus to the message window/buffer)
   :testkey               (test keyboard keys)
+  :tty_screen            (suspend the application and view original terminal)
   :set option            (set option for current buffer and control editor behavior)
                           --ftype=`ftype' set `ftype' as filetype
                           --tabwidth=[int] set tabwidth

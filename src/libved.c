@@ -4572,12 +4572,13 @@ init_list:;
       String.append_fmt (render, "%s%s", menu->header->bytes, TERM_COLOR_RESET);
     }
 
-    int ridx, iidx = 0; int start_row = 0;
+    int ridx, iidx = 0; int start_row = 0; int num_items = 0;
     for (ridx = 0; ridx < rend_rows; ridx++) {
       start_row = first_row + ridx;
       String.append_fmt (render, TERM_GOTO_PTR_POS_FMT, start_row, first_col);
 
       for (iidx = 0; iidx < num and iidx + (ridx  * num) + (frow_idx * num) < menu->list->num_items; iidx++) {
+        num_items++;
         int len = ((int) it->data->num_bytes > maxlen ? maxlen : (int) it->data->num_bytes);
         char item[len + 1];
         Cstring.cp (item, len + 1, it->data->bytes, len);
@@ -4588,8 +4589,10 @@ init_list:;
         it = it->next;
       }
 
+      mod = num_items % num;
+
       if (mod)
-        for (int i = mod + 1; i < num; i++)
+        for (int i = mod; i < num; i++)
           for (int j = 0; j < maxlen; j++)
             String.append_byte (render, ' ');
    }

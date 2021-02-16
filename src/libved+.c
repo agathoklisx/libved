@@ -3441,6 +3441,7 @@ private utf8 ex_lang_getkey (ed_t *ed, char *mode) {
 
   return c;
 }
+
 public void __init_ext__ (Type (ed) *this, ed_opts opts) {
   __ex_add_rline_commands__ (this);
   __ex_add_cw_mode_actions__ (this);
